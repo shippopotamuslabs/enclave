@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
@@ -22,7 +23,7 @@ class ChatRepositorySyncTest {
     private val chatDao = mockk<ChatDao>(relaxed = true)
     private val messageDao = mockk<MessageDao>(relaxed = true)
     private val webSearchSourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-    private val messageFileDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageFileDao>(relaxed = true)
+    private val documentDao = mockk<DocumentDao>(relaxed = true)
     private val transactionProvider = mockk<com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider>(relaxed = true)
 
     private lateinit var repository: ChatRepositoryImpl
@@ -39,7 +40,7 @@ class ChatRepositorySyncTest {
             chatDao = chatDao,
             messageDao = messageDao,
             webSearchSourceDao = webSearchSourceDao,
-            messageFileDao = messageFileDao,
+            documentDao = documentDao,
             transactionProvider = transactionProvider
         )
     }
@@ -87,6 +88,7 @@ class ChatRepositorySyncTest {
 
         coVerify {
             chatDao.softDeleteById(ChatId("id"), any())
+            documentDao.softDeleteByChatId(ChatId("id"), any())
             syncTrigger.trigger()
         }
     }

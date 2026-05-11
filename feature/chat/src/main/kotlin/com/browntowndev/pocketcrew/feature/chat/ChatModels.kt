@@ -80,6 +80,7 @@ data class ChatUiState(
     val isPlayingTts: Boolean = false,
     val shareState: ShareState = ShareState.Idle,
     val isReadOnly: Boolean = false,
+    val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,
 )
 
 sealed interface ShareState {

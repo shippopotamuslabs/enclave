@@ -12,6 +12,7 @@ interface CleanupDao {
         deleteMessages()
         deleteChatSummaries()
         deleteMessageFiles()
+        deleteDocuments()
         deleteVisionAnalysis()
         deleteMemories()
         deleteStudioMedia()
@@ -32,6 +33,9 @@ interface CleanupDao {
 
     @Query("DELETE FROM message_file")
     suspend fun deleteMessageFiles()
+
+    @Query("DELETE FROM documents")
+    suspend fun deleteDocuments()
 
     @Query("DELETE FROM message_vision_analysis")
     suspend fun deleteVisionAnalysis()

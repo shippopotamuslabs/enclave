@@ -1,13 +1,17 @@
 package com.browntowndev.pocketcrew.core.data.media
 
+import android.content.ClipData
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.core.content.FileProvider
+import com.browntowndev.pocketcrew.domain.model.media.ShareDocumentBytesInput
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,6 +45,53 @@ class AndroidShareMediaAdapter @Inject constructor(
         }
 
         context.startActivity(chooserIntent)
+    }
+
+    override fun shareDocumentBytes(items: List<ShareDocumentBytesInput>) {
+        if (items.isEmpty()) {
+            return
+        }
+        val resolver = context.contentResolver
+        val uris = ArrayList<Uri>(items.size)
+        for (item in items) {
+            val f = File(context.cacheDir, "share_${UUID.randomUUID()}_${item.suggestedFileName.replace('/', '_')}")
+            f.writeBytes(item.bytes)
+            uris.add(FileProvider.getUriForFile(context, fileProviderAuthority, f))
+        }
+        if (uris.size == 1) {
+            val intent =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = items[0].mimeType
+                    putExtra(Intent.EXTRA_STREAM, uris[0])
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            context.startActivity(
+                Intent.createChooser(intent, null).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+            return
+        }
+        val intent =
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    putExtra(Intent.EXTRA_MIME_TYPES, items.map { it.mimeType }.toTypedArray())
+                }
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val clip =
+                    ClipData.newUri(resolver, items[0].suggestedFileName, uris[0])
+                for (i in 1 until items.size) {
+                    clip.addItem(ClipData.Item(uris[i]))
+                }
+                clipData = clip
+            }
+        context.startActivity(
+            Intent.createChooser(intent, null).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+        )
     }
 
     private fun toShareUri(rawUri: String): Uri {

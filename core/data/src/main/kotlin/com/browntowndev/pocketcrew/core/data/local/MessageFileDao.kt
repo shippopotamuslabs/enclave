@@ -45,9 +45,6 @@ interface MessageFileDao {
     @Query("DELETE FROM message_file WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)
 
-    @Query("DELETE FROM message_file WHERE message_id = :messageId AND file_source != 'ATTACHMENT'")
-    suspend fun deleteArtifactsByMessageId(messageId: String)
-
     @Query("UPDATE message_file SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()
 
@@ -56,4 +53,5 @@ interface MessageFileDao {
 
     @Query("UPDATE message_file SET pending_sync = 0 WHERE id IN (:ids) AND pending_sync = 2")
     suspend fun markSynced(ids: List<String>)
+
 }

@@ -80,7 +80,7 @@ fun MessageList(
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
-    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
 ) {
@@ -176,7 +176,7 @@ fun MessageList(
                         hasTtsProviderAssigned = hasTtsProviderAssigned,
                         onEditMessage = onEditMessage,
                         onPlayAudio = onPlayAudio,
-                        onNavigateToArtifact = onNavigateToArtifact,
+                        onArtifactCardClick = onArtifactCardClick,
                         onNavigateToStudio = onNavigateToStudio,
                         onShareClick = onShareClick,
                         isPreview = isPreview
@@ -203,7 +203,7 @@ fun MessageList(
                                     hasTtsProviderAssigned = hasTtsProviderAssigned,
                                     onEditMessage = onEditMessage,
                                     onPlayAudio = onPlayAudio,
-                                    onNavigateToArtifact = onNavigateToArtifact,
+                                    onArtifactCardClick = onArtifactCardClick,
                                     onNavigateToStudio = onNavigateToStudio,
                                     onShareClick = onShareClick,
                                     isPreview = isPreview
@@ -276,7 +276,7 @@ private fun MessageItem(
     hasTtsProviderAssigned: Boolean,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
-    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit,
+    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
     isPreview: Boolean,
@@ -313,7 +313,7 @@ private fun MessageItem(
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
                 onPlayAudio = onPlayAudio,
-                onNavigateToArtifact = onNavigateToArtifact,
+                onArtifactCardClick = onArtifactCardClick,
                 onNavigateToStudio = onNavigateToStudio,
                 onShareClick = onShareClick,
             )

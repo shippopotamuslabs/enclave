@@ -6,7 +6,6 @@ import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Task
@@ -71,7 +70,6 @@ class MessageFileCloudSyncWorkerTest {
             messageId = "msg1",
             name = "test.txt",
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             content = "test content",
             stagingRemoteUrl = stagingUrl
         )

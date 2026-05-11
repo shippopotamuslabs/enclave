@@ -92,6 +92,8 @@ class ChatViewModelNavigationTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
     }
 

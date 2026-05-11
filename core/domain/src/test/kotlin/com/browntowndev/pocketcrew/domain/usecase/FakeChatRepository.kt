@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -213,6 +214,13 @@ class FakeChatRepository : ChatRepository {
                 generatedMediaPrompts = generatedMediaPrompts
             )
         )
+    }
+
+    override suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
+    ) {
+        // No-op for tests that do not assert on export preference
     }
 
     data class PersistedMessageData(

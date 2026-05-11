@@ -1,19 +1,15 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class StartArtifactParams(
-    @property:ToolParam(description = "The title of the document.")
+    @property:ToolParam(description = "The document title as a top-level string (not nested under metadata).")
     val title: String,
-    
+
     @property:ToolParam(description = "The author of the document.", required = false)
     val author: String? = null,
-    
-    @property:ToolParam(description = "The type of document to generate. 'PDF' or 'WORD'.")
-    val targetFormat: MimeType = MimeType.PDF
 ) : ToolParameters
 
 @Serializable

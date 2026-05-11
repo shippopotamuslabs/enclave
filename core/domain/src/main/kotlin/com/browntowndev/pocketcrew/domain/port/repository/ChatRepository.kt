@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -180,6 +181,15 @@ interface ChatRepository {
         generatedMediaAssetIds: List<String> = emptyList(),
         generatedMediaTypes: List<String> = emptyList(),
         generatedMediaPrompts: List<String> = emptyList()
+    )
+
+    /**
+     * Saves the user's preferred export format for a generated artifact.
+     * The artifact is addressed by its stable `DocumentEntity.id` (`artifactId`).
+     */
+    suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
     )
 
     /**

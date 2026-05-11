@@ -7,11 +7,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import io.mockk.coEvery
+import com.openai.models.responses.ResponseRefusalDeltaEvent
+import com.openai.models.responses.ResponseStreamEvent
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
+import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -28,6 +29,7 @@ class OpenAiResponseStreamHandlerTest {
     private fun createHandler(
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
     ) = OpenAiResponseStreamHandler(
         provider = "TEST",
         modelId = "test-model",
@@ -36,6 +38,7 @@ class OpenAiResponseStreamHandlerTest {
         tag = "TestHandler",
         chatId = chatId,
         userMessageId = userMessageId,
+        assistantMessageId = assistantMessageId,
         emitEvent = emitEvent,
     )
 
@@ -155,7 +158,7 @@ class OpenAiResponseStreamHandlerTest {
             val state = StreamState()
 
             // First function call arrives via handleEvent
-            val firstEvent = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
+            val firstEvent = mockk<ResponseStreamEvent>(relaxed = true)
             val firstCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "call_1",
                 name = "web_search",
@@ -168,7 +171,7 @@ class OpenAiResponseStreamHandlerTest {
             assertEquals("web_search", state.toolCallRequests.firstOrNull()?.toolName)
 
             // Second function call arrives in the same response
-            val secondEvent = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
+            val secondEvent = mockk<ResponseStreamEvent>(relaxed = true)
             val secondCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "call_2",
                 name = "attached_image_inspect",
@@ -196,7 +199,7 @@ class OpenAiResponseStreamHandlerTest {
             val handler = createHandler()
             val state = StreamState()
 
-            val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
             val functionCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "fc_1",
                 name = "web_search",
@@ -211,6 +214,44 @@ class OpenAiResponseStreamHandlerTest {
         }
 
     @Test
+    fun `handleEvent ignores function call arguments delta without logging`() =
+        kotlinx.coroutines.test.runTest {
+            val handler = createHandler()
+            val state = StreamState()
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
+            every { event.isFunctionCallArgumentsDelta() } returns true
+
+            handler.handleEvent(event, state)
+
+            verify(exactly = 0) { loggingPort.debug(any(), any()) }
+            verify(exactly = 0) { loggingPort.warning(any(), any()) }
+            assertTrue(emittedEvents.isEmpty())
+        }
+
+    @Test
+    fun `handleEvent emits partial response for refusal delta`() =
+        kotlinx.coroutines.test.runTest {
+            val handler = createHandler()
+            val state = StreamState()
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
+            val refusalDelta = mockk<ResponseRefusalDeltaEvent>()
+            every { refusalDelta.delta() } returns "No."
+            every { refusalDelta.itemId() } returns "item_ref"
+            every { refusalDelta.outputIndex() } returns 0L
+            every { refusalDelta.contentIndex() } returns 0L
+            every { event.isRefusalDelta() } returns true
+            every { event.refusalDelta() } returns Optional.of(refusalDelta)
+
+            handler.handleEvent(event, state)
+
+            assertEquals(1, emittedEvents.size)
+            val partial = emittedEvents.single() as InferenceEvent.PartialResponse
+            assertEquals("No.", partial.chunk)
+            assertTrue(state.emittedAny)
+            assertEquals("No.", state.streamedAssistantMessage.toString())
+        }
+
+    @Test
     fun `handleEvent captures tool call regardless of tool call configuration`() =
         kotlinx.coroutines.test.runTest {
             // Tool calls are always captured by the handler so the orchestrator
@@ -218,7 +259,7 @@ class OpenAiResponseStreamHandlerTest {
             val handler = createHandler()
             val state = StreamState()
 
-            val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
             val functionCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "call_1",
                 name = "web_search",

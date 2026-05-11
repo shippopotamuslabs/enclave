@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
@@ -12,7 +13,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import kotlinx.serialization.json.Json
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.serialization.encodeToString
@@ -35,13 +35,17 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     pendingSync = 1
 )
 
-fun MessageWithFiles.toDomain(webSearchSources: List<WebSearchSourceEntity> = emptyList()): Message {
-    return message.toDomain(webSearchSources, files)
+fun MessageWithFiles.toDomain(
+    webSearchSources: List<WebSearchSourceEntity> = emptyList(),
+    documents: List<DocumentEntity> = emptyList(),
+): Message {
+    return message.toDomain(webSearchSources, files, documents = documents)
 }
 
 fun MessageEntity.toDomain(
     webSearchSources: List<WebSearchSourceEntity> = emptyList(),
-    files: List<MessageFileEntity> = emptyList()
+    files: List<MessageFileEntity> = emptyList(),
+    documents: List<DocumentEntity> = emptyList(),
 ): Message {
     val mediaUris = try {
         generatedMediaUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
@@ -80,10 +84,15 @@ fun MessageEntity.toDomain(
             pipelineStep = pipelineStep,
             imageUris = imageUris,
             webSearchSources = webSearchSources.map { it.toDomain() },
-            artifacts = files.filter { it.fileSource == FileSource.GENERATED }.map { 
-                ArtifactGenerationRequest(targetFormat = it.targetFormat ?: MimeType.PDF, title = it.name, content = it.content)
+            artifacts = documents.map {
+                ArtifactGenerationRequest(
+                    artifactId = it.id,
+                    targetFormat = it.targetFormat,
+                    title = it.title,
+                    content = it.json,
+                )
             },
-            fileAttachments = files.filter { it.fileSource == FileSource.ATTACHMENT }.map { it.toDomain() },
+            fileAttachments = files.map { it.toDomain() },
             generatedMediaUris = mediaUris,
             generatedMediaAssetIds = mediaAssetIds,
             generatedMediaTypes = mediaTypes,
@@ -153,8 +162,6 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     name = name,
     content = content,
     mimeType = MimeType.PLAIN_TEXT,
-    fileSource = FileSource.ATTACHMENT,
-    targetFormat = null,
     syncStatus = "PENDING_UPLOAD",
     pendingSync = 0 // Will be set to 1 by the worker after binary upload
 )

@@ -130,6 +130,8 @@ class ChatViewModelActionsTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
     }
 
@@ -318,6 +320,8 @@ class ChatViewModelActionsTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }

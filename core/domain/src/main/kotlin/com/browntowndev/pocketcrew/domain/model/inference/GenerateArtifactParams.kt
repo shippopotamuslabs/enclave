@@ -22,10 +22,11 @@ data class GenerateArtifactParams(
     val content: String
 ) : ToolParameters {
     fun toRequest(): ArtifactGenerationRequest {
+        val artifactId = "legacy_${title.hashCode()}"
         return ArtifactGenerationRequest(
-            targetFormat = targetFormat,
+            artifactId = artifactId,
             title = title,
-            content = content
+            content = content,
         )
     }
 }

@@ -91,6 +91,7 @@ class ChatViewModelTest {
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
     private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
+    private val chatRepository: com.browntowndev.pocketcrew.domain.port.repository.ChatRepository = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -163,6 +164,8 @@ class ChatViewModelTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            chatRepository = chatRepository,
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
     }
 
@@ -459,14 +462,14 @@ class ChatViewModelTest {
         
         // Simulate a snapshot with two artifacts
         val artifact1 = ArtifactGenerationRequest(
+            artifactId = "artifact-doc-1",
             title = "Doc 1",
-            targetFormat = MimeType.PDF,
-            content = ""
+            content = "",
         )
         val artifact2 = ArtifactGenerationRequest(
+            artifactId = "artifact-doc-2",
             title = "Doc 2",
-            targetFormat = MimeType.PDF,
-            content = ""
+            content = "",
         )
         
         val snapshot = AccumulatedMessages(
@@ -623,6 +626,8 @@ class ChatViewModelTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            chatRepository = chatRepository,
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
 
         // Initial state should use cache URI

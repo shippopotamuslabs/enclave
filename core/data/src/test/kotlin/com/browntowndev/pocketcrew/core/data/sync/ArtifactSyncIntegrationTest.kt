@@ -26,12 +26,13 @@ import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
@@ -77,6 +78,7 @@ class ArtifactSyncIntegrationTest {
     private val defaultModelsDao = mockk<DefaultModelsDao>(relaxed = true)
     private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
     private val studioAlbumDao = mockk<StudioAlbumDao>(relaxed = true)
+    private val documentDao = mockk<DocumentDao>(relaxed = true)
     private val messageFileDao = mockk<MessageFileDao>(relaxed = true)
     private val messageVisionAnalysisDao = mockk<MessageVisionAnalysisDao>(relaxed = true)
     private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
@@ -105,7 +107,7 @@ class ArtifactSyncIntegrationTest {
             chatDao = chatDao,
             messageDao = messageDao,
             webSearchSourceDao = webSearchSourceDao,
-            messageFileDao = messageFileDao,
+            documentDao = documentDao,
             transactionProvider = transactionProvider
         )
 
@@ -157,13 +159,16 @@ class ArtifactSyncIntegrationTest {
     @Test
     fun `artifact generation flow - from repo to storage upload`() = runTest {
         val messageId = MessageId("msg1")
-        val artifact = ArtifactGenerationRequest(title = "Report", content = "# Markdown")
+        val artifact = ArtifactGenerationRequest(
+            artifactId = "artifact-sync-1",
+            title = "Report",
+            content = "# Markdown",
+        )
         
-        // 1. Persist artifact via repository
-        coEvery { messageFileDao.getByIdIncludingDeleted(any()) } returns null
-        coEvery { messageFileDao.getByMessageId(any()) } returns emptyList()
-        val capturedFiles = mutableListOf<MessageFileEntity>()
-        coEvery { messageFileDao.insert(capture(capturedFiles)) } returns Unit
+        // 1. Persist artifact via repository -> documents table.
+        coEvery { documentDao.softDeleteByMessageId(any(), any()) } returns Unit
+        val capturedDocuments = mutableListOf<DocumentEntity>()
+        coEvery { documentDao.insertDocument(capture(capturedDocuments)) } returns Unit
         
         repository.persistAllMessageData(
             messageId = messageId,
@@ -179,51 +184,14 @@ class ArtifactSyncIntegrationTest {
             artifacts = listOf(artifact)
         )
 
-        assertEquals(1, capturedFiles.size)
-        val savedFile = capturedFiles[0]
-        assertEquals("Report", savedFile.name)
-        assertEquals("# Markdown", savedFile.content)
-        assertEquals(MimeType.MARKDOWN, savedFile.mimeType)
-        assertEquals(FileSource.GENERATED, savedFile.fileSource)
-        assertEquals(MimeType.PDF, savedFile.targetFormat)
-        assertEquals("PENDING_UPLOAD", savedFile.syncStatus)
-
-        // 2. Run worker to upload to Storage
-        coEvery { messageFileDao.getPendingUploads() } returns listOf(savedFile)
-        coEvery { messageFileDao.getPendingDeletions() } returns emptyList()
-        
-        val storageRef = mockk<StorageReference>(relaxed = true)
-        val fileRef = mockk<StorageReference>(relaxed = true)
-        val uploadTask = mockk<UploadTask>(relaxed = true)
-        val downloadUrlTask = mockk<com.google.android.gms.tasks.Task<android.net.Uri>>(relaxed = true)
-
-        every { storage.reference } returns storageRef
-        every { storageRef.child(any()) } returns fileRef
-        every { fileRef.putBytes(any()) } returns uploadTask
-        
-        mockkStatic("kotlinx.coroutines.tasks.TasksKt")
-        mockkStatic("android.net.Uri")
-        val mockUri = mockk<android.net.Uri>()
-        every { mockUri.toString() } returns "https://firebase.storage/report.pdf"
-        every { android.net.Uri.parse(any()) } returns mockUri
-        
-        coEvery { uploadTask.await() } returns mockk()
-        every { fileRef.downloadUrl } returns downloadUrlTask
-        coEvery { downloadUrlTask.await() } returns mockUri
-        
-        coEvery { cryptoManager.encryptBytes(any()) } returns Result.success("encrypted".toByteArray())
-
-        val result = worker.doWork()
-
-        assertEquals(ListenableWorker.Result.success(), result)
-        
-        // Verify storage upload
-        verify { fileRef.putBytes("encrypted".toByteArray()) }
-        
-        // Verify DB update with remote URL and pendingSync=1
-        coVerify { 
-            messageFileDao.markUploaded(savedFile.id, "https://firebase.storage/report.pdf", any())
-        }
+        assertEquals(1, capturedDocuments.size)
+        val savedDocument = capturedDocuments[0]
+        assertEquals("artifact-sync-1", savedDocument.id)
+        assertEquals("Report", savedDocument.title)
+        assertEquals("# Markdown", savedDocument.json)
+        assertEquals(null, savedDocument.targetFormat)
+        assertEquals(messageId, savedDocument.messageId)
+        assertEquals(1, savedDocument.pendingSync)
     }
 
     @Test
@@ -257,7 +225,6 @@ class ArtifactSyncIntegrationTest {
             name = "file.txt",
             content = "Hello",
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             remoteUrl = "https://example.com/file.txt",
             syncStatus = "UPLOADED",
             pendingSync = 1,

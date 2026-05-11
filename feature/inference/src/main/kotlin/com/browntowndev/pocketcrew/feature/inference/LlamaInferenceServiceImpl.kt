@@ -426,6 +426,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                             modelType = targetModelType,
                             chatId = options.chatId,
                             userMessageId = options.userMessageId,
+                            assistantMessageId = options.assistantMessageId,
                         )
                     )
                 } ?: emptyList()
@@ -512,28 +513,24 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
                 if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
                     try {
-                        val payload = Json.parseToJsonElement(resultJson).jsonObject
-                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
-                        if (isComplete) {
-                            val fullDoc = payload["fullDocument"]?.jsonObject
-                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
-                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
-                            
-                            if (fullDoc != null) {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
+                            .parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
                                 emitEvent(
                                     InferenceEvent.Artifacts(
                                         artifacts = listOf(
                                             com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                                title = title,
-                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
-                                                content = fullDoc.toString()
-                                            )
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
                                         ),
-                                        modelType = targetModelType
-                                    )
+                                        modelType = targetModelType,
+                                    ),
                                 )
                             }
-                        }
                     } catch (e: Exception) {
                         loggingPort.error(TAG, "Failed to parse append_blocks result", e)
                     }
