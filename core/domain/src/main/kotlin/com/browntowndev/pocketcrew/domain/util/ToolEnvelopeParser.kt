@@ -6,8 +6,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
 import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.XSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateImageToolParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateVideoToolParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateMusicToolParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParameters
 import kotlinx.serialization.json.Json
@@ -26,11 +30,14 @@ import kotlinx.serialization.json.put
  * Generic tool envelope parser that supports both search and image-inspect tools.
  * Refactored from SearchToolSupport to handle multiple tool types.
  */
+@Suppress("TooManyFunctions")
 object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
     private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
+    @Suppress("MaxLineLength")
     private val GLM_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*([a-zA-Z0-9_]+)\s*<arg_key>([^<]+)</arg_key>\s*<arg_value>(.*?)</arg_value>\s*</tool_call>""")
+    @Suppress("MaxLineLength")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
 
     data class LocalToolEnvelope(
@@ -47,7 +54,7 @@ object ToolEnvelopeParser {
     }
 
     fun buildArgumentsJson(query: String): String =
-        ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments(TavilyWebSearchParams(query))
+        ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query))
 
     /**
      * Converts a raw Map (usually from an SDK like Google or Anthropic) into a JSON string.
@@ -64,7 +71,7 @@ object ToolEnvelopeParser {
                 // and apply any @SerialName mapping.
                 val params = toolDef.decodeArguments<ToolParameters>(jsonObject.toString())
                 toolDef.encodeArguments(params)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // If decoding fails (missing fields etc), fall back to raw JSON
                 // so the executor can decide how to handle it.
                 jsonObject.toString()
@@ -134,8 +141,8 @@ object ToolEnvelopeParser {
         urls: List<String>,
         extractDepth: String? = null,
         format: String? = null,
-    ): String = ToolDefinition.TAVILY_EXTRACT.encodeArguments(
-        TavilyExtractParams(
+    ): String = ToolDefinition.WEB_EXTRACT.encodeArguments(
+        WebExtractParams(
             urls = urls,
             extract_depth = extractDepth?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
             format = format?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown
@@ -172,17 +179,18 @@ object ToolEnvelopeParser {
 
     fun extractRequiredUrls(argumentsJson: String): List<String> {
         try {
-            val json = kotlinx.serialization.json.Json.parseToJsonElement(argumentsJson).jsonObject
-            val urlsArray = json["urls"]?.jsonArray
+            val json = Json.parseToJsonElement(argumentsJson).jsonObject
+            val urlsArray = (json["urls"] ?: json["arguments"]?.jsonObject?.get("urls"))?.jsonArray
             if (urlsArray != null && urlsArray.isNotEmpty()) {
                 return urlsArray.map { it.jsonPrimitive.content }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fall through to throw
         }
         throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
+    @Suppress("ThrowsCount", "CyclomaticComplexMethod")
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
         val glmMatch = GLM_TOOL_CALL_REGEX.find(text)
         if (glmMatch != null) {
@@ -225,9 +233,9 @@ object ToolEnvelopeParser {
         val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
             ?: throw IllegalStateException("Malformed tool_call envelope")
         val argumentsJson = when (toolName) {
-            ToolDefinition.TAVILY_WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
+            ToolDefinition.WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
             ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> buildImageInspectArgumentsJson(extractRequiredQuestion(payload))
-            ToolDefinition.TAVILY_EXTRACT.name -> {
+            ToolDefinition.WEB_EXTRACT.name -> {
                 val urls = extractRequiredUrls(payload)
                 buildExtractArgumentsJson(urls)
             }
@@ -236,6 +244,33 @@ object ToolEnvelopeParser {
             )
             ToolDefinition.SEARCH_CHAT.name -> buildSearchChatArgumentsJson(extractRequiredChatId(payload), extractRequiredQuery(payload))
             ToolDefinition.GET_MESSAGE_CONTEXT.name -> buildGetMessageContextArgumentsJson(extractRequiredMessageId(payload))
+            ToolDefinition.X_SEARCH.name -> ToolDefinition.X_SEARCH.encodeArguments(
+                XSearchParams(query = extractRequiredQuery(payload))
+            )
+            ToolDefinition.GENERATE_IMAGE.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_IMAGE.decodeArguments<GenerateImageToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateImageToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_IMAGE.encodeArguments(parsed)
+            }
+            ToolDefinition.GENERATE_VIDEO.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_VIDEO.decodeArguments<GenerateVideoToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateVideoToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_VIDEO.encodeArguments(parsed)
+            }
+            ToolDefinition.GENERATE_MUSIC.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_MUSIC.decodeArguments<GenerateMusicToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateMusicToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_MUSIC.encodeArguments(parsed)
+            }
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 
@@ -275,6 +310,7 @@ object ToolEnvelopeParser {
     fun buildLocalToolResultMessage(resultJson: String): String =
         "<tool_result>$resultJson</tool_result>"
 
+    @Suppress("MaxLineLength")
     fun stubResultJson(query: String): String =
         """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson("Pocket Crew stub result for query: $query")}"}]}"""
 
@@ -285,7 +321,7 @@ object ToolEnvelopeParser {
             if (!value.isNullOrBlank()) {
                 return value.trim()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback to regex if JSON parsing fails (common in partial local model streams)
         }
 
@@ -321,6 +357,7 @@ object ToolEnvelopeParser {
         }
     }
 
+    @Suppress("LoopWithTooManyJumpStatements")
     private fun unescapeJson(value: String): String {
         val result = StringBuilder(value.length)
         var index = 0

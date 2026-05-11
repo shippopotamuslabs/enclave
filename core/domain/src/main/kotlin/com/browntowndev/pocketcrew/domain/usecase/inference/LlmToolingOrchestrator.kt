@@ -70,7 +70,10 @@ class LlmToolingOrchestrator @Inject constructor(
         onInferencePass: suspend (params: TParams, allowToolCall: Boolean) -> TResponse,
         onToolCallDetected: (TResponse) -> List<ToolCallRequest>,
         onToolResultsMapped: suspend (params: TParams, response: TResponse, results: List<Pair<ToolCallRequest, String>>) -> TParams,
-        onContextExceeded: suspend (params: TParams, results: List<Pair<ToolCallRequest, String>>) -> ContextExceededResult<TParams> = { _, _ -> ContextExceededResult(false) },
+        @Suppress("MaxLineLength")
+        onContextExceeded: suspend (params: TParams, results: List<Pair<ToolCallRequest, String>>) -> ContextExceededResult<TParams> = { _, _ ->
+            ContextExceededResult(false)
+        },
         onToolResult: suspend (ToolCallRequest, String) -> Unit = { _, _ -> },
         onNoToolCallOnFirstPass: suspend (TResponse) -> Unit = {},
         onFinished: suspend (params: TParams, toolCallCount: Int, lastResponse: TResponse?) -> Unit
@@ -80,8 +83,11 @@ class LlmToolingOrchestrator @Inject constructor(
         var lastResponse: TResponse? = null
         var contextFullWarned = false
 
-        while (toolCallCount <= maxToolCalls + 1) {
-            val response = onInferencePass(currentParams, toolCallCount < maxToolCalls && !contextFullWarned)
+        // Effective limit that can expand for greedy tools
+        var effectiveMaxToolCalls = maxToolCalls
+
+        while (toolCallCount <= effectiveMaxToolCalls + 1) {
+            val response = onInferencePass(currentParams, toolCallCount < effectiveMaxToolCalls && !contextFullWarned)
             lastResponse = response
             
             val toolCalls = try {
@@ -112,9 +118,14 @@ class LlmToolingOrchestrator @Inject constructor(
                 break
             }
 
+            // Expand limit for incremental generation tools
+            if (toolCalls.any { it.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
+                effectiveMaxToolCalls = maxOf(effectiveMaxToolCalls, toolCallCount + 20)
+            }
+
             // If we are already beyond the limit and the model is STILL calling tools,
             // then we have a loop and must throw a hard error.
-            if (toolCallCount > maxToolCalls) {
+            if (toolCallCount > effectiveMaxToolCalls) {
                 loggingPort.error(tag, "Model ignored recursion limit warning provider=$providerName. Termination forced.")
                 throw IllegalStateException("Search skill recursion limit exceeded: Model ignored warning to stop calling tools.")
             }
@@ -122,19 +133,27 @@ class LlmToolingOrchestrator @Inject constructor(
             // If context was already flagged as full and the model is STILL calling tools,
             // hard error — same pattern as recursion limit enforcement.
             if (contextFullWarned) {
-                loggingPort.error(tag, "Model ignored context-full warning and called another tool provider=$providerName. Termination forced.")
-                throw IllegalStateException("Context window exceeded: Model was warned to stop calling tools but continued. Try simplifying your request.")
+                loggingPort.error(
+                    tag,
+                    "Model ignored context-full warning and called another tool " +
+                        "provider=$providerName. Termination forced."
+                )
+                throw IllegalStateException(
+                    "Context window exceeded: Model was warned to stop calling tools " +
+                        "but continued. Try simplifying your request."
+                )
             }
 
             val turnResults = mutableListOf<Pair<ToolCallRequest, String>>()
             for (toolCall in toolCalls) {
                 val toolResult = try {
-                    if (toolCallCount >= maxToolCalls) {
+                    if (toolCallCount >= effectiveMaxToolCalls) {
                         loggingPort.warning(
                             tag,
                             "Recursive tool call limit reached provider=$providerName tool=${toolCall.toolName}"
                         )
                         // Report limit as an error to the model instead of crashing
+                        @Suppress("MaxLineLength")
                         ToolExecutionResult(
                             toolName = toolCall.toolName,
                             resultJson = """{"error": "Recursion limit reached. You have called too many tools. Do not call any more tools. Provide a final response based on the information you already have."}"""
@@ -165,7 +184,8 @@ class LlmToolingOrchestrator @Inject constructor(
 
                 loggingPort.info(
                     tag,
-                    "Tool call processed provider=$providerName tool=${toolCall.toolName} iteration=$toolCallCount resultChars=${toolResult.resultJson.length}"
+                    "Tool call processed provider=$providerName tool=${toolCall.toolName} " +
+                        "iteration=$toolCallCount resultChars=${toolResult.resultJson.length}"
                 )
                 
                 onToolResult(toolCall, toolResult.resultJson)
@@ -181,7 +201,11 @@ class LlmToolingOrchestrator @Inject constructor(
             }
             if (contextResult.contextExceeded) {
                 contextFullWarned = true
-                loggingPort.warning(tag, "Context window threshold exceeded during tool loop provider=$providerName. Model will be warned to stop calling tools.")
+                loggingPort.warning(
+                    tag,
+                    "Context window threshold exceeded during tool loop " +
+                        "provider=$providerName. Model will be warned to stop calling tools."
+                )
             }
         }
 

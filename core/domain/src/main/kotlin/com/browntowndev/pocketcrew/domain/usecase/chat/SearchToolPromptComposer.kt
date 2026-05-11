@@ -3,26 +3,42 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
+import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import javax.inject.Inject
 
-class SearchToolPromptComposer @Inject constructor() {
+class SearchToolPromptComposer @Inject constructor() : PromptComposerPort {
 
-    fun compose(
+    override fun compose(
         baseSystemPrompt: String?,
-        includeSearchTool: Boolean = true,
-        includeImageInspectTool: Boolean = false,
-        includeMemoryTools: Boolean = true,
-        includeArtifactTool: Boolean = false,
-        currentChatId: String? = null,
-        strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
-        coreMemories: List<Memory> = emptyList(),
-        retrievedMemories: List<Memory> = emptyList(),
+        includeSearchTool: Boolean,
+        includeXSearchTool: Boolean,
+        includeImageInspectTool: Boolean,
+        includeMemoryTools: Boolean,
+        includeArtifactTool: Boolean,
+        includeImageGenerationTool: Boolean,
+        includeVideoGenerationTool: Boolean,
+        includeMusicGenerationTool: Boolean,
+        currentChatId: String?,
+        strategy: ToolCallStrategy,
+        coreMemories: List<Memory>,
+        retrievedMemories: List<Memory>,
     ): String =
         listOfNotNull(
             formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
             formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
-            localToolContract(includeSearchTool, includeImageInspectTool, includeMemoryTools, includeArtifactTool, currentChatId, strategy).takeIf(String::isNotEmpty),
+            localToolContract(
+                includeSearchTool = includeSearchTool,
+                includeXSearchTool = includeXSearchTool,
+                includeImageInspectTool = includeImageInspectTool,
+                includeMemoryTools = includeMemoryTools,
+                includeArtifactTool = includeArtifactTool,
+                includeImageGenerationTool = includeImageGenerationTool,
+                includeVideoGenerationTool = includeVideoGenerationTool,
+                includeMusicGenerationTool = includeMusicGenerationTool,
+                currentChatId = currentChatId,
+                strategy = strategy
+            ).takeIf(String::isNotEmpty),
         ).joinToString(separator = "\n\n")
 
     companion object {
@@ -58,15 +74,16 @@ class SearchToolPromptComposer @Inject constructor() {
 
         private fun searchToolContract(strategy: ToolCallStrategy): String {
             val extractNote = if (strategy == ToolCallStrategy.LITE_RT_NATIVE) {
-                " Note that 'urls' must be a SINGLE string where you list the URLs separated by commas. For very long pages, only the most relevant first part will be provided to fit the context window:"
+                " Note that 'urls' must be a SINGLE string where you list the URLs separated by commas. " +
+                    "For very long pages, only the most relevant first part will be provided to fit the context window:"
             } else ""
 
             return """
 # TOOL USE MANDATE:
-You have access to real-time information via '${ToolDefinition.TAVILY_WEB_SEARCH.name}' and '${ToolDefinition.TAVILY_EXTRACT.name}'. 
+You have access to real-time information via '${ToolDefinition.WEB_SEARCH.name}' and '${ToolDefinition.WEB_EXTRACT.name}'. 
 If the user's request involves ANY of the following, you MUST call the search tool before answering:
 - Current events, news, or recent developments.
-- Dates, times, or schedules (today is April 16, 2026).
+- Dates, times, or schedules.
 - Verifying facts, statistics, or status of products/companies.
 - Anything where your internal knowledge might be stale or incomplete.
 - Any terms you don't recognize.
@@ -74,12 +91,31 @@ If the user's request involves ANY of the following, you MUST call the search to
 DO NOT ASSUME you know the answer. When in doubt, SEARCH.
 
 To search:
-${ToolDefinition.TAVILY_WEB_SEARCH.toExample(strategy)}
+${ToolDefinition.WEB_SEARCH.toExample(strategy)}
 
-If you need to read the full content of a webpage from the search results, use ${ToolDefinition.TAVILY_EXTRACT.name}.$extractNote
-${ToolDefinition.TAVILY_EXTRACT.toExample(strategy)}
+If you need to read the full content of a webpage from the search results, use ${ToolDefinition.WEB_EXTRACT.name}.$extractNote
+${ToolDefinition.WEB_EXTRACT.toExample(strategy)}
 """.trimIndent()
         }
+
+        @Suppress("MaxLineLength")
+        private fun metadataRules(): String = """
+# TEMPORAL CONTEXT:
+User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation. 
+IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
+""".trimIndent()
+
+        private fun xSearchToolContract(strategy: ToolCallStrategy): String = """
+# X (TWITTER) SEARCH MANDATE:
+You have access to '${ToolDefinition.X_SEARCH.name}' to search for recent posts on X (Twitter).
+If the user's request involves ANY of the following, you SHOULD use this tool:
+- Real-time trends or public sentiment on X.
+- Recent breaking news or events being discussed on social media.
+- Finding specific posts or comments from X users.
+
+To search X:
+${ToolDefinition.X_SEARCH.toExample(strategy)}
+""".trimIndent()
 
         private fun imageInspectContract(strategy: ToolCallStrategy): String = """
 # IMAGE INSPECTION MANDATE:
@@ -90,26 +126,27 @@ To inspect:
 ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
 """.trimIndent()
 
+        @Suppress("MaxLineLength")
         private fun artifactContract(strategy: ToolCallStrategy): String = """
-# ARTIFACT STUDIO MANDATE:
-You have access to '${ToolDefinition.GENERATE_ARTIFACT.name}' to create professional, structured documents (PDFs).
-If the user's request involves creating a report, document, list, or structured summary that should be "exported" or "rendered nicely", you MUST use this tool.
-The tool produces a deterministic interactive preview and allows native PDF export.
+# ARTIFACT STUDIO MANDATE (Incremental Generation):
+You MUST use the Artifact tools to create professional, structured documents (PDF or Word).
+For large documents (reports, plans, books), you MUST generate the document incrementally using this loop:
 
-To generate an artifact:
-${ToolDefinition.GENERATE_ARTIFACT.toExample(strategy)}
+1. **Initialize**: Call '${ToolDefinition.START_ARTIFACT.name}' first. It returns an 'artifactId'.
+   Example: ${ToolDefinition.START_ARTIFACT.toExample(strategy)}
 
-CONTENT FORMAT:
-Provide the full content of the document as standard Markdown in the 'content' field.
-Use standard Markdown syntax for:
-- Headers (# for H1, ## for H2, etc.)
-- Lists (ordered and unordered)
-- Tables
-- Bold and Italic text
-- Code blocks with language labels
-- Blockquotes
+2. **Append content**: Call '${ToolDefinition.APPEND_BLOCKS.name}' repeatedly to add content.
+   - You MUST emit 10-15 blocks per call. NEVER exceed 15 blocks in a single call.
+   - 'blocks' is a list of JSON objects (headings, paragraphs, lists, tables, etc.).
+3. **Set complete**: Set 'isComplete' to true ONLY in your very last call.
+
+4. **Recall context**: If you need to recall specific details, names, or sections from earlier parts of the document that are no longer in your immediate context window, call '${ToolDefinition.SEARCH_CURRENT_ARTIFACT.name}'.
+   Example: ${ToolDefinition.SEARCH_CURRENT_ARTIFACT.toExample(strategy)}
+
+The tool produces a deterministic interactive preview and allows native PDF/Word export.
 """.trimIndent()
 
+        @Suppress("MaxLineLength")
         private fun memoryToolsContract(currentChatId: String?, strategy: ToolCallStrategy): String = buildString {
             append("""
 # CONVERSATION MEMORY TOOLS:
@@ -126,7 +163,8 @@ You have access to '${ToolDefinition.SEARCH_CHAT_HISTORY.name}', '${ToolDefiniti
             }
 
             if (currentChatId != null) {
-                append("\n\nThe current chat ID is \"" + currentChatId + "\". Use this ID with ${ToolDefinition.SEARCH_CHAT.name} to search messages in the current conversation.")
+                append("\n\nThe current chat ID is \"" + currentChatId + "\". " +
+                    "Use this ID with ${ToolDefinition.SEARCH_CHAT.name} to search messages in the current conversation.")
             }
             append("""
 
@@ -142,6 +180,43 @@ ${ToolDefinition.GET_MESSAGE_CONTEXT.toExample(strategy)}
 To manage long-term memories:
 ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
 """.trimIndent())
+        }
+
+        private fun mediaGenerationContract(
+            includeImage: Boolean,
+            includeVideo: Boolean,
+            includeMusic: Boolean,
+            strategy: ToolCallStrategy
+        ): String = buildString {
+            append("# MEDIA GENERATION MANDATE:\n")
+            append("You have access to professional media generation tools. " +
+                "Use these when the user asks you to create, generate, draw, or compose original content.\n\n")
+
+            if (includeImage) {
+                append("- Use '${ToolDefinition.GENERATE_IMAGE.name}' to generate images, " +
+                "illustrations, or pictures from text descriptions.\n")
+                append("To generate an image:\n")
+                append(ToolDefinition.GENERATE_IMAGE.toExample(strategy))
+                append("\n\n")
+            }
+
+            if (includeVideo) {
+                append("- Use '${ToolDefinition.GENERATE_VIDEO.name}' to generate short videos " +
+                "or animations from text descriptions.\n")
+                append("To generate a video:\n")
+                append(ToolDefinition.GENERATE_VIDEO.toExample(strategy))
+                append("\n\n")
+            }
+
+            if (includeMusic) {
+                append("- Use '${ToolDefinition.GENERATE_MUSIC.name}' to generate music, beats, or soundtracks from text descriptions.\n")
+                append("To generate music:\n")
+                append(ToolDefinition.GENERATE_MUSIC.toExample(strategy))
+                append("\n\n")
+            }
+
+            append("IMPORTANT: After calling any media tool, inform the user that the media has been generated " +
+                "and is available in their Studio. They can tap the generation card in the chat to open it.")
         }
 
         private fun strictRules(strategy: ToolCallStrategy): String = when (strategy) {
@@ -164,18 +239,31 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
 
         fun localToolContract(
             includeSearchTool: Boolean = true,
+            includeXSearchTool: Boolean = false,
             includeImageInspectTool: Boolean = false,
             includeMemoryTools: Boolean = true,
             includeArtifactTool: Boolean = false,
+            includeImageGenerationTool: Boolean = false,
+            includeVideoGenerationTool: Boolean = false,
+            includeMusicGenerationTool: Boolean = false,
             currentChatId: String? = null,
             strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         ): String {
-            if (!includeSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool) return ""
+            val noToolsIncluded = !includeSearchTool && !includeXSearchTool && !includeImageInspectTool &&
+                !includeMemoryTools && !includeArtifactTool &&
+                !includeImageGenerationTool && !includeVideoGenerationTool && !includeMusicGenerationTool
+            if (noToolsIncluded) return ""
             if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
             return buildString {
+                append(metadataRules())
+                append("\n\n")
                 if (includeSearchTool) {
                     append(searchToolContract(strategy))
+                }
+                if (includeXSearchTool) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(xSearchToolContract(strategy))
                 }
                 if (includeImageInspectTool) {
                     if (isNotEmpty()) append("\n\n")
@@ -188,6 +276,15 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
                 if (includeArtifactTool) {
                     if (isNotEmpty()) append("\n\n")
                     append(artifactContract(strategy))
+                }
+                if (includeImageGenerationTool || includeVideoGenerationTool || includeMusicGenerationTool) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(mediaGenerationContract(
+                        includeImage = includeImageGenerationTool,
+                        includeVideo = includeVideoGenerationTool,
+                        includeMusic = includeMusicGenerationTool,
+                        strategy = strategy
+                    ))
                 }
                 val rules = strictRules(strategy)
                 if (rules.isNotEmpty()) {

@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -20,8 +23,15 @@ interface SettingsPreferencesUseCases {
     val updateCustomPromptText: UpdateCustomPromptTextUseCase
     val updateAllowMemories: UpdateAllowMemoriesUseCase
     val updateSearchEnabled: UpdateSearchEnabledUseCase
+    val updateSearchProvider: UpdateSearchProviderUseCase
     val saveTavilyApiKey: SaveTavilyApiKeyUseCase
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
+    val saveExaApiKey: SaveExaApiKeyUseCase
+    val clearExaApiKey: ClearExaApiKeyUseCase
+    val updateXSearchEnabled: UpdateXSearchEnabledUseCase
+    val saveXApiKey: SaveXApiKeyUseCase
+    val clearXApiKey: ClearXApiKeyUseCase
+    val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase
     val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
 }
 
@@ -64,6 +74,19 @@ interface SettingsMediaUseCases {
     val deleteMediaProvider: DeleteMediaProviderUseCase
 }
 
+interface SettingsAuthUseCases {
+    val loginWithGoogle: LoginWithGoogleUseCase
+    val logout: LogoutUseCase
+    val getAuthState: GetAuthStateUseCase
+}
+
+interface SettingsMemoriesUseCases {
+    fun getAllMemoriesFlow(): kotlinx.coroutines.flow.Flow<List<com.browntowndev.pocketcrew.domain.model.memory.Memory>>
+    suspend fun insertMemory(category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory, content: String): com.browntowndev.pocketcrew.domain.model.memory.Memory
+    suspend fun updateMemory(id: String, content: String, category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?)
+    suspend fun deleteMemory(id: String)
+}
+
 interface SettingsUseCases {
     val preferences: SettingsPreferencesUseCases
     val localModels: SettingsLocalModelUseCases
@@ -72,6 +95,8 @@ interface SettingsUseCases {
     val deletion: SettingsDeletionUseCases
     val tts: SettingsTtsUseCases
     val media: SettingsMediaUseCases
+    val auth: SettingsAuthUseCases
+    val memories: SettingsMemoriesUseCases
 
     val getSettings: GetSettingsUseCase
         get() = preferences.getSettings

@@ -40,5 +40,11 @@ data class ChatSummaryEntity(
     @ColumnInfo(name = "last_summarized_message_id")
     val lastSummarizedMessageId: MessageId?,
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "pending_sync", defaultValue = "0")
+    val pendingSync: Int = 1,
+    @ColumnInfo(name = "deleted", defaultValue = "0")
+    val deleted: Boolean = false,
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = System.currentTimeMillis()
 )

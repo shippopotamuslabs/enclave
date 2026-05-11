@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -38,7 +38,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = capture(contentSlot),
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -59,7 +59,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
-                """{"name":"tavily_web_search","arguments":{"query":"android"}}""",
+                """{"name":"web_search","arguments":{"query":"android"}}""",
                 ModelType.FAST,
             )
         )
@@ -92,7 +92,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -113,7 +113,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
-                """<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"android"}}</tool>]]>""",
+                """<![CDATA[<tool>{"name":"web_search","arguments":{"query":"android"}}</tool>]]>""",
                 ModelType.FAST,
             )
         )
@@ -145,7 +145,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = any(),
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -174,7 +174,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
     @Test
     fun `persist use case applies extracted flag to sources before persisting`() = runTest {
         val chatRepository = mockk<ChatRepository>(relaxed = true)
-        val sourcesSlot = slot<List<TavilySource>>()
+        val sourcesSlot = slot<List<WebSearchSource>>()
         coEvery {
             chatRepository.persistAllMessageData(
                 messageId = any(),
@@ -186,7 +186,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = any(),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = capture(sourcesSlot),
+                webSearchSources = capture(sourcesSlot),
             )
         } returns Unit
 
@@ -198,7 +198,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             chatRepository = chatRepository,
         )
 
-        val source1 = TavilySource(
+        val source1 = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Result 1",
             url = "https://example.com/page1",
@@ -206,7 +206,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             score = 0.9,
             extracted = false,
         )
-        val source2 = TavilySource(
+        val source2 = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Result 2",
             url = "https://example.com/page2",
@@ -215,7 +215,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             extracted = false,
         )
 
-        manager.reduce(MessageGenerationState.TavilySourcesAttached(listOf(source1, source2), ModelType.FAST))
+        manager.reduce(MessageGenerationState.WebSearchSourcesAttached(listOf(source1, source2), ModelType.FAST))
         manager.reduce(MessageGenerationState.Finished(ModelType.FAST))
 
         val extractedUrls = setOf("https://example.com/page1")
@@ -237,7 +237,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         assertFalse(persistedSources.first { it.url == "https://example.com/page2" }.extracted,
             "Source whose URL is NOT in extractedUrls should have extracted=false")
 
-        // markSourcesExtracted should also be called as a safety net
-        coVerify(exactly = 1) { chatRepository.markSourcesExtracted(extractedUrls.toList()) }
+        // markWebSearchSourcesExtracted should also be called as a safety net
+        coVerify(exactly = 1) { chatRepository.markWebSearchSourcesExtracted(extractedUrls.toList()) }
     }
 }

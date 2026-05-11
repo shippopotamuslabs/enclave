@@ -60,12 +60,11 @@ fun DownloadFileSpec.requiredArtifacts(): List<DownloadArtifact> {
             huggingFacePath = huggingFacePath,
         )
     )
-    if (
-        !mmprojRemoteFileName.isNullOrBlank() &&
+    val hasMmprojArtifacts = !mmprojRemoteFileName.isNullOrBlank() &&
         !mmprojLocalFileName.isNullOrBlank() &&
         !mmprojSha256.isNullOrBlank() &&
         mmprojSizeInBytes != null
-    ) {
+    if (hasMmprojArtifacts) {
         artifacts += DownloadArtifact(
             remoteFileName = mmprojRemoteFileName,
             localFileName = mmprojLocalFileName,

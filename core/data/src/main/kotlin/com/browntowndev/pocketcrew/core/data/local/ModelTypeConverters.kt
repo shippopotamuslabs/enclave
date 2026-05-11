@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.TypeConverter
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
@@ -15,6 +17,18 @@ import java.util.Date
  * Type converters for Room to convert complex types to/from database-friendly formats.
  */
 class ModelTypeConverters {
+    @TypeConverter
+    fun fromMimeType(type: MimeType?): String? = type?.name
+
+    @TypeConverter
+    fun toMimeType(value: String?): MimeType? = value?.let { MimeType.valueOf(it) }
+
+    @TypeConverter
+    fun fromFileSource(source: FileSource): String = source.name
+
+    @TypeConverter
+    fun toFileSource(value: String): FileSource = FileSource.valueOf(value)
+
     @TypeConverter
     fun fromModelType(modelType: ModelType): String = modelType.apiValue
 

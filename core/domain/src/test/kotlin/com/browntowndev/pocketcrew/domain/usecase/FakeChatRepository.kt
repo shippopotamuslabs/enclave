@@ -1,15 +1,16 @@
 package com.browntowndev.pocketcrew.domain.usecase
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -187,8 +188,12 @@ class FakeChatRepository : ChatRepository {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>,
-        artifacts: List<ArtifactGenerationRequest>
+        webSearchSources: List<WebSearchSource>,
+        artifacts: List<ArtifactGenerationRequest>,
+        generatedMediaUris: List<String>,
+        generatedMediaAssetIds: List<String>,
+        generatedMediaTypes: List<String>,
+        generatedMediaPrompts: List<String>
     ) {
         persistedMessageData.add(
             PersistedMessageData(
@@ -201,10 +206,21 @@ class FakeChatRepository : ChatRepository {
                 content = content,
                 messageState = messageState,
                 pipelineStep = pipelineStep,
-                tavilySources = tavilySources,
-                artifacts = artifacts
+                webSearchSources = webSearchSources,
+                artifacts = artifacts,
+                generatedMediaUris = generatedMediaUris,
+                generatedMediaAssetIds = generatedMediaAssetIds,
+                generatedMediaTypes = generatedMediaTypes,
+                generatedMediaPrompts = generatedMediaPrompts
             )
         )
+    }
+
+    override suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
+    ) {
+        // No-op for tests that do not assert on export preference
     }
 
     data class PersistedMessageData(
@@ -217,11 +233,19 @@ class FakeChatRepository : ChatRepository {
         val content: String,
         val messageState: MessageState,
         val pipelineStep: PipelineStep?,
-        val tavilySources: List<TavilySource>,
-        val artifacts: List<ArtifactGenerationRequest>
+        val webSearchSources: List<WebSearchSource>,
+        val artifacts: List<ArtifactGenerationRequest>,
+        val generatedMediaUris: List<String> = emptyList(),
+        val generatedMediaAssetIds: List<String> = emptyList(),
+        val generatedMediaTypes: List<String> = emptyList(),
+        val generatedMediaPrompts: List<String> = emptyList()
     )
 
-    override suspend fun markSourcesExtracted(urls: List<String>) {
-        // No-op for testing
+    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
+        // No-op for fake
+    }
+
+    override suspend fun markWebSearchSourceExtracted(url: String) {
+        // No-op for fake
     }
 }

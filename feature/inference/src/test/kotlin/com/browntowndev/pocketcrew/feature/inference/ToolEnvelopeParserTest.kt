@@ -32,10 +32,10 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `generic local parser accepts valid search envelope`() {
-        val text = """Some prefix,{"name":"tavily_web_search","arguments":{"query":"android news"}},"""
+        val text = """Some prefix,{"name":"web_search","arguments":{"query":"android news"}},"""
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
         assertNotNull(envelope)
-        assertEquals("tavily_web_search", envelope!!.toolName)
+        assertEquals("web_search", envelope!!.toolName)
         assertTrue(envelope.argumentsJson.contains("query"))
     }
 
@@ -54,7 +54,7 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `missing query fails for search tool`() {
-        val text = """{"name":"tavily_web_search","arguments":{}},"""
+        val text = """{"name":"web_search","arguments":{}},"""
         assertFailsWith<IllegalArgumentException> {
             ToolEnvelopeParser.extractLocalToolEnvelope(text)
         }
@@ -85,8 +85,8 @@ class ToolEnvelopeParserTest {
     @Test
     fun `local tool contract string contains the search example by default`() {
         val contract = ToolPromptComposer.localToolContract(includeImageInspectTool = false)
-        assertTrue(contract.contains("tavily_web_search"),
-            "Contract should mention tavily_web_search")
+        assertTrue(contract.contains("web_search"),
+            "Contract should mention web_search")
         assertFalse(contract.contains("attached_image_inspect"),
             "Contract should not mention attached_image_inspect unless requested")
         assertTrue(contract.contains("query"),
@@ -131,7 +131,7 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `visiblePrefix and visibleSuffix preserved for search envelope`() {
-        val text = """Prefix,{"name":"tavily_web_search","arguments":{"query":"test query"}},Suffix"""
+        val text = """Prefix,{"name":"web_search","arguments":{"query":"test query"}},Suffix"""
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
         assertNotNull(envelope)
         assertEquals("Prefix", envelope!!.visiblePrefix)
@@ -140,7 +140,7 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `extractLocalToolEnvelope preserves escaped quotes in search query`() {
-        val text = """Prefix,{"name":"tavily_web_search","arguments":{"query":"android \"agent\" news"}},Suffix"""
+        val text = """Prefix,{"name":"web_search","arguments":{"query":"android \"agent\" news"}},Suffix"""
 
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
 
@@ -163,10 +163,10 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `extractLocalToolEnvelope parses CDATA tool envelope`() {
-        val text = """Some prefix,<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"android news"}}</tool>]]>,Some suffix"""
+        val text = """Some prefix,<![CDATA[<tool>{"name":"web_search","arguments":{"query":"android news"}}</tool>]]>,Some suffix"""
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
         assertNotNull(envelope)
-        assertEquals("tavily_web_search", envelope!!.toolName)
+        assertEquals("web_search", envelope!!.toolName)
         assertEquals("""{"query":"android news"}""", envelope.argumentsJson)
         assertEquals("Some prefix,", envelope.visiblePrefix)
         assertEquals(",Some suffix", envelope.visibleSuffix)
@@ -174,10 +174,10 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun `extractLocalToolEnvelope parses original wrapped tool envelope`() {
-        val text = """Some prefix,<tool_call>{"name":"tavily_web_search","arguments":{"query":"android news"}}</tool_call>,Some suffix"""
+        val text = """Some prefix,<tool_call>{"name":"web_search","arguments":{"query":"android news"}}</tool_call>,Some suffix"""
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
         assertNotNull(envelope)
-        assertEquals("tavily_web_search", envelope!!.toolName)
+        assertEquals("web_search", envelope!!.toolName)
         assertEquals("""{"query":"android news"}""", envelope.argumentsJson)
         assertEquals("Some prefix,", envelope.visiblePrefix)
         assertEquals(",Some suffix", envelope.visibleSuffix)

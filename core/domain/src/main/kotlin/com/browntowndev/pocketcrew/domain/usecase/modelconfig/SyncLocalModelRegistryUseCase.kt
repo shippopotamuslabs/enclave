@@ -27,6 +27,7 @@ class SyncLocalModelRegistryUseCase @Inject constructor(
      * @param asset The local model asset to sync
      * @return SlotResolvedLocalModel containing the synced asset and configuration
      */
+    @Suppress("ThrowsCount")
     suspend operator fun invoke(
         modelType: ModelType,
         asset: LocalModelAsset
@@ -35,7 +36,7 @@ class SyncLocalModelRegistryUseCase @Inject constructor(
             val assetId = localModelRepository.upsertLocalAsset(asset)
             
             if (asset.configurations.isEmpty()) {
-                throw IllegalArgumentException("Asset must contain at least one configuration")
+                require(false) { "Asset must contain at least one configuration" }
             }
 
             // Find the specific config that is assigned to this modelType

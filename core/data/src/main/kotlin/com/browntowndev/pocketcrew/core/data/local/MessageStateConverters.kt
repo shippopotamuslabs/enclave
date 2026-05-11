@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.TypeConverter
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 
 /**
  * Type converters for Room to convert MessageState enum to/from String.

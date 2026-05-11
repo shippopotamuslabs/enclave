@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "androjack": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "androjack-mcp@1.7.1"
+      ],
+      "env": {},
+      "autoApprove": [],
+      "disabled": false
+    }
+  }
+}

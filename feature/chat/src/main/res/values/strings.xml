@@ -5,4 +5,17 @@
     <string name="mode_thinking">Thinking</string>
     <string name="use_the_crew">Use the Crew</string>
     <string name="use_the_crew_subtitle">Get a better response</string>
+    <string name="artifact_export_sheet_title">Export document</string>
+    <string name="artifact_export_step_format">Choose format</string>
+    <string name="artifact_export_step_destination">Share or download</string>
+    <string name="artifact_export_format_pdf">PDF</string>
+    <string name="artifact_export_format_word">Word</string>
+    <string name="artifact_export_format_both">Both</string>
+    <string name="artifact_export_dest_share">Share</string>
+    <string name="artifact_export_dest_download">Download</string>
+    <string name="artifact_export_continue">Continue</string>
+    <string name="artifact_export_action">Export</string>
+    <string name="artifact_export_back">Back</string>
+    <string name="artifact_export_close">Close export sheet</string>
+    <string name="artifact_export_in_progress">Exporting…</string>
 </resources>

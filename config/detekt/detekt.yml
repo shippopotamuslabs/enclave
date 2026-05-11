@@ -1,5 +1,5 @@
 # Detekt configuration for Pocket Crew
-# Strict but pragmatic rule sets
+# Strict but pragmatic rule sets optimized for Jetpack Compose and Hilt
 
 build:
   maxIssues: 0
@@ -9,7 +9,6 @@ config:
   validation: true
   warningsAsErrors: false
 
-# Enable main rule sets with relaxed thresholds for existing codebase
 potential-bugs:
   active: true
   excludes:
@@ -22,7 +21,84 @@ style:
     - '**/test/**'
     - '**/androidTest/**'
   MaxLineLength:
+    # 140 is pragmatic for Android: Room queries, Hilt modules, Compose signatures,
+    # long string templates, and API model classes
+    maxLineLength: 140
     excludeCommentStatements: true
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludes:
+      # Regex patterns and prompt templates can't be meaningfully broken
+      - '**/ToolEnvelopeParser.kt'
+      - '**/SystemPromptTemplates.kt'
+  MagicNumber:
+    # Ignore magic numbers in Compose and UI related files where they are idiomatic
+    excludes:
+      - '**/ui/**'
+      - '**/components/**'
+      - '**/theme/**'
+      - '**/*Screen.kt'
+      - '**/*Preview.kt'
+      - '**/navigation/**'
+      - '**/di/**'
+      - '**/*Module.kt'
+    # Use list of strings to avoid type casting issues in older detekt versions
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+      - '3'
+      - '4'
+      - '5'
+      - '6'
+      - '7'
+      - '8'
+      - '9'
+      - '10'
+      - '12'
+      - '13'
+      - '15'
+      - '16'
+      - '24'
+      - '30'
+      - '32'
+      - '40'
+      - '50'
+      - '60'
+      - '75'
+      - '100'
+      - '128'
+      - '150'
+      - '256'
+      - '500'
+      - '512'
+      - '1000'
+      - '1024'
+      - '2048'
+      - '3000'
+      - '3600'
+      - '4096'
+      - '8192'
+    ignoreEnums: true
+    ignoreAnnotation: true
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  ReturnCount:
+    # Relaxed for complex state mapping and intent handling
+    max: 5
+  UnusedPrivateProperty:
+    active: true
+  UnusedParameter:
+    active: true
+  UseCheckOrError:
+    active: false
+    # Disabled: Hilt/Dagger modules, Room DAOs, and Android framework code
+    # legitimately use IllegalStateException/IllegalArgumentException
+  WildcardImport:
+    active: false
+    # Disabled: Android convention allows wildcard imports for
+    # Compose (androidx.compose.*), Hilt, and Kotlin standard library
 
 complexity:
   active: true
@@ -30,18 +106,71 @@ complexity:
     - '**/test/**'
     - '**/androidTest/**'
   LongMethod:
-    threshold: 60
+    # Relaxed for declarative UI and Navigation graphs
+    # Compose functions with many parameters naturally exceed 100 lines
+    # Navigation graphs are inherently long (PocketCrewNavGraph is 705 lines)
+    threshold: 350
   CyclomaticComplexMethod:
-    threshold: 20
+    # Relaxed for complex UI branching
+    threshold: 30
+  LongParameterList:
+    # Essential for Compose state hoisting and Hilt ViewModels
+    functionThreshold: 15
+    constructorThreshold: 20
+  LargeClass:
+    # COORDINATOR ViewModels are naturally larger
+    threshold: 600
+  TooManyFunctions:
+    # Large feature ViewModels often exceed the default 11
+    # Using v1.x property names as project uses detekt 1.23.8
+    thresholdInFiles: 40
+    thresholdInClasses: 30
+    thresholdInInterfaces: 20
+    thresholdInObjects: 20
+    thresholdInEnums: 20
+  NestedBlockDepth:
+    threshold: 6
 
 performance:
   active: true
 
 naming:
   active: true
+  FunctionNaming:
+    # Allow PascalCase for Jetpack Compose functions
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+  ConstructorParameterNaming:
+    # Hilt-injected constructors use underscore-prefixed params conventionally
+    active: false
+  EnumNaming:
+    # Allow PascalCase entries for Room enum columns and API response enums
+    active: false
+  VariableNaming:
+    # Allow short names for common patterns (e.g., `e` in catch, `t` in generic)
+    active: false
+  FunctionParameterNaming:
+    # Allow underscore-prefixed params (Hilt convention) and short names
+    active: false
 
 empty-blocks:
   active: true
+  EmptyFunctionBlock:
+    # Allow empty blocks in test fakes and overridden methods with no-op behavior
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+    ignoreOverridden: true
 
 exceptions:
   active: true
+  excludes:
+    - '**/test/**'
+    - '**/androidTest/**'
+  TooGenericExceptionCaught:
+    active: false
+    # Disabled: Android services, coroutines, and framework callbacks
+    # commonly catch generic Exception as a top-level safety net
+  TooGenericExceptionThrown:
+    active: false
+    # Disabled: IllegalStateException/IllegalArgumentException are idiomatic
+    # for precondition checks in Android

@@ -1,0 +1,33 @@
+    @Test
+    fun `shareChat works`() = runTest {
+        try {
+            val messages = listOf(
+                Message(
+                    id = MessageId("1"),
+                    chatId = ChatId("chat1"),
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                    createdAt = 1000L
+                )
+            )
+
+            val callable = mockk<HttpsCallableReference>(relaxed = true)
+            val result = mockk<HttpsCallableResult>(relaxed = true)
+            val mockData = mapOf(
+                "shareId" to "share123",
+                "shareUrl" to "https://pocketcrew.app/share/share123"
+            )
+
+            every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+            every { callable.call(any()) } returns Tasks.forResult(result)
+            every { result.data } returns mockData
+
+            val sharedChat = repository.shareChat(messages)
+            assertNotNull(sharedChat)
+            assertTrue(sharedChat.shareUrl.contains("#key="))
+        } catch (e: Throwable) {
+            println("CATCHED: ${e.javaClass.name}: ${e.message}")
+            e.printStackTrace()
+            throw e
+        }
+    }

@@ -328,6 +328,7 @@ private fun DetailActionsOverlay(
 }
 
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Image detail", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun StudioDetailImagePreview() {
@@ -344,6 +345,7 @@ private fun StudioDetailImagePreview() {
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Loading animation", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun StudioDetailLoadingPreview() {
@@ -360,6 +362,7 @@ private fun StudioDetailLoadingPreview() {
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Generated video", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun StudioDetailVideoPreview() {

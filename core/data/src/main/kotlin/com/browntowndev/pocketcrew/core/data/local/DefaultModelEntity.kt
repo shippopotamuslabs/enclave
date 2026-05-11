@@ -64,7 +64,12 @@ data class DefaultModelEntity(
     val mediaProviderId: MediaProviderId? = null,
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 ) {
     init {
         val nonNullCount = listOf(localConfigId, apiConfigId, ttsProviderId, mediaProviderId).count { it != null }

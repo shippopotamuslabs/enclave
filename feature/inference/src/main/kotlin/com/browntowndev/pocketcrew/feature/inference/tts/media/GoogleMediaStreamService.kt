@@ -58,6 +58,12 @@ class GoogleMediaStreamService @Inject constructor(
 private class GoogleTtsDelegate(
     private val modelsApiProvider: () -> com.google.genai.Models,
 ) {
+    private companion object {
+        const val TTS_SAMPLE_RATE = 24_000
+        const val WAV_HEADER_SIZE = 44
+        const val WAV_FMT_CHUNK_SIZE = 36
+    }
+
     suspend fun synthesizeSpeech(text: String, voice: String, modelId: String?): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -91,16 +97,16 @@ private class GoogleTtsDelegate(
         }
 
     private fun wrapPcmInWav(pcmData: ByteArray): ByteArray {
-        val sampleRate = 24_000
+        val sampleRate = TTS_SAMPLE_RATE
         val channels = 1
         val bitsPerSample = 16
         val byteRate = sampleRate * channels * bitsPerSample / 8
         val blockAlign = channels * bitsPerSample / 8
-        val header = ByteArray(44)
+        val header = ByteArray(WAV_HEADER_SIZE)
         val buffer = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
 
         buffer.put("RIFF".toByteArray(Charsets.US_ASCII))
-        buffer.putInt(36 + pcmData.size)
+        buffer.putInt(WAV_FMT_CHUNK_SIZE + pcmData.size)
         buffer.put("WAVE".toByteArray(Charsets.US_ASCII))
         buffer.put("fmt ".toByteArray(Charsets.US_ASCII))
         buffer.putInt(16)

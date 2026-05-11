@@ -113,6 +113,7 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.pocketcrew.core.ui.util.loadVideoFrame
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -182,7 +183,7 @@ fun GalleryScreen(
             .distinctBy { item -> item.id }
     }
     val videoThumbnailKey = remember(videoItems) {
-        videoItems.joinToString(separator = "|") { item -> "${item.id}:${item.localUri}" }
+        videoItems.joinToString(separator = "|") { item -> "${item.id}:${item.bestUri}" }
     }
     val videoThumbnailCache by produceState(
         initialValue = VideoThumbnailCache(isLoading = true),
@@ -199,7 +200,7 @@ fun GalleryScreen(
             val frames = withContext(Dispatchers.IO) {
                 videoItems.associate { item ->
                     item.id to loadVideoFrame(
-                        localUri = item.localUri,
+                        localUri = item.bestUri?.toString() ?: "",
                         context = context,
                     )
                 }
@@ -222,7 +223,9 @@ fun GalleryScreen(
                 selectedItemCount = selectionCount,
                 selectedMediaItemCount = selectedMediaItemIds.size,
                 showAddAlbumIcon = selectedAlbumId == null,
-                showRenameAlbumIcon = selectedAlbumId != null && selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID && selectedMediaItemIds.isEmpty(),
+                showRenameAlbumIcon = selectedAlbumId != null &&
+                    selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID &&
+                    selectedMediaItemIds.isEmpty(),
                 showDeleteIcon = selectionCount > 0 && !isDefaultAlbumSelected,
                 hazeState = hazeState,
                 onBackClick = {
@@ -292,7 +295,10 @@ fun GalleryScreen(
                         videoThumbnails = videoThumbnailCache.frames,
                         onAlbumClick = { albumId ->
                             if (selectedAlbumIds.isNotEmpty()) {
-                                selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
+                                selectedAlbumIds = if (albumId in selectedAlbumIds)
+                                    selectedAlbumIds - albumId
+                                else
+                                    selectedAlbumIds + albumId
                             } else {
                                 selectedAlbumId = albumId
                             }
@@ -390,6 +396,7 @@ fun GalleryScreen(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 private fun GalleryTopBar(
     title: String,
@@ -684,7 +691,7 @@ private fun AlbumCoverItem(
 
     if (item.mediaType == MediaCapability.VIDEO) {
         VideoThumbnail(
-            videoUri = item.localUri,
+            videoUri = item.bestUri?.toString() ?: "",
             thumbnail = videoThumbnail,
             contentDescription = item.prompt,
             modifier = itemModifier,
@@ -707,7 +714,7 @@ private fun AlbumCoverItem(
         }
     } else {
         AsyncImage(
-            model = item.localUri,
+            model = item.bestUri,
             contentDescription = null,
             modifier = itemModifier,
             contentScale = ContentScale.Crop,
@@ -1067,6 +1074,7 @@ private fun DeleteAlbumsDialog(
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun GalleryScreenPopulatedPreview() {
@@ -1099,6 +1107,7 @@ private fun GalleryScreenPopulatedPreview() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun GalleryScreenDarkPreview() {

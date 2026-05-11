@@ -101,15 +101,25 @@ import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.R
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun InputBar(
     inputText: String,
     speechState: SpeechState,
-    selectedImageUri: String?,
+    selectedImageUris: List<String>,
     selectedFileName: String?,
     isPhotoAttachmentEnabled: Boolean,
+    photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
     isGenerating: Boolean,
@@ -121,7 +131,7 @@ fun InputBar(
     onStopGenerating: () -> Unit,
     onImageAttach: () -> Unit,
     onFileAttach: () -> Unit,
-    onClearImage: () -> Unit,
+    onClearImage: (String) -> Unit,
     onClearFile: () -> Unit,
     onMicClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -145,7 +155,6 @@ fun InputBar(
 
     val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
     val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
-    val hasSendableContent = (inputText.isNotBlank() || selectedImageUri != null || selectedFileName != null) && !isListening
 
     if (showAttachmentSheet) {
         JumpFreeModalBottomSheet(
@@ -160,7 +169,8 @@ fun InputBar(
                         showAttachmentSheet = false
                         onImageAttach()
                     },
-                    enabled = isPhotoAttachmentEnabled
+                    enabled = isPhotoAttachmentEnabled,
+                    disabledReason = photoAttachmentDisabledReason
                 )
                 AttachmentMenuItem(
                     icon = Icons.Default.AttachFile,
@@ -183,12 +193,20 @@ fun InputBar(
             } else Modifier
         ),
         attachmentContent = {
-            AnimatedVisibility(visible = selectedImageUri != null && speechState == SpeechState.Idle) {
-                UniversalImageAttachment(
-                    uri = selectedImageUri ?: "",
-                    onClear = onClearImage,
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                )
+            AnimatedVisibility(visible = selectedImageUris.isNotEmpty() && speechState == SpeechState.Idle) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    selectedImageUris.forEach { uri ->
+                        UniversalImageAttachment(
+                            uri = uri,
+                            onClear = { onClearImage(uri) },
+                        )
+                    }
+                }
             }
 
             AnimatedVisibility(visible = selectedFileName != null && speechState == SpeechState.Idle) {
@@ -229,14 +247,7 @@ fun InputBar(
                 }
             }
             
-            if (speechState == SpeechState.Idle && !isPhotoAttachmentEnabled && !photoAttachmentDisabledReason.isNullOrBlank()) {
-                Text(
-                    text = photoAttachmentDisabledReason,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-                )
-            }
+
         },
         inputContent = {
             BasicTextField(
@@ -348,39 +359,69 @@ fun InputBar(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttachmentMenuItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    disabledReason: String? = null
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (enabled) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-            }
+    val scope = rememberCoroutineScope()
+    val tooltipState = rememberTooltipState(isPersistent = true)
+
+    val content = @Composable {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    if (enabled) {
+                        onClick()
+                    } else if (!disabledReason.isNullOrBlank()) {
+                        scope.launch { tooltipState.show() }
+                    }
+                }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                }
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                }
+            )
+        }
+    }
+
+    if (!enabled && !disabledReason.isNullOrBlank()) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                positioning = TooltipAnchorPosition.Above
+            ),
+            tooltip = {
+                PlainTooltip {
+                    Text(disabledReason)
+                }
+            },
+            state = tooltipState,
+            content = content
         )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (enabled) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            }
-        )
+    } else {
+        content()
     }
 }
 
@@ -392,9 +433,10 @@ fun PreviewChatInputBar() {
             InputBar(
                 inputText = "Hello World",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = "test_file.txt",
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,

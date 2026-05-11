@@ -16,7 +16,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
         // snapshot was created before the extraction event was processed.
         val extractedUrls = extractedUrls
         if (extractedUrls.isNotEmpty()) {
-            accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+            accumulatorManager.markWebSearchSourcesExtracted(extractedUrls.toList())
         }
 
         accumulatorManager.messages.values.forEach { accumulator ->
@@ -31,8 +31,12 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 content = content,
                 messageState = accumulator.currentState,
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
-                tavilySources = accumulator.tavilySources.toList(),
+                webSearchSources = accumulator.webSearchSources.toList(),
                 artifacts = accumulator.artifacts.toList(),
+                generatedMediaUris = accumulator.generatedMediaUris.toList(),
+                generatedMediaAssetIds = accumulator.generatedMediaAssetIds.toList(),
+                generatedMediaTypes = accumulator.generatedMediaTypes.toList(),
+                generatedMediaPrompts = accumulator.generatedMediaPrompts.toList(),
             )
 
             // Generate and save embedding for the assistant message
@@ -46,7 +50,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
         // The extract tool may have called markExtracted before sources were persisted,
         // so the DAO update was a no-op. Now that sources exist in the DB, apply the flags.
         if (extractedUrls.isNotEmpty()) {
-            chatRepository.markSourcesExtracted(extractedUrls.toList())
+            chatRepository.markWebSearchSourcesExtracted(extractedUrls.toList())
         }
     }
 
@@ -56,6 +60,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
             .trim()
 
     private companion object {
+        @Suppress("MaxLineLength")
         private val TOOL_CALL_TRACE_REGEX = Regex(
             """(?s)<!\[CDATA\[<tool>\s*\{.*?\}\s*</tool>\]\]>|autocomplete\s*\{.*?\}\s*autocomplete|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?"""
         )

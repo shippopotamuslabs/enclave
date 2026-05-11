@@ -42,7 +42,7 @@ class ConversationManagerImplRegressionTest {
 
         val result = manager.executeToolSafelyForTest(
             ToolCallRequest(
-                toolName = "tavily_web_search",
+                toolName = "web_search",
                 argumentsJson = """{"query":"latest android tool calling"}""",
                 provider = "LITERT",
                 modelType = ModelType.FAST,

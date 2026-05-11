@@ -121,7 +121,7 @@ fun GalleryDetailScreen(
                     val asset = assets[page]
                     Box(modifier = Modifier.fillMaxSize()) {
                         FullscreenMediaViewer(
-                            localUri = asset.localUri,
+                            localUri = asset.bestUri?.toString() ?: "",
                             mediaType = asset.mediaType,
                             contentDescription = asset.prompt,
                             modifier = Modifier.fillMaxSize(),

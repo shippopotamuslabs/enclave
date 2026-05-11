@@ -7,10 +7,13 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.auth.AuthState
+import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
@@ -22,12 +25,15 @@ internal data class SheetVisibilityState(
     val memories: Boolean = false,
     val feedback: Boolean = false,
     val visionSettings: Boolean = false,
+    val searchSkill: Boolean = false,
+    val searchSkillTabIndex: Int = 0,
 )
 
 internal data class LocalModelsTransientState(
     val isSheetOpen: Boolean = false,
     val availableToDownloadModels: List<LocalModelAsset> = emptyList(),
     val selectedAsset: LocalModelAssetUi? = null,
+    val selectedConfig: LocalModelConfigUi? = null,
     val configDraft: LocalModelConfigUi? = null,
 )
 
@@ -53,6 +59,12 @@ internal data class MemoriesTransientState(
 
 internal data class SearchSkillTransientState(
     val isEditing: Boolean = false,
+    val enabled: Boolean? = null,
+    val selectedProvider: SearchProvider? = null,
+    val showSwitchAlert: Boolean? = null,
+)
+
+internal data class XSearchTransientState(
     val enabled: Boolean? = null,
 )
 
@@ -98,6 +110,7 @@ class SettingsUiStateFactory @Inject constructor(
     private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
     private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
 ) {
+    @Suppress("LongParameterList", "CyclomaticComplexMethod")
     internal fun create(
         persistedSettings: SettingsData,
         localAssets: List<LocalModelAsset>,
@@ -105,6 +118,7 @@ class SettingsUiStateFactory @Inject constructor(
         ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
         mediaAssets: List<MediaProviderAsset>,
         defaultModels: List<DefaultModelAssignment>,
+        authState: AuthState,
         sheetVisibility: SheetVisibilityState,
         memories: List<StoredMemory>,
         feedbackText: String,
@@ -116,6 +130,12 @@ class SettingsUiStateFactory @Inject constructor(
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
         memoriesState: MemoriesTransientState,
+        currentTavilyApiKey: String,
+        currentExaApiKey: String,
+        currentXApiKey: String,
+        xSearchState: XSearchTransientState,
+        isReindexing: Boolean,
+        reindexProgress: Float,
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
@@ -248,6 +268,7 @@ class SettingsUiStateFactory @Inject constructor(
             query = apiState.modelSearchQuery,
             providerFilters = apiState.modelProviderFilters,
             sortOption = apiState.modelSortOption,
+            requireChatCapability = true,
         )
 
         val discoveredMediaModels = mediaState.discoveredApiModels.map(DiscoveredApiModel::toUi)
@@ -270,6 +291,7 @@ class SettingsUiStateFactory @Inject constructor(
                 hapticPress = persistedSettings.hapticPress,
                 hapticResponse = persistedSettings.hapticResponse,
                 backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
+                auth = authState.toUi(),
                 isLocalModelsSheetOpen = localModelsState.isSheetOpen,
                 isApiProvidersSheetOpen = apiState.isSheetOpen,
                 isDataControlsSheetOpen = sheetVisibility.dataControls,
@@ -278,6 +300,10 @@ class SettingsUiStateFactory @Inject constructor(
                 isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                 isTtsProvidersSheetOpen = ttsState.isSheetOpen,
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
+                isSearchSkillSheetOpen = sheetVisibility.searchSkill,
+                searchSkillTabIndex = sheetVisibility.searchSkillTabIndex,
+                isReindexing = isReindexing,
+                reindexProgress = reindexProgress,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -359,7 +385,17 @@ class SettingsUiStateFactory @Inject constructor(
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,
                 enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
+                selectedProvider = searchSkillState.selectedProvider ?: persistedSettings.searchProvider,
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
+                exaKeyPresent = persistedSettings.exaKeyPresent,
+                currentTavilyApiKey = currentTavilyApiKey,
+                currentExaApiKey = currentExaApiKey,
+                showSwitchAlert = persistedSettings.showSearchProviderSwitchAlert,
+            ),
+            xSearchEditor = XSearchEditorUiState(
+                enabled = xSearchState.enabled ?: persistedSettings.xSearchEnabled,
+                apiKeyPresent = persistedSettings.xApiKeyPresent,
+                currentApiKey = currentXApiKey,
             ),
             assignments = ModelAssignmentsUiState(
                 assignments = assignmentRows,
@@ -424,6 +460,20 @@ class SettingsUiStateFactory @Inject constructor(
             displayLabel = modelType.displayLabel,
         )
     }
+
+    private fun AuthState.toUi(): AuthStateUi = when (this) {
+        is AuthState.Authenticated -> AuthStateUi.Authenticated(user.toUi())
+        AuthState.Loading -> AuthStateUi.Loading
+        AuthState.Unauthenticated -> AuthStateUi.Unauthenticated
+        is AuthState.Error -> AuthStateUi.Error(message)
+    }
+
+    private fun UserProfile.toUi(): UserProfileUi = UserProfileUi(
+        uid = uid,
+        displayName = displayName,
+        email = email,
+        photoUrl = photoUrl,
+    )
 
     private companion object {
         val VISIBLE_MODEL_ASSIGNMENT_TYPES = listOf(

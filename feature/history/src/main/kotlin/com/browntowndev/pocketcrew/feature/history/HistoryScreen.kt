@@ -89,33 +89,26 @@ fun HistoryScreen(
     onRenameChat: (ChatId, String) -> Unit,
     onPinChat: (ChatId) -> Unit,
     onUnpinChat: (ChatId) -> Unit,
-    onSettingsClick: () -> Unit,
-    @Suppress("UNUSED_PARAMETER") onShowSnackbar: (String, String?) -> Unit
+    onSettingsClick: () -> Unit
 ) {
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
 
+    // Always compute shimmer — used for loading skeleton AND inline syncing items
     val colorScheme = MaterialTheme.colorScheme
-    val shimmerColors = remember(colorScheme, uiState.isLoading) {
-        if (uiState.isLoading) {
-            val base = colorScheme.onSurface.copy(alpha = 0.05f)
-            val highlight = colorScheme.onSurface.copy(alpha = 0.15f)
-            base to highlight
-        } else null
-    }
+    val shimmerBaseColor = colorScheme.onSurface.copy(alpha = 0.05f)
+    val shimmerHighlightColor = colorScheme.onSurface.copy(alpha = 0.15f)
 
-    val shimmerProgress = if (uiState.isLoading) {
-        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shimmerProgress"
-        )
-    } else null
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerProgress = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerProgress"
+    )
 
     Scaffold(
         topBar = {
@@ -143,12 +136,12 @@ fun HistoryScreen(
                 )
             }
 
-            if (uiState.isLoading && shimmerProgress != null && shimmerColors != null) {
+            if (uiState.isLoading) {
                 items(5) {
                     HistoryChatSkeletonItem(
                         progressState = shimmerProgress,
-                        baseColor = shimmerColors.first,
-                        highlightColor = shimmerColors.second
+                        baseColor = shimmerBaseColor,
+                        highlightColor = shimmerHighlightColor
                     )
                 }
             } else {
@@ -160,13 +153,21 @@ fun HistoryScreen(
                         items = uiState.pinnedChats,
                         key = { it.id.value }
                     ) { chat ->
-                        HistoryChatItem(
-                            chat = chat,
-                            onClick = { onChatClick(chat.id) },
-                            onShowOptions = {
-                                optionsState = HistoryOptionsState.Sheet(chat)
-                            }
-                        )
+                        if (chat.isSyncing) {
+                            HistoryChatSkeletonItem(
+                                progressState = shimmerProgress,
+                                baseColor = shimmerBaseColor,
+                                highlightColor = shimmerHighlightColor
+                            )
+                        } else {
+                            HistoryChatItem(
+                                chat = chat,
+                                onClick = { onChatClick(chat.id) },
+                                onShowOptions = {
+                                    optionsState = HistoryOptionsState.Sheet(chat)
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -178,13 +179,21 @@ fun HistoryScreen(
                         items = uiState.otherChats,
                         key = { it.id.value }
                     ) { chat ->
-                        HistoryChatItem(
-                            chat = chat,
-                            onClick = { onChatClick(chat.id) },
-                            onShowOptions = {
-                                optionsState = HistoryOptionsState.Sheet(chat)
-                            }
-                        )
+                        if (chat.isSyncing) {
+                            HistoryChatSkeletonItem(
+                                progressState = shimmerProgress,
+                                baseColor = shimmerBaseColor,
+                                highlightColor = shimmerHighlightColor
+                            )
+                        } else {
+                            HistoryChatItem(
+                                chat = chat,
+                                onClick = { onChatClick(chat.id) },
+                                onShowOptions = {
+                                    optionsState = HistoryOptionsState.Sheet(chat)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -591,6 +600,7 @@ private fun BottomSheetOption(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun PreviewHistoryScreenLoading() {
@@ -608,8 +618,7 @@ private fun PreviewHistoryScreenLoading() {
             onRenameChat = { _, _ -> },
             onPinChat = {},
             onUnpinChat = {},
-            onSettingsClick = {},
-            onShowSnackbar = { _, _ -> }
+            onSettingsClick = {}
         )
     }
 }

@@ -2,54 +2,55 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
-import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
-import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import org.junit.After
 
 class MessageRepositoryImplGetMessagesForChatTest {
 
-    private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
     private lateinit var chatSummaryDao: ChatSummaryDao
-    private lateinit var defaultModelsDao: DefaultModelsDao
-    private lateinit var apiModelConfigurationsDao: ApiModelConfigurationsDao
     private lateinit var embeddingDao: EmbeddingDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: MessageRepositoryImpl
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @BeforeEach
     fun setup() {
-        chatDao = mockk(relaxed = true)
         messageDao = mockk(relaxed = true)
         messageVisionAnalysisDao = mockk(relaxed = true)
         chatSummaryDao = mockk(relaxed = true)
-        defaultModelsDao = mockk(relaxed = true)
-        apiModelConfigurationsDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
+        transactionProvider = mockk(relaxed = true)
         repository = MessageRepositoryImpl(
-            chatDao,
+            syncTrigger,
             messageDao,
             messageVisionAnalysisDao,
             chatSummaryDao,
-            defaultModelsDao,
-            apiModelConfigurationsDao,
             embeddingDao,
+            transactionProvider
         )
+    }
+
+    @After
+    fun tearDown() {
     }
 
     // ========== Basic Functionality Tests ==========
@@ -59,8 +60,14 @@ class MessageRepositoryImplGetMessagesForChatTest {
         // Given
         val chatId = ChatId("5")
         val entities = listOf(
-            MessageEntity(id = MessageId("1"), chatId = chatId, content = "Hello", role = Role.USER),
-            MessageEntity(id = MessageId("2"), chatId = chatId, content = "Hi there!", role = Role.ASSISTANT)
+            MessageWithFiles(
+                message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Hello", role = Role.USER),
+                files = emptyList()
+            ),
+            MessageWithFiles(
+                message = MessageEntity(id = MessageId("2"), chatId = chatId, content = "Hi there!", role = Role.ASSISTANT),
+                files = emptyList()
+            )
         )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns entities
 
@@ -78,9 +85,18 @@ class MessageRepositoryImplGetMessagesForChatTest {
         // Given - the DAO query orders by created_at ASC, so we provide already sorted entities
         val chatId = ChatId("10")
         val entities = listOf(
-            MessageEntity(id = MessageId("3"), chatId = chatId, content = "Message 1", role = Role.USER),
-            MessageEntity(id = MessageId("5"), chatId = chatId, content = "Message 2", role = Role.ASSISTANT),
-            MessageEntity(id = MessageId("8"), chatId = chatId, content = "Message 3", role = Role.USER)
+            MessageWithFiles(
+                message = MessageEntity(id = MessageId("3"), chatId = chatId, content = "Message 1", role = Role.USER),
+                files = emptyList()
+            ),
+            MessageWithFiles(
+                message = MessageEntity(id = MessageId("5"), chatId = chatId, content = "Message 2", role = Role.ASSISTANT),
+                files = emptyList()
+            ),
+            MessageWithFiles(
+                message = MessageEntity(id = MessageId("8"), chatId = chatId, content = "Message 3", role = Role.USER),
+                files = emptyList()
+            )
         )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns entities
 
@@ -113,7 +129,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat maps USER role correctly`() = runTest {
         // Given
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = "User message", role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "User message", role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -127,7 +146,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat maps ASSISTANT role correctly`() = runTest {
         // Given
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("2"), chatId = chatId, content = "Assistant response", role = Role.ASSISTANT)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("2"), chatId = chatId, content = "Assistant response", role = Role.ASSISTANT),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -141,7 +163,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat maps SYSTEM role correctly`() = runTest {
         // Given
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("3"), chatId = chatId, content = "System message", role = Role.SYSTEM)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("3"), chatId = chatId, content = "System message", role = Role.SYSTEM),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -158,7 +183,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
         // Given - content with special characters that could break parsing
         val chatId = ChatId("1")
         val specialContent = "Hello! \"Quotes\" & <special> chars\nnewlines\ttabs"
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = specialContent, role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = specialContent, role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -172,7 +200,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat preserves empty content`() = runTest {
         // Given
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = "", role = Role.ASSISTANT)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "", role = Role.ASSISTANT),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -201,7 +232,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat works with chatId of 1`() = runTest {
         // Given - edge case: minimum valid ID
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = "First chat", role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "First chat", role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -216,7 +250,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat works with large chatId`() = runTest {
         // Given - edge case: large ID
         val chatId = ChatId("MAX")
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Large ID chat", role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Large ID chat", role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -234,12 +271,12 @@ class MessageRepositoryImplGetMessagesForChatTest {
         // Given - simulate a multi-turn conversation
         val chatId = ChatId("1")
         val entities = listOf(
-            MessageEntity(id = MessageId("1"), chatId = chatId, content = "Hello", role = Role.USER),
-            MessageEntity(id = MessageId("2"), chatId = chatId, content = "Hi! How can I help?", role = Role.ASSISTANT),
-            MessageEntity(id = MessageId("3"), chatId = chatId, content = "Tell me a joke", role = Role.USER),
-            MessageEntity(id = MessageId("4"), chatId = chatId, content = "Why did the chicken cross the road?", role = Role.ASSISTANT),
-            MessageEntity(id = MessageId("5"), chatId = chatId, content = "I don't know, why?", role = Role.USER),
-            MessageEntity(id = MessageId("6"), chatId = chatId, content = "To get to the other side!", role = Role.ASSISTANT)
+            MessageWithFiles(message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Hello", role = Role.USER), files = emptyList()),
+            MessageWithFiles(message = MessageEntity(id = MessageId("2"), chatId = chatId, content = "Hi! How can I help?", role = Role.ASSISTANT), files = emptyList()),
+            MessageWithFiles(message = MessageEntity(id = MessageId("3"), chatId = chatId, content = "Tell me a joke", role = Role.USER), files = emptyList()),
+            MessageWithFiles(message = MessageEntity(id = MessageId("4"), chatId = chatId, content = "Why did the chicken cross the road?", role = Role.ASSISTANT), files = emptyList()),
+            MessageWithFiles(message = MessageEntity(id = MessageId("5"), chatId = chatId, content = "I don't know, why?", role = Role.USER), files = emptyList()),
+            MessageWithFiles(message = MessageEntity(id = MessageId("6"), chatId = chatId, content = "To get to the other side!", role = Role.ASSISTANT), files = emptyList())
         )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns entities
 
@@ -270,7 +307,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
     fun `getMessagesForChat handles single message chat`() = runTest {
         // Given
         val chatId = ChatId("1")
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Only message", role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = "Only message", role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When
@@ -286,7 +326,10 @@ class MessageRepositoryImplGetMessagesForChatTest {
         // Given
         val chatId = ChatId("1")
         val unicodeContent = "Hello 世界 🌍 مرحبا"
-        val entity = MessageEntity(id = MessageId("1"), chatId = chatId, content = unicodeContent, role = Role.USER)
+        val entity = MessageWithFiles(
+            message = MessageEntity(id = MessageId("1"), chatId = chatId, content = unicodeContent, role = Role.USER),
+            files = emptyList()
+        )
         coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
 
         // When

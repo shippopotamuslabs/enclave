@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.browntowndev.pocketcrew.feature.settings.navigation
 
 import androidx.navigation.NavController
@@ -34,7 +36,6 @@ object SettingsDestination {
 
 fun NavGraphBuilder.settingsGraph(
     navController: NavController,
-    onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
 ) {
     navigation(
         startDestination = SettingsDestination.MAIN,
@@ -72,9 +73,6 @@ fun NavGraphBuilder.settingsGraph(
             }
             SettingsRoute(
                 onCloseClick = { navController.popBackStack() },
-                onNavigateToModelDownload = {
-                    navController.navigate(SettingsDestination.MODEL_DOWNLOAD)
-                },
                 onNavigateToByokConfigure = {
                     navController.navigate(SettingsDestination.BYOK_CONFIGURE)
                 },
@@ -316,6 +314,7 @@ fun NavGraphBuilder.settingsGraph(
         ) { backStackEntry ->
             val modelTypeStr = backStackEntry.arguments?.getString("modelType")
                 ?: return@composable
+            @Suppress("SwallowedException")
             val modelType = try {
                 ModelType.valueOf(modelTypeStr)
             } catch (e: IllegalArgumentException) {
@@ -326,7 +325,6 @@ fun NavGraphBuilder.settingsGraph(
                 navController.getBackStackEntry(SettingsDestination.GRAPH)
             }
             ModelConfigurationRoute(
-                modelType = modelType,
                 onNavigateBack = { navController.popBackStack() },
                 viewModel = hiltViewModel(parentEntry)
             )

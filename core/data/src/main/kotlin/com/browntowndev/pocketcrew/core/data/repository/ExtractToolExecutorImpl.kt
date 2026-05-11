@@ -1,11 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
+import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
@@ -20,7 +21,8 @@ class ExtractToolExecutorImpl @Inject constructor(
     private val loggingPort: LoggingPort,
     private val settingsRepository: SettingsRepository,
     private val tavilySearchRepository: TavilySearchRepository,
-    private val tavilySourceDao: TavilySourceDao,
+    private val exaSearchRepository: ExaSearchRepository,
+    private val webSearchSourceDao: WebSearchSourceDao,
     private val eventBus: ToolExecutionEventBus,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
 ) : ToolExecutorPort {
@@ -31,11 +33,11 @@ class ExtractToolExecutorImpl @Inject constructor(
 
     override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
         requireSupportedTool(request.toolName)
-        val params = request.parameters as TavilyExtractParams
+        val params = request.parameters as WebExtractParams
         val urls = params.urls
 
-        val searchEnabled = settingsRepository.settingsFlow.first().searchEnabled
-        if (!searchEnabled) {
+        val settings = settingsRepository.settingsFlow.first()
+        if (!settings.searchEnabled) {
             loggingPort.warning(TAG, "Extract tool invoked but search is disabled in settings")
             throw IllegalStateException("Search is disabled in settings")
         }
@@ -57,19 +59,29 @@ class ExtractToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing extract tool provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} urls=${urls.size} extractDepth=$extractDepth format=$format"
+            "Executing extract tool provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "searchProvider=${settings.searchProvider} urls=${urls.size} " +
+                "extractDepth=$extractDepth format=$format"
         )
 
-        val resultJson = tavilySearchRepository.extract(
-            urls = urls,
-            extractDepth = extractDepth,
-            format = format,
-        )
+        val resultJson = when (settings.searchProvider) {
+            SearchProvider.TAVILY -> {
+                tavilySearchRepository.extract(
+                    urls = urls,
+                    extractDepth = extractDepth,
+                    format = format,
+                )
+            }
+            SearchProvider.EXA -> {
+                exaSearchRepository.extract(urls = urls)
+            }
+        }
 
         // Mark each URL as extracted in the DAO and tracker
         for (url in urls) {
             try {
-                tavilySourceDao.markExtracted(url)
+                webSearchSourceDao.markExtracted(url)
             } catch (e: Exception) {
                 loggingPort.warning(TAG, "Failed to mark source as extracted for url=$url: ${e.message}")
             }
@@ -78,7 +90,9 @@ class ExtractToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Extract tool execution complete provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} resultChars=${resultJson.length}"
+            "Extract tool execution complete provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "resultChars=${resultJson.length}"
         )
 
         return ToolExecutionResult(
@@ -88,7 +102,7 @@ class ExtractToolExecutorImpl @Inject constructor(
     }
 
     private fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.TAVILY_EXTRACT.name) {
+        require(toolName == ToolDefinition.WEB_EXTRACT.name) {
             "Unsupported tool: $toolName"
         }
     }

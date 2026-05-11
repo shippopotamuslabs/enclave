@@ -8,7 +8,12 @@ object Routes {
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
     const val STUDIO = "studio"
-    const val STUDIO_WITH_ARGS = "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}"
+    @Suppress("MaxLineLength")
+    const val STUDIO_WITH_ARGS =
+        "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}" +
+            "&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}" +
+            "&rehydrateIds={rehydrateIds}&rehydrateUris={rehydrateUris}" +
+            "&rehydrateTypes={rehydrateTypes}&rehydratePrompts={rehydratePrompts}"
     const val STUDIO_DETAIL = "studio_detail?assetId={assetId}&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}"
     const val GALLERY = "gallery"
     const val GALLERY_DETAIL = "gallery_detail?albumId={albumId}&assetId={assetId}"
@@ -16,8 +21,8 @@ object Routes {
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"
     const val BYOK_CONFIGURE = "byok_configure"
-    const val ARTIFACT = "artifact"
-    const val ARTIFACT_WITH_ARGS = "artifact?content={content}&title={title}"
+    const val SHARED_CHAT = "shared?shareId={shareId}"
+    const val SHARED_CHAT_DEEP_LINK_PATTERN = "pocketcrew://shared/{shareId}"
 
     fun studioWithEditAsset(assetId: String): String = "$STUDIO?editAssetId=$assetId"
 
@@ -31,7 +36,13 @@ object Routes {
             if (prompt != null) "&animatePrompt=$prompt" else ""
     }
 
-    fun artifact(title: String, content: String): String {
-        return "$ARTIFACT?title=$title&content=$content"
+    fun studioWithRehydration(ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>): String {
+        val json = kotlinx.serialization.json.Json
+        val encodedIds = android.net.Uri.encode(json.encodeToString(ids))
+        val encodedUris = android.net.Uri.encode(json.encodeToString(uris))
+        val encodedTypes = android.net.Uri.encode(json.encodeToString(types))
+        val encodedPrompts = android.net.Uri.encode(json.encodeToString(prompts))
+        
+        return "$STUDIO?rehydrateIds=$encodedIds&rehydrateUris=$encodedUris&rehydrateTypes=$encodedTypes&rehydratePrompts=$encodedPrompts"
     }
 }

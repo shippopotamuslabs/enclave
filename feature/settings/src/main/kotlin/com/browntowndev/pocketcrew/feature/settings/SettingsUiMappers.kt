@@ -126,14 +126,18 @@ class LocalModelAssetUiMapper @Inject constructor() {
 }
 
 class ApiDiscoveryUiFilter @Inject constructor() {
+    @Suppress("CyclomaticComplexMethod")
     fun filter(
         models: List<DiscoveredApiModelUi>,
         query: String,
         providerFilters: Set<String>,
         sortOption: ModelSortOption,
+        requireChatCapability: Boolean = false,
     ): List<DiscoveredApiModelUi> = models
         .filter { model ->
-            if (query.isBlank()) {
+            if (requireChatCapability && !model.isChatCapable) {
+                false
+            } else if (query.isBlank()) {
                 true
             } else {
                 model.name?.contains(query, ignoreCase = true) == true ||
@@ -247,5 +251,9 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         completionPrice = completionPrice,
         providerName = provider,
         isMultimodal = isMultimodal,
+        isChatCapable = isChatCapable,
+        isImageGenerationCapable = isImageGenerationCapable,
+        isVideoGenerationCapable = isVideoGenerationCapable,
+        isAudioGenerationCapable = isAudioGenerationCapable,
     )
 }

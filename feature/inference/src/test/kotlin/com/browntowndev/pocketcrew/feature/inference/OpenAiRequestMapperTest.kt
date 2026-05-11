@@ -114,7 +114,7 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
-    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+    fun `mapToResponseParams serializes web_search when tooling is enabled`() {
         val params = OpenAiRequestMapper.mapToResponseParams(
             modelId = "gpt-4o",
             prompt = "Find recent Android agent news",
@@ -125,11 +125,11 @@ class OpenAiRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             )
         )
 
-        assertTrue(params.toString().contains("tavily_web_search"))
+        assertTrue(params.toString().contains("web_search"))
         assertTrue(params.toString().contains("query"))
     }
 

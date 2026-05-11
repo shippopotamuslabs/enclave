@@ -85,7 +85,7 @@ class ChatGenerationProgressSession internal constructor(
     private fun markExtractedSources() {
         val extractedUrls = extractedUrlTracker.urls
         if (extractedUrls.isNotEmpty()) {
-            accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+            accumulatorManager.markWebSearchSourcesExtracted(extractedUrls.toList())
         }
     }
 }

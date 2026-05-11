@@ -79,7 +79,7 @@ class GoogleRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
                 apiProvider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.GOOGLE,
                 modelId = "gemini-1.5-flash"
             )
@@ -89,7 +89,7 @@ class GoogleRequestMapperTest {
         val functionDeclaration = tool.functionDeclarations().orElseThrow().single()
         val parameters = functionDeclaration.parameters().orElseThrow()
 
-        assertEquals("tavily_web_search", functionDeclaration.name().orElseThrow())
+        assertEquals("web_search", functionDeclaration.name().orElseThrow())
         assertTrue(request.config.toolConfig().isPresent)
         assertTrue(request.config.toolConfig().orElseThrow().functionCallingConfig().isPresent)
         assertTrue(parameters.properties().orElseThrow().containsKey("query"))

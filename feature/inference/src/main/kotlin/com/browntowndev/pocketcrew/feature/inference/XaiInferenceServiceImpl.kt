@@ -37,6 +37,8 @@ class XaiInferenceServiceImpl(
 
     override val tag: String = "XaiInferenceService"
 
+    override val maxImages: Int = 20
+
     override fun mapToolingResponseParams(
         prompt: String,
         options: GenerationOptions,
@@ -164,10 +166,18 @@ class XaiInferenceServiceImpl(
             try {
                 executeToolingPrompt(prompt, options, requestHistory, emitEvent)
                 return
+            } catch (e: BadRequestException) {
+                loggingPort.warning(
+                    tag,
+                    "xAI Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
+                )
+            } catch (e: NotFoundException) {
+                loggingPort.warning(
+                    tag,
+                    "xAI Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
+                )
             } catch (e: Exception) {
-                if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
-                    e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
-                ) {
+                if (isClientErrorMessage(e.message)) {
                     loggingPort.warning(
                         tag,
                         "xAI Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
@@ -193,6 +203,7 @@ class XaiInferenceServiceImpl(
         try {
             loggingPort.info(
                 tag,
+                @Suppress("MaxLineLength")
                 "Using xAI Responses API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget}"
             )
             streamResponses(
@@ -200,12 +211,25 @@ class XaiInferenceServiceImpl(
                 emitEvent = emitEvent,
             )
             emitEvent(InferenceEvent.Finished(modelType))
+        } catch (e: BadRequestException) {
+            loggingPort.warning(
+                tag,
+                @Suppress("MaxLineLength")
+                "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+            )
+        } catch (e: NotFoundException) {
+            loggingPort.warning(
+                tag,
+                @Suppress("MaxLineLength")
+                "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+            )
         } catch (e: Exception) {
-            if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
-                e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
-            ) {
+            val isClientError = (e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) ||
+                (e.message?.contains("404") == true || e.message?.contains("Not Found") == true)
+            if (isClientError) {
                 loggingPort.warning(
                     tag,
+                    @Suppress("MaxLineLength")
                     "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
                 )
             } else {
@@ -218,7 +242,13 @@ class XaiInferenceServiceImpl(
                 history = requestHistory,
                 options = options
             )
-            streamChatCompletions(chatParams, emitEvent)
+            streamChatCompletions(
+                params = chatParams,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+                assistantMessageId = options.assistantMessageId,
+                emitEvent = emitEvent,
+            )
             emitEvent(InferenceEvent.Finished(modelType))
         }
     }

@@ -117,6 +117,12 @@ enum class ModelType(val apiValue: String) {
             UNASSIGNED -> "Models not yet assigned to a role."
         }
 
+    val isTextModel: Boolean
+        get() = when (this) {
+            FAST, THINKING, MAIN, DRAFT_ONE, DRAFT_TWO, FINAL_SYNTHESIS, VISION -> true
+            else -> false
+        }
+
     companion object {
         /**
          * Maps a string value to a ModelType enum.

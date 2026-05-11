@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -17,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfigur
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,10 +27,14 @@ import javax.inject.Singleton
 
 @Singleton
 class ApiModelRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val apiCredentialsDao: ApiCredentialsDao,
     private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
-    private val apiKeyManager: ApiKeyManager
+    private val apiKeyManager: ApiKeyManager,
+    private val cryptoManager: CryptoManagerPort,
 ) : ApiModelRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> =
         apiCredentialsDao.observeAll().map { entities ->
@@ -70,6 +76,13 @@ class ApiModelRepositoryImpl @Inject constructor(
                 apiKey = it,
             )
         } ?: existingEntity?.apiKeySignature
+        
+        val encryptedKeyPayload = if (sourceApiKey != null && cryptoManager.hasCachedKey()) {
+            cryptoManager.encrypt(sourceApiKey).getOrNull()
+        } else {
+            existingEntity?.encryptedApiKey
+        }
+
         val now = System.currentTimeMillis()
         val persistedId = if (credentials.id.value.isEmpty()) {
             val entity = ApiCredentialsEntity(
@@ -80,9 +93,11 @@ class ApiModelRepositoryImpl @Inject constructor(
                 baseUrl = storedBaseUrl,
                 isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
+                encryptedApiKey = encryptedKeyPayload,
                 apiKeySignature = apiKeySignature,
                 createdAt = now,
-                updatedAt = now
+                updatedAt = now,
+                pendingSync = 1,
             )
             apiCredentialsDao.insert(entity)
             entity.id
@@ -95,9 +110,11 @@ class ApiModelRepositoryImpl @Inject constructor(
                 baseUrl = storedBaseUrl,
                 isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
+                encryptedApiKey = encryptedKeyPayload,
                 apiKeySignature = apiKeySignature,
                 createdAt = existingEntity?.createdAt ?: now,
-                updatedAt = now
+                updatedAt = now,
+                pendingSync = 1,
             )
             apiCredentialsDao.update(entity)
             credentials.id
@@ -114,7 +131,8 @@ class ApiModelRepositoryImpl @Inject constructor(
                 apiKeyManager.save(credentials.credentialAlias, sourceApiKey)
             }
         }
-        
+
+        triggerSync()
         return persistedCredentials.id
     }
 
@@ -142,8 +160,10 @@ class ApiModelRepositoryImpl @Inject constructor(
 
     override suspend fun deleteCredentials(id: ApiCredentialsId) {
         apiCredentialsDao.getById(id)?.let { entity ->
-            apiCredentialsDao.deleteById(id)
+            apiModelConfigurationsDao.deleteAllForCredentials(id)
+            apiCredentialsDao.softDeleteById(id)
             apiKeyManager.delete(entity.credentialAlias)
+            triggerSync()
         }
     }
 
@@ -183,17 +203,21 @@ class ApiModelRepositoryImpl @Inject constructor(
             openRouterRequireParameters = config.openRouterRouting.requireParameters,
             openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
             openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
+            pendingSync = 1,
         )
         apiModelConfigurationsDao.upsert(entity)
+        triggerSync()
         return entityId
     }
 
     override suspend fun deleteConfiguration(id: ApiModelConfigurationId) {
-        apiModelConfigurationsDao.deleteById(id)
+        apiModelConfigurationsDao.softDeleteById(id)
+        triggerSync()
     }
 
     override suspend fun deleteConfigurationsForCredentials(credentialsId: ApiCredentialsId) {
         apiModelConfigurationsDao.deleteAllForCredentials(credentialsId)
+        triggerSync()
     }
     
     private fun ApiCredentialsEntity.toDomain() = ApiCredentials(
@@ -203,7 +227,8 @@ class ApiModelRepositoryImpl @Inject constructor(
         modelId = modelId,
         baseUrl = baseUrl,
         isMultimodal = isMultimodal,
-        credentialAlias = credentialAlias
+        credentialAlias = credentialAlias,
+        encryptedApiKey = encryptedApiKey
     )
     
     private fun ApiModelConfigurationEntity.toDomain() = ApiModelConfiguration(

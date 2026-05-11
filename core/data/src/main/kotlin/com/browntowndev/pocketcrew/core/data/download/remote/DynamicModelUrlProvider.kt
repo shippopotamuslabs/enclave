@@ -29,7 +29,11 @@ class DynamicModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
         val source = try {
             DownloadSource.valueOf(spec.source)
         } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Unknown download source: '${spec.source}'. Valid sources: ${DownloadSource.entries.joinToString()}", e)
+            throw IllegalArgumentException(
+                "Unknown download source: '${spec.source}'. " +
+                    "Valid sources: ${DownloadSource.entries.joinToString()}",
+                e
+            )
         }
         return when (source) {
             DownloadSource.CLOUDFLARE_R2 -> R2_BUCKET_URL.newBuilder()

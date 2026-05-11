@@ -75,9 +75,9 @@ interface MessageRepository {
      * Resolves the latest image-bearing user message for a chat.
      *
      * Resolution rules:
-     * 1. If [currentUserMessageId] has an imageUri, return that message.
+     * 1. If [currentUserMessageId] has imageUris, return that message.
      * 2. Otherwise, find the most recent prior user message in the same chat
-     *    with a non-null imageUri, ordered by createdAt DESC.
+     *    with non-empty imageUris, ordered by createdAt DESC.
      * 3. Returns null if no image-bearing user message exists.
      *
      * @param chatId The chat to search within.

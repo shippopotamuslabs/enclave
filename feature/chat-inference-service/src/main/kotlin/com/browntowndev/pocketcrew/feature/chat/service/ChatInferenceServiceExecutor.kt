@@ -43,7 +43,9 @@ class ChatInferenceServiceExecutor @Inject constructor(
         return flow {
             loggingPort.info(
                 TAG,
-                "execute() requested chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} backgroundInferenceEnabled=$backgroundInferenceEnabled",
+                "execute() requested chat=${chatId.value} " +
+                    "assistantMessageId=${assistantMessageId.value} " +
+                    "modelType=${modelType.name} backgroundInferenceEnabled=$backgroundInferenceEnabled",
             )
             try {
                 loggingPort.debug(
@@ -65,8 +67,9 @@ class ChatInferenceServiceExecutor @Inject constructor(
             } catch (e: ForegroundServiceStartNotAllowedException) {
                 loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
                 emit(MessageGenerationState.Failed(e, modelType))
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
                 loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
                 emit(MessageGenerationState.Failed(e, modelType))
             }

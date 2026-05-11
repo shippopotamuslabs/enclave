@@ -1,38 +1,46 @@
 package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
-import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
-    private val tavilySourceDao: TavilySourceDao,
+    private val webSearchSourceDao: WebSearchSourceDao,
+    private val documentDao: DocumentDao,
+    private val transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider,
 ) : ChatRepository {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     override fun getAllChats(): Flow<List<Chat>> {
         return chatDao.getAllChats().map { entities ->
@@ -42,25 +50,26 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun togglePinStatus(chatId: ChatId) {
         val rowsAffected = chatDao.updatePinStatus(chatId)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        triggerSync()
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
-        // Combine the message table Flow with a tavily_source table Flow.
-        // This ensures that source-level changes (e.g. extracted flag updates)
-        // trigger a re-read, even though the message table itself hasn't changed.
-        // Without this, markExtracted on tavily_source would not cause the
-        // messages Flow to re-emit, and the UI would show stale extracted=false.
+        // Combine the message table Flow with a web_search_source table Flow.
+        // Without this, markExtracted on web_search_source would not cause the
+        // Flow to emit, and the UI wouldn't know when a source was extracted.
         return combine(
             messageDao.getMessagesByChatIdFlow(chatId),
-            tavilySourceDao.getByChatIdFlow(chatId),
-        ) { entities, sources ->
-            val sourcesByMessage = sources.groupBy { it.messageId }
-            entities.map { entity ->
-                val messageSources = sourcesByMessage[entity.message.id].orEmpty()
-                entity.toDomain(messageSources)
+            webSearchSourceDao.getByChatIdFlow(chatId),
+            documentDao.getDocumentsByChatIdFlow(chatId),
+        ) { messages, webSearchSources, documents ->
+            val sourcesByMessageId = webSearchSources.groupBy { it.messageId }
+            val documentsByMessageId = documents.groupBy { it.messageId }
+            messages.map {
+                it.toDomain(
+                    webSearchSources = sourcesByMessageId[it.message.id] ?: emptyList(),
+                    documents = documentsByMessageId[it.message.id] ?: emptyList(),
+                )
             }
         }
     }
@@ -70,33 +79,33 @@ class ChatRepositoryImpl @Inject constructor(
         if (messageState == MessageState.COMPLETE) {
             messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
         }
+        triggerSync()
     }
 
     override suspend fun updateMessageContent(messageId: MessageId, content: String) {
         messageDao.updateMessageContentText(messageId, content)
+        triggerSync()
     }
 
     override suspend fun appendMessageContent(messageId: MessageId, content: String) {
-        val existing = messageDao.getMessageById(messageId)
-        if (existing != null) {
-            val newContent = existing.message.content + content
-            messageDao.updateMessageContentText(messageId, newContent)
-        }
+        messageDao.appendMessageContentAtomic(messageId, content)
+        triggerSync()
     }
 
     override suspend fun setThinkingStartTime(messageId: MessageId) {
         messageDao.updateThinkingStartTime(messageId, System.currentTimeMillis())
         messageDao.updateMessageState(messageId, MessageState.THINKING)
+        triggerSync()
     }
 
     override suspend fun setThinkingEndTime(messageId: MessageId) {
         messageDao.updateThinkingEndTime(messageId, System.currentTimeMillis())
+        triggerSync()
     }
 
     override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
-        val existing = messageDao.getMessageById(messageId)
-        val currentRaw = existing?.message?.thinkingRaw ?: ""
-        messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
+        messageDao.appendThinkingRawAtomic(messageId, thinkingText)
+        triggerSync()
     }
 
     override suspend fun clearThinking(messageId: MessageId) {
@@ -105,10 +114,12 @@ class ChatRepositoryImpl @Inject constructor(
         messageDao.updateThinkingEndTime(messageId, 0)
         messageDao.updateMessageState(messageId, MessageState.COMPLETE)
         messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
+        triggerSync()
     }
 
     override suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType) {
         messageDao.updateMessageModelType(messageId, modelType)
+        triggerSync()
     }
 
     override suspend fun createAssistantMessage(
@@ -125,15 +136,18 @@ class ChatRepositoryImpl @Inject constructor(
             userMessageId = userMessageId,
             messageState = MessageState.PROCESSING,
             modelType = modelType,
-            pipelineStep = pipelineStep
+            pipelineStep = pipelineStep,
+            pendingSync = 1
         )
-        messageDao.insert(entity)
+        messageDao.upsert(entity)
+        triggerSync()
         return entity.id
     }
 
     override suspend fun createChat(chat: Chat): ChatId {
         val entity = chat.toEntity()
-        chatDao.insert(entity)
+        chatDao.upsert(entity)
+        triggerSync()
         return entity.id
     }
 
@@ -150,6 +164,7 @@ class ChatRepositoryImpl @Inject constructor(
             thinkingDuration = duration?.toInt(),
             thinkingRaw = thinkingData?.rawFullThought
         )
+        triggerSync()
     }
 
     /**
@@ -166,26 +181,73 @@ class ChatRepositoryImpl @Inject constructor(
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>,
-        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>
+        webSearchSources: List<WebSearchSource>,
+        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
+        generatedMediaUris: List<String>,
+        generatedMediaAssetIds: List<String>,
+        generatedMediaTypes: List<String>,
+        generatedMediaPrompts: List<String>
     ) {
-        val artifactsJson = if (artifacts.isNotEmpty()) {
-            Json.encodeToString(artifacts)
+        val documentEntities = artifacts.map { artifact ->
+            DocumentEntity(
+                id = artifact.artifactId,
+                messageId = messageId,
+                json = artifact.content,
+                title = artifact.title,
+                author = null,
+                targetFormat = artifact.targetFormat,
+                pendingSync = 1,
+            )
+        }
+
+        val mediaUrisJson = if (generatedMediaUris.isNotEmpty()) {
+            Json.encodeToString(generatedMediaUris)
         } else null
 
-        messageDao.persistAllMessageData(
-            messageId = messageId,
-            modelType = modelType,
-            thinkingStartTime = thinkingStartTime,
-            thinkingEndTime = thinkingEndTime,
-            thinkingDuration = thinkingDuration,
-            thinkingRaw = thinkingRaw,
-            content = content,
-            messageState = messageState,
-            pipelineStep = pipelineStep,
-            tavilySources = tavilySources.map { it.toEntity() },
-            artifactsJson = artifactsJson
-        )
+        val mediaAssetIdsJson = if (generatedMediaAssetIds.isNotEmpty()) {
+            Json.encodeToString(generatedMediaAssetIds)
+        } else null
+
+        val mediaTypesJson = if (generatedMediaTypes.isNotEmpty()) {
+            Json.encodeToString(generatedMediaTypes)
+        } else null
+
+        val mediaPromptsJson = if (generatedMediaPrompts.isNotEmpty()) {
+            Json.encodeToString(generatedMediaPrompts)
+        } else null
+
+        transactionProvider.runInTransaction {
+            messageDao.persistAllMessageData(
+                messageId = messageId,
+                modelType = modelType,
+                thinkingStartTime = thinkingStartTime,
+                thinkingEndTime = thinkingEndTime,
+                thinkingDuration = thinkingDuration,
+                thinkingRaw = thinkingRaw,
+                content = content,
+                messageState = messageState,
+                pipelineStep = pipelineStep,
+                webSearchSources = webSearchSources.map { it.toEntity() },
+                mediaUrisJson = mediaUrisJson,
+                mediaAssetIdsJson = mediaAssetIdsJson,
+                mediaTypesJson = mediaTypesJson,
+                mediaPromptsJson = mediaPromptsJson
+            )
+
+            // Soft-delete all previous artifacts attached to this assistant message,
+            // then upsert the current set by stable `artifactId`.
+            documentDao.softDeleteByMessageId(messageId)
+            documentEntities.forEach { documentDao.insertDocument(it) }
+        }
+        triggerSync()
+    }
+
+    override suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
+    ) {
+        documentDao.updateTargetFormat(artifactId = artifactId, targetFormat = format)
+        triggerSync()
     }
 
     /**
@@ -203,17 +265,17 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteChat(chatId: ChatId) {
-        val rowsAffected = chatDao.deleteById(chatId)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        val rowsAffected = chatDao.softDeleteById(chatId)
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        // Soft-delete related generated documents so sync doesn't resurrect them later.
+        documentDao.softDeleteByChatId(chatId)
+        triggerSync()
     }
 
     override suspend fun renameChat(chatId: ChatId, newName: String) {
         val rowsAffected = chatDao.updateName(chatId, newName)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        triggerSync()
     }
 
     override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {
@@ -227,9 +289,13 @@ class ChatRepositoryImpl @Inject constructor(
         return chatDao.getChatsByIds(ids).associate { it.id to it.toDomain() }
     }
 
-    override suspend fun markSourcesExtracted(urls: List<String>) {
-        for (url in urls) {
-            tavilySourceDao.markExtracted(url)
-        }
+    override suspend fun markWebSearchSourceExtracted(url: String) {
+        webSearchSourceDao.markExtracted(url)
+        triggerSync()
+    }
+
+    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
+        urls.forEach { webSearchSourceDao.markExtracted(it) }
+        triggerSync()
     }
 }

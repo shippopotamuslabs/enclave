@@ -58,7 +58,13 @@ class GetMessageContextToolExecutor @Inject constructor(
         return try {
             executeInternal(request)
         } catch (e: Exception) {
-            loggingPort.error(TAG, "get_message_context FAILED provider=${request.provider} modelType=${request.modelType} arguments=${request.argumentsJson} error=${e.message}", e)
+            loggingPort.error(
+                TAG,
+                "get_message_context FAILED provider=${request.provider} " +
+                    "modelType=${request.modelType} arguments=${request.argumentsJson} " +
+                    "error=${e.message}",
+                e
+            )
             throw e
         }
     }
@@ -71,7 +77,9 @@ class GetMessageContextToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing get_message_context provider=${request.provider} modelType=${request.modelType} messageId=$messageId before=$before after=$after"
+            "Executing get_message_context provider=${request.provider} " +
+                "modelType=${request.modelType} messageId=$messageId " +
+                "before=$before after=$after"
         )
 
         // First find the anchor message to get its chat ID and timestamp
@@ -93,9 +101,9 @@ class GetMessageContextToolExecutor @Inject constructor(
             )
         }
 
-        // Get surrounding context
+        // Get surrounding context — anchor message comes from DB and always has a chatId
         val contextMessages = messageRepository.getMessagesAround(
-            chatId = anchorMessage.chatId,
+            chatId = anchorMessage.chatId ?: return ToolExecutionResult(toolName = request.toolName, resultJson = buildErrorResponse(messageId, "Message has no chat ID")),
             timestamp = timestamp,
             before = before,
             after = after,
@@ -105,7 +113,9 @@ class GetMessageContextToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "get_message_context complete provider=${request.provider} modelType=${request.modelType} messageId=$messageId returned=${contextMessages.size}"
+            "get_message_context complete provider=${request.provider} " +
+                "modelType=${request.modelType} messageId=$messageId " +
+                "returned=${contextMessages.size}"
         )
 
         return ToolExecutionResult(
@@ -145,7 +155,7 @@ class GetMessageContextToolExecutor @Inject constructor(
         return Json.encodeToString(
             GetContextResult(
                 anchor_message_id = messageId,
-                chat_id = anchorMessage.chatId.value,
+                chat_id = anchorMessage.chatId?.value ?: "",
                 total_context_messages = mappedMessages.size,
                 messages = mappedMessages
             )

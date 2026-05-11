@@ -213,26 +213,6 @@ class DownloadProgressTracker(
     fun serializeToWorkData(): Data {
         val snapshot = computeOverallProgress()
 
-        val speedString = if (snapshot.currentSpeedMBps > 0) {
-            String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
-        } else ""
-
-        val etaString = speedTracker.formatEta(snapshot.etaSeconds)
-
-        val subText = buildString {
-            append(formatBytes(snapshot.totalBytesDownloaded))
-            append(" / ")
-            append(formatBytes(snapshot.totalSize))
-            if (speedString.isNotEmpty()) {
-                append(" • ")
-                append(speedString)
-            }
-            if (snapshot.etaSeconds >= 0) {
-                append(" • ETA: ")
-                append(etaString)
-            }
-        }
-
         // Create a lookup map for per-file speeds from the computed snapshot
         val filesProgressMap = snapshot.filesProgress.associateBy { it.filename }
 

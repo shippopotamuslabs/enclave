@@ -1,0 +1,101 @@
+package com.browntowndev.pocketcrew.core.data.sync
+
+import android.content.Context
+import androidx.work.ListenableWorker
+import androidx.work.WorkerParameters
+import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
+import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.storage.StorageReference
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.io.File
+
+@RunWith(RobolectricTestRunner::class)
+class MediaCloudSyncWorkerTest {
+
+    private val context = mockk<Context>(relaxed = true)
+    private val workerParams = mockk<WorkerParameters>(relaxed = true)
+    private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
+    private val storage = mockk<FirebaseStorage>(relaxed = true)
+    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val userIdProvider = { "user123" }
+
+    private lateinit var worker: MediaCloudSyncWorker
+
+    @Before
+    fun setup() {
+        mockkStatic("kotlinx.coroutines.tasks.TasksKt")
+        worker = MediaCloudSyncWorker(
+            context,
+            workerParams,
+            studioMediaDao,
+            storage,
+            loggingPort,
+            cryptoManager,
+            userIdProvider,
+            syncTrigger
+        )
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic("kotlinx.coroutines.tasks.TasksKt")
+    }
+
+    @Test
+    fun `doWork recovers from stagingRemoteUrl if present`() = runBlocking {
+        // Arrange
+        val mediaId = "media1"
+        val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Fmedia%2Fmedia1?alt=media"
+        val media = StudioMediaEntity(
+            id = mediaId,
+            prompt = "test",
+            mediaUri = "file:///tmp/media1.jpg",
+            mediaType = "IMAGE",
+            stagingRemoteUrl = stagingUrl
+        )
+
+        coEvery { studioMediaDao.getPendingUploads() } returns listOf(media)
+        coEvery { studioMediaDao.getPendingDeletions() } returns emptyList()
+
+        val storageRef = mockk<StorageReference>(relaxed = true)
+        val metadata = mockk<StorageMetadata>(relaxed = true)
+        
+        every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+        // Mock storageRef.metadata.await() returns metadata
+        every { storageRef.metadata } returns Tasks.forResult(metadata)
+        // Mock storageRef.downloadUrl.await() returns stagingUrl
+        every { storageRef.downloadUrl } returns Tasks.forResult(android.net.Uri.parse(stagingUrl))
+
+        // Act
+        val result = worker.doWork()
+
+        // Assert
+        assertEquals(ListenableWorker.Result.success(), result)
+        // Verify we DID NOT try to read the file or encrypt it (minimal code would just use the URL)
+        coVerify(exactly = 0) { cryptoManager.encryptBytes(any()) }
+        // Verify we DID NOT try to upload
+        coVerify(exactly = 0) { storageRef.putBytes(any()) }
+        // Verify we marked it uploaded with the recovered URL
+        coVerify { studioMediaDao.markUploaded(mediaId, stagingUrl, any()) }
+    }
+}

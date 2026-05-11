@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.0"
+agp = "9.2.1"
 detekt = "1.23.8"
 animation = "1.11.0"
 coreKtx = "1.18.0"
@@ -26,8 +26,10 @@ uiText = "1.11.0"
 okhttpVersion = "5.3.2"
 roomVersion = "2.8.4"
 androidx-core-splashscreen = "1.2.0"
+biometric = "1.2.0-alpha05"
+androidx-credentials = "1.7.0-alpha01"
+googleid = "1.1.1"
 workVersion = "2.11.2"
-identityDoctypesJvm = "202411.1"
 foundation = "1.11.0"
 robolectricVersion = "4.16.1"
 androidxTestCoreVersion = "1.7.0"
@@ -35,8 +37,11 @@ markdown = "1.2.4"
 turbineVersion = "1.2.1"
 firebaseCrashlyticsVersion = "20.0.5"
 googleServicesVersion = "4.4.4"
+jacocoVersion = "0.8.14"
 firebaseCrashlyticsPluginVersion = "3.0.7"
 firebaseBomVersion = "34.12.0"
+grpc = "1.70.0"
+uniffi = "0.29.0"
 
 kotlinx-serialization = "1.11.0"
 openai = "4.32.0"
@@ -50,11 +55,13 @@ media3 = "1.10.0"
 commonmark = "0.22.0"
 
 [libraries]
+uniffi-kotlin-runtime = { group = "ch.ubique.uniffi", name = "runtime", version = "1.0.7" }
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -91,6 +98,7 @@ mockk-agent = { group = "io.mockk", name = "mockk-agent-jvm", version.ref = "moc
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutinesVersion" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutinesVersion" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTestVersion" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesVersion" }
 kotlin-test-junit5 = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit5", version.ref = "kotlin" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomVersion" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomVersion" }
@@ -98,7 +106,7 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workVersion" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttpVersion" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttpVersion" }
-identity-doctypes-jvm = { group = "com.android.identity", name = "identity-doctypes-jvm", version.ref = "identityDoctypesJvm" }
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "workVersion" }
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectricVersion" }
@@ -108,16 +116,29 @@ markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.re
 markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBomVersion" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+grpc-bom = { group = "io.grpc", name = "grpc-bom", version.ref = "grpc" }
+grpc-android = { group = "io.grpc", name = "grpc-android", version.ref = "grpc" }
+grpc-okhttp = { group = "io.grpc", name = "grpc-okhttp", version.ref = "grpc" }
+grpc-stub = { group = "io.grpc", name = "grpc-stub", version.ref = "grpc" }
+grpc-protobuf-lite = { group = "io.grpc", name = "grpc-protobuf-lite", version.ref = "grpc" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-functions = { group = "com.google.firebase", name = "firebase-functions" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "androidx-credentials" }
+androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "androidx-credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlyticsVersion" }
+firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 openai-java = { group = "com.openai", name = "openai-java", version.ref = "openai" }
 anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 google-genai = { group = "com.google.genai", name = "google-genai", version.ref = "googleGenai" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 telephoto-zoomable-image-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
 commonmark-ext-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }
@@ -132,5 +153,6 @@ hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintVersion" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServicesVersion" }
+jacoco = { id = "org.jacoco.jacoco", version.ref = "jacocoVersion" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPluginVersion" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

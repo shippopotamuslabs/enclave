@@ -112,8 +112,10 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     fun setAssets(newAssets: List<LocalModelAsset>) {
         assets.clear()
+        assets.addAll(newAssets)
     }
 
+    @Suppress("UnusedPrivateMember")
     private fun updateFlow() {
         _registeredModelsFlow.value = modelsMap.mapValues { it.value.second.displayName }
     }

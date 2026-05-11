@@ -8,7 +8,6 @@ import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -41,7 +40,6 @@ class DownloadViewModelUiModelTest {
         // Mock dependencies for ViewModel (though we only need the extension)
         val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
         val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val registry = mockk<LocalModelRepositoryPort>(relaxed = true)
         val parser = mockk<WorkProgressParser>(relaxed = true)
         val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
@@ -49,7 +47,7 @@ class DownloadViewModelUiModelTest {
         val viewModel = DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
             downloadWorkRepository = workRepo,
-            localModelRepository = registry,
+
             progressParser = parser,
             errorHandler = errorHandler,
             modelsResult = result,
@@ -79,7 +77,6 @@ class DownloadViewModelUiModelTest {
         // Mock dependencies
         val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
         val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val registry = mockk<LocalModelRepositoryPort>(relaxed = true)
         val parser = mockk<WorkProgressParser>(relaxed = true)
         val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
@@ -87,7 +84,7 @@ class DownloadViewModelUiModelTest {
         val viewModel = DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
             downloadWorkRepository = workRepo,
-            localModelRepository = registry,
+
             progressParser = parser,
             errorHandler = errorHandler,
             modelsResult = result,
@@ -116,7 +113,6 @@ class DownloadViewModelUiModelTest {
 
         val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
         val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val registry = mockk<LocalModelRepositoryPort>(relaxed = true)
         val parser = mockk<WorkProgressParser>(relaxed = true)
         val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
@@ -124,7 +120,7 @@ class DownloadViewModelUiModelTest {
         val viewModel = DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
             downloadWorkRepository = workRepo,
-            localModelRepository = registry,
+
             progressParser = parser,
             errorHandler = errorHandler,
             modelsResult = result,

@@ -1,19 +1,14 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
-import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
-import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
-import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -22,7 +17,9 @@ import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import kotlinx.coroutines.flow.first
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -42,14 +39,15 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
-    private val chatDao: ChatDao,
+    private val syncTrigger: CloudSyncTrigger,
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
-    private val defaultModelsDao: DefaultModelsDao,
-    private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
     private val embeddingDao: EmbeddingDao,
+    private val transactionProvider: TransactionProvider,
 ) : MessageRepository {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     /**
      * Saves a message to the database.
@@ -64,17 +62,24 @@ class MessageRepositoryImpl @Inject constructor(
      * @return The ID of the saved message
      */
     override suspend fun saveMessage(message: Message): MessageId {
-        val entity = message.toEntity()
-        messageDao.insert(entity)
+        require(message.chatId != null) { "Message(id=${message.id.value}) must have a chatId before persisting — route through CreateUserMessageUseCase" }
+        
+        val messageId = transactionProvider.runInTransaction {
+            val entity = message.toEntity()
+            messageDao.upsert(entity)
 
-        if (message.content.fileAttachments.isNotEmpty()) {
-            val fileEntities = message.content.fileAttachments.map { 
-                it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+            if (message.content.fileAttachments.isNotEmpty()) {
+                val fileEntities = message.content.fileAttachments.map { 
+                    it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+                }
+                messageDao.insertFiles(fileEntities)
             }
-            messageDao.insertFiles(fileEntities)
-        }
 
-        return entity.id
+            entity.id
+        }
+        
+        triggerSync()
+        return messageId
     }
 
     override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
@@ -132,7 +137,7 @@ class MessageRepositoryImpl @Inject constructor(
         modelType: ModelType,
     ) {
         val now = System.currentTimeMillis()
-        messageVisionAnalysisDao.insert(
+        messageVisionAnalysisDao.upsert(
             MessageVisionAnalysisEntity(
                 id = UUID.randomUUID().toString(),
                 userMessageId = userMessageId,
@@ -142,8 +147,10 @@ class MessageRepositoryImpl @Inject constructor(
                 modelType = modelType,
                 createdAt = now,
                 updatedAt = now,
+                pendingSync = 1,
             )
         )
+        triggerSync()
     }
 
     override suspend fun getVisionAnalysesForMessages(
@@ -160,20 +167,20 @@ class MessageRepositoryImpl @Inject constructor(
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? {
         val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.toDomain()
-        if (currentUserMessage != null && currentUserMessage.content.imageUri != null) {
+        if (currentUserMessage != null && currentUserMessage.content.imageUris.isNotEmpty()) {
             return ResolvedImageTarget(
                 userMessageId = currentUserMessage.id,
-                imageUri = currentUserMessage.content.imageUri!!,
+                imageUris = currentUserMessage.content.imageUris,
             )
         }
         val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
         val latestImageMessage = messages
-            .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
+            .filter { it.role == Role.USER && it.content.imageUris.isNotEmpty() && it.id != currentUserMessageId }
             .maxByOrNull { it.createdAt ?: 0L }
         return latestImageMessage?.let {
             ResolvedImageTarget(
                 userMessageId = it.id,
-                imageUri = it.content.imageUri!!,
+                imageUris = it.content.imageUris,
             )
         }
     }

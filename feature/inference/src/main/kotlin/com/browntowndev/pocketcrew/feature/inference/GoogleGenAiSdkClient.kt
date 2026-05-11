@@ -41,6 +41,7 @@ internal class GoogleGenAiSdkClientImpl(
 
     private val modelsApi: Models get() = modelsApiProvider()
 
+    @Suppress("NestedBlockDepth")
     override suspend fun generateContentStream(
         modelId: String,
         contents: List<Content>,

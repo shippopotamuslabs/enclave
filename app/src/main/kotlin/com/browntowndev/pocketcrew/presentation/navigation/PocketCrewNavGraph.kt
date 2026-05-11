@@ -8,7 +8,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -19,9 +22,9 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
+import com.browntowndev.pocketcrew.feature.chat.ChatViewModel
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
-import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 import com.browntowndev.pocketcrew.feature.studio.GalleryDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
@@ -29,10 +32,10 @@ import com.browntowndev.pocketcrew.feature.studio.GalleryViewModel
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
-import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
 
 private const val ANIMATION_DURATION = 300
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun PocketCrewNavGraph(
     navController: NavHostController,
@@ -154,11 +157,8 @@ fun PocketCrewNavGraph(
                         popUpTo(Routes.CHAT_WITH_ID) { inclusive = true }
                     }
                 },
-                onNavigateToArtifactStudio = { request ->
-                    val content = kotlinx.serialization.json.Json.encodeToString(request)
-                    val encodedTitle = android.net.Uri.encode(request.title)
-                    val encodedContent = android.net.Uri.encode(content)
-                    navController.navigate(Routes.artifact(encodedTitle, encodedContent))
+                onNavigateToStudio = { ids, uris, types, prompts ->
+                    navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
                 },
                 onShowSnackbar = onShowSnackbar,
             )
@@ -237,80 +237,7 @@ fun PocketCrewNavGraph(
                 },
                 onNavigateToStudio = { navController.navigate(Routes.STUDIO) },
                 onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
-                onShowSnackbar = onShowSnackbar,
-            )
-        }
-
-        composable(
-            route = Routes.ARTIFACT_WITH_ARGS,
-            arguments = listOf(
-                navArgument("content") { type = NavType.StringType },
-                navArgument("title") { type = NavType.StringType }
-            ),
-            enterTransition = {
-                val initialLevel = getRouteLevel(initialState.destination.route)
-                val targetLevel = getRouteLevel(targetState.destination.route)
-                if (initialLevel < targetLevel) {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                } else {
-                    slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                }
-            },
-            exitTransition = {
-                val targetLevel = getRouteLevel(targetState.destination.route)
-                val currentLevel = getRouteLevel(initialState.destination.route)
-                if (targetLevel > currentLevel) {
-                    slideOutHorizontally(
-                        targetOffsetX = { -it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                } else {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                }
-            },
-            popEnterTransition = {
-                val initialLevel = getRouteLevel(initialState.destination.route)
-                val targetLevel = getRouteLevel(targetState.destination.route)
-                if (initialLevel < targetLevel) {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                } else {
-                    slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                }
-            },
-            popExitTransition = {
-                val targetLevel = getRouteLevel(targetState.destination.route)
-                val currentLevel = getRouteLevel(initialState.destination.route)
-                if (targetLevel > currentLevel) {
-                    slideOutHorizontally(
-                        targetOffsetX = { -it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                } else {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = tween(ANIMATION_DURATION),
-                    )
-                }
-            },
-        ) {
-            ArtifactRoute(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) }
             )
         }
 
@@ -336,6 +263,26 @@ fun PocketCrewNavGraph(
                     navArgument("autoAnimate") {
                         type = NavType.BoolType
                         defaultValue = false
+                    },
+                    navArgument("rehydrateIds") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydrateUris") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydrateTypes") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydratePrompts") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     },
                 ),
             enterTransition = {
@@ -405,11 +352,44 @@ fun PocketCrewNavGraph(
             val animatePrompt = backStackEntry.arguments?.getString("animatePrompt")
             val autoAnimate = backStackEntry.arguments?.getBoolean("autoAnimate") ?: false
 
-            LaunchedEffect(editAssetId, animateAssetId, animatePrompt, autoAnimate) {
-                if (editAssetId != null) {
-                    studioViewModel.onEditMedia(editAssetId)
+            val rehydrateIds = backStackEntry.arguments?.getString("rehydrateIds")
+            val rehydrateUris = backStackEntry.arguments?.getString("rehydrateUris")
+            val rehydrateTypes = backStackEntry.arguments?.getString("rehydrateTypes")
+            val rehydratePrompts = backStackEntry.arguments?.getString("rehydratePrompts")
+            
+            var isStudioInitialized by rememberSaveable { mutableStateOf(false) }
+
+            LaunchedEffect(
+                editAssetId,
+                animateAssetId,
+                animatePrompt,
+                autoAnimate,
+                rehydrateIds,
+                rehydrateUris,
+                rehydrateTypes,
+                rehydratePrompts
+            ) {
+                if (editAssetId != null || rehydrateUris != null) {
+                    val json = kotlinx.serialization.json.Json
+                    val ids = rehydrateIds?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val uris = rehydrateUris?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val types = rehydrateTypes?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val prompts = rehydratePrompts?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+
+                    studioViewModel.onEditMedia(
+                        assetId = editAssetId,
+                        rehydrateIds = ids,
+                        rehydrateUris = uris,
+                        rehydrateTypes = types,
+                        rehydratePrompts = prompts
+                    )
+                    isStudioInitialized = true
                 } else if (animateAssetId != null) {
                     studioViewModel.onAnimateMedia(animateAssetId, autoAnimate, animatePrompt)
+                    isStudioInitialized = true
+                } else if (!isStudioInitialized) {
+                    studioViewModel.clearSession()
+                    isStudioInitialized = true
                 }
             }
 
@@ -420,7 +400,7 @@ fun PocketCrewNavGraph(
                 onMediaClick = { assetId ->
                     navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", assetId))
                 },
-                onShowSnackbar = onShowSnackbar,
+                onShowSnackbar = onShowSnackbar
             )
         }
 
@@ -678,7 +658,7 @@ fun PocketCrewNavGraph(
             // Use the studio's backstack entry to share the ViewModel
             val studioBackStackEntry =
                 remember(backStackEntry) {
-                    navController.getBackStackEntry(Routes.STUDIO)
+                    navController.getBackStackEntry(Routes.STUDIO_WITH_ARGS)
                 }
             val studioViewModel = hiltViewModel<MultimodalViewModel>(studioBackStackEntry)
             val studioUiState by studioViewModel.uiState.collectAsStateWithLifecycle()
@@ -705,8 +685,42 @@ fun PocketCrewNavGraph(
 
         settingsGraph(
             navController = navController,
-            onShowSnackbar = onShowSnackbar,
         )
+
+        composable(
+            route = Routes.SHARED_CHAT,
+            arguments = listOf(
+                navArgument("shareId") { type = NavType.StringType }
+            ),
+            deepLinks = listOf(
+                navDeepLink {
+                    uriPattern = Routes.SHARED_CHAT_DEEP_LINK_PATTERN
+                }
+            )
+        ) { backStackEntry ->
+            val shareId = backStackEntry.arguments?.getString("shareId")
+            val chatViewModel = hiltViewModel<ChatViewModel>()
+
+            LaunchedEffect(shareId) {
+                if (shareId != null) {
+                    chatViewModel.onLoadSharedChat(shareId)
+                }
+            }
+
+            ChatRoute(
+                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNewChat = {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(Routes.SHARED_CHAT) { inclusive = true }
+                    }
+                },
+                onNavigateToStudio = { ids, uris, types, prompts ->
+                    navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
+                },
+                onShowSnackbar = onShowSnackbar,
+                viewModel = chatViewModel
+            )
+        }
     }
 }
 
@@ -716,7 +730,6 @@ private fun getRouteLevel(route: String?): Int {
         route.startsWith(Routes.SETTINGS_GRAPH) || route.startsWith(Routes.SETTINGS_MAIN) -> 6
         route.startsWith(Routes.GALLERY_DETAIL.substringBefore("?")) -> 5
         route.startsWith(Routes.GALLERY) -> 4
-        route.startsWith(Routes.ARTIFACT.substringBefore("?")) -> 3
         route.startsWith(Routes.STUDIO_DETAIL.substringBefore("?")) -> 3
         route.startsWith(Routes.STUDIO) -> 2
         route.startsWith(Routes.CHAT) -> 1

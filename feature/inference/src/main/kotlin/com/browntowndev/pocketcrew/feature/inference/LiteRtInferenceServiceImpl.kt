@@ -11,7 +11,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -64,10 +65,23 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     if (!resultJson.isNullOrEmpty()) {
                         val assistantMessageId = options.assistantMessageId
                         if (assistantMessageId != null) {
-                            val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                            val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                             val validSources = sources.filter { it.url.isNotEmpty() && it.title.isNotEmpty() }
                             if (validSources.isNotEmpty()) {
-                                send(InferenceEvent.TavilyResults(validSources, targetModelType))
+                                send(InferenceEvent.WebSearchResults(validSources, targetModelType))
+                            }
+
+                            val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                            if (mediaResult.uris.isNotEmpty()) {
+                                send(
+                                    InferenceEvent.Media(
+                                        mediaUris = mediaResult.uris,
+                                        mediaIds = mediaResult.ids,
+                                        mediaTypes = mediaResult.types,
+                                        prompts = mediaResult.prompts,
+                                        modelType = targetModelType
+                                    )
+                                )
                             }
                         }
                     }
@@ -122,7 +136,9 @@ class LiteRtInferenceServiceImpl @Inject constructor(
             } catch (e: JavaCancellationException) {
                 // LiteRT cancelProcess() signals cancellation through this exception type.
                 // Emit Finished so the UI transitions out of generating state cleanly.
-                Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType")
+                // Note: JavaCancellationException is NOT a Kotlin CancellationException,
+                // so we do not re-throw it — the native layer already handled cancellation.
+                Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType", e)
                 conversationManager.cancelProcess()
                 send(InferenceEvent.Finished(targetModelType))
             } catch (e: CancellationException) {
@@ -137,7 +153,9 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     Log.w(TAG, "LiteRT inference failed; resetting engine and retrying once", e)
                     try {
                         conversationManager.closeEngine()
-                    } catch (_: Throwable) {}
+                    } catch (teardownError: Throwable) {
+                        Log.w(TAG, "Failed to close engine during inference reset", teardownError)
+                    }
                     
                     // Reset accumulators before retry
                     isThinking = false

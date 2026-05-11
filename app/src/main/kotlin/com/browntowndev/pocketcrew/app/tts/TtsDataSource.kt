@@ -58,7 +58,7 @@ class TtsDataSource(
                 ?: throw IOException("TTS request not found in registry: $requestId. It may have expired or been removed.")
 
         val apiKey =
-            apiKeyProvider.getApiKey(request.credentialAlias)
+            runBlocking { apiKeyProvider.getApiKey(request.credentialAlias) }
                 ?: throw IOException("API key not found for credential alias: ${request.credentialAlias}")
 
         val streamService =

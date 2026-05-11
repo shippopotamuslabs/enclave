@@ -25,6 +25,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -33,7 +34,6 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressPer
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatInferenceRequestPreparer
-import com.browntowndev.pocketcrew.domain.usecase.chat.SearchToolPromptComposer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -86,13 +86,25 @@ class ChatInferenceService : Service() {
     lateinit var embeddingEnginePort: EmbeddingEnginePort
 
     @Inject
-    lateinit var searchToolPromptComposer: SearchToolPromptComposer
+    lateinit var promptComposer: PromptComposerPort
 
     @Inject
     lateinit var loggingPort: LoggingPort
 
     @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
+    
+    @Inject
+    lateinit var defaultModelRepository: com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+    
+    @Inject
+    lateinit var mediaProviderRepository: com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
+    
+    @Inject
+    lateinit var mediaToolDefinitionFactory: com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory
+    
+    @Inject
+    lateinit var getProviderCapabilitiesUseCase: com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 
     @Inject
     lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
@@ -120,7 +132,11 @@ class ChatInferenceService : Service() {
             messageRepository,
             memoriesRepository,
             embeddingEnginePort,
-            searchToolPromptComposer,
+            promptComposer = promptComposer,
+            defaultModelRepository,
+            mediaProviderRepository,
+            mediaToolDefinitionFactory,
+            getProviderCapabilitiesUseCase,
             loggingPort
         )
     }
@@ -142,7 +158,9 @@ class ChatInferenceService : Service() {
                 val modelType = ModelType.valueOf(intent.getStringExtra(EXTRA_MODEL_TYPE) ?: ModelType.FAST.name)
                 loggingPort.info(
                     TAG,
-                    "ACTION_START chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
+                    "ACTION_START chat=${chatId.value} " +
+                        "assistantMessageId=${assistantMessageId.value} " +
+                        "modelType=${modelType.name} userHasImage=$userHasImage",
                 )
 
                 startInference(prompt, userMessageId, assistantMessageId, chatId, userHasImage, modelType)
@@ -179,7 +197,9 @@ class ChatInferenceService : Service() {
         currentAssistantMessageId = assistantMessageId
         loggingPort.info(
             TAG,
-            "startInference chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
+            "startInference chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "modelType=${modelType.name} userHasImage=$userHasImage",
         )
         startForeground(ONGOING_NOTIFICATION_ID, createOngoingNotification(chatId))
         loggingPort.debug(TAG, "foreground service started chat=${chatId.value}")
@@ -200,7 +220,8 @@ class ChatInferenceService : Service() {
                 if (userHasImage) {
                     loggingPort.debug(
                         TAG,
-                        "emitting initial Processing state for image request chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                        "emitting initial Processing state for image request " +
+                            "chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                     )
                     publishState(
                         chatId = chatId,
@@ -232,7 +253,7 @@ class ChatInferenceService : Service() {
                 withContext(NonCancellable) {
                     persistenceSession.flush(markIncompleteAsCancelled = true)
                 }
-                return@launch
+                throw e
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Inference failed in service", e)
                 publishState(
@@ -260,7 +281,9 @@ class ChatInferenceService : Service() {
         val config = activeModelProvider.getActiveConfiguration(modelType)
         loggingPort.info(
             TAG,
-            "generateWithService start chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} configAvailable=${config != null}",
+            "generateWithService start chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "modelType=${modelType.name} configAvailable=${config != null}",
         )
         val preparedRequest = inferenceRequestPreparer(
             prompt = prompt,
@@ -271,7 +294,9 @@ class ChatInferenceService : Service() {
         )
         loggingPort.debug(
             TAG,
-            "request prepared chat=${chatId.value} assistantMessageId=${assistantMessageId.value} promptLength=${preparedRequest.prompt.length}",
+            "request prepared chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "promptLength=${preparedRequest.prompt.length}",
         )
 
         try {
@@ -306,8 +331,15 @@ class ChatInferenceService : Service() {
                 is InferenceEvent.Processing -> MessageGenerationState.Processing(event.modelType)
                 is InferenceEvent.Thinking -> MessageGenerationState.ThinkingLive(event.chunk, modelType)
                 is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
-                is InferenceEvent.TavilyResults -> MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType)
+                is InferenceEvent.WebSearchResults -> MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType)
                 is InferenceEvent.Artifacts -> MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType)
+                is InferenceEvent.Media -> MessageGenerationState.MediaAttached(
+                    mediaUris = event.mediaUris,
+                    mediaIds = event.mediaIds,
+                    mediaTypes = event.mediaTypes,
+                    prompts = event.prompts,
+                    modelType = event.modelType
+                )
                 is InferenceEvent.Finished -> {
                     maybeShowCompletionNotification(chatId)
                     MessageGenerationState.Finished(event.modelType)

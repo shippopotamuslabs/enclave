@@ -34,12 +34,14 @@ enum class ToolCallBannerKind {
     IMAGE,
     MEMORY,
     ARTIFACT,
+    X_SEARCH,
+    MEDIA,
 }
 
 data class ToolCallBannerUi(
     val kind: ToolCallBannerKind,
     val label: String,
-    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+    val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
 data class ChatMessage(
@@ -50,16 +52,17 @@ data class ChatMessage(
     val formattedTimestamp: String,
     val indicatorState: IndicatorState? = null,
     val modelDisplayName: String = "",
-    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+    val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val speechState: SpeechState = SpeechState.Idle,
-    val selectedImageUri: String? = null,
+    val selectedImageUris: List<String> = emptyList(),
     val selectedFileName: String? = null,
     val isPhotoAttachmentEnabled: Boolean = false,
+    val photoAttachmentMaxItems: Int = 1,
     val photoAttachmentDisabledReason: String? = null,
     val selectedMode: ChatModeUi = ChatModeUi.FAST,
     val isGlobalInferenceBlocked: Boolean = false,
@@ -75,7 +78,22 @@ data class ChatUiState(
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
     val isPlayingTts: Boolean = false,
+    val shareState: ShareState = ShareState.Idle,
+    val isReadOnly: Boolean = false,
+    val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,
 )
+
+sealed interface ShareState {
+    data object Idle : ShareState
+    data object ShowingSheet : ShareState
+    data object Loading : ShareState
+    data class Success(val shareUrl: String) : ShareState
+    data class Error(val message: String) : ShareState
+}
+
+sealed interface ShareUiEvent {
+    data class OpenShareSheet(val shareUrl: String) : ShareUiEvent
+}
 
 /**
  * Used in previews - various indicator states.
@@ -133,7 +151,10 @@ val fakeLongMessages = listOf(
         indicatorState = IndicatorState.Generating(
             thinkingData = ThinkingDataUi(
                 thinkingDurationSeconds = 15,
-                thinkingRaw = "Kotlin coroutines are like lightweight threads. They allow you to write asynchronous code in a sequential manner. Key concepts: **suspend functions**, **Dispatchers**, and **Scopes**.\n\n- `launch` for fire-and-forget\n- `async` for results\n- `flow` for streams"
+                thinkingRaw = "Kotlin coroutines are like lightweight threads. They allow you to write " +
+                    "asynchronous code in a sequential manner. Key concepts: **suspend functions**, " +
+                    "**Dispatchers**, and **Scopes**.\n\n- `launch` for fire-and-forget\n" +
+                    "- `async` for results\n- `flow` for streams"
             )
         ),
         modelDisplayName = "Qwen 3 8B",

@@ -33,9 +33,10 @@ class InputBarTest {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
@@ -47,7 +48,7 @@ class InputBarTest {
                 onStopGenerating = {},
                 onImageAttach = {},
                 onFileAttach = {},
-                onClearImage = {},
+                onClearImage = { _ -> },
                 onClearFile = {},
                 onMicClick = {}
             )
@@ -68,9 +69,10 @@ class InputBarTest {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = fileName,
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
@@ -82,7 +84,7 @@ class InputBarTest {
                 onStopGenerating = {},
                 onImageAttach = {},
                 onFileAttach = {},
-                onClearImage = {},
+                onClearImage = { _ -> },
                 onClearFile = {},
                 onMicClick = {}
             )
@@ -100,9 +102,10 @@ class InputBarTest {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
@@ -114,7 +117,7 @@ class InputBarTest {
                 onStopGenerating = {},
                 onImageAttach = {},
                 onFileAttach = {},
-                onClearImage = {},
+                onClearImage = { _ -> },
                 onClearFile = {},
                 onMicClick = { onMicClickCalled = true }
             )
@@ -137,9 +140,10 @@ class InputBarTest {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
@@ -151,7 +155,7 @@ class InputBarTest {
                 onStopGenerating = {},
                 onImageAttach = {},
                 onFileAttach = {},
-                onClearImage = {},
+                onClearImage = { _ -> },
                 onClearFile = {},
                 onMicClick = { onMicClickCalled = true }
             )
@@ -172,9 +176,10 @@ class InputBarTest {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
@@ -186,7 +191,7 @@ class InputBarTest {
                 onStopGenerating = {},
                 onImageAttach = {},
                 onFileAttach = {},
-                onClearImage = {},
+                onClearImage = { _ -> },
                 onClearFile = {},
                 onMicClick = {}
             )

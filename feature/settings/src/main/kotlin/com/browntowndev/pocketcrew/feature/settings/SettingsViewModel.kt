@@ -3,95 +3,45 @@ package com.browntowndev.pocketcrew.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
-import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
-import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryRequest
-import com.browntowndev.pocketcrew.domain.usecase.settings.ApiPresetDraft
-import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
-import com.browntowndev.pocketcrew.domain.usecase.settings.PreparedModelDeletion
+import com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.feature.settings.ApiModelConfigUi
-import com.browntowndev.pocketcrew.feature.settings.LocalModelAssetUiMapper
-import com.browntowndev.pocketcrew.feature.settings.ApiModelAssetUiMapper
-import com.browntowndev.pocketcrew.feature.settings.TtsProviderAssetUiMapper
-import com.browntowndev.pocketcrew.feature.settings.ReassignmentOptionUiMapper
-import com.browntowndev.pocketcrew.feature.settings.SettingsUiStateFactory
-import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
-import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-
-private data class PersistedSettingsBundle(
-    val settings: com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
-    val localAssets: List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
-    val apiAssets: List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
-    val ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
-    val mediaAssets: List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
-    val defaultModels: List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
-)
-
-private data class TransientSettingsBundle(
-    val sheetVisibility: SheetVisibilityState,
-    val memories: List<StoredMemory>,
-    val feedbackText: String,
-    val localModelsState: LocalModelsTransientState,
-    val apiState: ApiProvidersTransientState,
-    val ttsState: TtsProvidersTransientState,
-    val mediaState: MediaProvidersTransientState,
-    val searchSkillState: SearchSkillTransientState,
-    val assignmentState: AssignmentDialogTransientState,
-    val deletionState: DeletionTransientState,
-    val memoriesState: MemoriesTransientState,
-)
-
-private data class SheetTransientBundle(
-    val sheetVisibility: SheetVisibilityState,
-    val memories: List<StoredMemory>,
-    val feedbackText: String,
-    val localModelsState: LocalModelsTransientState,
-)
-
-private data class DialogTransientBundle(
-    val searchSkillState: SearchSkillTransientState,
-    val apiState: ApiProvidersTransientState,
-    val ttsState: TtsProvidersTransientState,
-    val assignmentState: AssignmentDialogTransientState,
-    val deletionState: DeletionTransientState,
-)
+import javax.inject.Inject
 
 @HiltViewModel
-class SettingsViewModel @Inject constructor(
+@Suppress("LargeClass", "TooManyFunctions")
+internal class SettingsViewModel @Inject constructor(
+    private val generalDelegate: SettingsGeneralDelegate,
+    private val memoriesDelegate: SettingsMemoriesDelegate,
+    private val localModelsDelegate: SettingsLocalModelsDelegate,
+    private val apiProvidersDelegate: SettingsApiProvidersDelegate,
+    private val searchDelegate: SettingsSearchDelegate,
+    private val assignmentsDelegate: SettingsAssignmentsDelegate,
+    private val deletionHelper: SettingsDeletionHelper,
     settingsUseCases: SettingsUseCases,
-    private val memoriesRepository: MemoriesRepository,
     private val settingsUiStateFactory: SettingsUiStateFactory,
-    private val localModelAssetUiMapper: LocalModelAssetUiMapper,
-    private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
-    private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
-    private val reassignmentOptionUiMapper: ReassignmentOptionUiMapper,
     private val errorHandler: ViewModelErrorHandler,
+    private val embeddingProgressPort: EmbeddingProgressPort,
 ) : ViewModel() {
 
     companion object {
@@ -108,12 +58,17 @@ class SettingsViewModel @Inject constructor(
     private val _mediaState = MutableStateFlow(MediaProvidersTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
+    private val _xSearchState = MutableStateFlow(XSearchTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val _currentApiKey = MutableStateFlow("")
     private val _currentTavilyApiKey = MutableStateFlow("")
+    private val _currentExaApiKey = MutableStateFlow("")
+    private val _currentXApiKey = MutableStateFlow("")
+
     val currentApiKey: StateFlow<String> = _currentApiKey
     val currentTavilyApiKey: StateFlow<String> = _currentTavilyApiKey
+    val currentXApiKey: StateFlow<String> = _currentXApiKey
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private val preferencesUseCases = settingsUseCases.preferences
@@ -122,109 +77,69 @@ class SettingsViewModel @Inject constructor(
     private val ttsUseCases = settingsUseCases.tts
     private val mediaUseCases = settingsUseCases.media
     private val assignmentUseCases = settingsUseCases.assignments
-    private val deletionUseCases = settingsUseCases.deletion
+    private val memoriesUseCases = settingsUseCases.memories
+    private val authUseCases = settingsUseCases.auth
 
     private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
     private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
     private val ttsAssetsFlow = ttsUseCases.getTtsProviders()
     private val mediaAssetsFlow = mediaUseCases.getMediaProviders()
-    private val memoriesFlow = memoriesRepository.getAllMemoriesFlow().map { memories ->
+    private val memoriesFlow = memoriesUseCases.getAllMemoriesFlow().map { memories ->
         memories.map { StoredMemory(it.id, it.content, it.category) }
-    }
-    // Combine(6) isn't available as a typed overload — nest to stay within the 5-flow limit.
-    private val ttsAndMediaBundle = combine(
-        ttsAssetsFlow,
-        mediaAssetsFlow,
-    ) { tts, media -> Pair(tts, media) }
-    private val persistedSettingsBundle = combine(
-        settingsUseCases.getSettings(),
-        localModelAssetsFlow,
-        apiModelAssetsFlow,
-        ttsAndMediaBundle,
-        assignmentUseCases.getDefaultModels(),
-    ) { settings, localAssets, apiAssets, ttsAndMedia, defaultModels ->
-        PersistedSettingsBundle(
-            settings = settings,
-            localAssets = localAssets,
-            apiAssets = apiAssets,
-            ttsAssets = ttsAndMedia.first,
-            mediaAssets = ttsAndMedia.second,
-            defaultModels = defaultModels,
-        )
-    }
-    private val sheetAndMemoriesBundle = combine(
-        _sheetVisibility,
-        memoriesFlow,
-        _feedbackText,
-        _memoriesState
-    ) { sheetVisibility, memories, feedbackText, memoriesState ->
-        object {
-            val sheetVisibility = sheetVisibility
-            val memories = memories
-            val feedbackText = feedbackText
-            val memoriesState = memoriesState
-        }
-    }
-
-    private val modelAndToolsBundle = combine(
-        _localModelsState,
-        _apiState,
-        _searchSkillState,
-        _ttsState,
-        _mediaState,
-    ) { localModelsState, apiState, searchSkillState, ttsState, mediaState ->
-        object {
-            val localModelsState = localModelsState
-            val apiState = apiState
-            val searchSkillState = searchSkillState
-            val ttsState = ttsState
-            val mediaState = mediaState
-        }
-    }
-
-    private val transientSettingsBundle = combine(
-        sheetAndMemoriesBundle,
-        modelAndToolsBundle,
-        _assignmentState,
-        _deletionState
-    ) { smBundle, mtBundle, assignmentState, deletionState ->
-        TransientSettingsBundle(
-            sheetVisibility = smBundle.sheetVisibility,
-            memories = smBundle.memories,
-            feedbackText = smBundle.feedbackText,
-            localModelsState = mtBundle.localModelsState,
-            apiState = mtBundle.apiState,
-            ttsState = mtBundle.ttsState,
-            mediaState = mtBundle.mediaState,
-            searchSkillState = mtBundle.searchSkillState,
-            assignmentState = assignmentState,
-            deletionState = deletionState,
-            memoriesState = smBundle.memoriesState,
-        )
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
-        persistedSettingsBundle,
-        transientSettingsBundle,
-    ) { persisted, transient ->
+        preferencesUseCases.getSettings(),
+        localModelAssetsFlow,
+        apiModelAssetsFlow,
+        ttsAssetsFlow,
+        mediaAssetsFlow,
+        assignmentUseCases.getDefaultModels(),
+        authUseCases.getAuthState(),
+        _sheetVisibility,
+        memoriesFlow,
+        _feedbackText,
+        _localModelsState,
+        _apiState,
+        _ttsState,
+        _mediaState,
+        _searchSkillState,
+        _assignmentState,
+        _deletionState,
+        _memoriesState,
+        _currentTavilyApiKey,
+        _currentExaApiKey,
+        _currentXApiKey,
+        _xSearchState,
+        embeddingProgressPort.isReindexing,
+        embeddingProgressPort.progress,
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
         settingsUiStateFactory.create(
-            persistedSettings = persisted.settings,
-            localAssets = persisted.localAssets,
-            apiAssets = persisted.apiAssets,
-            ttsAssets = persisted.ttsAssets,
-            mediaAssets = persisted.mediaAssets,
-            defaultModels = persisted.defaultModels,
-            sheetVisibility = transient.sheetVisibility,
-            memories = transient.memories,
-            feedbackText = transient.feedbackText,
-            localModelsState = transient.localModelsState,
-            apiState = transient.apiState,
-            ttsState = transient.ttsState,
-            mediaState = transient.mediaState,
-            searchSkillState = transient.searchSkillState,
-            assignmentsState = transient.assignmentState,
-            deletionState = transient.deletionState,
-            memoriesState = transient.memoriesState,
+            persistedSettings = args[0] as com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
+            localAssets = args[1] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
+            apiAssets = args[2] as List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
+            ttsAssets = args[3] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
+            mediaAssets = args[4] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
+            defaultModels = args[5] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
+            authState = args[6] as com.browntowndev.pocketcrew.domain.port.auth.AuthState,
+            sheetVisibility = args[7] as SheetVisibilityState,
+            memories = args[8] as List<StoredMemory>,
+            feedbackText = args[9] as String,
+            localModelsState = args[10] as LocalModelsTransientState,
+            apiState = args[11] as ApiProvidersTransientState,
+            ttsState = args[12] as TtsProvidersTransientState,
+            mediaState = args[13] as MediaProvidersTransientState,
+            searchSkillState = args[14] as SearchSkillTransientState,
+            assignmentsState = args[15] as AssignmentDialogTransientState,
+            deletionState = args[16] as DeletionTransientState,
+            memoriesState = args[17] as MemoriesTransientState,
+            currentTavilyApiKey = args[18] as String,
+            currentExaApiKey = args[19] as String,
+            currentXApiKey = args[20] as String,
+            xSearchState = args[21] as XSearchTransientState,
+            isReindexing = args[22] as Boolean,
+            reindexProgress = args[23] as Float,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -232,1369 +147,240 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsUiState(),
     )
 
-    /**
-     * When local model assets change (e.g., a re-download completes and restores
-     * a soft-deleted model), remove it from the "Available for Download" list
-     * so it doesn't appear in both sections simultaneously.
-     */
     init {
-        viewModelScope.launch {
-            localModelAssetsFlow.collect { activeAssets ->
-                val activeSha256s = activeAssets.map { it.metadata.sha256 }.toSet()
-                _localModelsState.update { current ->
-                    val filtered = current.availableToDownloadModels.filterNot { restoredAsset ->
-                        restoredAsset.metadata.sha256 in activeSha256s
-                    }
-                    if (filtered.size != current.availableToDownloadModels.size) {
-                        current.copy(availableToDownloadModels = filtered)
-                    } else {
-                        current
-                    }
-                }
-            }
-        }
+        localModelsDelegate.observeActiveLocalModels(viewModelScope, localModelAssetsFlow, _localModelsState)
     }
 
-    fun onThemeChange(theme: AppTheme) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update theme", "Failed to update theme")) {
-            preferencesUseCases.updateTheme(theme)
-        }
-    }
+    // --- General / Auth ---
+    fun onThemeChange(theme: AppTheme) = generalDelegate.onThemeChange(viewModelScope, TAG, theme)
+    fun onHapticPressChange(enabled: Boolean) = generalDelegate.onHapticPressChange(viewModelScope, TAG, enabled)
+    fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, enabled)
+    fun onBackgroundInferenceChange(enabled: Boolean) = generalDelegate.onBackgroundInferenceChange(viewModelScope, TAG, enabled)
+    fun onLoginWithGoogle() = generalDelegate.onLoginWithGoogle(viewModelScope, TAG)
+    fun onLogout() = generalDelegate.onLogout(viewModelScope, TAG)
+    fun onShowCustomizationSheet(show: Boolean) = generalDelegate.onShowCustomizationSheet(_sheetVisibility, show)
+    fun onCustomizationEnabledChange(enabled: Boolean) = generalDelegate.onCustomizationEnabledChange(viewModelScope, TAG, enabled)
+    fun onPromptOptionChange(option: SystemPromptOption) = generalDelegate.onPromptOptionChange(viewModelScope, TAG, option)
+    fun onCustomPromptTextChange(text: String) = generalDelegate.onCustomPromptTextChange(viewModelScope, TAG, text)
+    fun onSaveCustomization() = generalDelegate.onSaveCustomization(_sheetVisibility)
+    fun onShowFeedbackSheet(show: Boolean) = generalDelegate.onShowFeedbackSheet(_sheetVisibility, show)
+    fun onShowVisionSettingsSheet(show: Boolean) = generalDelegate.onShowVisionSettingsSheet(_sheetVisibility, show)
+    fun onFeedbackTextChange(text: String) = generalDelegate.onFeedbackTextChange(_feedbackText, text)
+    fun onSubmitFeedback() = generalDelegate.onSubmitFeedback(_feedbackText, _sheetVisibility)
 
-    fun onHapticPressChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic press setting", "Failed to update setting")) {
-            preferencesUseCases.updateHapticPress(enabled)
-        }
-    }
+    // --- Memories ---
+    fun onShowDataControlsSheet(show: Boolean) = memoriesDelegate.onShowDataControlsSheet(_sheetVisibility, show)
+    fun onShowMemoriesSheet(show: Boolean) = memoriesDelegate.onShowMemoriesSheet(_sheetVisibility, _memoriesState, show)
+    fun onAddMemory() = memoriesDelegate.onAddMemory(_memoriesState)
+    fun onEditMemory(memory: StoredMemory) = memoriesDelegate.onEditMemory(_memoriesState, memory)
+    fun onUpdateMemoryDraft(text: String, category: MemoryCategory) = memoriesDelegate.onUpdateMemoryDraft(_memoriesState, text, category)
+    fun onSaveMemory() = memoriesDelegate.onSaveMemory(viewModelScope, TAG, _memoriesState)
+    fun onCancelMemoryEdit() = memoriesDelegate.onCancelMemoryEdit(_memoriesState)
+    fun onDeleteMemory(memoryId: String) = memoriesDelegate.onDeleteMemory(viewModelScope, TAG, memoryId)
+    fun onAllowMemoriesChange(enabled: Boolean) = memoriesDelegate.onAllowMemoriesChange(viewModelScope, TAG, enabled)
+    fun onDeleteAllMemories(memories: List<StoredMemory>) = memoriesDelegate.onDeleteAllMemories(viewModelScope, TAG, memories)
 
-    fun onHapticResponseChange(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesUseCases.updateHapticResponse(enabled)
-        }
-    }
-
-    fun onBackgroundInferenceChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update background inference setting", "Failed to update setting")) {
-            preferencesUseCases.updateBackgroundInferenceEnabled(enabled)
-        }
-    }
-
-    fun onShowCustomizationSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(customization = show) }
-    }
-
-    fun onCustomizationEnabledChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update customization setting", "Failed to update setting")) {
-            preferencesUseCases.updateCustomizationEnabled(enabled)
-        }
-    }
-
-    fun onPromptOptionChange(option: SystemPromptOption) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update prompt option", "Failed to update setting")) {
-            preferencesUseCases.updateSelectedPromptOption(option)
-        }
-    }
-
-    fun onCustomPromptTextChange(text: String) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update custom prompt", "Failed to update setting")) {
-            preferencesUseCases.updateCustomPromptText(text)
-        }
-    }
-
-    fun onSaveCustomization() {
-        _sheetVisibility.update { it.copy(customization = false) }
-    }
-
-    fun onShowDataControlsSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(dataControls = show) }
-    }
-
-    fun onShowMemoriesSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(memories = show) }
-        if (!show) {
-            _memoriesState.update { MemoriesTransientState() }
-        }
-    }
-
-    fun onAddMemory() {
-        _memoriesState.update {
-            it.copy(
-                memoryDraft = StoredMemory(category = MemoryCategory.PREFERENCES),
-                isEditing = true
-            )
-        }
-    }
-
-    fun onEditMemory(memory: StoredMemory) {
-        _memoriesState.update {
-            it.copy(
-                memoryDraft = memory,
-                isEditing = true
-            )
-        }
-    }
-
-    fun onUpdateMemoryDraft(text: String, category: MemoryCategory) {
-        _memoriesState.update {
-            it.copy(
-                memoryDraft = it.memoryDraft?.copy(text = text, category = category)
-                    ?: StoredMemory(text = text, category = category)
-            )
-        }
-    }
-
-    fun onSaveMemory() {
-        val draft = _memoriesState.value.memoryDraft ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save memory", "Failed to save memory")) {
-            if (draft.id.isEmpty()) {
-                memoriesRepository.insertMemory(draft.category, draft.text)
-            } else {
-                memoriesRepository.updateMemory(draft.id, draft.text, draft.category)
-            }
-            _memoriesState.update { MemoriesTransientState() }
-        }
-    }
-
-    fun onCancelMemoryEdit() {
-        _memoriesState.update { MemoriesTransientState() }
-    }
-
-    fun onDeleteMemory(memoryId: String) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete memory", "Failed to delete memory")) {
-            memoriesRepository.deleteMemory(memoryId)
-        }
-    }
-
-    fun onAllowMemoriesChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update memories setting", "Failed to update setting")) {
-            preferencesUseCases.updateAllowMemories(enabled)
-        }
-    }
-
-    fun onDeleteAllConversations() = Unit
-
-    fun onDeleteAllMemories() {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete all memories", "Failed to delete all memories")) {
-            // Add a use case for this if needed, or loop delete
-            // For now, let's just use repository directly
-            uiState.value.memories.memories.forEach { 
-                memoriesRepository.deleteMemory(it.id)
-            }
-        }
-    }
-
-    fun onShowFeedbackSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(feedback = show) }
-    }
-
-    fun onShowVisionSettingsSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(visionSettings = show) }
-    }
-
-    fun onFeedbackTextChange(text: String) {
-        _feedbackText.value = text
-    }
-
-    fun onSubmitFeedback() {
-        _feedbackText.value = ""
-        _sheetVisibility.update { it.copy(feedback = false) }
-    }
-
-    fun onShowModelConfigSheet(show: Boolean) {
-        if (!show) {
-            _localModelsState.update { it.copy(isSheetOpen = false) }
-            return
-        }
-
-        viewModelScope.launch {
-            val softDeleted = localModelUseCases.getRestorableLocalModels()
-            _localModelsState.update {
-                it.copy(
-                    isSheetOpen = true,
-                    availableToDownloadModels = softDeleted,
-                    selectedAsset = null,
-                    configDraft = null,
-                )
-            }
-        }
-    }
-
-    fun onSelectModelType(modelType: ModelType) {
-        viewModelScope.launch {
-            val selection = assignmentUseCases.resolveAssignedModelSelection(modelType) ?: return@launch
-            selection.localAsset?.let {
-                onSelectLocalModelAsset(localModelAssetUiMapper.map(it))
-                onSelectLocalModelConfig(selection.localConfig?.let(localModelAssetUiMapper::mapConfig))
-            }
-            selection.apiAsset?.let {
-                onSelectApiModelAsset(apiModelAssetUiMapper.map(it))
-                onSelectApiModelConfig(selection.apiConfig?.let(apiModelAssetUiMapper::mapConfig))
-            }
-            selection.ttsAsset?.let {
-                _ttsState.update { state ->
-                    state.copy(
-                        selectedAsset = ttsProviderAssetUiMapper.map(it, isDefault = true),
-                        isSheetOpen = true
-                    )
-                }
-            }
-        }
-    }
-
-    fun onClearSelectedModel() {
-        _localModelsState.update {
-            it.copy(selectedAsset = null, configDraft = null)
-        }
-        _apiState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-            )
-        }
-    }
-
-    fun onSelectLocalModelAsset(asset: LocalModelAssetUi?) {
-        _localModelsState.update { it.copy(selectedAsset = asset, configDraft = null) }
-    }
-
-    fun onSelectLocalModelConfig(config: LocalModelConfigUi?) {
-        _localModelsState.update { it.copy(configDraft = config ?: LocalModelConfigUi()) }
-    }
-
-    fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) {
-        _ttsState.update { it.copy(selectedAsset = asset, assetDraft = asset) }
-        resetModelDiscovery()
-    }
-
+    // --- Local Models ---
+    fun onShowModelConfigSheet(show: Boolean) = localModelsDelegate.onShowModelConfigSheet(_localModelsState, show)
+    fun onSelectLocalModelAsset(asset: LocalModelAssetUi?) = localModelsDelegate.onSelectLocalModelAsset(_localModelsState, asset)
+    fun onSelectLocalModelConfig(config: LocalModelConfigUi?) = localModelsDelegate.onSelectLocalModelConfig(_localModelsState, config)
+    fun onLocalModelConfigFieldChange(config: LocalModelConfigUi) = localModelsDelegate.onModelConfigFieldChange(_localModelsState, config)
+    fun onSaveLocalModelConfig(onSuccess: () -> Unit) = localModelsDelegate.onSaveLocalModelConfig(viewModelScope, TAG, _localModelsState, onSuccess)
+    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) = localModelsDelegate.onDeleteLocalModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
+    fun onDeleteLocalModelAsset(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) = localModelsDelegate.onDeleteLocalModelAsset(viewModelScope, _deletionState, TAG, id)
+    fun onReDownloadLocalModel(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) = localModelsDelegate.onReDownloadLocalModel(viewModelScope, TAG, id)
     fun onClearSelectedLocalModel() {
-        _localModelsState.update { it.copy(selectedAsset = null, configDraft = null) }
+        _localModelsState.value = _localModelsState.value.copy(selectedAsset = null, configDraft = null)
     }
 
-    fun onLocalModelConfigFieldChange(config: LocalModelConfigUi) {
-        if (_localModelsState.value.configDraft?.isSystemPreset == true) return
-        _localModelsState.update { it.copy(configDraft = config) }
-    }
+    // --- API Providers (BYOK) ---
+    fun onShowByokSheet(show: Boolean) = apiProvidersDelegate.onShowByokSheet(_apiState, show)
+    fun onSelectApiModelAsset(asset: ApiModelAssetUi?) = apiProvidersDelegate.onSelectApiProviderAsset(viewModelScope, _apiState, _currentApiKey, asset)
+    fun onApiProviderAssetDraftChange(asset: ApiModelAssetUi) = apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
+    fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) = apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
+    fun onApiModelConfigFieldChange(config: ApiModelConfigUi) = apiProvidersDelegate.onApiModelConfigFieldChange(_apiState, config)
+    fun onSelectApiModelConfig(config: ApiModelConfigUi?) = apiProvidersDelegate.onSelectApiModelConfig(_apiState, config)
+    fun onFetchApiModels() = apiProvidersDelegate.onFetchApiModels(viewModelScope, TAG, _apiState, _currentApiKey)
+    fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) = apiProvidersDelegate.onSaveApiCredentials(viewModelScope, TAG, _apiState, _currentApiKey, onSuccess) { _snackbarMessages.tryEmit(it) }
+    fun onStartCreateApiModelAsset() = apiProvidersDelegate.onStartCreateApiModelAsset(_apiState)
+    fun onShowTtsProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowTtsProvidersSheet(_ttsState, show)
+    fun onFetchTtsModels() = apiProvidersDelegate.onFetchTtsModels(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey)
+    fun onStartCreateTtsProviderAsset() = apiProvidersDelegate.onStartCreateTtsProviderAsset(_ttsState)
+    fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) = apiProvidersDelegate.onTtsAssetFieldChange(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, assignmentsUseCases = assignmentUseCases, asset = asset)
+    fun onSaveTtsProvider(onSuccess: () -> Unit) = apiProvidersDelegate.onSaveTtsProvider(viewModelScope, TAG, _ttsState, _currentApiKey, assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess)
+    fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) = apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, asset)
+    fun onShowMediaProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowMediaProvidersSheet(_mediaState, show)
+    fun onStartCreateMediaProviderAsset() = apiProvidersDelegate.onStartCreateMediaProviderAsset(_mediaState)
+    fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) = apiProvidersDelegate.onMediaAssetFieldChange(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, assignmentsUseCases = assignmentUseCases, asset = asset)
+    fun onFetchMediaModels() = apiProvidersDelegate.onFetchMediaModels(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey)
+    fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) = apiProvidersDelegate.onSelectMediaProviderAsset(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, asset)
+    fun onSaveMediaProvider(onSuccess: () -> Unit) = apiProvidersDelegate.onSaveMediaProvider(viewModelScope, TAG, _mediaState, _currentApiKey, assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess)
+    fun onDeleteApiModelAsset(id: ApiCredentialsId) = apiProvidersDelegate.onDeleteApiModelAsset(viewModelScope, _deletionState, TAG, id)
+    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) = apiProvidersDelegate.onDeleteApiModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
+    fun onDeleteTtsProviderAsset(id: TtsProviderId) = apiProvidersDelegate.onDeleteTtsProviderAsset(viewModelScope, TAG, id)
+    fun onDeleteMediaProviderAsset(id: MediaProviderId) = apiProvidersDelegate.onDeleteMediaProviderAsset(viewModelScope, TAG, id)
+    fun onApiKeyChange(key: String) { _currentApiKey.value = key }
+    fun onSaveApiModelConfig(onSuccess: () -> Unit) = apiProvidersDelegate.onSaveApiModelConfig(viewModelScope, TAG, _apiState, onSuccess)
 
-    fun onSaveLocalModelConfig(onSuccess: () -> Unit) {
-        val selectedAsset = _localModelsState.value.selectedAsset ?: return
-        val configDraft = _localModelsState.value.configDraft ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save local model configuration", "Failed to save configuration")) {
-            localModelUseCases.saveLocalModelPreset(
-                localModelId = selectedAsset.metadataId,
-                draft = configDraft.toDomain(),
-            ).getOrThrow()
-            onSuccess()
-        }
-    }
-
-    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) {
-        prepareDeletion(
-            target = ModelDeletionTarget.LocalModelPreset(id),
-            failureMessage = "Failed to delete local model configuration",
-            userMessage = "Failed to delete configuration",
-            onImmediateSuccess = onSuccess,
-        )
-    }
-
-    fun onDeleteLocalModelAsset(id: LocalModelId) {
-        prepareDeletion(
-            target = ModelDeletionTarget.LocalModelAsset(id),
-            failureMessage = "Failed to delete local model asset",
-            userMessage = "Failed to delete asset",
-        )
-    }
-
-    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) {
-        val deletionState = _deletionState.value
-        val pendingTarget = deletionState.pendingTarget ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
-            deletionUseCases.executeModelDeletionWithReassignment(
-                target = pendingTarget.toDomain(),
-                modelTypesNeedingReassignment = deletionState.modelTypesNeedingReassignment,
-                replacementLocalConfigId = replacementLocalConfigId,
-                replacementApiConfigId = replacementApiConfigId,
-            ).getOrThrow()
-            onDismissDeletionSafety()
-        }
-    }
-
-    fun onDismissDeletionSafety() {
-        _deletionState.value = DeletionTransientState()
-    }
-
-    fun onShowByokSheet(show: Boolean) {
-        if (!show) {
-            _apiState.update { it.copy(isSheetOpen = false) }
-            return
-        }
-
-        _apiState.update {
-            it.copy(
-                isSheetOpen = true,
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-                discoveredApiModels = emptyList(),
-                discoveredApiModelScope = null,
-                isDiscoveringApiModels = false,
-                modelSearchQuery = "",
-                modelProviderFilters = emptySet(),
-                modelSortOption = ModelSortOption.A_TO_Z,
-            )
-        }
-        _searchSkillState.value = SearchSkillTransientState()
-    }
-
-    fun onShowTtsProvidersSheet(show: Boolean) {
-        if (!show) {
-            _ttsState.update { it.copy(isSheetOpen = false) }
-            return
-        }
-
-        _ttsState.update {
-            it.copy(
-                isSheetOpen = true,
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-            )
-        }
-    }
-
-    fun onStartCreateApiModelAsset() {
+    fun onSelectReusableApiCredential(id: ApiCredentialsId?) {
+        val reusableCredential = uiState.value.apiProvidersSheet.assets
+            .find { it.credentialsId == id }
+            ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
         _currentApiKey.value = ""
-        _searchSkillState.value = SearchSkillTransientState()
-        _apiState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = blankApiModelAssetDraft(),
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-                discoveredApiModels = emptyList(),
-                discoveredApiModelScope = null,
-                isDiscoveringApiModels = false,
-                modelSearchQuery = "",
-                modelProviderFilters = emptySet(),
-                modelSortOption = ModelSortOption.A_TO_Z,
-            )
-        }
-    }
-
-    fun onStartCreateTtsProviderAsset() {
-        _currentApiKey.value = ""
-        resetModelDiscovery()
-        _ttsState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = TtsProviderAssetUi(
-                    displayName = "New TTS Provider",
-                    provider = ApiProvider.OPENAI,
-                ),
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-            )
-        }
-    }
-
-    fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) {
-        val existingDraft = _ttsState.value.assetDraft
-        val discoveryScopeChanged =
-            existingDraft == null ||
-                existingDraft.provider != asset.provider ||
-                existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
-        if (discoveryScopeChanged) {
-            resetModelDiscovery()
-        }
-
-        if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
-            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
-                if (asset.useAsDefault) {
-                    assignmentUseCases.setDefaultModel(
-                        modelType = ModelType.TTS,
-                        localConfigId = null,
-                        apiConfigId = null,
-                        ttsProviderId = asset.id
-                    )
-                } else {
-                    assignmentUseCases.clearDefaultModel(ModelType.TTS)
-                }
-            }
-        }
-
-        _ttsState.update { state ->
-            state.copy(
-                assetDraft = asset,
-                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) {
-                    null
-                } else {
-                    state.selectedReusableApiCredentialAlias
-                },
-                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) {
-                    null
-                } else {
-                    state.selectedReusableApiCredentialName
-                },
-            )
-        }
+        _apiState.value = _apiState.value.copy(
+            selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+            selectedReusableApiCredentialName = reusableCredential?.displayName,
+        )
     }
 
     fun onSelectReusableTtsApiCredential(id: ApiCredentialsId?) {
         val reusableCredential = uiState.value.apiProvidersSheet.assets
             .find { it.credentialsId == id }
-            ?.let {
-                ReusableApiCredentialUi(
-                    credentialsId = it.credentialsId,
-                    displayName = it.displayName,
-                    modelId = it.modelId,
-                    credentialAlias = it.credentialAlias,
-                )
-        }
+            ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
         _currentApiKey.value = ""
-        resetModelDiscovery()
-        _ttsState.update {
-            it.copy(
-                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
-                selectedReusableApiCredentialName = reusableCredential?.displayName,
-            )
-        }
-    }
-
-    fun onSaveTtsProvider(onSuccess: () -> Unit) {
-        val draft = _ttsState.value.assetDraft ?: return
-        val reusedAlias = _ttsState.value.selectedReusableApiCredentialAlias
-        val apiKey = _currentApiKey.value.ifBlank { "" }
-
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save TTS provider", "Failed to save provider")) {
-            val ttsId = ttsUseCases.saveTtsProvider(
-                com.browntowndev.pocketcrew.domain.usecase.settings.TtsProviderDraft(
-                    id = draft.id,
-                    displayName = draft.displayName,
-                    provider = draft.provider,
-                    voiceName = draft.voiceName,
-                    modelName = draft.modelName,
-                    baseUrl = draft.baseUrl,
-                    credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
-                        "tts-${draft.provider.name.lowercase()}-${draft.voiceName.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
-                    },
-                    apiKey = apiKey,
-                )
-            ).getOrThrow()
-
-            if (draft.useAsDefault) {
-                assignmentUseCases.setDefaultModel(
-                    modelType = ModelType.TTS,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = ttsId
-                )
-            }
-
-            onSuccess()
-        }
-    }
-
-    fun onShowMediaProvidersSheet(show: Boolean) {
-        if (!show) {
-            _mediaState.update { it.copy(isSheetOpen = false) }
-            return
-        }
-
-        _mediaState.update {
-            it.copy(
-                isSheetOpen = true,
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                isDiscoveringApiModels = false,
-                discoveredApiModels = emptyList(),
-            )
-        }
-    }
-
-    fun onStartCreateMediaProviderAsset() {
-        _currentApiKey.value = ""
-        _mediaState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = MediaProviderAssetUi(
-                    displayName = "New Media Provider",
-                    provider = ApiProvider.OPENAI,
-                ),
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                isDiscoveringApiModels = false,
-                discoveredApiModels = emptyList(),
-            )
-        }
-    }
-
-    fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) {
-        _currentApiKey.value = ""
-        _mediaState.update {
-            it.copy(
-                selectedAsset = asset,
-                assetDraft = asset,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                isDiscoveringApiModels = false,
-                discoveredApiModels = emptyList(),
-            )
-        }
-    }
-
-    fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) {
-        val existingDraft = _mediaState.value.assetDraft
-        val discoveryScopeChanged =
-            existingDraft == null ||
-                existingDraft.provider != asset.provider ||
-                existingDraft.capability != asset.capability ||
-                existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
-
-        if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
-            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
-                val modelType = when (asset.capability) {
-                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
-                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
-                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
-                }
-                assignmentUseCases.setDefaultModel(
-                    modelType = modelType,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    mediaProviderId = asset.id
-                )
-            }
-        }
-
-        _mediaState.update { state ->
-            state.copy(
-                assetDraft = asset,
-                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialAlias,
-                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialName,
-                discoveredApiModels = if (discoveryScopeChanged) emptyList() else state.discoveredApiModels,
-                isDiscoveringApiModels = if (discoveryScopeChanged) false else state.isDiscoveringApiModels,
-            )
-        }
+        _apiState.value = _apiState.value.copy(
+            discoveredApiModels = emptyList(),
+            discoveredApiModelScope = null,
+            isDiscoveringApiModels = false,
+            modelSearchQuery = "",
+            modelProviderFilters = emptySet(),
+            modelSortOption = ModelSortOption.A_TO_Z,
+        )
+        _ttsState.value = _ttsState.value.copy(
+            selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+            selectedReusableApiCredentialName = reusableCredential?.displayName,
+        )
     }
 
     fun onSelectReusableMediaApiCredential(id: ApiCredentialsId?) {
         val reusableCredential = uiState.value.apiProvidersSheet.assets
             .find { it.credentialsId == id }
-            ?.let {
-                ReusableApiCredentialUi(
-                    credentialsId = it.credentialsId,
-                    displayName = it.displayName,
-                    modelId = it.modelId,
-                    credentialAlias = it.credentialAlias,
-                )
-            }
+            ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
         _currentApiKey.value = ""
-        _mediaState.update {
-            it.copy(
-                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
-                selectedReusableApiCredentialName = reusableCredential?.displayName,
-                discoveredApiModels = emptyList(),
-                isDiscoveringApiModels = false,
-            )
-        }
-    }
-
-    fun onFetchMediaModels() {
-        val draft = _mediaState.value.assetDraft ?: return
-        val credentialAlias = resolveMediaCredentialAlias(draft)
-        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
-
-        _mediaState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch media models", "Failed to fetch models")) {
-            try {
-                val result = apiProviderUseCases.discoverApiModels(
-                    ApiModelDiscoveryRequest(
-                        provider = draft.provider,
-                        currentApiKey = _currentApiKey.value,
-                        credentialAlias = credentialAlias,
-                        baseUrl = draft.baseUrl,
-                        selectedModelId = draft.modelName.takeIf(String::isNotBlank),
-                    )
-                )
-                _mediaState.update { state ->
-                    state.copy(
-                        discoveredApiModels = result.models.filterMediaModels(draft.capability),
-                        discoveredApiModelScope = result.scope,
-                        isDiscoveringApiModels = false,
-                    )
-                }
-            } catch (e: Exception) {
-                _mediaState.update { it.copy(isDiscoveringApiModels = false) }
-                throw e
-            }
-        }
-    }
-
-    fun onSaveMediaProvider(onSuccess: () -> Unit) {
-        val draft = _mediaState.value.assetDraft ?: return
-        val reusedAlias = _mediaState.value.selectedReusableApiCredentialAlias
-        val apiKey = _currentApiKey.value.ifBlank { "" }
-
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save Media provider", "Failed to save provider")) {
-            val mediaId = mediaUseCases.saveMediaProvider(
-                com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset(
-                    id = draft.id,
-                    displayName = draft.displayName,
-                    provider = draft.provider,
-                    capability = draft.capability,
-                    modelName = draft.modelName,
-                    baseUrl = draft.baseUrl,
-                    credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
-                        "media-${draft.provider.name.lowercase()}-${draft.capability.name.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
-                    }
-                ),
-                apiKey = apiKey
-            )
-
-            if (draft.useAsDefault) {
-                val modelType = when (draft.capability) {
-                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
-                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
-                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
-                }
-                assignmentUseCases.setDefaultModel(
-                    modelType = modelType,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    mediaProviderId = mediaId
-                )
-            }
-
-            onSuccess()
-        }
-    }
-
-    fun onDeleteMediaProviderAsset(id: MediaProviderId) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete Media provider", "Failed to delete provider")) {
-            mediaUseCases.deleteMediaProvider(id)
-        }
-    }
-
-    fun onStartConfigureSearchSkill() {
-        val persistedState = uiState.value.searchSkillEditor
-        _currentTavilyApiKey.value = ""
-        _apiState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-            )
-        }
-        _searchSkillState.value = SearchSkillTransientState(
-            isEditing = true,
-            enabled = persistedState.enabled,
+        _mediaState.value = _mediaState.value.copy(
+            selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+            selectedReusableApiCredentialName = reusableCredential?.displayName,
         )
-    }
-
-    fun onSelectApiModelAsset(id: ApiCredentialsId?) {
-        val asset = uiState.value.apiProvidersSheet.assets.find { it.credentialsId == id }
-        onSelectApiModelAsset(asset)
-    }
-
-    fun onSelectApiModelAsset(asset: ApiModelAssetUi?) {
-        _apiState.update { state ->
-            val keepDiscoveredModels =
-                state.selectedAsset.matchesDiscoveryScope(asset) || state.discoveredApiModelScope.matches(asset)
-            val retainedModels = if (keepDiscoveredModels) state.discoveredApiModels else emptyList()
-            val normalizedAsset = state.normalizeVisionCapability(asset, retainedModels)
-            state.copy(
-                selectedAsset = asset,
-                assetDraft = normalizedAsset,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-                discoveredApiModels = retainedModels.mergeSelectedModel(normalizedAsset),
-                discoveredApiModelScope = if (keepDiscoveredModels) state.discoveredApiModelScope else null,
-                isDiscoveringApiModels = false,
-                modelSearchQuery = "",
-                modelProviderFilters = emptySet(),
-                modelSortOption = ModelSortOption.A_TO_Z,
-            )
-        }
-        maybeFetchSelectedXaiModelMetadata(asset)
-        maybeFetchModelsOnReEntry(asset)
-    }
-
-    fun onSelectApiModelConfig(config: ApiModelConfigUi?) {
-        _apiState.update { state ->
-            val activeAsset = state.assetDraft ?: state.selectedAsset
-            val normalizedConfig = config?.let { draft ->
-                if (draft.credentialsId.value.isEmpty() && activeAsset != null) {
-                    draft.copy(credentialsId = activeAsset.credentialsId)
-                } else {
-                    draft
-                }
-            }
-            state.copy(presetDraft = normalizedConfig)
-        }
-    }
-
-    fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) {
-        _apiState.update {
-            val existingDraft = it.assetDraft
-            val discoveryScopeChanged =
-                existingDraft == null ||
-                    existingDraft.provider != asset.provider ||
-                    existingDraft.credentialsId != asset.credentialsId ||
-                    existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
-            val existingModels = if (discoveryScopeChanged) emptyList() else it.discoveredApiModels
-            val normalizedAsset = it.normalizeVisionCapability(asset, existingModels)
-            it.copy(
-                assetDraft = normalizedAsset,
-                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialAlias,
-                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialName,
-                discoveredApiModels = existingModels.mergeSelectedModel(normalizedAsset),
-                discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope,
-            )
-        }
-        maybeFetchSelectedXaiModelMetadata(asset)
-    }
-
-    fun onApiModelConfigFieldChange(config: ApiModelConfigUi) {
-        _apiState.update { it.copy(presetDraft = config) }
-    }
-
-    fun onApiKeyChange(key: String) {
-        _currentApiKey.value = key
-        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId?.value?.isEmpty() == true) {
-            _apiState.update {
-                it.copy(
-                    selectedReusableApiCredentialAlias = null,
-                    selectedReusableApiCredentialName = null,
-                )
-            }
-        }
-    }
-
-    fun onSearchEnabledChange(enabled: Boolean) {
-        _searchSkillState.update { it.copy(enabled = enabled) }
-    }
-
-    fun onTavilyApiKeyChange(key: String) {
-        _currentTavilyApiKey.value = key
-        if (key.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
-            _searchSkillState.update { it.copy(enabled = false) }
-        }
-    }
-
-    fun onClearTavilyApiKey() {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to clear Tavily API key", "Failed to clear search key")) {
-            preferencesUseCases.clearTavilyApiKey()
-            _currentTavilyApiKey.value = ""
-        }
-    }
-
-    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) {
-        val enabled = _searchSkillState.value.enabled ?: uiState.value.searchSkillEditor.enabled
-        val pendingApiKey = _currentTavilyApiKey.value.trim()
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save search skill settings", "Failed to save search settings")) {
-            if (enabled && pendingApiKey.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
-                throw IllegalStateException("A Tavily API key is required to enable web search")
-            }
-            preferencesUseCases.updateSearchEnabled(enabled)
-            if (pendingApiKey.isNotBlank()) {
-                preferencesUseCases.saveTavilyApiKey(pendingApiKey)
-            }
-            _currentTavilyApiKey.value = ""
-            _searchSkillState.value = SearchSkillTransientState()
-            onSuccess()
-        }
-    }
-
-    fun onSelectReusableApiCredential(id: ApiCredentialsId?) {
-        val reusableCredential = uiState.value.apiProvidersSheet.assets
-            .find { it.credentialsId == id }
-            ?.let {
-                ReusableApiCredentialUi(
-                    credentialsId = it.credentialsId,
-                    displayName = it.displayName,
-                    modelId = it.modelId,
-                    credentialAlias = it.credentialAlias,
-                )
-            }
-        _currentApiKey.value = ""
-        _apiState.update {
-            it.copy(
-                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
-                selectedReusableApiCredentialName = reusableCredential?.displayName,
-            )
-        }
-    }
-
-    fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) {
-        val assetDraft = _apiState.value.assetDraft ?: return
-        val sourceCredentialAlias = if (_currentApiKey.value.isBlank()) {
-            _apiState.value.selectedReusableApiCredentialAlias
-        } else {
-            null
-        }
-
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API credentials", "Failed to save credentials")) {
-            val result = apiProviderUseCases.saveApiProviderDraft(
-                ApiProviderDraft(
-                    id = assetDraft.credentialsId,
-                    displayName = assetDraft.displayName,
-                    provider = assetDraft.provider,
-                    modelId = assetDraft.modelId,
-                    baseUrl = assetDraft.baseUrl,
-                    isMultimodal = assetDraft.isMultimodal,
-                    credentialAlias = assetDraft.credentialAlias,
-                    apiKey = _currentApiKey.value,
-                    sourceCredentialAlias = sourceCredentialAlias,
-                    defaultReasoningEffort = apiProviderUseCases.applyApiModelMetadataDefaults.defaultReasoningEffort(
-                        provider = assetDraft.provider,
-                        modelId = assetDraft.modelId,
-                    ),
-                )
-            ).getOrThrow()
-
-            val updatedAsset = apiModelAssetUiMapper.map(result.persistedAsset)
-            val createdPreset = result.createdPreset?.let(apiModelAssetUiMapper::mapConfig)
-
-            _currentApiKey.value = ""
-            _apiState.update { state ->
-                state.copy(
-                    selectedAsset = updatedAsset,
-                    assetDraft = updatedAsset,
-                    presetDraft = createdPreset,
-                    selectedReusableApiCredentialAlias = null,
-                    selectedReusableApiCredentialName = null,
-                    discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(updatedAsset),
-                    discoveredApiModelScope = updatedAsset.toDiscoveryScope(),
-                )
-            }
-            result.linkedExistingAssetDisplayName?.let { displayName ->
-                _snackbarMessages.tryEmit("Automatically linked to \"$displayName\" API Model")
-            }
-            onSuccess(updatedAsset, createdPreset)
-        }
-    }
-
-    fun onSaveApiModelConfig(onSuccess: () -> Unit) {
-        val assetDraft = _apiState.value.assetDraft ?: _apiState.value.selectedAsset ?: return
-        val presetDraft = uiState.value.apiProviderEditor.presetDraft ?: return
-        val parentCredentialsId = if (presetDraft.credentialsId.value.isNotEmpty()) presetDraft.credentialsId else assetDraft.credentialsId
-
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
-            apiProviderUseCases.saveApiPreset(
-                provider = assetDraft.provider,
-                parentCredentialsId = parentCredentialsId,
-                defaultReasoningEffort = apiProviderUseCases.applyApiModelMetadataDefaults.defaultReasoningEffort(
-                    provider = assetDraft.provider,
-                    modelId = assetDraft.modelId,
-                ),
-                draft = presetDraft.toDomain(),
-            ).getOrThrow()
-            onSuccess()
-        }
     }
 
     fun onUpdateModelSearchQuery(query: String) {
-        _apiState.update { it.copy(modelSearchQuery = query) }
+        _apiState.value = _apiState.value.copy(modelSearchQuery = query)
     }
 
     fun onUpdateMediaModelSearchQuery(query: String) {
-        _mediaState.update { it.copy(modelSearchQuery = query) }
+        _mediaState.value = _mediaState.value.copy(modelSearchQuery = query)
     }
 
     fun onToggleModelProviderFilter(provider: String) {
-        _apiState.update { state -> 
-            val currentFilters = state.modelProviderFilters
-            val newFilters = if (currentFilters.contains(provider)) {
-                currentFilters - provider
-            } else {
-                currentFilters + provider
-            }
-            state.copy(modelProviderFilters = newFilters)
-        }
+        val filters = _apiState.value.modelProviderFilters
+        _apiState.value = _apiState.value.copy(
+            modelProviderFilters = if (filters.contains(provider)) filters - provider else filters + provider
+        )
     }
 
     fun onToggleMediaModelProviderFilter(provider: String) {
-        _mediaState.update { state ->
-            val currentFilters = state.modelProviderFilters
-            val newFilters = if (currentFilters.contains(provider)) {
-                currentFilters - provider
-            } else {
-                currentFilters + provider
-            }
-            state.copy(modelProviderFilters = newFilters)
-        }
+        val filters = _mediaState.value.modelProviderFilters
+        _mediaState.value = _mediaState.value.copy(
+            modelProviderFilters = if (filters.contains(provider)) filters - provider else filters + provider
+        )
     }
 
     fun onClearModelProviderFilters() {
-        _apiState.update { it.copy(modelProviderFilters = emptySet()) }
+        _apiState.value = _apiState.value.copy(modelProviderFilters = emptySet())
     }
 
     fun onClearMediaModelProviderFilters() {
-        _mediaState.update { it.copy(modelProviderFilters = emptySet()) }
+        _mediaState.value = _mediaState.value.copy(modelProviderFilters = emptySet())
     }
 
     fun onUpdateModelSortOption(option: ModelSortOption) {
-        _apiState.update { it.copy(modelSortOption = option) }
+        _apiState.value = _apiState.value.copy(modelSortOption = option)
     }
 
     fun onUpdateMediaModelSortOption(option: ModelSortOption) {
-        _mediaState.update { it.copy(modelSortOption = option) }
-    }
-
-    fun onFetchApiModels() {
-        val assetDraft = _apiState.value.assetDraft ?: _apiState.value.selectedAsset ?: return
-        val credentialAlias = resolveCredentialAlias(assetDraft)
-        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
-
-        _apiState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models", "Failed to fetch models")) {
-            try {
-                val result = apiProviderUseCases.discoverApiModels(
-                    ApiModelDiscoveryRequest(
-                        provider = assetDraft.provider,
-                        currentApiKey = _currentApiKey.value,
-                        credentialAlias = credentialAlias,
-                        baseUrl = assetDraft.baseUrl,
-                        selectedModelId = assetDraft.modelId.takeIf(String::isNotBlank),
-                    )
-                )
-                _apiState.update { state ->
-                    state.copy(
-                        discoveredApiModels = result.models,
-                        discoveredApiModelScope = result.scope,
-                        assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
-                    )
-                }
-            } finally {
-                _apiState.update { it.copy(isDiscoveringApiModels = false) }
-            }
-        }
-    }
-
-    fun onFetchTtsModels() {
-        val draft = _ttsState.value.assetDraft ?: _ttsState.value.selectedAsset ?: return
-        val credentialAlias = resolveTtsCredentialAlias(draft)
-        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
-
-        _apiState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch TTS provider models", "Failed to fetch models")) {
-            try {
-                val result = apiProviderUseCases.discoverApiModels(
-                    ApiModelDiscoveryRequest(
-                        provider = draft.provider,
-                        currentApiKey = _currentApiKey.value,
-                        credentialAlias = credentialAlias,
-                        baseUrl = draft.baseUrl,
-                        selectedModelId = draft.modelName
-                            ?.takeIf(String::isNotBlank)
-                            ?.takeIf { it.isGoogleTtsModelCandidate() },
-                    )
-                )
-                _apiState.update { state ->
-                    state.copy(
-                        discoveredApiModels = result.models.filterGoogleTtsModels(),
-                        discoveredApiModelScope = result.scope,
-                    )
-                }
-            } finally {
-                _apiState.update { it.copy(isDiscoveringApiModels = false) }
-            }
-        }
+        _mediaState.value = _mediaState.value.copy(modelSortOption = option)
     }
 
     fun onAddCustomHeader() {
-        _apiState.update { state ->
-            val draft = state.presetDraft ?: return@update state
-            state.copy(presetDraft = draft.copy(customHeaders = draft.customHeaders + CustomHeaderUi()))
-        }
+        val draft = _apiState.value.presetDraft ?: return
+        _apiState.value = _apiState.value.copy(presetDraft = draft.copy(customHeaders = draft.customHeaders + CustomHeaderUi()))
     }
 
     fun onDeleteCustomHeader(index: Int) {
-        _apiState.update { state ->
-            val draft = state.presetDraft ?: return@update state
-            state.copy(
-                presetDraft = draft.copy(
-                    customHeaders = draft.customHeaders.toMutableList().apply { removeAt(index) }
-                )
-            )
-        }
+        val draft = _apiState.value.presetDraft ?: return
+        _apiState.value = _apiState.value.copy(
+            presetDraft = draft.copy(customHeaders = draft.customHeaders.toMutableList().apply { removeAt(index) })
+        )
     }
 
     fun onCustomHeaderChange(index: Int, header: CustomHeaderUi) {
-        _apiState.update { state ->
-            val draft = state.presetDraft ?: return@update state
-            state.copy(
-                presetDraft = draft.copy(
-                    customHeaders = draft.customHeaders.toMutableList().apply { this[index] = header }
-                )
-            )
-        }
-    }
-
-    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) {
-        prepareDeletion(
-            target = ModelDeletionTarget.ApiPreset(id),
-            failureMessage = "Failed to delete API configuration",
-            userMessage = "Failed to delete configuration",
-            onImmediateSuccess = onSuccess,
+        val draft = _apiState.value.presetDraft ?: return
+        _apiState.value = _apiState.value.copy(
+            presetDraft = draft.copy(customHeaders = draft.customHeaders.toMutableList().apply { this[index] = header })
         )
     }
 
-    fun onDeleteApiModelAsset(id: ApiCredentialsId) {
-        prepareDeletion(
-            target = ModelDeletionTarget.ApiProvider(id),
-            failureMessage = "Failed to delete API provider",
-            userMessage = "Failed to delete provider",
+    fun onCleanupCustomHeaders() {
+        val draft = _apiState.value.presetDraft ?: return
+        _apiState.value = _apiState.value.copy(
+            presetDraft = draft.copy(customHeaders = draft.customHeaders.filter { it.key.isNotBlank() && it.value.isNotBlank() })
         )
     }
 
-    fun onDeleteTtsProviderAsset(id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete TTS provider", "Failed to delete provider")) {
-            ttsUseCases.deleteTtsProvider(id)
+    fun onBackToMediaList() {
+        _currentApiKey.value = ""
+        _mediaState.value = _mediaState.value.copy(
+            selectedAsset = null,
+            assetDraft = null,
+            selectedReusableApiCredentialAlias = null,
+            selectedReusableApiCredentialName = null,
+            isDiscoveringApiModels = false,
+            discoveredApiModels = emptyList(),
+        )
+    }
+
+    // --- Search ---
+    fun onShowSearchSkillSheet(show: Boolean) = generalDelegate.onShowSearchSkillSheet(_sheetVisibility, show)
+    fun onSearchSkillTabChange(index: Int) = generalDelegate.onSearchSkillTabChange(_sheetVisibility, index)
+    fun onSearchEnabledChange(enabled: Boolean) = searchDelegate.onSearchEnabledChange(_searchSkillState, enabled)
+    fun onTavilyApiKeyChange(key: String) = searchDelegate.onTavilyApiKeyChange(_currentTavilyApiKey, _searchSkillState, uiState.value.searchSkillEditor.tavilyKeyPresent, key)
+    fun onClearTavilyApiKey() = searchDelegate.onClearTavilyApiKey(viewModelScope, TAG, _currentTavilyApiKey)
+    fun onExaApiKeyChange(key: String) = searchDelegate.onExaApiKeyChange(_currentExaApiKey, _searchSkillState, uiState.value.searchSkillEditor.exaKeyPresent, key)
+    fun onClearExaApiKey() = searchDelegate.onClearExaApiKey(viewModelScope, TAG, _currentExaApiKey)
+    fun onSearchProviderChange(provider: SearchProvider) = searchDelegate.onSearchProviderChange(_searchSkillState, provider)
+    fun onUpdateShowSearchProviderSwitchAlert(show: Boolean) = searchDelegate.onUpdateShowSearchProviderSwitchAlert(viewModelScope, TAG, show)
+    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) = searchDelegate.onSaveSearchSkillSettings(viewModelScope, TAG, uiState.value.searchSkillEditor, _searchSkillState, _currentTavilyApiKey, _currentExaApiKey, onSuccess)
+    fun onXSearchEnabledChange(enabled: Boolean) = searchDelegate.onXSearchEnabledChange(_xSearchState, enabled)
+    fun onXApiKeyChange(key: String) = searchDelegate.onXApiKeyChange(_currentXApiKey, key)
+    fun onClearXApiKey() = searchDelegate.onClearXApiKey(viewModelScope, TAG, _currentXApiKey)
+    fun onSaveXSearchSettings(onSuccess: () -> Unit) = searchDelegate.onSaveXSearchSettings(viewModelScope, TAG, uiState.value.xSearchEditor, _xSearchState, _currentXApiKey, onSuccess)
+
+    // --- Assignments ---
+    fun onSelectModelType(modelType: ModelType) {
+        assignmentsDelegate.onShowAssignmentDialog(_assignmentState, true, modelType)
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to resolve model selection", "")) {
+            val selection = assignmentUseCases.resolveAssignedModelSelection(modelType) ?: return@launch
+            selection.apiAsset?.let { apiProvidersDelegate.onSelectApiAsset(viewModelScope, _apiState, _currentApiKey, it) }
         }
+    }
+    fun onSetDefaultModel(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?, ttsProviderId: TtsProviderId? = null, mediaProviderId: MediaProviderId? = null) = assignmentsDelegate.onSetDefaultModel(viewModelScope, TAG, _assignmentState, modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
+    fun onShowAssignmentDialog(show: Boolean, modelType: ModelType?) = assignmentsDelegate.onShowAssignmentDialog(_assignmentState, show, modelType)
+
+    // --- Deletion Safety ---
+    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) = deletionHelper.onConfirmDeletionWithReassignment(viewModelScope, TAG, _deletionState, replacementLocalConfigId, replacementApiConfigId)
+    fun onDismissDeletionSafety() = deletionHelper.onDismissDeletionSafety(_deletionState)
+
+    // --- Navigation / Multi-State Resets ---
+    fun onClearSelectedModel() {
+        localModelsDelegate.onSelectLocalModelAsset(_localModelsState, null)
+        apiProvidersDelegate.onSelectApiProviderAsset(viewModelScope, _apiState, _currentApiKey, null)
     }
 
     fun onBackToByokList() {
         _currentApiKey.value = ""
         _currentTavilyApiKey.value = ""
+        _currentExaApiKey.value = ""
         _searchSkillState.value = SearchSkillTransientState()
-        _apiState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                presetDraft = null,
-            )
-        }
+        apiProvidersDelegate.onShowByokSheet(_apiState, true)
     }
-
-    fun onBackToMediaList() {
-        _currentApiKey.value = ""
-        _mediaState.update {
-            it.copy(
-                selectedAsset = null,
-                assetDraft = null,
-                selectedReusableApiCredentialAlias = null,
-                selectedReusableApiCredentialName = null,
-                isDiscoveringApiModels = false,
-                discoveredApiModels = emptyList(),
-            )
-        }
-    }
-
-    fun onCleanupCustomHeaders() {
-        _apiState.update { state ->
-            val draft = state.presetDraft ?: return@update state
-            state.copy(
-                presetDraft = draft.copy(
-                    customHeaders = draft.customHeaders.filter {
-                        it.key.isNotBlank() && it.value.isNotBlank()
-                    }
-                )
-            )
-        }
-    }
-
-    fun onSetDefaultModel(
-        modelType: ModelType,
-        localConfigId: LocalModelConfigurationId?,
-        apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: TtsProviderId? = null,
-        mediaProviderId: MediaProviderId? = null,
-    ) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
-            assignmentUseCases.setDefaultModel(
-                modelType = modelType,
-                localConfigId = localConfigId,
-                apiConfigId = apiConfigId,
-                ttsProviderId = ttsProviderId,
-                mediaProviderId = mediaProviderId,
-            )
-            onShowAssignmentDialog(false, null)
-        }
-    }
-
-    fun onShowAssignmentDialog(show: Boolean, modelType: ModelType?) {
-        _assignmentState.update { it.copy(isOpen = show, editingSlot = modelType) }
-    }
-
-    private fun prepareDeletion(
-        target: ModelDeletionTarget,
-        failureMessage: String,
-        userMessage: String,
-        onImmediateSuccess: (() -> Unit)? = null,
-    ) {
-        viewModelScope.launch {
-            when (val preparedDeletion = deletionUseCases.prepareModelDeletion(target)) {
-                PreparedModelDeletion.BlockedLastModel -> {
-                    _deletionState.update { it.copy(showLastModelAlert = true) }
-                }
-
-                is PreparedModelDeletion.Ready -> {
-                    if (preparedDeletion.modelTypesNeedingReassignment.isEmpty()) {
-                        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, failureMessage, userMessage)) {
-                            deletionUseCases.executeModelDeletionWithReassignment(
-                                target = preparedDeletion.target,
-                                modelTypesNeedingReassignment = emptyList(),
-                                replacementLocalConfigId = null,
-                                replacementApiConfigId = null,
-                            ).getOrThrow()
-                            onImmediateSuccess?.invoke()
-                        }
-                    } else {
-                        _deletionState.value = DeletionTransientState(
-                            pendingTarget = preparedDeletion.target.toUi(),
-                            modelTypesNeedingReassignment = preparedDeletion.modelTypesNeedingReassignment,
-                            reassignmentOptions = reassignmentOptionUiMapper.map(preparedDeletion.reassignmentCandidates),
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Silently fills in missing [contextWindowTokens] for the selected xAI model when the full
-     * model list is already loaded. This is xAI-specific because xAI returns per-model context
-     * window data via the models endpoint. Only runs if [discoveredApiModels] is non-empty (the
-     * re-entry / no-models case is handled by [maybeFetchModelsOnReEntry]).
-     */
-    private fun maybeFetchSelectedXaiModelMetadata(asset: ApiModelAssetUi?) {
-        if (asset?.provider != ApiProvider.XAI || asset.modelId.isBlank()) return
-        // Only fill the metadata gap — if models aren't loaded yet, maybeFetchModelsOnReEntry
-        // handles that to avoid a concurrent double-fetch.
-        if (_apiState.value.discoveredApiModels.isEmpty()) return
-        if (_apiState.value.discoveredModelFor(asset)?.contextWindowTokens != null) return
-
-        val credentialAlias = resolveCredentialAlias(asset)
-        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
-
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch xAI model details", "Failed to fetch model details")) {
-            val result = apiProviderUseCases.discoverApiModels(
-                ApiModelDiscoveryRequest(
-                    provider = asset.provider,
-                    currentApiKey = _currentApiKey.value,
-                    credentialAlias = credentialAlias,
-                    baseUrl = asset.baseUrl,
-                    selectedModelId = asset.modelId,
-                )
-            )
-            _apiState.update { state ->
-                state.copy(
-                    discoveredApiModels = result.models,
-                    discoveredApiModelScope = result.scope,
-                    assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
-                )
-            }
-        }
-    }
-
-    /**
-     * Auto-fetches the model list on re-entry to the configure screen for any provider that has
-     * persisted credentials (stored alias or a live key already typed). Handles all providers
-     * uniformly, including xAI — the no-models case is not xAI-specific.
-     */
-    private fun maybeFetchModelsOnReEntry(asset: ApiModelAssetUi?) {
-        if (asset == null) return
-        val state = _apiState.value
-        // Skip if models are already present for this scope, or a fetch is already in progress.
-        if (state.discoveredApiModels.isNotEmpty()) return
-        if (state.isDiscoveringApiModels) return
-
-        // Resolve a credential: prefer a live key being typed, then stored alias on the asset.
-        val credentialAlias = resolveCredentialAlias(asset)
-        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
-
-        _apiState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models on re-entry", "Failed to fetch models")) {
-            try {
-                val result = apiProviderUseCases.discoverApiModels(
-                    ApiModelDiscoveryRequest(
-                        provider = asset.provider,
-                        currentApiKey = _currentApiKey.value,
-                        credentialAlias = credentialAlias,
-                        baseUrl = asset.baseUrl,
-                        selectedModelId = asset.modelId.takeIf(String::isNotBlank),
-                    )
-                )
-                _apiState.update { s ->
-                    s.copy(
-                        discoveredApiModels = result.models,
-                        discoveredApiModelScope = result.scope,
-                        assetDraft = s.normalizeVisionCapability(s.assetDraft, result.models),
-                    )
-                }
-            } finally {
-                _apiState.update { it.copy(isDiscoveringApiModels = false) }
-            }
-        }
-    }
-
-    private fun resolveCredentialAlias(asset: ApiModelAssetUi): String? = _apiState.value.selectedReusableApiCredentialAlias
-        ?.takeIf { it.isNotBlank() }
-        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
-
-    private fun resetModelDiscovery() {
-        _apiState.update {
-            it.copy(
-                discoveredApiModels = emptyList(),
-                discoveredApiModelScope = null,
-                isDiscoveringApiModels = false,
-                modelSearchQuery = "",
-                modelProviderFilters = emptySet(),
-                modelSortOption = ModelSortOption.A_TO_Z,
-            )
-        }
-        _mediaState.update {
-            it.copy(
-                discoveredApiModels = emptyList(),
-                discoveredApiModelScope = null,
-                isDiscoveringApiModels = false,
-                modelSearchQuery = "",
-                modelProviderFilters = emptySet(),
-                modelSortOption = ModelSortOption.A_TO_Z,
-            )
-        }
-    }
-
-    private fun resolveTtsCredentialAlias(asset: TtsProviderAssetUi): String? = _ttsState.value.selectedReusableApiCredentialAlias
-        ?.takeIf { it.isNotBlank() }
-        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
-
-    private fun resolveMediaCredentialAlias(asset: MediaProviderAssetUi): String? = _mediaState.value.selectedReusableApiCredentialAlias
-        ?.takeIf { it.isNotBlank() }
-        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
-
-    private fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
-        discoveredApiModels.find { it.id == asset?.modelId }
-
-    private fun ApiProvidersTransientState.normalizeVisionCapability(
-        asset: ApiModelAssetUi?,
-        models: List<DiscoveredApiModel> = discoveredApiModels,
-    ): ApiModelAssetUi? {
-        if (asset == null) return null
-        val discoveredVisionCapability = models
-            .find { it.id == asset.modelId }
-            ?.isMultimodal
-        return discoveredVisionCapability?.let { asset.copy(isMultimodal = it) } ?: asset
-    }
-
-    private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
-        if (this == null || other == null) return false
-        if (this.provider != other.provider) return false
-        if (this.baseUrl.normalizedBaseUrl() != other.baseUrl.normalizedBaseUrl()) return false
-        val currentAlias = this.credentialAlias.takeIf(String::isNotBlank)
-        val nextAlias = other.credentialAlias.takeIf(String::isNotBlank)
-        return currentAlias == null || nextAlias == null || currentAlias == nextAlias
-    }
-
-    private fun com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope?.matches(
-        asset: ApiModelAssetUi?,
-    ): Boolean {
-        if (this == null || asset == null) return false
-        if (provider != asset.provider) return false
-        if (baseUrl != asset.baseUrl.normalizedBaseUrl()) return false
-        val assetAlias = asset.credentialAlias.takeIf(String::isNotBlank)
-        return credentialAlias == null || assetAlias == null || credentialAlias == assetAlias
-    }
-
-    private fun ApiModelAssetUi.toDiscoveryScope(): com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope =
-        com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope(
-            provider = provider,
-            baseUrl = baseUrl.normalizedBaseUrl(),
-            credentialAlias = credentialAlias.takeIf(String::isNotBlank),
-        )
-
-    private fun String?.normalizedBaseUrl(): String = this?.trim().orEmpty()
-
-    private fun List<DiscoveredApiModel>.mergeSelectedModel(asset: ApiModelAssetUi?): List<DiscoveredApiModel> = when {
-        asset == null || asset.modelId.isBlank() -> this
-        any { it.id == asset.modelId } -> this
-        else -> listOf(DiscoveredApiModel(id = asset.modelId)) + this
-    }
-
-    private fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
-        filter { it.id.isGoogleTtsModelCandidate() }
-
-    private fun List<DiscoveredApiModel>.filterMediaModels(capability: MediaCapability): List<DiscoveredApiModel> {
-        return filter { model ->
-            when (capability) {
-                MediaCapability.IMAGE -> {
-                    (model.id.contains("gpt-image-", ignoreCase = true) ||
-                            model.id.contains("gemini-3.1", ignoreCase = true) ||
-                            model.id.contains("dall-e-3", ignoreCase = true)) &&
-                            !model.id.contains("dall-e-2", ignoreCase = true)
-                }
-                MediaCapability.VIDEO -> {
-                    model.id.contains("veo-3", ignoreCase = true)
-                }
-                MediaCapability.MUSIC -> {
-                    model.id.contains("lyria-3", ignoreCase = true)
-                }
-            }
-        }
-    }
-
-    private fun String.isGoogleTtsModelCandidate(): Boolean =
-        endsWith("-tts") || endsWith("-tts-preview")
-
-    private fun PendingDeletionTarget.toDomain(): ModelDeletionTarget = when (this) {
-        is PendingDeletionTarget.LocalModelAsset -> ModelDeletionTarget.LocalModelAsset(id)
-        is PendingDeletionTarget.LocalModelPreset -> ModelDeletionTarget.LocalModelPreset(id)
-        is PendingDeletionTarget.ApiProvider -> ModelDeletionTarget.ApiProvider(id)
-        is PendingDeletionTarget.ApiPreset -> ModelDeletionTarget.ApiPreset(id)
-    }
-
-    private fun LocalModelConfigUi.toDomain(): com.browntowndev.pocketcrew.domain.usecase.settings.LocalModelPresetDraft =
-        com.browntowndev.pocketcrew.domain.usecase.settings.LocalModelPresetDraft(
-            id = id,
-            displayName = displayName,
-            maxTokens = maxTokens,
-            contextWindow = contextWindow,
-            temperature = temperature,
-            topP = topP,
-            topK = topK,
-            minP = minP,
-            repetitionPenalty = repetitionPenalty,
-            thinkingEnabled = thinkingEnabled,
-            systemPrompt = systemPrompt,
-            isSystemPreset = isSystemPreset,
-        )
-
-    private fun ApiModelConfigUi.toDomain(): ApiPresetDraft = ApiPresetDraft(
-        id = id,
-        credentialsId = credentialsId,
-        displayName = displayName,
-        maxTokens = maxTokens,
-        contextWindow = contextWindow,
-        temperature = temperature,
-        topP = topP,
-        topK = topK,
-        minP = minP,
-        frequencyPenalty = frequencyPenalty,
-        presencePenalty = presencePenalty,
-        maxTokensDisabled = maxTokensDisabled,
-        temperatureDisabled = temperatureDisabled,
-        topPDisabled = topPDisabled,
-        topKDisabled = topKDisabled,
-        minPDisabled = minPDisabled,
-        frequencyPenaltyDisabled = frequencyPenaltyDisabled,
-        presencePenaltyDisabled = presencePenaltyDisabled,
-        systemPrompt = systemPrompt,
-        reasoningEffort = reasoningEffort,
-        customHeaders = customHeaders.map { it.key to it.value },
-        openRouterRouting = openRouterRouting,
-    )
 }

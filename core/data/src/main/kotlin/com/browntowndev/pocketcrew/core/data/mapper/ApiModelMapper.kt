@@ -13,7 +13,7 @@ object ApiModelMapper {
         if (json.isBlank()) return emptyMap()
         return try {
             Json.decodeFromString<Map<String, String>>(json)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Return empty map if parsing fails
             emptyMap()
         }

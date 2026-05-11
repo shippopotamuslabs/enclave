@@ -6,13 +6,16 @@ import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -260,11 +263,23 @@ private class FakeStudioRepository : StudioRepositoryPort {
         media.value = items
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
-        StudioMediaAsset(id = "1", localUri = localUri, prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
+    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = localUri, prompt = prompt, mediaType = mediaType, createdAt = createdAt ?: 1L, albumId = albumId)
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
-        StudioMediaAsset(id = "1", localUri = "bytes", prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
+    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = "bytes", prompt = prompt, mediaType = mediaType, createdAt = createdAt ?: 1L, albumId = albumId)
+
+    override suspend fun updateMedia(asset: StudioMediaAsset) {
+        media.value = media.value.map {
+            if (it.id == asset.id) asset else it
+        }
+    }
+
+    override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset {
+        val asset = StudioMediaAsset(id = "perm-$id", localUri = "files://$id", prompt = "p", mediaType = "IMAGE", createdAt = 1L, albumId = albumId)
+        media.value = media.value + asset
+        return asset
+    }
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String = ""
 
@@ -275,6 +290,20 @@ private class FakeStudioRepository : StudioRepositoryPort {
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = media.value.firstOrNull { it.id == id }
+
+    override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = flowOf(emptyList())
+
+    override fun observeGenerationError(): Flow<String?> = flowOf(null)
+
+    override suspend fun reportGenerationError(message: String?) {}
+
+    override suspend fun clearGenerationError() {}
+
+    override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {}
+
+    override suspend fun updateEphemeralMedia(asset: StudioMediaAsset) {}
+
+    override suspend fun removeEphemeralMedia(id: String) {}
 
     override suspend fun createAlbum(name: String): String {
         val id = nextAlbumId++.toString()

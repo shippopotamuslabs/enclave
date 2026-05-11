@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
@@ -57,26 +61,22 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
     onCloseClick: () -> Unit,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
-    onShowCustomizationSheet: (Boolean) -> Unit,
-    onCustomizationEnabledChange: (Boolean) -> Unit,
-    onPromptOptionChange: (SystemPromptOption) -> Unit,
-    onCustomPromptTextChange: (String) -> Unit,
-    onSaveCustomization: () -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
-    onAllowMemoriesChange: (Boolean) -> Unit,
-    onDeleteAllConversations: () -> Unit,
-    onDeleteAllMemories: () -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
     onAddMemory: () -> Unit,
     onEditMemory: (StoredMemory) -> Unit,
@@ -86,8 +86,6 @@ fun SettingsScreen(
     onDeleteMemory: (String) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
-    onFeedbackTextChange: (String) -> Unit,
-    onSubmitFeedback: () -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
@@ -95,17 +93,20 @@ fun SettingsScreen(
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
-    onStartConfigureSearchSkill: () -> Unit,
-    onApiKeyChange: (String) -> Unit,
+    onShowSearchSkillSheet: (Boolean) -> Unit,
+    onSearchSkillTabChange: (Int) -> Unit,
     onSearchEnabledChange: (Boolean) -> Unit,
-    onSearchApiKeyChange: (String) -> Unit,
-    onClearSearchApiKey: () -> Unit,
-    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
-    onFetchApiModels: () -> Unit,
-    onUpdateModelSearchQuery: (String) -> Unit,
-    onToggleModelProviderFilter: (String) -> Unit,
-    onClearModelProviderFilters: () -> Unit,
-    onUpdateModelSortOption: (ModelSortOption) -> Unit,
+    onSearchProviderChange: (SearchProvider) -> Unit,
+    onTavilyApiKeyChange: (String) -> Unit,
+    onClearTavilyApiKey: () -> Unit,
+    onExaApiKeyChange: (String) -> Unit,
+    onClearExaApiKey: () -> Unit,
+    onUpdateShowSearchProviderSwitchAlert: (Boolean) -> Unit,
+    onSaveSearchSkillSettings: (onSuccess: () -> Unit) -> Unit,
+    onXSearchEnabledChange: (Boolean) -> Unit,
+    onXApiKeyChange: (String) -> Unit,
+    onClearXApiKey: () -> Unit,
+    onSaveXSearchSettings: (onSuccess: () -> Unit) -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
@@ -153,6 +154,16 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                AccountSection(
+                    authState = uiState.home.auth,
+                    isReindexing = uiState.home.isReindexing,
+                    reindexProgress = uiState.home.reindexProgress,
+                    onLoginClick = onLoginClick,
+                    onLogoutClick = onLogoutClick
+                )
+            }
+
             item {
                 SectionHeader(text = "Appearance")
                 ThemeSelection(
@@ -227,16 +238,20 @@ fun SettingsScreen(
             item {
                 SectionHeader(text = "Tools")
                 SettingsNavigationItem(
-                    title = "Web Search",
+                    title = "Search Skills",
                     subtitle = buildString {
-                        append(if (uiState.searchSkillEditor.enabled) "Enabled" else "Disabled")
-                        append(" • ")
-                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key Saved" else "No Tavily Key")
+                        val webEnabled = uiState.searchSkillEditor.enabled
+                        val xEnabled = uiState.xSearchEditor.enabled
+                        when {
+                            webEnabled && xEnabled -> append("Web & X Enabled")
+                            webEnabled -> append("Web Enabled")
+                            xEnabled -> append("X Enabled")
+                            else -> append("Disabled")
+                        }
                     },
                     icon = Icons.Default.Public,
                     onClick = {
-                        onStartConfigureSearchSkill()
-                        onNavigateToByokConfigure()
+                        onShowSearchSkillSheet(true)
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -312,8 +327,6 @@ fun SettingsScreen(
                 onStartCreateTtsProviderAsset = onStartCreateTtsProviderAsset,
                 onSelectTtsProviderAsset = onSelectTtsProviderAsset,
                 onDeleteTtsProviderAsset = onDeleteTtsProviderAsset,
-                onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
-                onDismissDeletionSafety = onDismissDeletionSafety
             )
         }
 
@@ -354,6 +367,30 @@ fun SettingsScreen(
                 onDeleteMediaProviderAsset = onDeleteMediaProviderAsset
             )
         }
+
+        if (uiState.home.isSearchSkillSheetOpen) {
+            SearchSkillBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowSearchSkillSheet(false) },
+                onTabChange = onSearchSkillTabChange,
+                onSearchEnabledChange = onSearchEnabledChange,
+                onSearchProviderChange = onSearchProviderChange,
+                onTavilyApiKeyChange = onTavilyApiKeyChange,
+                onClearTavilyApiKey = onClearTavilyApiKey,
+                onExaApiKeyChange = onExaApiKeyChange,
+                onClearExaApiKey = onClearExaApiKey,
+                onUpdateShowSearchProviderSwitchAlert = onUpdateShowSearchProviderSwitchAlert,
+                onSaveWebSearch = {
+                    onSaveSearchSkillSettings {
+                        // Success handled by onDismiss or similar
+                    }
+                },
+                onXSearchEnabledChange = onXSearchEnabledChange,
+                onXApiKeyChange = onXApiKeyChange,
+                onClearXApiKey = onClearXApiKey,
+                onSaveXSearch = onSaveXSearchSettings
+            )
+        }
     }
 }
 
@@ -366,6 +403,132 @@ fun SectionHeader(text: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
     )
+}
+
+@Composable
+fun AccountSection(
+    authState: AuthStateUi,
+    isReindexing: Boolean,
+    reindexProgress: Float,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    SectionHeader(text = "Account")
+    when (authState) {
+        is AuthStateUi.Authenticated -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            ) {
+                ListItem(
+                    leadingContent = {
+                        if (authState.user.photoUrl != null) {
+                            AsyncImage(
+                                model = authState.user.photoUrl,
+                                contentDescription = "Profile picture",
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    headlineContent = {
+                        Text(
+                            text = authState.user.displayName ?: "User",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    supportingContent = authState.user.email?.let { email ->
+                        {
+                            Text(
+                                text = email,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    trailingContent = {
+                        IconButton(onClick = onLogoutClick) {
+                            Icon(
+                                imageVector = Icons.Default.Logout,
+                                contentDescription = "Logout",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    colors = androidx.compose.material3.ListItemDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                )
+
+                if (isReindexing) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            text = "Syncing and indexing models...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { reindexProgress },
+                            modifier = Modifier.fillMaxWidth().height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+        AuthStateUi.Unauthenticated -> {
+            ListItem(
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                headlineContent = { Text("Login with Google") },
+                supportingContent = { Text("Sync your data across devices") },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .clickable(onClick = onLoginClick)
+            )
+        }
+        AuthStateUi.Loading -> {
+            ListItem(
+                headlineContent = { Text("Loading account...") },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            )
+        }
+        is AuthStateUi.Error -> {
+            ListItem(
+                headlineContent = { Text("Error: ${authState.message}") },
+                trailingContent = {
+                    IconButton(onClick = onLoginClick) {
+                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Retry Login")
+                    }
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+            )
+        }
+    }
 }
 
 @Composable
@@ -511,19 +674,13 @@ fun PreviewSettingsScreen() {
         SettingsScreen(
             uiState = MockSettingsData.baseUiState,
             onCloseClick = {},
+            onLoginClick = {},
+            onLogoutClick = {},
             onThemeChange = {},
             onHapticPressChange = {},
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
-            onShowCustomizationSheet = {},
-            onCustomizationEnabledChange = {},
-            onPromptOptionChange = {},
-            onCustomPromptTextChange = {},
-            onSaveCustomization = {},
             onShowDataControlsSheet = {},
-            onAllowMemoriesChange = {},
-            onDeleteAllConversations = {},
-            onDeleteAllMemories = {},
             onShowMemoriesSheet = {},
             onAddMemory = {},
             onEditMemory = { _ -> },
@@ -533,8 +690,6 @@ fun PreviewSettingsScreen() {
             onDeleteMemory = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
-            onFeedbackTextChange = {},
-            onSubmitFeedback = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
             onSetDefaultModel = { _, _, _, _, _ -> },
@@ -542,17 +697,20 @@ fun PreviewSettingsScreen() {
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
-            onStartConfigureSearchSkill = {},
-            onApiKeyChange = {},
+            onShowSearchSkillSheet = {},
+            onSearchSkillTabChange = {},
             onSearchEnabledChange = {},
-            onSearchApiKeyChange = {},
-            onClearSearchApiKey = {},
-            onSelectReusableApiCredential = {},
-            onFetchApiModels = {},
-            onUpdateModelSearchQuery = {},
-            onToggleModelProviderFilter = {},
-            onClearModelProviderFilters = {},
-            onUpdateModelSortOption = {},
+            onSearchProviderChange = {},
+            onTavilyApiKeyChange = {},
+            onClearTavilyApiKey = {},
+            onExaApiKeyChange = {},
+            onClearExaApiKey = {},
+            onUpdateShowSearchProviderSwitchAlert = {},
+            onSaveSearchSkillSettings = {},
+            onXSearchEnabledChange = {},
+            onXApiKeyChange = {},
+            onClearXApiKey = {},
+            onSaveXSearchSettings = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},
@@ -577,3 +735,4 @@ fun PreviewSettingsScreen() {
         )
     }
 }
+
