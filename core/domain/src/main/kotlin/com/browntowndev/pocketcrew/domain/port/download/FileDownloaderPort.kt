@@ -1,11 +1,5 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import java.io.File
-
-/**
- * Domain abstraction for file download operations.
- * This is implemented in the data layer to keep domain pure.
- */
 interface FileDownloaderPort {
     /**
      * Configuration for file download with integrity verification.
@@ -33,7 +27,7 @@ interface FileDownloaderPort {
      * Result of a download operation containing metadata about the download.
      */
     data class DownloadResult(
-        val file: File,
+        val filePath: String,
         val bytesDownloaded: Long,
         val totalBytes: Long,
         val isResumed: Boolean
@@ -45,7 +39,7 @@ interface FileDownloaderPort {
      *
      * @param config The download configuration with filename and integrity info
      * @param downloadUrl The computed download URL
-     * @param targetDir The target directory for the download
+     * @param targetDirPath The target directory path for the download
      * @param existingBytes Bytes already downloaded (for resume support)
      * @param progressCallback Optional callback for progress updates during download
      * @return DownloadResult with download metadata
@@ -53,7 +47,7 @@ interface FileDownloaderPort {
     suspend fun downloadFile(
         config: FileDownloadConfig,
         downloadUrl: String,
-        targetDir: File,
+        targetDirPath: String,
         existingBytes: Long = 0,
         progressCallback: ProgressCallback? = null
     ): DownloadResult
