@@ -25,6 +25,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -33,7 +34,6 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressPer
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatInferenceRequestPreparer
-import com.browntowndev.pocketcrew.domain.usecase.chat.SearchToolPromptComposer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -86,7 +86,7 @@ class ChatInferenceService : Service() {
     lateinit var embeddingEnginePort: EmbeddingEnginePort
 
     @Inject
-    lateinit var searchToolPromptComposer: SearchToolPromptComposer
+    lateinit var promptComposer: PromptComposerPort
 
     @Inject
     lateinit var loggingPort: LoggingPort
@@ -132,7 +132,7 @@ class ChatInferenceService : Service() {
             messageRepository,
             memoriesRepository,
             embeddingEnginePort,
-            searchToolPromptComposer,
+            promptComposer = promptComposer,
             defaultModelRepository,
             mediaProviderRepository,
             mediaToolDefinitionFactory,

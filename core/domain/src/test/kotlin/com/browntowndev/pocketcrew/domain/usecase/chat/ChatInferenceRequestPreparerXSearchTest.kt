@@ -106,7 +106,7 @@ class ChatInferenceRequestPreparerXSearchTest {
             embeddingEnginePort = mockk {
                 coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f)
             },
-            searchToolPromptComposer = SearchToolPromptComposer(),
+            promptComposer = SearchToolPromptComposer(),
             defaultModelRepository = mockk(relaxed = true),
             mediaProviderRepository = mockk(relaxed = true),
             mediaToolDefinitionFactory = mockk(relaxed = true),

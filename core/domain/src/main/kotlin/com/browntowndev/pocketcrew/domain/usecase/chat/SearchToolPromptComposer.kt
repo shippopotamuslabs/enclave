@@ -3,24 +3,25 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
+import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import javax.inject.Inject
 
-class SearchToolPromptComposer @Inject constructor() {
+class SearchToolPromptComposer @Inject constructor() : PromptComposerPort {
 
-    fun compose(
+    override fun compose(
         baseSystemPrompt: String?,
-        includeSearchTool: Boolean = true,
-        includeXSearchTool: Boolean = false,
-        includeImageInspectTool: Boolean = false,
-        includeMemoryTools: Boolean = true,
-        includeArtifactTool: Boolean = false,
-        includeImageGenerationTool: Boolean = false,
-        includeVideoGenerationTool: Boolean = false,
-        includeMusicGenerationTool: Boolean = false,
-        currentChatId: String? = null,
-        strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
-        coreMemories: List<Memory> = emptyList(),
-        retrievedMemories: List<Memory> = emptyList(),
+        includeSearchTool: Boolean,
+        includeXSearchTool: Boolean,
+        includeImageInspectTool: Boolean,
+        includeMemoryTools: Boolean,
+        includeArtifactTool: Boolean,
+        includeImageGenerationTool: Boolean,
+        includeVideoGenerationTool: Boolean,
+        includeMusicGenerationTool: Boolean,
+        currentChatId: String?,
+        strategy: ToolCallStrategy,
+        coreMemories: List<Memory>,
+        retrievedMemories: List<Memory>,
     ): String =
         listOfNotNull(
             formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
