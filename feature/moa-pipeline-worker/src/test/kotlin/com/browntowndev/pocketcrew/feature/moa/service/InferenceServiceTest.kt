@@ -20,12 +20,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -42,7 +41,7 @@ class InferenceServiceTest {
     private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
     private val inferenceEventBus = mockk<InferenceEventBus>(relaxed = true)
     private val llmInferenceService = mockk<LlmInferencePort>(relaxed = true)
-    private val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher()
+    private val testDispatcher = StandardTestDispatcher()
     private var serviceCompletion = CompletableDeferred<Unit>()
 
     private val invokedModelTypes = java.util.Collections.synchronizedList(mutableListOf<ModelType>())
