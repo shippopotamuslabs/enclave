@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
+import com.browntowndev.pocketcrew.core.data.artifact.SearchArtifactToolExecutor
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -27,6 +28,7 @@ class CompositeToolExecutorTest {
     private lateinit var getMessageContextToolExecutor: GetMessageContextToolExecutor
     private lateinit var manageMemoriesToolExecutor: ManageMemoriesToolExecutor
     private lateinit var artifactToolExecutor: ArtifactToolExecutor
+    private lateinit var searchArtifactToolExecutor: SearchArtifactToolExecutor
     private lateinit var xSearchToolExecutor: XSearchToolExecutorImpl
     private lateinit var mediaToolExecutor: MediaToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
@@ -42,6 +44,7 @@ class CompositeToolExecutorTest {
         getMessageContextToolExecutor = mockk()
         manageMemoriesToolExecutor = mockk()
         artifactToolExecutor = mockk()
+        searchArtifactToolExecutor = mockk()
         xSearchToolExecutor = mockk()
         mediaToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
@@ -54,6 +57,7 @@ class CompositeToolExecutorTest {
             getMessageContextToolExecutor = getMessageContextToolExecutor,
             manageMemoriesToolExecutor = manageMemoriesToolExecutor,
             artifactToolExecutor = artifactToolExecutor,
+            searchArtifactToolExecutor = searchArtifactToolExecutor,
             xSearchToolExecutor = xSearchToolExecutor,
             mediaToolExecutor = mediaToolExecutor,
             eventBus = eventBus
@@ -171,27 +175,7 @@ class CompositeToolExecutorTest {
         }
     }
 
-    @Test
-    fun `execute routes generate_artifact to artifactToolExecutor`() = runTest {
-        // Given
-        val request = ToolCallRequest(
-            chatId = ChatId("chat-abc"),
-            userMessageId = MessageId("msg-abc"),
-            toolName = ToolDefinition.GENERATE_ARTIFACT.name,
-            argumentsJson = "{\"targetFormat\":\"PDF\",\"title\":\"Report\",\"content\":\"{}\"}",
-            provider = "xai",
-            modelType = ModelType.FAST
-        )
-        val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
-        coEvery { artifactToolExecutor.execute(request) } returns expectedResult
 
-        // When
-        val result = compositeToolExecutor.execute(request)
-
-        // Then
-        coVerify { artifactToolExecutor.execute(request) }
-        assertEquals(expectedResult, result)
-    }
 
     @Test
     fun `execute routes search_x_recent to xSearchToolExecutor`() = runTest {

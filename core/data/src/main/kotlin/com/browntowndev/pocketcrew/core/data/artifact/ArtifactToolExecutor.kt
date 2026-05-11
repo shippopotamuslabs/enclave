@@ -156,6 +156,11 @@ class ArtifactToolExecutor @Inject constructor(
                 put("totalBlocks", JsonPrimitive(currentBlocks.size))
                 put("isComplete", JsonPrimitive(params.isComplete))
                 put("message", JsonPrimitive(message))
+                if (params.isComplete) {
+                    put("fullDocument", JsonPrimitive(updatedDoc.toString()))
+                    put("title", JsonPrimitive(entity.title))
+                    put("targetFormat", JsonPrimitive(entity.targetFormat))
+                }
             }.toString()
         )
     }
