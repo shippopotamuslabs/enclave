@@ -301,10 +301,17 @@ private fun MessageItem(
             suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
         )
 
-        ToolCallBanner(
-            banner = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        val activeBanner =
+            if (message.id == activeIndicatorMessageId) activeToolCallBanner else null
+        val inlineToolCallBannerInTranscript =
+            message.role == MessageRole.Assistant && message.transcriptSegments.isNotEmpty()
+
+        if (!inlineToolCallBannerInTranscript) {
+            ToolCallBanner(
+                banner = activeBanner,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
 
         // ============================================================
         // Content rendering based on message role
@@ -319,6 +326,7 @@ private fun MessageItem(
                 message = message,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
+                toolCallBanner = if (inlineToolCallBannerInTranscript) activeBanner else null,
                 onPlayAudio = onPlayAudio,
                 onArtifactCardClick = onArtifactCardClick,
                 onNavigateToStudio = onNavigateToStudio,

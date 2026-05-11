@@ -273,6 +273,7 @@ internal class MessageAccumulator(
                         text = StringBuilder(seg.text),
                         thinkingStartMs = seg.thinkingStartTime,
                         thinkingEndMs = seg.thinkingEndTime,
+                        restoredDurationSeconds = seg.thinkingDurationSeconds?.takeIf { it > 0L },
                     ),
                 )
                 is MessageTranscriptSegment.AssistantText -> transcriptSegmentsMutable.add(
@@ -365,11 +366,18 @@ internal class MessageAccumulator(
         return transcriptSegmentsMutable.mapIndexed { index, seg ->
             when (seg.kind) {
                 TranscriptSegmentKind.THINKING -> {
-                    val dur = if (seg.thinkingStartMs != null && seg.thinkingEndMs != null) {
-                        (seg.thinkingEndMs!! - seg.thinkingStartMs!!) / 1000
-                    } else {
-                        null
-                    }
+                    val durFromWallClock =
+                        if (seg.thinkingStartMs != null && seg.thinkingEndMs != null) {
+                            val ms = seg.thinkingEndMs!! - seg.thinkingStartMs!!
+                            when {
+                                ms <= 0L -> null
+                                ms < 1000L -> 1L
+                                else -> ms / 1000
+                            }
+                        } else {
+                            null
+                        }
+                    val dur = durFromWallClock ?: seg.restoredDurationSeconds
                     MessageTranscriptSegment.Thinking(
                         ordinal = index,
                         text = seg.text.toString(),
@@ -420,6 +428,8 @@ internal data class MutableTranscriptSegment(
     val text: StringBuilder,
     var thinkingStartMs: Long? = null,
     var thinkingEndMs: Long? = null,
+    /** From DB restore when wall-clock bounds are missing but denormalized seconds were stored. */
+    var restoredDurationSeconds: Long? = null,
 )
 
 internal fun getPipelineStepForModelType(modelType: ModelType): PipelineStep =

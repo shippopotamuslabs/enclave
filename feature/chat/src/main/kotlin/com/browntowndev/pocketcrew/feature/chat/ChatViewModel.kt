@@ -836,11 +836,13 @@ class ChatViewModel @Inject constructor(
         if (segments.isEmpty()) return emptyList()
         val lastThinkingIndex = segments.indexOfLast { it is MessageTranscriptSegment.Thinking }
         val lastAnswerIndex = segments.indexOfLast { it is MessageTranscriptSegment.AssistantText }
+        val durationOverrides = distributeThinkingDurationFromAggregate(message, segments)
         return segments.mapIndexed { index, seg ->
             when (seg) {
                 is MessageTranscriptSegment.Thinking -> {
                     val durationSeconds =
-                        seg.thinkingDurationSeconds ?: effectiveSegmentDurationSeconds(seg)
+                        durationOverrides[index]
+                            ?: transcriptThinkingDurationSecondsForUi(seg)
                     TranscriptSegmentUi.ThinkingBlock(
                         ordinal = seg.ordinal,
                         text = seg.text,
@@ -861,15 +863,69 @@ class ChatViewModel @Inject constructor(
     private fun effectiveSegmentDurationSeconds(seg: MessageTranscriptSegment.Thinking): Long? {
         val start = seg.thinkingStartTime
         val end = seg.thinkingEndTime
-        return if (start != null && end != null && end >= start) {
-            (end - start) / 1000
-        } else {
-            null
+        if (start == null || end == null || end < start) return null
+        val ms = end - start
+        return when {
+            ms <= 0L -> null
+            ms < 1000L -> 1L
+            else -> ms / 1000
         }
     }
 
-    private fun aggregateThinkingDurationSeconds(message: Message): Long? =
-        message.thinkingDurationSeconds ?: message.computedDurationSeconds
+    /**
+     * Resolves segment duration for transcript UI. A denormalized
+     * [MessageTranscriptSegment.Thinking.thinkingDurationSeconds] of `0` must not suppress
+     * recomputation from [MessageTranscriptSegment.Thinking.thinkingStartTime] /
+     * [MessageTranscriptSegment.Thinking.thinkingEndTime] (persisted 0 while timestamps are valid).
+     */
+    private fun transcriptThinkingDurationSecondsForUi(seg: MessageTranscriptSegment.Thinking): Long? {
+        val stored = seg.thinkingDurationSeconds
+        val fromTimestamps = effectiveSegmentDurationSeconds(seg)
+        return when {
+            stored != null && stored > 0L -> stored
+            fromTimestamps != null -> fromTimestamps
+            else -> stored
+        }
+    }
+
+    /**
+     * When every thinking slice still resolves to 0 / null seconds (e.g. legacy rows without
+     * per-segment timestamps) but the assistant message has a positive aggregate thinking duration,
+     * split that total across thinking rows so "Thought for …" is not all 0s.
+     */
+    private fun distributeThinkingDurationFromAggregate(
+        message: Message,
+        segments: List<MessageTranscriptSegment>,
+    ): Map<Int, Long> {
+        val thinkingIndices =
+            segments.mapIndexedNotNull { i, s -> i.takeIf { s is MessageTranscriptSegment.Thinking } }
+        if (thinkingIndices.isEmpty()) return emptyMap()
+        val allWeak =
+            thinkingIndices.all { i ->
+                val d = transcriptThinkingDurationSecondsForUi(segments[i] as MessageTranscriptSegment.Thinking)
+                d == null || d == 0L
+            }
+        if (!allWeak) return emptyMap()
+        val agg = aggregateThinkingDurationSeconds(message) ?: return emptyMap()
+        if (agg <= 0L) return emptyMap()
+        val n = thinkingIndices.size
+        val base = agg / n
+        val rem = (agg % n).toInt()
+        return thinkingIndices.mapIndexed { idx, segIndex ->
+            val extra = if (idx < rem) 1L else 0L
+            segIndex to base + extra
+        }.toMap()
+    }
+
+    private fun aggregateThinkingDurationSeconds(message: Message): Long? {
+        val stored = message.thinkingDurationSeconds
+        val fromTimestamps = message.computedDurationSeconds
+        return when {
+            stored != null && stored > 0L -> stored
+            fromTimestamps != null -> fromTimestamps
+            else -> stored
+        }
+    }
 
     /**
      * Computes the indicator state based on the message's messageState.

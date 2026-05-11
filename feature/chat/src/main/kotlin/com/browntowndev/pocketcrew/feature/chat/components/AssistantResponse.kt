@@ -74,6 +74,8 @@ fun AssistantResponse(
     message: ChatMessage,
     isPreview: Boolean = false,
     hasTtsProviderAssigned: Boolean = false,
+    /** When set with a non-empty transcript, banner is placed under leading thinking UI (see [toolCallBannerInsertAfterSegmentIndex]). */
+    toolCallBanner: ToolCallBannerUi? = null,
     onPlayAudio: (String) -> Unit = {},
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
@@ -161,7 +163,15 @@ fun AssistantResponse(
             }
 
             if (message.transcriptSegments.isNotEmpty()) {
-                message.transcriptSegments.forEach { segment ->
+                val insertAfterIndex = toolCallBannerInsertAfterSegmentIndex(message.transcriptSegments)
+                val showBannerBeforeSegments = toolCallBanner != null && insertAfterIndex == null
+                if (showBannerBeforeSegments) {
+                    ToolCallBanner(
+                        banner = toolCallBanner,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                message.transcriptSegments.forEachIndexed { index, segment ->
                     key(segment.ordinal) {
                         when (segment) {
                             is TranscriptSegmentUi.ThinkingBlock -> {
@@ -207,6 +217,12 @@ fun AssistantResponse(
                                 )
                             }
                         }
+                    }
+                    if (toolCallBanner != null && insertAfterIndex == index) {
+                        ToolCallBanner(
+                            banner = toolCallBanner,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
                     }
                 }
             } else {
@@ -737,4 +753,18 @@ private fun MediaCard(
             }
         }
     }
+}
+
+/**
+ * Where to insert an active [ToolCallBanner] relative to transcript segments so it sits **below**
+ * the **latest** thinking UI (streaming [LiveThinkingTranscriptRow] or completed [ThoughtForHeader])
+ * instead of above it in [MessageItem].
+ *
+ * @return index of the segment **after which** the banner is shown, or `null` if there is no
+ * thinking row yet (e.g. answer-only transcript) so the banner stays above the first segment.
+ */
+internal fun toolCallBannerInsertAfterSegmentIndex(segments: List<TranscriptSegmentUi>): Int? {
+    if (segments.isEmpty()) return null
+    val lastThinkingIndex = segments.indexOfLast { it is TranscriptSegmentUi.ThinkingBlock }
+    return if (lastThinkingIndex >= 0) lastThinkingIndex else null
 }

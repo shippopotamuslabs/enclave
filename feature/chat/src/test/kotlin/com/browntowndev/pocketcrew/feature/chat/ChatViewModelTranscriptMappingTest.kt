@@ -109,6 +109,53 @@ class ChatViewModelTranscriptMappingTest {
     }
 
     @Test
+    fun `mapToChatMessage derives segment duration from timestamps when stored seconds are zero`() {
+        val message =
+            assistantMessage(
+                messageState = MessageState.COMPLETE,
+                transcriptSegments =
+                    listOf(
+                        MessageTranscriptSegment.Thinking(
+                            ordinal = 0,
+                            text = "cot",
+                            thinkingDurationSeconds = 0L,
+                            thinkingStartTime = 10_000L,
+                            thinkingEndTime = 45_000L,
+                        ),
+                        MessageTranscriptSegment.AssistantText(ordinal = 1, text = "answer"),
+                    ),
+            )
+
+        val ui = viewModel.mapToChatMessageForTesting(message)
+        val thinking = ui.transcriptSegments.first() as TranscriptSegmentUi.ThinkingBlock
+        assertEquals(35L, thinking.durationSeconds)
+    }
+
+    @Test
+    fun `mapToChatMessage splits message aggregate across thinking segments when all slice durations missing`() {
+        val message =
+            assistantMessage(
+                messageState = MessageState.COMPLETE,
+                thinkingRaw = "trace",
+                thinkingDurationSeconds = 10L,
+                thinkingStartTime = null,
+                thinkingEndTime = null,
+                transcriptSegments =
+                    listOf(
+                        MessageTranscriptSegment.Thinking(ordinal = 0, text = "t0"),
+                        MessageTranscriptSegment.AssistantText(ordinal = 1, text = "a1"),
+                        MessageTranscriptSegment.Thinking(ordinal = 2, text = "t2"),
+                        MessageTranscriptSegment.Thinking(ordinal = 3, text = "t3"),
+                    ),
+            )
+
+        val ui = viewModel.mapToChatMessageForTesting(message)
+        val durations =
+            ui.transcriptSegments.filterIsInstance<TranscriptSegmentUi.ThinkingBlock>().map { it.durationSeconds }
+        assertEquals(listOf(4L, 3L, 3L), durations)
+    }
+
+    @Test
     fun `mapToChatMessage marks last thinking segment streaming when message is THINKING`() {
         val message =
             assistantMessage(
@@ -127,6 +174,24 @@ class ChatViewModelTranscriptMappingTest {
         assertEquals(2, blocks.size)
         assertTrue(blocks.none { it.ordinal == 0 && it.isStreaming })
         assertTrue(blocks.any { it.ordinal == 2 && it.isStreaming })
+    }
+
+    @Test
+    fun `mapToChatMessage complete indicator uses computed duration when denormalized seconds are zero`() {
+        val message =
+            assistantMessage(
+                messageState = MessageState.COMPLETE,
+                thinkingRaw = "full trace",
+                thinkingDurationSeconds = 0L,
+                thinkingStartTime = 100L,
+                thinkingEndTime = 8_100L,
+                transcriptSegments = emptyList(),
+            )
+
+        val ui = viewModel.mapToChatMessageForTesting(message)
+        val complete = ui.indicatorState as IndicatorState.Complete
+        assertNotNull(complete.thinkingData)
+        assertEquals(8L, complete.thinkingData!!.thinkingDurationSeconds)
     }
 
     @Test
