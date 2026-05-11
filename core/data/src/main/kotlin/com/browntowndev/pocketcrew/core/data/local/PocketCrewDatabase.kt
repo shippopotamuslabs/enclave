@@ -25,7 +25,7 @@ import androidx.room.TypeConverters
         MessageFileEntity::class,
         DocumentEntity::class,
     ],
-    version = 5
+    version = 1
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class PocketCrewDatabase : RoomDatabase() {
