@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -29,7 +30,7 @@ class ChatInferenceRequestPreparer(
     private val messageRepository: MessageRepository,
     private val memoriesRepository: MemoriesRepository,
     private val embeddingEnginePort: EmbeddingEnginePort,
-    private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val promptComposer: PromptComposerPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val mediaProviderRepository: MediaProviderRepositoryPort,
     private val mediaToolDefinitionFactory: MediaToolDefinitionFactory,
@@ -120,7 +121,7 @@ class ChatInferenceRequestPreparer(
         } else null
 
         val systemPrompt = if (toolingEnabled) {
-            searchToolPromptComposer.compose(
+            promptComposer.compose(
                 baseSystemPrompt = config?.systemPrompt,
                 includeSearchTool = searchEnabled,
                 includeXSearchTool = xSearchEnabled,
