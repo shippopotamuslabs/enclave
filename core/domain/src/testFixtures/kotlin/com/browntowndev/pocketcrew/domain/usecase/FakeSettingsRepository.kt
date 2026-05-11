@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -103,10 +104,11 @@ class FakeSettingsRepository : SettingsRepository {
     }
 
     override suspend fun updateSearchEnabled(enabled: Boolean) {
-        if (shouldThrowOnUpdateSearchEnabled) throw RuntimeException("Simulated error")
-        updateSearchEnabledCallCount++
-        lastSearchEnabledValue = enabled
         _settingsFlow.value = _settingsFlow.value.copy(searchEnabled = enabled)
+    }
+
+    override suspend fun updateSearchProvider(provider: SearchProvider) {
+        _settingsFlow.value = _settingsFlow.value.copy(searchProvider = provider)
     }
 
     override suspend fun updateBackgroundInferenceEnabled(enabled: Boolean) {
@@ -128,6 +130,30 @@ class FakeSettingsRepository : SettingsRepository {
         clearTavilyApiKeyCallCount++
         lastSavedTavilyApiKey = null
         _settingsFlow.value = _settingsFlow.value.copy(tavilyKeyPresent = false)
+    }
+
+    override suspend fun saveExaApiKey(apiKey: String) {
+        _settingsFlow.value = _settingsFlow.value.copy(exaKeyPresent = apiKey.isNotBlank())
+    }
+
+    override suspend fun clearExaApiKey() {
+        _settingsFlow.value = _settingsFlow.value.copy(exaKeyPresent = false)
+    }
+
+    override suspend fun updateXSearchEnabled(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(xSearchEnabled = enabled)
+    }
+
+    override suspend fun saveXApiKey(apiKey: String) {
+        _settingsFlow.value = _settingsFlow.value.copy(xApiKeyPresent = apiKey.isNotBlank())
+    }
+
+    override suspend fun clearXApiKey() {
+        _settingsFlow.value = _settingsFlow.value.copy(xApiKeyPresent = false)
+    }
+
+    override suspend fun updateShowSearchProviderSwitchAlert(show: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(showSearchProviderSwitchAlert = show)
     }
 
     // Verification methods

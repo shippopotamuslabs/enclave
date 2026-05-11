@@ -77,7 +77,7 @@ class MemoriesDaoTest {
             content = "The sky is blue."
         )
         dao.insertMemory(memory)
-        dao.deleteMemory(memory)
+        dao.softDeleteById(id)
         
         val retrieved = dao.getMemoryById(id)
         assertNull(retrieved)

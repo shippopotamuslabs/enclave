@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.media
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import com.browntowndev.pocketcrew.domain.port.media.FileAttachmentMetadata
 import com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,20 +24,21 @@ class AndroidFileAttachmentPort @Inject constructor(
 
     override suspend fun readFileContent(uri: String): FileAttachmentMetadata = withContext(Dispatchers.IO) {
         val androidUri = Uri.parse(uri)
-        val mimeType = context.contentResolver.getType(androidUri)
-        
-        // Check for supported MIME types
-        if (mimeType != null && !isSupported(mimeType)) {
-            throw NotImplementedError("File type $mimeType is not yet supported for analysis.")
-        }
-
+        val mimeType = context.contentResolver.getType(androidUri) ?: "application/octet-stream"
         val name = getFileName(androidUri) ?: "attached_file"
         
-        val content = context.contentResolver.openInputStream(androidUri)?.use { inputStream ->
-            BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                reader.readText()
-            }
-        } ?: throw IllegalStateException("Unable to open file stream for $uri")
+        val content = if (isTextBased(mimeType)) {
+            context.contentResolver.openInputStream(androidUri)?.use { inputStream ->
+                BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                    reader.readText()
+                }
+            } ?: throw IllegalStateException("Unable to open file stream for $uri")
+        } else {
+            val bytes = context.contentResolver.openInputStream(androidUri)?.use { it.readBytes() }
+                ?: throw IllegalStateException("Unable to open file stream for $uri")
+            // Encode binary data as base64 prefix so we know how to decode it later
+            "BASE64:" + Base64.encodeToString(bytes, Base64.NO_WRAP)
+        }
 
         FileAttachmentMetadata(
             name = name,
@@ -45,7 +47,7 @@ class AndroidFileAttachmentPort @Inject constructor(
         )
     }
 
-    private fun isSupported(mimeType: String): Boolean {
+    private fun isTextBased(mimeType: String): Boolean {
         return mimeType.startsWith("text/") || 
                mimeType == "application/json" || 
                mimeType == "application/xml" ||
@@ -67,5 +69,11 @@ class AndroidFileAttachmentPort @Inject constructor(
             val index = path.lastIndexOf('/')
             if (index != -1) path.substring(index + 1) else path
         }
+    }
+
+    override suspend fun readBytes(uri: String): ByteArray = withContext(Dispatchers.IO) {
+        val androidUri = Uri.parse(uri)
+        context.contentResolver.openInputStream(androidUri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("Unable to open file stream for $uri")
     }
 }

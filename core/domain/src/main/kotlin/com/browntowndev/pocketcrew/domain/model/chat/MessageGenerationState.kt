@@ -33,12 +33,19 @@ sealed interface MessageGenerationState {
     data class Finished(val modelType: ModelType) : MessageGenerationState
     data class Blocked(val reason: String, val modelType: ModelType) : MessageGenerationState
     data class Failed(val error: Throwable, val modelType: ModelType) : MessageGenerationState
-    data class TavilySourcesAttached(
-        val sources: List<TavilySource>,
+    data class WebSearchSourcesAttached(
+        val sources: List<WebSearchSource>,
         val modelType: ModelType,
     ) : MessageGenerationState
     data class ArtifactsAttached(
         val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+    data class MediaAttached(
+        val mediaUris: List<String>,
+        val mediaIds: List<String> = emptyList(),
+        val mediaTypes: List<String> = emptyList(),
+        val prompts: List<String> = emptyList(),
         val modelType: ModelType,
     ) : MessageGenerationState
     data class StepCompleted(

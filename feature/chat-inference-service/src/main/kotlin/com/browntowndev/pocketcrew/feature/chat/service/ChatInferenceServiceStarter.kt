@@ -33,7 +33,9 @@ class ChatInferenceServiceStarter @Inject constructor(
     ) {
         loggingPort.info(
             TAG,
-            "startService requested chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
+            "startService requested chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "modelType=${modelType.name} userHasImage=$userHasImage",
         )
         val intent = Intent(context, ChatInferenceService::class.java).apply {
             action = ChatInferenceService.ACTION_START
@@ -46,7 +48,9 @@ class ChatInferenceServiceStarter @Inject constructor(
         }
         loggingPort.debug(
             TAG,
-            "startForegroundService intent prepared action=${intent.action} chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+            "startForegroundService intent prepared " +
+                "action=${intent.action} chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value}",
         )
         context.startForegroundService(intent)
         loggingPort.info(

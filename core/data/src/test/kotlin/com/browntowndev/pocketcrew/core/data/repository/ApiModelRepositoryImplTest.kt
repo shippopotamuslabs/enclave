@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -13,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionP
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -30,13 +32,17 @@ class ApiModelRepositoryImplTest {
     private val credentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
     private val configurationsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
+    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @Before
     fun setup() {
         repo = ApiModelRepositoryImpl(
+            syncTrigger = syncTrigger,
             apiCredentialsDao = credentialsDao,
             apiModelConfigurationsDao = configurationsDao,
-            apiKeyManager = apiKeyManager
+            apiKeyManager = apiKeyManager,
+            cryptoManager = cryptoManager
         )
     }
 
@@ -101,7 +107,10 @@ class ApiModelRepositoryImplTest {
 
         repo.deleteCredentials(credId)
 
-        coVerify { credentialsDao.deleteById(credId) }
+        coVerify { 
+            configurationsDao.deleteAllForCredentials(credId, any())
+            credentialsDao.softDeleteById(credId, any()) 
+        }
         verify { apiKeyManager.delete("my_key") }
     }
     
@@ -305,6 +314,84 @@ class ApiModelRepositoryImplTest {
                     it.openRouterDataCollectionPolicy == "allow" &&
                     it.openRouterZeroDataRetention == true
             })
+        }
+    }
+
+    @Test
+    fun `saveCredentials calls triggerSync once`() = runTest {
+        val creds = ApiCredentials(
+            id = ApiCredentialsId(""),
+            displayName = "Test",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            credentialAlias = "key1"
+        )
+        coEvery { credentialsDao.insert(any()) } returns 1L
+        coEvery { credentialsDao.getById(any()) } returns ApiCredentialsEntity(
+            id = ApiCredentialsId("1"),
+            displayName = "Test",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            credentialAlias = "key1",
+        )
+
+        repo.saveCredentials(creds, "sk-test")
+
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `saveConfiguration calls triggerSync once`() = runTest {
+        val config = ApiModelConfiguration(
+            apiCredentialsId = ApiCredentialsId("9"),
+            displayName = "Fast"
+        )
+        coEvery { configurationsDao.upsert(any()) } returns Unit
+
+        repo.saveConfiguration(config)
+
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `deleteCredentials calls triggerSync once`() = runTest {
+        val credId = ApiCredentialsId("1")
+        coEvery { credentialsDao.getById(credId) } returns ApiCredentialsEntity(
+            id = credId,
+            displayName = "Test",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            credentialAlias = "my_key",
+        )
+
+        repo.deleteCredentials(credId)
+
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `deleteConfiguration calls triggerSync once`() = runTest {
+        val configId = ApiModelConfigurationId("cfg-1")
+        coEvery { configurationsDao.softDeleteById(configId, any()) } returns Unit
+
+        repo.deleteConfiguration(configId)
+
+        coVerify { configurationsDao.softDeleteById(configId, any()) }
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `saveConfiguration upserts entity with pendingSync true`() = runTest {
+        val config = ApiModelConfiguration(
+            apiCredentialsId = ApiCredentialsId("9"),
+            displayName = "Fast"
+        )
+        coEvery { configurationsDao.upsert(any()) } returns Unit
+
+        repo.saveConfiguration(config)
+
+        coVerify {
+            configurationsDao.upsert(match { it.pendingSync == 1 })
         }
     }
 }

@@ -33,7 +33,7 @@ class NoOpInferenceService @Inject constructor(
 
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
         emit(InferenceEvent.Error(
-            cause = IllegalStateException("Model for $modelType is not available. Please download it first."),
+            cause = IllegalStateException("${modelType.displayName()} model is not available. Please download it first."),
             modelType = modelType
         ))
     }

@@ -44,6 +44,7 @@ llama-android/src/main/cpp/CMakeFiles/
 # Third-party dependencies
 third_party/*
 !third_party/whisper.cpp/
+!third_party/docgen_core/
 
 bin/
 
@@ -88,3 +89,13 @@ diff.txt
 edge-gallery
 
 image generation styles/
+
+# Firebase
+.firebase/
+firebase-debug.log*
+.runtimeconfig.json
+functions/lib/
+functions/node_modules/
+.worktrees/
+
+node_modules/

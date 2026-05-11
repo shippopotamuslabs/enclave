@@ -15,6 +15,7 @@ object ContextWindowPlanner {
     const val LOCAL_TOOL_RESULT_BUFFER_TOKENS = 1_000
     const val TOOL_CALL_OVERHEAD_TOKENS = 30
 
+    @Suppress("MaxLineLength")
     const val STOP_TOOLS_WARNING =
         "[SYSTEM: Context window is nearly full. Do not call any more tools. Provide a final response based on the information you already have.]"
 

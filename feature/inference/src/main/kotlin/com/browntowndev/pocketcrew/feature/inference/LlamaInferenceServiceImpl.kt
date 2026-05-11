@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMe
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
@@ -13,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -27,7 +29,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
@@ -42,6 +43,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 /**
@@ -63,6 +67,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     companion object {
         private const val TAG = "LlamaInferenceService"
+        private const val DEFAULT_TEMPERATURE = 0.7f
+        private const val DEFAULT_TOP_P = 0.9f
     }
 
     private data class SessionSignature(
@@ -102,6 +108,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Ensures the engine is loaded with the current model from registry.
      * If the model or config has changed since last load, tears down and reloads.
      */
+    @Suppress("ThrowsCount")
     private suspend fun ensureModelLoaded(
         modelType: ModelType, 
         options: GenerationOptions,
@@ -111,6 +118,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             ?: throw IllegalStateException("No active configuration for $modelType")
 
         if (!activeConfig.isLocal) {
+            @Suppress("MaxLineLength")
             throw IllegalStateException("LlamaInferenceService cannot run API models. ModelType $modelType is mapped to an API configuration.")
         }
 
@@ -119,9 +127,9 @@ class LlamaInferenceServiceImpl @Inject constructor(
             ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
         val targetReasoningBudget = options.reasoningBudget
-        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: 0.7f
+        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: DEFAULT_TEMPERATURE
         val targetTopK = options.topK ?: activeConfig.topK ?: 40
-        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: 0.9f
+        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: DEFAULT_TOP_P
         val targetMaxTokens = options.maxTokens ?: activeConfig.maxTokens ?: 4096
 
         val newSignature = SessionSignature(
@@ -149,11 +157,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
             val modelPath = getModelPath(asset.metadata.localFileName)
             val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
-            if (options.imageUris.isNotEmpty() &&
+            val requiresMmproj = options.imageUris.isNotEmpty() &&
                 asset.metadata.isMultimodal &&
-                asset.metadata.modelFileFormat == ModelFileFormat.GGUF &&
-                mmprojPath.isNullOrBlank()
-            ) {
+                asset.metadata.modelFileFormat == ModelFileFormat.GGUF
+            if (requiresMmproj && mmprojPath.isNullOrBlank()) {
                 throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
             }
             val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
@@ -187,10 +194,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 currentSignature = newSignature
                 currentContextWindow = samplingConfig.contextWindow
                 currentSystemPrompt = systemPrompt
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: JavaCancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is CancellationException || e is JavaCancellationException) {
-                    throw e
-                }
                 // GPU initialization failed, try falling back to CPU
                 if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
                     Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
@@ -266,9 +274,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
         val targetModelType = options.modelType ?: ModelType.FAST
         transientToolResultTokens = 0
 
+        var imageUrisToProcess = options.imageUris
+        if (imageUrisToProcess.size > 1) {
+            Log.w(TAG, "Llama supports only 1 image per request. Ignoring extra images.")
+            imageUrisToProcess = listOf(imageUrisToProcess.first())
+        }
+
         // Downscale images and save them to temporary files for the JNI engine
-        val processedOptions = if (options.imageUris.isNotEmpty()) {
-            val downscaledUris = options.imageUris.map { uri ->
+        val processedOptions = if (imageUrisToProcess.isNotEmpty()) {
+            val downscaledUris = imageUrisToProcess.map { uri ->
                 try {
                     "file://" + ImageDownscaler.downscaleToTempFile(context, uri)
                 } catch (e: Exception) {
@@ -286,8 +300,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 send(InferenceEvent.EngineLoading(targetModelType))
             }
             send(InferenceEvent.Processing(targetModelType))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: JavaCancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             send(InferenceEvent.Error(e, targetModelType))
             return@channelFlow
         }
@@ -409,6 +426,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                             modelType = targetModelType,
                             chatId = options.chatId,
                             userMessageId = options.userMessageId,
+                            assistantMessageId = options.assistantMessageId,
                         )
                     )
                 } ?: emptyList()
@@ -475,19 +493,63 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     ContextExceededResult(contextExceeded = true)
                 } else {
                     if (evaluation.contextFull) {
+                        @Suppress("MaxLineLength")
                         loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
                     }
                     ContextExceededResult(evaluation.contextFull)
                 }
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
+                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, targetModelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, targetModelType))
                         }
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
+                            .parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
+                                        ),
+                                        modelType = targetModelType,
+                                    ),
+                                )
+                            }
+                    } catch (e: Exception) {
+                        loggingPort.error(TAG, "Failed to parse append_blocks result", e)
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
+                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                    if (mediaResult.uris.isNotEmpty()) {
+                        emitEvent(
+                            InferenceEvent.Media(
+                                mediaUris = mediaResult.uris,
+                                mediaIds = mediaResult.ids,
+                                mediaTypes = mediaResult.types,
+                                prompts = mediaResult.prompts,
+                                modelType = targetModelType
+                            )
+                        )
                     }
                 }
             },

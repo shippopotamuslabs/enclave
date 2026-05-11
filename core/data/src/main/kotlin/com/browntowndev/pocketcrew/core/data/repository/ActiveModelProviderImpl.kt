@@ -22,6 +22,7 @@ class ActiveModelProviderImpl @Inject constructor(
     private val apiConfigsDao: ApiModelConfigurationsDao
 ) : ActiveModelProviderPort {
 
+    @Suppress("ReturnCount")
     override suspend fun getActiveConfiguration(modelType: ModelType): ActiveModelConfiguration? {
         val defaultAssignment = defaultModelRepository.getDefault(modelType) ?: return null
 

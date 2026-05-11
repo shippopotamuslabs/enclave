@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
 /**
- * Domain port for tracking URLs that have been extracted via the Tavily extract tool.
+ * Domain port for tracking URLs that have been extracted via a web search extract tool.
  * Used to re-apply extracted flags after sources are persisted to the database.
  */
 interface ExtractedUrlTrackerPort {

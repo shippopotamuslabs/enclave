@@ -66,7 +66,9 @@ class JniLlamaEngineGenerateWithOptionsTest {
             val engine = setupEngineWithMocks()
             try {
                 engine.generateWithOptions(GenerationOptions(reasoningBudget = 0)).toList()
-            } catch(e: Exception) {}
+            } catch(e: Exception) {
+                // Expected: exception swallowed — only verifying mock interaction
+            }
 
             verify { engine.startCompletion(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
@@ -82,7 +84,9 @@ class JniLlamaEngineGenerateWithOptionsTest {
             val engine = setupEngineWithMocks()
             try {
                 engine.generateWithOptions(GenerationOptions(reasoningBudget = 2048)).toList()
-            } catch(e: Exception) {}
+            } catch(e: Exception) {
+                // Expected: exception swallowed — only verifying mock interaction
+            }
 
             verify { engine.startCompletion(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
@@ -98,7 +102,9 @@ class JniLlamaEngineGenerateWithOptionsTest {
             val engine = setupEngineWithMocks()
             try {
                 engine.generateWithOptions(GenerationOptions(reasoningBudget = 0, temperature = 0.5f)).toList()
-            } catch(e: Exception) {}
+            } catch(e: Exception) {
+                // Expected: exception swallowed — only verifying mock interaction
+            }
 
             verify { engine.startCompletion(
                 any(), any(), any(),
@@ -118,10 +124,12 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 engine.generateWithOptions(
                     GenerationOptions(
                         reasoningBudget = 0,
-                        systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>"
+                        systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>"
                     )
                 ).toList()
-            } catch(e: Exception) {}
+            } catch(e: Exception) {
+                // Expected: exception swallowed — only verifying mock interaction
+            }
 
             verify {
                 engine.startCompletion(
@@ -133,7 +141,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
             }
 
             assertEquals(
-                "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
+                "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
                 slot.captured.first()
             )
             assertEquals("User question", slot.captured[1])
@@ -156,6 +164,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
                     )
                 ).toList()
             } catch (_: Exception) {
+                // Expected: exception swallowed — only verifying mock interaction
             }
 
             verify {

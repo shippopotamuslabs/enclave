@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -31,7 +32,12 @@ class SettingsRepositoryImpl @Inject constructor(
         private val CUSTOM_PROMPT_TEXT_KEY = stringPreferencesKey("settings_custom_prompt_text")
         private val ALLOW_MEMORIES_KEY = booleanPreferencesKey("settings_allow_memories")
         private val SEARCH_ENABLED_KEY = booleanPreferencesKey("settings_search_enabled")
+        private val SEARCH_PROVIDER_KEY = stringPreferencesKey("settings_search_provider")
         private val TAVILY_KEY_PRESENT_KEY = booleanPreferencesKey("settings_tavily_key_present")
+        private val EXA_KEY_PRESENT_KEY = booleanPreferencesKey("settings_exa_key_present")
+        private val X_SEARCH_ENABLED_KEY = booleanPreferencesKey("settings_x_search_enabled")
+        private val X_API_KEY_PRESENT_KEY = booleanPreferencesKey("settings_x_api_key_present")
+        private val SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY = booleanPreferencesKey("settings_show_search_provider_switch_alert")
         private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
     }
 
@@ -40,7 +46,7 @@ class SettingsRepositoryImpl @Inject constructor(
             theme = preferences[THEME_KEY]?.let { name ->
                 try {
                     AppTheme.valueOf(name)
-                } catch (e: IllegalArgumentException) {
+                } catch (_: IllegalArgumentException) {
                     AppTheme.SYSTEM
                 }
             } ?: AppTheme.SYSTEM,
@@ -50,15 +56,28 @@ class SettingsRepositoryImpl @Inject constructor(
             selectedPromptOption = preferences[SELECTED_PROMPT_OPTION_KEY]?.let { name ->
                 try {
                     SystemPromptOption.valueOf(name)
-                } catch (e: IllegalArgumentException) {
+                } catch (_: IllegalArgumentException) {
                     SystemPromptOption.CONCISE
                 }
             } ?: SystemPromptOption.CONCISE,
             customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY] ?: "",
             allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
             searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
+            searchProvider = preferences[SEARCH_PROVIDER_KEY]?.let { name ->
+                try {
+                    SearchProvider.valueOf(name)
+                } catch (_: IllegalArgumentException) {
+                    SearchProvider.TAVILY
+                }
+            } ?: SearchProvider.TAVILY,
             tavilyKeyPresent = preferences[TAVILY_KEY_PRESENT_KEY]
                 ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
+            exaKeyPresent = preferences[EXA_KEY_PRESENT_KEY]
+                ?: apiKeyManager.has(ApiKeyManager.EXA_SEARCH_ALIAS),
+            xSearchEnabled = preferences[X_SEARCH_ENABLED_KEY] ?: false,
+            xApiKeyPresent = preferences[X_API_KEY_PRESENT_KEY]
+                ?: apiKeyManager.has(ApiKeyManager.X_SEARCH_ALIAS),
+            showSearchProviderSwitchAlert = preferences[SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY] ?: true,
             backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
         )
     }
@@ -111,6 +130,12 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun updateSearchProvider(provider: SearchProvider) {
+        dataStore.edit { preferences ->
+            preferences[SEARCH_PROVIDER_KEY] = provider.name
+        }
+    }
+
     override suspend fun saveTavilyApiKey(apiKey: String) {
         val normalizedKey = apiKey.trim()
         apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, normalizedKey)
@@ -123,6 +148,48 @@ class SettingsRepositoryImpl @Inject constructor(
         apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
         dataStore.edit { preferences ->
             preferences[TAVILY_KEY_PRESENT_KEY] = false
+        }
+    }
+
+    override suspend fun saveExaApiKey(apiKey: String) {
+        val normalizedKey = apiKey.trim()
+        apiKeyManager.save(ApiKeyManager.EXA_SEARCH_ALIAS, normalizedKey)
+        dataStore.edit { preferences ->
+            preferences[EXA_KEY_PRESENT_KEY] = normalizedKey.isNotBlank()
+        }
+    }
+
+    override suspend fun clearExaApiKey() {
+        apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
+        dataStore.edit { preferences ->
+            preferences[EXA_KEY_PRESENT_KEY] = false
+        }
+    }
+
+    override suspend fun updateXSearchEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[X_SEARCH_ENABLED_KEY] = enabled
+        }
+    }
+
+    override suspend fun saveXApiKey(apiKey: String) {
+        val normalizedKey = apiKey.trim()
+        apiKeyManager.save(ApiKeyManager.X_SEARCH_ALIAS, normalizedKey)
+        dataStore.edit { preferences ->
+            preferences[X_API_KEY_PRESENT_KEY] = normalizedKey.isNotBlank()
+        }
+    }
+
+    override suspend fun clearXApiKey() {
+        apiKeyManager.delete(ApiKeyManager.X_SEARCH_ALIAS)
+        dataStore.edit { preferences ->
+            preferences[X_API_KEY_PRESENT_KEY] = false
+        }
+    }
+
+    override suspend fun updateShowSearchProviderSwitchAlert(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY] = show
         }
     }
 

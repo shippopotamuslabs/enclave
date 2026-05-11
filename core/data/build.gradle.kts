@@ -40,6 +40,8 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:docgen"))
+    implementation(platform(libs.firebase.bom))
 
     // ONNX Runtime
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
@@ -49,6 +51,7 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -83,6 +86,15 @@ dependencies {
     implementation(libs.commonmark)
     implementation(libs.commonmark.ext.tables)
 
+    // Auth & Credentials
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.functions)
+    implementation(libs.firebase.storage)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
+
     // Test dependencies - JUnit 5 (Jupiter)
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
@@ -99,6 +111,7 @@ dependencies {
     testImplementation(libs.junit)
     testRuntimeOnly(libs.junit.vintage.engine)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.work.testing)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
 

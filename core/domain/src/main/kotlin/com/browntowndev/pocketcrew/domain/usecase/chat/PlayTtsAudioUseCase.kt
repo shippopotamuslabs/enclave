@@ -13,6 +13,7 @@ class PlayTtsAudioUseCase @Inject constructor(
     private val audioPlayer: AudioPlayerPort,
     private val apiKeyProvider: ApiKeyProviderPort,
 ) {
+    @Suppress("ThrowsCount")
     suspend operator fun invoke(text: String): Result<Unit> {
         return Result.runCatching {
             val selection = resolveAssignedModelSelectionUseCase(ModelType.TTS)

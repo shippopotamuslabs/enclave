@@ -1,15 +1,18 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.serialization.json.Json
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.serialization.encodeToString
@@ -19,7 +22,8 @@ fun ChatEntity.toDomain(): Chat = Chat(
     name = name,
     created = created,
     lastModified = lastModified,
-    pinned = pinned
+    pinned = pinned,
+    isSyncing = created.time == 0L
 )
 
 fun Chat.toEntity(): ChatEntity = ChatEntity(
@@ -27,20 +31,49 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     name = name,
     created = created,
     lastModified = lastModified,
-    pinned = pinned
+    pinned = pinned,
+    pendingSync = 1
 )
 
-fun MessageWithFiles.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()): Message {
-    return message.toDomain(tavilySources, files)
+fun MessageWithFiles.toDomain(
+    webSearchSources: List<WebSearchSourceEntity> = emptyList(),
+    documents: List<DocumentEntity> = emptyList(),
+): Message {
+    return message.toDomain(webSearchSources, files, documents = documents)
 }
 
 fun MessageEntity.toDomain(
-    tavilySources: List<TavilySourceEntity> = emptyList(),
-    files: List<MessageFileEntity> = emptyList()
+    webSearchSources: List<WebSearchSourceEntity> = emptyList(),
+    files: List<MessageFileEntity> = emptyList(),
+    documents: List<DocumentEntity> = emptyList(),
 ): Message {
-    val artifacts = try {
-        artifactsJson?.let { Json.decodeFromString<List<ArtifactGenerationRequest>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    val mediaUris = try {
+        generatedMediaUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    val mediaAssetIds = try {
+        generatedMediaAssetIdsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    val mediaTypes = try {
+        generatedMediaTypesJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    val mediaPrompts = try {
+        generatedMediaPromptsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    val imageUris = try {
+        imageUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
         emptyList()
     }
 
@@ -49,10 +82,21 @@ fun MessageEntity.toDomain(
         content = Content(
             text = content,
             pipelineStep = pipelineStep,
-            imageUri = imageUri,
-            tavilySources = tavilySources.map { it.toDomain() },
-            artifacts = artifacts,
-            fileAttachments = files.map { it.toDomain() }
+            imageUris = imageUris,
+            webSearchSources = webSearchSources.map { it.toDomain() },
+            artifacts = documents.map {
+                ArtifactGenerationRequest(
+                    artifactId = it.id,
+                    targetFormat = it.targetFormat,
+                    title = it.title,
+                    content = it.json,
+                )
+            },
+            fileAttachments = files.map { it.toDomain() },
+            generatedMediaUris = mediaUris,
+            generatedMediaAssetIds = mediaAssetIds,
+            generatedMediaTypes = mediaTypes,
+            generatedMediaPrompts = mediaPrompts
         ),
         role = role,
         chatId = chatId,
@@ -63,26 +107,47 @@ fun MessageEntity.toDomain(
         thinkingStartTime = thinkingStartTime,
         thinkingEndTime = thinkingEndTime,
         modelType = modelType,
-        tavilySources = tavilySources.map { it.toDomain() }
+        webSearchSources = webSearchSources.map { it.toDomain() }
     )
 }
 
 fun Message.toEntity(): MessageEntity {
-    val artifactsJson = if (content.artifacts.isNotEmpty()) {
-        Json.encodeToString(content.artifacts)
+    val mediaUrisJson = if (content.generatedMediaUris.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaUris)
+    } else null
+
+    val mediaAssetIdsJson = if (content.generatedMediaAssetIds.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaAssetIds)
+    } else null
+
+    val mediaTypesJson = if (content.generatedMediaTypes.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaTypes)
+    } else null
+
+    val mediaPromptsJson = if (content.generatedMediaPrompts.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaPrompts)
+    } else null
+
+    val imageUrisJson = if (content.imageUris.isNotEmpty()) {
+        Json.encodeToString(content.imageUris)
     } else null
 
     return MessageEntity(
         id = id,
         content = content.text,
-        imageUri = content.imageUri,
+        imageUrisJson = imageUrisJson,
         role = role,
-        chatId = chatId,
+        chatId = requireNotNull(chatId) { "Cannot persist Message(id=${id.value}) with null chatId — must go through CreateUserMessageUseCase" },
         messageState = messageState,
         createdAt = createdAt,
         modelType = modelType,
         pipelineStep = content.pipelineStep,
-        artifactsJson = artifactsJson
+        artifactsJson = null, // Moved to message_file table
+        generatedMediaUrisJson = mediaUrisJson,
+        generatedMediaAssetIdsJson = mediaAssetIdsJson,
+        generatedMediaTypesJson = mediaTypesJson,
+        generatedMediaPromptsJson = mediaPromptsJson,
+        pendingSync = 1
     )
 }
 
@@ -95,10 +160,13 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     id = id,
     messageId = messageId,
     name = name,
-    content = content
+    content = content,
+    mimeType = MimeType.PLAIN_TEXT,
+    syncStatus = "PENDING_UPLOAD",
+    pendingSync = 0 // Will be set to 1 by the worker after binary upload
 )
 
-fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
+fun WebSearchSourceEntity.toDomain(): WebSearchSource = WebSearchSource(
     id = id,
     messageId = messageId,
     title = title,
@@ -108,7 +176,7 @@ fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
     extracted = extracted,
 )
 
-fun TavilySource.toEntity(): TavilySourceEntity = TavilySourceEntity(
+fun WebSearchSource.toEntity(): WebSearchSourceEntity = WebSearchSourceEntity(
     id = id,
     messageId = messageId,
     title = title,
@@ -116,4 +184,5 @@ fun TavilySource.toEntity(): TavilySourceEntity = TavilySourceEntity(
     content = content,
     score = score,
     extracted = extracted,
+    pendingSync = 1
 )

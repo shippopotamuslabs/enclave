@@ -77,7 +77,7 @@ class StudioScreenScrollThresholdTest {
     fun galleryRows_whenLastMediaRowHasEmptySlot_addsPlaceholderToSameRow() {
         val group = StudioGalleryGroup(
             prompt = "prompt",
-            items = listOf(studioMedia("asset-1")),
+            mediaItems = listOf(studioMedia("asset-1")),
         )
 
         val rows = buildStudioGalleryRows(
@@ -94,7 +94,7 @@ class StudioScreenScrollThresholdTest {
     fun galleryRows_whenLastMediaRowHasOneSlot_addsOverflowPlaceholderToNewRow() {
         val group = StudioGalleryGroup(
             prompt = "prompt",
-            items = listOf(studioMedia("asset-1")),
+            mediaItems = listOf(studioMedia("asset-1")),
         )
 
         val rows = buildStudioGalleryRows(
@@ -113,7 +113,7 @@ class StudioScreenScrollThresholdTest {
     fun galleryRows_whenLastMediaRowIsFull_addsPlaceholderToNewRow() {
         val group = StudioGalleryGroup(
             prompt = "prompt",
-            items = listOf(studioMedia("asset-1"), studioMedia("asset-2")),
+            mediaItems = listOf(studioMedia("asset-1"), studioMedia("asset-2")),
         )
 
         val rows = buildStudioGalleryRows(
@@ -134,11 +134,11 @@ class StudioScreenScrollThresholdTest {
             groupedGallery = listOf(
                 StudioGalleryGroup(
                     prompt = "first",
-                    items = listOf(studioMedia("asset-1"), studioMedia("asset-2"), studioMedia("asset-3")),
+                    mediaItems = listOf(studioMedia("asset-1"), studioMedia("asset-2"), studioMedia("asset-3")),
                 ),
                 StudioGalleryGroup(
                     prompt = "second",
-                    items = listOf(studioMedia("asset-4")),
+                    mediaItems = listOf(studioMedia("asset-4")),
                 ),
             ),
             isGenerating = false,
@@ -169,7 +169,7 @@ class StudioScreenScrollThresholdTest {
             groupedGallery = listOf(
                 StudioGalleryGroup(
                     prompt = "first",
-                    items = listOf(studioMedia("asset-1")),
+                    mediaItems = listOf(studioMedia("asset-1")),
                 ),
             ),
             isGenerating = true,
@@ -200,7 +200,7 @@ class StudioScreenScrollThresholdTest {
             groupedGallery = listOf(
                 StudioGalleryGroup(
                     prompt = "first",
-                    items = listOf(studioMedia("asset-1")),
+                    mediaItems = listOf(studioMedia("asset-1")),
                 ),
             ),
             isGenerating = true,
@@ -211,11 +211,11 @@ class StudioScreenScrollThresholdTest {
             groupedGallery = listOf(
                 StudioGalleryGroup(
                     prompt = "first",
-                    items = listOf(studioMedia("asset-1")),
+                    mediaItems = listOf(studioMedia("asset-1")),
                 ),
                 StudioGalleryGroup(
                     prompt = "second",
-                    items = listOf(studioMedia("asset-2")),
+                    mediaItems = listOf(studioMedia("asset-2")),
                 ),
             ),
             isGenerating = false,
@@ -234,7 +234,7 @@ class StudioScreenScrollThresholdTest {
             headers = headers,
             firstVisibleItemIndex = 0,
             visibleItems = listOf(
-                StudioVisibleListItemInfo(key = "header-1", offset = 24),
+                StudioVisibleListItemInfo(key = "header-1", offset = 120),
             ),
             stickyTopPx = 96,
             headerHeightPx = 48,

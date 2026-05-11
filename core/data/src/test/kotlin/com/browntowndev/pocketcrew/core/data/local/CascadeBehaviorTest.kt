@@ -53,7 +53,8 @@ class CascadeBehaviorTest {
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "c1"))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-2"), localModelId = modelId, displayName = "c2"))
         
-        database.localModelsDao().deleteById(modelId)
+        database.localModelsDao().softDeleteById(modelId)
+        database.localModelConfigurationsDao().deleteAllForAsset(modelId)
         
         val configs = database.localModelConfigurationsDao().getAllForAsset(modelId)
         assertTrue(configs.isEmpty())
@@ -69,14 +70,15 @@ class CascadeBehaviorTest {
         database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-1"), apiCredentialsId = credId, displayName = "c1"))
         database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-2"), apiCredentialsId = credId, displayName = "c2"))
         
-        database.apiCredentialsDao().deleteById(credId)
+        database.apiCredentialsDao().softDeleteById(credId)
+        database.apiModelConfigurationsDao().deleteAllForCredentials(credId)
         
         val configs = database.apiModelConfigurationsDao().getAllForCredentials(credId)
         assertTrue(configs.isEmpty())
     }
 
-    @Test(expected = SQLiteConstraintException::class)
-    fun `deleting a local config that is currently a default is blocked`() = runTest {
+    @Test
+    fun `soft-deleting a local model that is a default is allowed`() = runTest {
         val modelId = nextModelId()
         val model = LocalModelEntity(
             id = modelId,
@@ -87,11 +89,13 @@ class CascadeBehaviorTest {
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "c1"))
         database.defaultModelsDao().upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = LocalModelConfigurationId("test-config-1"), apiConfigId = null))
         
-        database.localModelsDao().deleteById(modelId)
+        database.localModelsDao().softDeleteById(modelId)
+        val retrieved = database.localModelsDao().getById(modelId)
+        org.junit.Assert.assertNull(retrieved)
     }
 
-    @Test(expected = SQLiteConstraintException::class)
-    fun `deleting an API config that is currently a default is blocked`() = runTest {
+    @Test
+    fun `soft-deleting an API config that is currently a default is allowed`() = runTest {
         val credId = nextCredId()
         database.apiCredentialsDao().upsert(ApiCredentialsEntity(
             id = credId,
@@ -100,6 +104,8 @@ class CascadeBehaviorTest {
         database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-1"), apiCredentialsId = credId, displayName = "c1"))
         database.defaultModelsDao().upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = null, apiConfigId = ApiModelConfigurationId("test-api-config-1")))
         
-        database.apiCredentialsDao().deleteById(credId)
+        database.apiCredentialsDao().softDeleteById(credId)
+        val retrieved = database.apiCredentialsDao().getById(credId)
+        org.junit.Assert.assertNull(retrieved)
     }
 }

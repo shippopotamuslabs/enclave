@@ -92,7 +92,7 @@ class LiteRtInferenceServiceImplTest {
     }
 
     @Test
-    fun `sendPrompt should emit TavilyResults when specific ToolExecutionEvent Finished is received`() = runTest {
+    fun `sendPrompt should emit WebSearchResults when specific ToolExecutionEvent Finished is received`() = runTest {
         val toolEventEmitted = kotlinx.coroutines.CompletableDeferred<Unit>()
         
         // Given
@@ -104,11 +104,11 @@ class LiteRtInferenceServiceImplTest {
         }
         every { mockConversation.sendMessageAsync(any(), any()) } returns responses
         
-        io.mockk.mockkObject(com.browntowndev.pocketcrew.domain.util.TavilyResultParser)
+        io.mockk.mockkObject(com.browntowndev.pocketcrew.domain.util.WebSearchResultParser)
         every { 
-            com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(any(), any()) 
+            com.browntowndev.pocketcrew.domain.util.WebSearchResultParser.parse(any(), any()) 
         } returns listOf(
-            com.browntowndev.pocketcrew.domain.model.chat.TavilySource(
+            com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource(
                 messageId = com.browntowndev.pocketcrew.domain.model.chat.MessageId("msg-2"),
                 title = "Test",
                 url = "https://test.com",
@@ -145,9 +145,9 @@ class LiteRtInferenceServiceImplTest {
         
         // Then
         val events = deferredEvents.await()
-        val tavilyResultsEvent = events.filterIsInstance<InferenceEvent.TavilyResults>().firstOrNull()
+        val tavilyResultsEvent = events.filterIsInstance<InferenceEvent.WebSearchResults>().firstOrNull()
         
-        io.mockk.unmockkObject(com.browntowndev.pocketcrew.domain.util.TavilyResultParser)
+        io.mockk.unmockkObject(com.browntowndev.pocketcrew.domain.util.WebSearchResultParser)
         
         assertNotNull(tavilyResultsEvent)
         assertEquals(1, tavilyResultsEvent!!.sources.size)

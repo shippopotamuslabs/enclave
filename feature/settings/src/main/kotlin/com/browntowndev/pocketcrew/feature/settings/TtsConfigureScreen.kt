@@ -65,6 +65,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.TtsVoices
 private const val DEFAULT_GOOGLE_TTS_MODEL_ID = "gemini-3.1-flash-tts-preview"
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun TtsConfigureScreen(
     uiState: SettingsUiState,

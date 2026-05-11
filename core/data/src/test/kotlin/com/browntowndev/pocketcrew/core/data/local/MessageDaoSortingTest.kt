@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -50,7 +50,7 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-1")
         
         // Insert parent chat to satisfy FK constraint
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
@@ -88,16 +88,16 @@ class MessageDaoSortingTest {
             createdAt = 2000L
         )
 
-        dao.insert(msgInFlight)
-        dao.insert(msgOld)
-        dao.insert(msgNew)
+        dao.upsert(msgInFlight)
+        dao.upsert(msgOld)
+        dao.upsert(msgNew)
 
         val messages = dao.getMessagesByChatIdFlow(chatId).first()
 
         assertEquals(3, messages.size)
-        assertEquals("1", messages[0].id.value) // 1000L
-        assertEquals("2", messages[1].id.value) // 2000L
-        assertEquals("3", messages[2].id.value) // NULL
+        assertEquals("1", messages[0].message.id.value) // 1000L
+        assertEquals("2", messages[1].message.id.value) // 2000L
+        assertEquals("3", messages[2].message.id.value) // NULL
     }
 
     @Test
@@ -105,7 +105,7 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-1")
         
         // Insert parent chat
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
@@ -113,7 +113,7 @@ class MessageDaoSortingTest {
             pinned = false
         ))
         
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = MessageId("3"),
             chatId = chatId,
             role = Role.ASSISTANT,
@@ -122,7 +122,7 @@ class MessageDaoSortingTest {
             createdAt = null
         ))
         
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = MessageId("1"),
             chatId = chatId,
             role = Role.USER,
@@ -134,8 +134,8 @@ class MessageDaoSortingTest {
         val messages = dao.getMessagesByChatId(chatId)
 
         assertEquals(2, messages.size)
-        assertEquals("1", messages[0].id.value) // 1000L
-        assertEquals("3", messages[1].id.value) // NULL
+        assertEquals("1", messages[0].message.id.value) // 1000L
+        assertEquals("3", messages[1].message.id.value) // NULL
     }
 
     @Test
@@ -143,14 +143,14 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-atomic")
         val assistantMessageId = MessageId("assistant")
 
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
             lastModified = Date(),
             pinned = false
         ))
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = assistantMessageId,
             chatId = chatId,
             role = Role.ASSISTANT,
@@ -159,7 +159,7 @@ class MessageDaoSortingTest {
             createdAt = null,
         ))
 
-        val emissions = mutableListOf<List<MessageEntity>>()
+        val emissions = mutableListOf<List<MessageWithFiles>>()
         val collectJob = launch {
             dao.getMessagesByChatIdFlow(chatId)
                 .take(2)
@@ -180,13 +180,13 @@ class MessageDaoSortingTest {
         )
         collectJob.join()
 
-        val finalMessage = emissions.last().single { it.id == assistantMessageId }
+        val finalMessage = emissions.last().single { it.message.id == assistantMessageId }.message
         assertEquals("final answer", finalMessage.content)
         assertEquals(MessageState.COMPLETE, finalMessage.messageState)
         assertTrue(finalMessage.createdAt != null && finalMessage.createdAt > 0L)
         assertTrue(
             emissions.none { emission ->
-                val message = emission.single { it.id == assistantMessageId }
+                val message = emission.single { it.message.id == assistantMessageId }.message
                 val finalContentWithoutCompleteState =
                     message.content == "final answer" && message.messageState != MessageState.COMPLETE
                 val completeStateWithoutFinalContent =

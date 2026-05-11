@@ -2,11 +2,13 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -23,13 +25,18 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Date
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import org.junit.After
 
 class ChatRepositoryImplTest {
 
     private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
-    private lateinit var tavilySourceDao: TavilySourceDao
+    private lateinit var tavilySourceDao: WebSearchSourceDao
+    private lateinit var documentDao: DocumentDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: ChatRepositoryImpl
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     private val testDate = Date(1700_000_000_000L)
 
@@ -37,8 +44,27 @@ class ChatRepositoryImplTest {
     fun setup() {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
-        tavilySourceDao = mockk<TavilySourceDao>(relaxed = true)
-        repository = ChatRepositoryImpl(chatDao, messageDao, tavilySourceDao)
+        tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
+        documentDao = mockk(relaxed = true)
+        transactionProvider = mockk(relaxed = true)
+        
+        // Mock transaction provider to run the block immediately
+        coEvery { transactionProvider.runInTransaction<Any>(any()) } answers {
+            runTest { (it.invocation.args[0] as suspend () -> Any).invoke() }
+        }
+
+        repository = ChatRepositoryImpl(
+            syncTrigger, 
+            chatDao, 
+            messageDao, 
+            tavilySourceDao,
+            documentDao,
+            transactionProvider
+        )
+    }
+
+    @After
+    fun tearDown() {
     }
 
     @Test
@@ -74,11 +100,11 @@ class ChatRepositoryImplTest {
             pinned = false
         )
         coEvery { chatDao.getChatById(ChatId("5")) } returns entity
-        coEvery { chatDao.updatePinStatus(ChatId("5")) } returns 1
+        coEvery { chatDao.updatePinStatus(ChatId("5"), any()) } returns 1
 
         repository.togglePinStatus(ChatId("5"))
 
-        coVerify { chatDao.updatePinStatus(ChatId("5")) }
+        coVerify { chatDao.updatePinStatus(ChatId("5"), any()) }
     }
 
     @Test
@@ -91,11 +117,11 @@ class ChatRepositoryImplTest {
             pinned = true
         )
         coEvery { chatDao.getChatById(ChatId("10")) } returns entity
-        coEvery { chatDao.updatePinStatus(ChatId("10")) } returns 1
+        coEvery { chatDao.updatePinStatus(ChatId("10"), any()) } returns 1
 
         repository.togglePinStatus(ChatId("10"))
 
-        coVerify { chatDao.updatePinStatus(ChatId("10")) }
+        coVerify { chatDao.updatePinStatus(ChatId("10"), any()) }
     }
 
     @Test
@@ -111,7 +137,7 @@ class ChatRepositoryImplTest {
             messageState = MessageState.COMPLETE,
             modelType = ModelType.FAST,
         )
-        val sourceEntity = TavilySourceEntity(
+        val sourceEntity = WebSearchSourceEntity(
             id = "src-1",
             messageId = messageId,
             title = "Test Source",
@@ -121,15 +147,18 @@ class ChatRepositoryImplTest {
             extracted = true,
         )
 
-        every { messageDao.getMessagesByChatIdFlow(chatId) } returns flowOf(listOf(messageEntity))
+        every { messageDao.getMessagesByChatIdFlow(chatId) } returns flowOf(
+            listOf(MessageWithFiles(message = messageEntity, files = emptyList()))
+        )
         every { tavilySourceDao.getByChatIdFlow(chatId) } returns flowOf(listOf(sourceEntity))
+        every { documentDao.getDocumentsByChatIdFlow(chatId) } returns kotlinx.coroutines.flow.flowOf(emptyList())
 
         val result = repository.getMessagesForChat(chatId).first()
 
         assertEquals(1, result.size)
-        assertEquals(1, result[0].tavilySources.size)
-        assertEquals("https://example.com", result[0].tavilySources[0].url)
-        assertTrue(result[0].tavilySources[0].extracted,
+        assertEquals(1, result[0].webSearchSources.size)
+        assertEquals("https://example.com", result[0].webSearchSources[0].url)
+        assertTrue(result[0].webSearchSources[0].extracted,
             "Extracted source should have extracted=true from tavily_source table")
     }
 }

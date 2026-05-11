@@ -14,6 +14,7 @@ data class StreamState(
     var outputTextDeltaCount: Int = 0,
     var reasoningTextDeltaCount: Int = 0,
     var reasoningSummaryDeltaCount: Int = 0,
+    var refusalTextDeltaCount: Int = 0,
     val toolCallRequests: MutableList<ToolCallRequest> = mutableListOf(),
     var responseId: String? = null,
     val providerToolCallIds: MutableList<String> = mutableListOf(),
@@ -21,6 +22,7 @@ data class StreamState(
     val outputTextByPart: MutableMap<String, StringBuilder> = mutableMapOf(),
     val reasoningTextByPart: MutableMap<String, StringBuilder> = mutableMapOf(),
     val reasoningSummaryByPart: MutableMap<String, StringBuilder> = mutableMapOf(),
+    val refusalTextByPart: MutableMap<String, StringBuilder> = mutableMapOf(),
     val streamedAssistantMessage: StringBuilder = StringBuilder(),
     val capturedFunctionCallByKey: MutableMap<String, CapturedFunctionCall> = mutableMapOf(),
 )

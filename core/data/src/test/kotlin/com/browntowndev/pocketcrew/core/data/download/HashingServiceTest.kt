@@ -30,8 +30,8 @@ class HashingServiceTest {
         }
 
         // When: Calculate MD5 twice
-        val hash1 = hashingService.calculateMd5(testFile)
-        val hash2 = hashingService.calculateMd5(testFile)
+        val hash1 = hashingService.calculateMd5(testFile.absolutePath)
+        val hash2 = hashingService.calculateMd5(testFile.absolutePath)
 
         // Then: Same content produces same hash
         assertEquals(hash1, hash2)
@@ -46,7 +46,7 @@ class HashingServiceTest {
         testFile.createNewFile()
 
         // When: Calculate MD5
-        val hash = hashingService.calculateMd5(testFile)
+        val hash = hashingService.calculateMd5(testFile.absolutePath)
 
         // Then: Verify hash is computed (Base64 encoded is 24 chars)
         assertEquals(24, hash.length)
@@ -62,7 +62,7 @@ class HashingServiceTest {
         }
 
         // When: Calculate MD5
-        val hash = hashingService.calculateMd5(testFile)
+        val hash = hashingService.calculateMd5(testFile.absolutePath)
 
         // Then: Verify hash is computed correctly
         assertTrue(hash.isNotEmpty())
@@ -79,8 +79,8 @@ class HashingServiceTest {
         FileWriter(file2).use { it.write("content B") }
 
         // When: Calculate hashes
-        val hash1 = hashingService.calculateMd5(file1)
-        val hash2 = hashingService.calculateMd5(file2)
+        val hash1 = hashingService.calculateMd5(file1.absolutePath)
+        val hash2 = hashingService.calculateMd5(file2.absolutePath)
 
         // Then: Verify different content produces different hashes
         assertNotEquals(hash1, hash2)
@@ -97,8 +97,8 @@ class HashingServiceTest {
         FileWriter(file2).use { it.write(content) }
 
         // When: Calculate hashes
-        val hash1 = hashingService.calculateMd5(file1)
-        val hash2 = hashingService.calculateMd5(file2)
+        val hash1 = hashingService.calculateMd5(file1.absolutePath)
+        val hash2 = hashingService.calculateMd5(file2.absolutePath)
 
         // Then: Verify same content produces same hash
         assertEquals(hash1, hash2)
@@ -112,10 +112,41 @@ class HashingServiceTest {
         testFile.writeBytes(binaryContent)
 
         // When: Calculate hash
-        val hash = hashingService.calculateMd5(testFile)
+        val hash = hashingService.calculateMd5(testFile.absolutePath)
 
         // Then: Verify hash is computed correctly
         assertTrue(hash.isNotEmpty())
         assertEquals(24, hash.length) // Base64 encoded
+    }
+
+    @Test
+    fun calculateSha256_returnsConsistentHash_forSameContent() {
+        // Given: Create temp file with known content
+        val testFile = File(tempDir, "test_sha256.txt")
+        FileWriter(testFile).use { writer ->
+            writer.write("hello sha256")
+        }
+
+        // When: Calculate SHA-256 twice
+        val hash1 = hashingService.calculateSha256(testFile.absolutePath)
+        val hash2 = hashingService.calculateSha256(testFile.absolutePath)
+
+        // Then: Same content produces same hash
+        assertEquals(hash1, hash2)
+        // SHA-256 Hex encoded is 64 characters
+        assertEquals(64, hash1.length)
+    }
+
+    @Test
+    fun calculateSha256_returnsHash_forEmptyFile() {
+        // Given: Create empty temp file
+        val testFile = File(tempDir, "empty_sha256.txt")
+        testFile.createNewFile()
+
+        // When: Calculate SHA-256
+        val hash = hashingService.calculateSha256(testFile.absolutePath)
+
+        // Then: Verify hash is computed (Hex encoded is 64 chars)
+        assertEquals(64, hash.length)
     }
 }

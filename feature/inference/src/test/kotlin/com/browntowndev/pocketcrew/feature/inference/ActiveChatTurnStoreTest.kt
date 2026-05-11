@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.feature.inference
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
@@ -84,7 +84,7 @@ class ActiveChatTurnStoreTest {
     @Test
     fun `equal length snapshot with additional source metadata is accepted`() = runTest {
         val store = ActiveChatTurnStore()
-        val source = TavilySource(
+        val source = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Source",
             url = "https://example.com",
@@ -96,14 +96,14 @@ class ActiveChatTurnStoreTest {
 
         assertEquals(
             listOf(source),
-            store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.tavilySources,
+            store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.webSearchSources,
         )
     }
 
     @Test
-    fun `markSourcesExtracted updates active snapshot explicitly`() = runTest {
+    fun `markWebSearchSourcesExtracted updates active snapshot explicitly`() = runTest {
         val store = ActiveChatTurnStore()
-        val source = TavilySource(
+        val source = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Source",
             url = "https://example.com",
@@ -111,12 +111,12 @@ class ActiveChatTurnStoreTest {
         )
 
         store.publish(key, accumulated("answer", sources = listOf(source)))
-        store.markSourcesExtracted(key, listOf("https://example.com"))
+        store.markWebSearchSourcesExtracted(key, listOf("https://example.com"))
 
         val updatedSource = store.snapshotValue(key)
             ?.messages
             ?.get(MessageId("assistant"))
-            ?.tavilySources
+            ?.webSearchSources
             ?.single()
         assertEquals("answer", store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.content)
         assertEquals(true, updatedSource?.extracted)
@@ -195,8 +195,9 @@ class ActiveChatTurnStoreTest {
 
     private fun artifact(title: String): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest {
         return com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+            artifactId = "artifact-$title",
             title = title,
-            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.PDF,
             content = "Stub content for $title"
         )
     }
@@ -205,7 +206,7 @@ class ActiveChatTurnStoreTest {
     private fun accumulated(
         content: String,
         state: MessageState = MessageState.GENERATING,
-        sources: List<TavilySource> = emptyList(),
+        sources: List<WebSearchSource> = emptyList(),
     ): AccumulatedMessages {
         return AccumulatedMessages(
             messages = mapOf(
@@ -215,7 +216,7 @@ class ActiveChatTurnStoreTest {
                     content = content,
                     thinkingRaw = "",
                     messageState = state,
-                    tavilySources = sources,
+                    webSearchSources = sources,
                 )
             )
         )

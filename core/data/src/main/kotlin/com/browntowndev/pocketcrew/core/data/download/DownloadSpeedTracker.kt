@@ -15,6 +15,10 @@ class DownloadSpeedTracker @Inject constructor(
     private val clock: Clock
 ) : DownloadSpeedTrackerPort {
 
+    private companion object {
+        const val SPEED_WINDOW_MS = 10_000L
+    }
+
     // Per-file speed samples - each file gets its own sample list
     private val fileSpeedSamples: ConcurrentHashMap<String, MutableList<SpeedSample>> = ConcurrentHashMap()
 
@@ -25,6 +29,7 @@ class DownloadSpeedTracker @Inject constructor(
         return fileSpeedSamples.getOrPut(filename) { CopyOnWriteArrayList() }
     }
 
+    @Suppress("ReturnCount")
     override fun calculateSpeedAndEta(
         filename: String,
         bytesDownloaded: Long,
@@ -36,7 +41,7 @@ class DownloadSpeedTracker @Inject constructor(
         // Add current sample for this specific file
         samples.add(SpeedSample(currentTime, bytesDownloaded))
 
-        val tenSecondsAgo = currentTime - 10_000L
+        val tenSecondsAgo = currentTime - SPEED_WINDOW_MS
         val recentSamples = samples.filter { it.timestamp >= tenSecondsAgo }
 
         if (recentSamples.size < 2) {
@@ -75,6 +80,7 @@ class DownloadSpeedTracker @Inject constructor(
         return Pair(speedMBps, etaSeconds)
     }
 
+    @Suppress("ReturnCount")
     override fun calculateAggregateSpeedAndEta(
         totalBytesDownloaded: Long,
         totalSize: Long
@@ -82,7 +88,7 @@ class DownloadSpeedTracker @Inject constructor(
         val currentTime = clock.currentTimeMillis()
         aggregateSpeedSamples.add(SpeedSample(currentTime, totalBytesDownloaded))
 
-        val tenSecondsAgo = currentTime - 10_000L
+        val tenSecondsAgo = currentTime - SPEED_WINDOW_MS
         val recentSamples = aggregateSpeedSamples.filter { it.timestamp >= tenSecondsAgo }
 
         if (recentSamples.size < 2) {

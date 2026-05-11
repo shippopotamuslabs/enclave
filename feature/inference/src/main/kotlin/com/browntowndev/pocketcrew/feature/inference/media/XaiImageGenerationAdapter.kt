@@ -85,6 +85,7 @@ class XaiImageGenerationAdapter @Inject constructor(
         }
     }
 
+    @Suppress("ThrowsCount")
     private fun performXaiImageEdit(
         prompt: String,
         apiKey: String,

@@ -5,9 +5,11 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
  * Transaction management is delegated to the use case layer to keep
  * this interface agnostic of transaction lifecycle.
  */
+@Suppress("TooManyFunctions")
 interface ChatRepository {
     /**
      * Returns all chats as a Flow.
@@ -138,7 +141,12 @@ interface ChatRepository {
      * @param pipelineStep The pipeline step this message belongs to (for Crew mode)
      * @return The ID of the newly created message
      */
-    suspend fun createAssistantMessage(chatId: ChatId, userMessageId: MessageId, modelType: ModelType, pipelineStep: PipelineStep? = null): MessageId
+    suspend fun createAssistantMessage(
+        chatId: ChatId,
+        userMessageId: MessageId,
+        modelType: ModelType,
+        pipelineStep: PipelineStep? = null
+    ): MessageId
 
     /**
      * Persists all message data atomically in a single transaction.
@@ -156,6 +164,7 @@ interface ChatRepository {
      * @param messageState The final message state
      * @param pipelineStep The pipeline step (for CREW mode messages)
      */
+    @Suppress("LongParameterList")
     suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -166,8 +175,21 @@ interface ChatRepository {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
-        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList()
+        webSearchSources: List<WebSearchSource> = emptyList(),
+        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
+        generatedMediaUris: List<String> = emptyList(),
+        generatedMediaAssetIds: List<String> = emptyList(),
+        generatedMediaTypes: List<String> = emptyList(),
+        generatedMediaPrompts: List<String> = emptyList()
+    )
+
+    /**
+     * Saves the user's preferred export format for a generated artifact.
+     * The artifact is addressed by its stable `DocumentEntity.id` (`artifactId`).
+     */
+    suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
     )
 
     /**
@@ -215,12 +237,17 @@ interface ChatRepository {
     suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat>
 
     /**
-     * Marks Tavily sources as extracted for the given URLs.
+     * Marks web search sources as extracted for the given URLs.
      * Called after sources are persisted to ensure the extracted flag
      * is set correctly even when extraction happens before persistence.
      *
-     * @param urls The URLs that were extracted via the Tavily extract tool.
+     * @param urls The URLs that were extracted via the web search extract tool.
      */
-    suspend fun markSourcesExtracted(urls: List<String>)
+    suspend fun markWebSearchSourcesExtracted(urls: List<String>)
+
+    /**
+     * Marks a single web search source as extracted.
+     */
+    suspend fun markWebSearchSourceExtracted(url: String)
 }
 

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data
 
 import android.app.NotificationManager
 import android.content.Context
+import androidx.credentials.CredentialManager
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
@@ -10,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.core.data.auth.FirebaseGoogleAuthManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.core.data.download.DownloadSpeedTracker
@@ -31,18 +33,20 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
+import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
+import com.browntowndev.pocketcrew.core.data.media.AndroidSaveBinaryToDownloadsAdapter
 import com.browntowndev.pocketcrew.core.data.media.AndroidShareMediaAdapter
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
@@ -65,6 +69,7 @@ import com.browntowndev.pocketcrew.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
+import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
@@ -80,6 +85,7 @@ import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
 import com.browntowndev.pocketcrew.domain.port.media.AudioPlayerPort
 import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
+import com.browntowndev.pocketcrew.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -100,16 +106,24 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
+import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
 import com.browntowndev.pocketcrew.domain.util.SystemClock
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Singleton
@@ -119,20 +133,8 @@ private val Context.pipelineDataStore: DataStore<Preferences> by preferencesData
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 object DataModule {
-
-    private val MIGRATION_1_2 = object : Migration(1, 2) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN max_tokens_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN temperature_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_p_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_k_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN min_p_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN frequency_penalty_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN presence_penalty_disabled INTEGER NOT NULL DEFAULT 0")
-        }
-    }
-
     @Provides
     @Singleton
     fun providePocketCrewDatabase(@ApplicationContext context: Context): PocketCrewDatabase {
@@ -141,20 +143,21 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
         )
-        .addMigrations(MIGRATION_1_2)
-        .fallbackToDestructiveMigration()
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
                 SQLiteVecInstaller.createEmbeddingTable(db)
                 SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
             }
 
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 SQLiteVecInstaller.createEmbeddingTable(db)
                 SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
             }
         })
         .build()
@@ -167,10 +170,13 @@ object DataModule {
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
 
     @Provides
+    fun provideMessageFileDao(database: PocketCrewDatabase): MessageFileDao = database.messageFileDao()
+
+    @Provides
     fun provideChatSummaryDao(database: PocketCrewDatabase): ChatSummaryDao = database.chatSummaryDao()
 
     @Provides
-    fun provideTavilySourceDao(database: PocketCrewDatabase): TavilySourceDao = database.tavilySourceDao()
+    fun provideWebSearchSourceDao(database: PocketCrewDatabase): WebSearchSourceDao = database.webSearchSourceDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =
@@ -214,6 +220,10 @@ object DataModule {
     fun provideStudioAlbumDao(database: PocketCrewDatabase): StudioAlbumDao = database.studioAlbumDao()
 
     @Provides
+    fun provideDocumentDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DocumentDao =
+        database.documentDao()
+
+    @Provides
     @Singleton
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
@@ -225,6 +235,39 @@ object DataModule {
     @Provides
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager = WorkManager.getInstance(context)
+
+    @Provides
+    @Singleton
+    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions = 
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage = 
+        com.google.firebase.storage.FirebaseStorage.getInstance()
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @Singleton
+    fun provideUserIdProvider(firebaseAuth: FirebaseAuth): () -> String? = {
+        firebaseAuth.currentUser?.uid
+    }
+
+    @Provides
+    @Singleton
+    fun provideCredentialManager(@ApplicationContext context: Context): CredentialManager = CredentialManager.create(context)
 
     @Provides
     @Singleton
@@ -253,7 +296,10 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideHttpFileDownloader(okHttpClient: OkHttpClient, logger: LoggingPort): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
+    fun provideHttpFileDownloader(
+        okHttpClient: OkHttpClient,
+        logger: LoggingPort
+    ): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 
     @Provides
     @Singleton
@@ -266,7 +312,28 @@ object DataModule {
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 abstract class DataRepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthManager(impl: FirebaseGoogleAuthManager): AuthManager
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudSyncPort(impl: FirestoreDataSource): CloudSyncPort
+
+    @Binds
+    @Singleton
+    abstract fun bindBiometricPort(
+        impl: com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager
+    ): com.browntowndev.pocketcrew.domain.port.security.BiometricPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCleanupRepository(
+        impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl
+    ): com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 
     @Binds
     @Singleton
@@ -294,7 +361,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindFileAttachmentPort(impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
+    abstract fun bindFileAttachmentPort(
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort
+    ): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
 
     @Binds
     @Singleton
@@ -378,7 +447,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindMediaSaver(impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
+    abstract fun bindMediaSaver(
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver
+    ): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
 
     @Binds
     @Singleton
@@ -386,7 +457,25 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindSaveBinaryToDownloadsPort(
+        impl: AndroidSaveBinaryToDownloadsAdapter,
+    ): SaveBinaryToDownloadsPort
+
+    @Binds
+    @Singleton
+    abstract fun bindShareRepository(
+        impl: com.browntowndev.pocketcrew.core.data.repository.FirestoreShareRepository
+    ): com.browntowndev.pocketcrew.domain.port.repository.ShareRepositoryPort
+
+    @Binds
+    @Singleton
     abstract fun bindApiKeyProvider(impl: ApiKeyProviderImpl): ApiKeyProviderPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCryptoManager(
+        impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl
+    ): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 
     @Binds
     @Singleton
@@ -395,4 +484,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindToolExecutionEventPort(impl: ToolExecutionEventBus): ToolExecutionEventPort
+
+    @Binds
+    @Singleton
+    abstract fun bindEmbeddingProgressPort(
+        impl: com.browntowndev.pocketcrew.core.data.sync.EmbeddingProgressManager
+    ): com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
 }

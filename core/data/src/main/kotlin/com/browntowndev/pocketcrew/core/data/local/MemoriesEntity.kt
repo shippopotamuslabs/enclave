@@ -23,7 +23,12 @@ data class MemoriesEntity(
     val createdAt: Long = System.currentTimeMillis(),
     
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "pending_sync", defaultValue = "0")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 ) {
     fun toDomain(): Memory = Memory(
         id = id,

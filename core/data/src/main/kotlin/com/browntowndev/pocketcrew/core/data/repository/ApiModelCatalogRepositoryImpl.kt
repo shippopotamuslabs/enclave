@@ -13,6 +13,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Call
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -66,6 +68,7 @@ private data class XaiModel(
     val prompt_token_price: Double? = null,
     val completion_text_token_price: Double? = null,
     val completion_token_price: Double? = null,
+    val image_price: Double? = null,
     val max_prompt_length: Int? = null,
     val context_length: Int? = null,
     val input_modalities: List<String> = emptyList(),
@@ -81,6 +84,11 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
 ) : ApiModelCatalogPort {
     private companion object {
         private const val TAG = "ApiModelCatalog"
+        private const val PER_TOKEN_TO_PER_MILLION = 1_000_000.0
+        private const val XAI_PER_TOKEN_TO_PER_MILLION = 10_000.0
+        private const val XAI_LANGUAGE_MODELS_PATH = "language-models"
+        private const val XAI_IMAGE_MODELS_PATH = "image-generation-models"
+        private const val XAI_VIDEO_MODELS_PATH = "video-generation-models"
         private val json = Json { ignoreUnknownKeys = true }
     }
 
@@ -107,7 +115,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
             ).models()
                 .list()
                 .autoPager()
-                .map { 
+                .mapNotNull {
                     DiscoveredApiModel(
                         id = it.id(),
                         name = it.displayName(),
@@ -115,7 +123,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                         isMultimodal = it.capabilities()
                             .map { capabilities -> capabilities.imageInput().supported() }
                             .orElse(null),
-                    )
+                    ).applyCapabilities(provider)
                 }
                 .distinctBy(DiscoveredApiModel::id)
                 .sortedBy(DiscoveredApiModel::id)
@@ -125,7 +133,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                 baseUrl = resolvedBaseUrl,
             )
                 .asSequence()
-                .map(::toGoogleDiscoveredModel)
+                .mapNotNull { toGoogleDiscoveredModel(it) }
                 .filter { it.id.isNotBlank() }
                 .distinctBy(DiscoveredApiModel::id)
                 .sortedBy(DiscoveredApiModel::id)
@@ -135,7 +143,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                 apiKey = apiKey,
                 baseUrl = checkNotNull(resolvedBaseUrl),
             )
-            
+
             ApiProvider.XAI -> fetchXaiModels(
                 apiKey = apiKey,
                 baseUrl = checkNotNull(resolvedBaseUrl)
@@ -147,11 +155,11 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
             ).models()
                 .list()
                 .data()
-                .map { 
+                .mapNotNull {
                     DiscoveredApiModel(
                         id = it.id(),
                         created = it.created()
-                    )
+                    ).applyCapabilities(provider)
                 }
                 .distinctBy(DiscoveredApiModel::id)
                 .sortedBy(DiscoveredApiModel::id)
@@ -170,17 +178,20 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                 apiKey = apiKey,
                 baseUrl = checkNotNull(resolvedBaseUrl),
                 modelId = modelId,
-            )
+            )?.applyCapabilities(provider)
 
             else -> null
         }
     }
 
-    private fun toGoogleDiscoveredModel(model: Model): DiscoveredApiModel =
+    private fun toGoogleDiscoveredModel(model: Model): DiscoveredApiModel? =
         DiscoveredApiModel(
             id = normalizeGoogleModelName(model),
             contextWindowTokens = model.inputTokenLimit().orElse(null),
             maxOutputTokens = model.outputTokenLimit().orElse(null),
+        ).applyCapabilities(
+            provider = ApiProvider.GOOGLE,
+            supportedGenerationMethods = model.supportedActions().orElse(emptyList())
         )
 
     private fun normalizeGoogleModelName(model: Model): String =
@@ -225,7 +236,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
 
     internal fun parseOpenRouterModels(responseBody: String): List<DiscoveredApiModel> {
         val response = json.decodeFromString<OpenRouterModelsResponse>(responseBody)
-        return response.data.map { model ->
+        return response.data.mapNotNull { model ->
             DiscoveredApiModel(
                 id = model.id,
                 name = model.name?.takeIf { it.isNotBlank() },
@@ -235,60 +246,97 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                 contextWindowTokens = model.context_length,
                 maxOutputTokens = model.top_provider?.max_completion_tokens,
                 isMultimodal = model.architecture?.input_modalities?.any { it.equals("image", ignoreCase = true) } ?: false,
+            ).applyCapabilities(
+                provider = ApiProvider.OPENROUTER,
+                supportedGenerationMethods = model.architecture?.input_modalities.orEmpty()
             )
         }
             .distinctBy(DiscoveredApiModel::id)
             .sortedBy(DiscoveredApiModel::id)
     }
 
-    private fun fetchXaiModels(
+    private suspend fun fetchXaiModels(
         apiKey: String,
         baseUrl: String,
-    ): List<DiscoveredApiModel> {
+    ): List<DiscoveredApiModel> = coroutineScope {
         val trimmedApiKey = apiKey.trim()
+        val languageModelsDeferred = async {
+            fetchXaiModelsFromEndpoint(trimmedApiKey, baseUrl, XAI_LANGUAGE_MODELS_PATH, isChat = true)
+        }
+        val imageModelsDeferred = async {
+            fetchXaiModelsFromEndpoint(trimmedApiKey, baseUrl, XAI_IMAGE_MODELS_PATH, isImageGen = true)
+        }
+        val videoModelsDeferred = async {
+            fetchXaiModelsFromEndpoint(trimmedApiKey, baseUrl, XAI_VIDEO_MODELS_PATH, isVideoGen = true)
+        }
+
+        val results = listOf(
+            languageModelsDeferred.await(),
+            imageModelsDeferred.await(),
+            videoModelsDeferred.await()
+        ).flatten()
+
+        if (results.isEmpty()) {
+            fetchXaiFallbackModels(trimmedApiKey, baseUrl)
+        } else {
+            results
+                .distinctBy(DiscoveredApiModel::id)
+                .sortedBy(DiscoveredApiModel::id)
+        }
+    }
+
+    private fun fetchXaiModelsFromEndpoint(
+        apiKey: String,
+        baseUrl: String,
+        endpointPath: String,
+        isChat: Boolean = false,
+        isImageGen: Boolean = false,
+        isVideoGen: Boolean = false
+    ): List<DiscoveredApiModel> {
         val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
         val url = httpUrl.newBuilder()
             .apply {
                 val segments = httpUrl.pathSegments
-                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
+                val xaiEndpoints = listOf("models", XAI_LANGUAGE_MODELS_PATH, XAI_IMAGE_MODELS_PATH, XAI_VIDEO_MODELS_PATH)
+                if (segments.isNotEmpty() && segments.last() in xaiEndpoints) {
                     removePathSegment(segments.size - 1)
                 }
             }
-            .addPathSegments("language-models")
+            .addPathSegments(endpointPath)
             .build()
-            
+
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Authorization", "Bearer $trimmedApiKey")
+            .header("Authorization", "Bearer $apiKey")
             .header("Accept", "application/json")
             .build()
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 val errorBody = response.body.string()
-                Log.e(TAG, "xAI model discovery (/v1/language-models) failed with HTTP ${response.code}: $errorBody")
-                // Fallback to /v1/models if /v1/language-models fails (e.g. they don't support it yet via this proxy)
-                return fetchXaiFallbackModels(trimmedApiKey, baseUrl)
+                Log.e(TAG, "xAI model discovery ($endpointPath) failed with HTTP ${response.code}: $errorBody")
+                return emptyList()
             }
             val body = response.body.string()
-            return parseXaiModels(body)
+            return parseXaiModels(body, isChat = isChat, isImageGen = isImageGen, isVideoGen = isVideoGen)
         }
     }
-    
+
     private fun fetchXaiFallbackModels(apiKey: String, baseUrl: String): List<DiscoveredApiModel> {
         val trimmedApiKey = apiKey.trim()
         val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
         val url = httpUrl.newBuilder()
             .apply {
                 val segments = httpUrl.pathSegments
-                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
+                val xaiEndpoints = listOf("models", XAI_LANGUAGE_MODELS_PATH, XAI_IMAGE_MODELS_PATH, XAI_VIDEO_MODELS_PATH)
+                if (segments.isNotEmpty() && segments.last() in xaiEndpoints) {
                     removePathSegment(segments.size - 1)
                 }
             }
             .addPathSegments("models")
             .build()
-            
+
         val request = Request.Builder()
             .url(url)
             .get()
@@ -312,43 +360,56 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
         modelId: String,
     ): DiscoveredApiModel? {
         val trimmedApiKey = apiKey.trim()
-        val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
-        val url = httpUrl.newBuilder()
-            .apply {
-                val segments = httpUrl.pathSegments
-                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
-                    removePathSegment(segments.size - 1)
+        val endpoints = listOf(XAI_LANGUAGE_MODELS_PATH, XAI_IMAGE_MODELS_PATH, XAI_VIDEO_MODELS_PATH)
+        
+        for (endpoint in endpoints) {
+            val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
+            val url = httpUrl.newBuilder()
+                .apply {
+                    val segments = httpUrl.pathSegments
+                    val xaiEndpoints = listOf("models", XAI_LANGUAGE_MODELS_PATH, XAI_IMAGE_MODELS_PATH, XAI_VIDEO_MODELS_PATH)
+                    if (segments.isNotEmpty() && segments.last() in xaiEndpoints) {
+                        removePathSegment(segments.size - 1)
+                    }
+                }
+                .addPathSegments(endpoint)
+                .addPathSegment(modelId)
+                .build()
+
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer $trimmedApiKey")
+                .header("Accept", "application/json")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    return parseXaiModelDetail(
+                        responseBody = response.body.string(),
+                        requestedModelId = modelId,
+                        isChat = endpoint == XAI_LANGUAGE_MODELS_PATH,
+                        isImageGen = endpoint == XAI_IMAGE_MODELS_PATH,
+                        isVideoGen = endpoint == XAI_VIDEO_MODELS_PATH,
+                    )
                 }
             }
-            .addPathSegments("language-models")
-            .addPathSegment(modelId)
-            .build()
-
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .header("Authorization", "Bearer $trimmedApiKey")
-            .header("Accept", "application/json")
-            .build()
-
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val errorBody = response.body.string()
-                Log.e(TAG, "xAI model detail fetch failed with HTTP ${response.code}: $errorBody")
-                return null
-            }
-            return parseXaiModelDetail(
-                responseBody = response.body.string(),
-                requestedModelId = modelId,
-            )
         }
+        
+        Log.e(TAG, "xAI model detail fetch failed for $modelId across all endpoints")
+        return null
     }
 
-    internal fun parseXaiModels(responseBody: String): List<DiscoveredApiModel> {
+    internal fun parseXaiModels(
+        responseBody: String,
+        isChat: Boolean = false,
+        isImageGen: Boolean = false,
+        isVideoGen: Boolean = false
+    ): List<DiscoveredApiModel> {
         val response = json.decodeFromString<XaiModelsResponse>(responseBody)
         val data = response.models ?: response.data ?: return emptyList()
 
-        return data.map { model ->
+        return data.mapNotNull { model ->
             val promptPrice = model.prompt_text_token_price ?: model.prompt_token_price
             val completionPrice = model.completion_text_token_price ?: model.completion_token_price
 
@@ -360,6 +421,12 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                 completionPrice = completionPrice?.asUsdPerMillionFromXai(),
                 contextWindowTokens = model.max_prompt_length,
                 isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
+            ).applyCapabilities(
+                provider = ApiProvider.XAI,
+                supportedGenerationMethods = model.input_modalities,
+                isChatOverride = isChat,
+                isImageGenOverride = isImageGen,
+                isVideoGenOverride = isVideoGen,
             )
         }
             .distinctBy(DiscoveredApiModel::id)
@@ -369,6 +436,9 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
     internal fun parseXaiModelDetail(
         responseBody: String,
         requestedModelId: String,
+        isChat: Boolean = false,
+        isImageGen: Boolean = false,
+        isVideoGen: Boolean = false,
     ): DiscoveredApiModel? {
         val model = json.decodeFromString<XaiModel>(responseBody)
         val canonicalId = model.id.takeIf { it.isNotBlank() } ?: return null
@@ -385,14 +455,88 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
             completionPrice = completionPrice?.asUsdPerMillionFromXai(),
             contextWindowTokens = model.max_prompt_length ?: model.context_length,
             isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
+        ).applyCapabilities(
+            provider = ApiProvider.XAI,
+            supportedGenerationMethods = model.input_modalities,
+            isChatOverride = isChat,
+            isImageGenOverride = isImageGen,
+            isVideoGenOverride = isVideoGen,
         )
     }
 
     private fun Double.asUsdPerMillionFromPerToken(): Double? =
         takeIf { isFinite() && this >= 0.0 }
-            ?.times(1_000_000.0)
+            ?.times(PER_TOKEN_TO_PER_MILLION)
 
     private fun Double.asUsdPerMillionFromXai(): Double? =
         takeIf { isFinite() && this >= 0.0 }
-            ?.div(10_000.0)
+            ?.div(XAI_PER_TOKEN_TO_PER_MILLION)
+
+    private fun DiscoveredApiModel.applyCapabilities(
+        provider: ApiProvider,
+        supportedGenerationMethods: List<String> = emptyList(),
+        isChatOverride: Boolean? = null,
+        isImageGenOverride: Boolean? = null,
+        isVideoGenOverride: Boolean? = null,
+    ): DiscoveredApiModel? {
+        // Tier 2: Centralized Blacklist (Exclude legacy/unsupported models)
+        val isBlacklisted = when (provider) {
+            ApiProvider.OPENAI -> {
+                id.contains("dall-e-2", ignoreCase = true) ||
+                        id.startsWith("whisper", ignoreCase = true) ||
+                        id.startsWith("tts-", ignoreCase = true) ||
+                        id.contains("canary", ignoreCase = true)
+            }
+            ApiProvider.GOOGLE -> {
+                id.contains("imagen-1", ignoreCase = true) ||
+                        id.contains("imagen-2", ignoreCase = true) ||
+                        id.contains("aqa", ignoreCase = true)
+            }
+            else -> false
+        }
+        if (isBlacklisted) return null
+
+        // Tier 1: Capability Detection (Identify image/video/music/chat)
+        val isImageGen = when (provider) {
+            ApiProvider.OPENAI -> id.contains("dall-e-3", ignoreCase = true) || id.contains("gpt-image-", ignoreCase = true)
+            ApiProvider.GOOGLE -> {
+                id.contains("imagen-3", ignoreCase = true) ||
+                        id.contains("nano-banana", ignoreCase = true) ||
+                        (supportedGenerationMethods.any { it.equals("predict", ignoreCase = true) } &&
+                                id.contains("imagen", ignoreCase = true))
+            }
+            ApiProvider.XAI -> isImageGenOverride ?: false
+            else -> false
+        }
+
+        val isVideoGen = when (provider) {
+            ApiProvider.GOOGLE -> {
+                id.contains("veo", ignoreCase = true) ||
+                        supportedGenerationMethods.any { it.equals("predictLongRunning", ignoreCase = true) }
+            }
+            ApiProvider.XAI -> isVideoGenOverride ?: false
+            else -> false
+        }
+
+        val isMusicGen = when (provider) {
+            ApiProvider.GOOGLE -> id.contains("lyria", ignoreCase = true)
+            else -> false
+        }
+
+        // Chat capability detection
+        val isMediaOnly = (isImageGen || isVideoGen || isMusicGen) &&
+                !id.contains("gemini", ignoreCase = true) &&
+                !id.contains("gpt-4", ignoreCase = true)
+
+        val isChat = isChatOverride ?: (!isMediaOnly &&
+                !id.startsWith("whisper", ignoreCase = true) &&
+                !id.startsWith("tts-", ignoreCase = true))
+
+        return copy(
+            isChatCapable = isChat,
+            isImageGenerationCapable = isImageGen,
+            isVideoGenerationCapable = isVideoGen,
+            isAudioGenerationCapable = isMusicGen,
+        )
+    }
 }

@@ -24,8 +24,7 @@ class MusicGenerationPortImpl @Inject constructor(
                 prompt, 
                 apiKey, 
                 provider.modelName ?: "lyria-3-clip-preview", 
-                provider.baseUrl, 
-                settings
+                provider.baseUrl
             )
             else -> Result.failure(UnsupportedOperationException("Music generation not supported for provider: ${provider.provider}"))
         }

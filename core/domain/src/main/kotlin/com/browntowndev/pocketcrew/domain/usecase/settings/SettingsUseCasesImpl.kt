@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -21,8 +24,15 @@ class SettingsPreferencesUseCasesImpl @Inject constructor(
     override val updateCustomPromptText: UpdateCustomPromptTextUseCase,
     override val updateAllowMemories: UpdateAllowMemoriesUseCase,
     override val updateSearchEnabled: UpdateSearchEnabledUseCase,
+    override val updateSearchProvider: UpdateSearchProviderUseCase,
     override val saveTavilyApiKey: SaveTavilyApiKeyUseCase,
     override val clearTavilyApiKey: ClearTavilyApiKeyUseCase,
+    override val saveExaApiKey: SaveExaApiKeyUseCase,
+    override val clearExaApiKey: ClearExaApiKeyUseCase,
+    override val updateXSearchEnabled: UpdateXSearchEnabledUseCase,
+    override val saveXApiKey: SaveXApiKeyUseCase,
+    override val clearXApiKey: ClearXApiKeyUseCase,
+    override val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase,
     override val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase,
 ) : SettingsPreferencesUseCases
 
@@ -65,6 +75,23 @@ class SettingsMediaUseCasesImpl @Inject constructor(
     override val deleteMediaProvider: DeleteMediaProviderUseCase,
 ) : SettingsMediaUseCases
 
+class SettingsAuthUseCasesImpl @Inject constructor(
+    override val loginWithGoogle: LoginWithGoogleUseCase,
+    override val logout: LogoutUseCase,
+    override val getAuthState: GetAuthStateUseCase,
+) : SettingsAuthUseCases
+
+class SettingsMemoriesUseCasesImpl @Inject constructor(
+    private val memoriesRepository: com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository,
+) : SettingsMemoriesUseCases {
+    override fun getAllMemoriesFlow() = memoriesRepository.getAllMemoriesFlow()
+    override suspend fun insertMemory(category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory, content: String) = 
+        memoriesRepository.insertMemory(category, content)
+    override suspend fun updateMemory(id: String, content: String, category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?) = 
+        memoriesRepository.updateMemory(id, content, category)
+    override suspend fun deleteMemory(id: String) = memoriesRepository.deleteMemory(id)
+}
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
@@ -73,4 +100,6 @@ class SettingsUseCasesImpl @Inject constructor(
     override val deletion: SettingsDeletionUseCases,
     override val tts: SettingsTtsUseCases,
     override val media: SettingsMediaUseCases,
+    override val auth: SettingsAuthUseCases,
+    override val memories: SettingsMemoriesUseCases,
 ) : SettingsUseCases

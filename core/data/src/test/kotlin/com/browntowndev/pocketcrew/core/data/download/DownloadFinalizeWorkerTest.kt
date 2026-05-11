@@ -15,6 +15,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -62,6 +64,7 @@ class DownloadFinalizeWorkerTest {
         const val MODEL_ID = "test-model-id"
         const val SHA_1 = "sha256-downloaded-1"
         const val SHA_2 = "sha256-downloaded-2"
+        const val SHA_ONNX = "sha256-onnx"
     }
 
     @MockK
@@ -78,6 +81,9 @@ class DownloadFinalizeWorkerTest {
 
     @MockK
     private lateinit var mockSyncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase
+
+    @MockK
+    private lateinit var mockEmbeddingCoordinator: EmbeddingRegenerationCoordinator
 
     @MockK
     private lateinit var mockLoggingPort: LoggingPort
@@ -102,6 +108,7 @@ class DownloadFinalizeWorkerTest {
         coEvery { mockLocalModelRepository.getAllLocalAssets() } returns emptyList()
         coEvery { mockLocalModelRepository.getAssetById(any()) } returns null
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
+        every { mockEmbeddingCoordinator.enqueueFullRegeneration() } returns Unit
 
         // Setup logging port mock with all logging methods
         every { mockLoggingPort.debug(any(), any()) } returns Unit
@@ -117,6 +124,7 @@ class DownloadFinalizeWorkerTest {
             localModelRepository = mockLocalModelRepository,
             modelConfigFetcher = mockModelConfigFetcher,
             syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
+            embeddingCoordinator = mockEmbeddingCoordinator,
             logger = mockLoggingPort
         )
     }
@@ -129,6 +137,131 @@ class DownloadFinalizeWorkerTest {
     }
 
     // ===== 3.2 Common Parsing and Guard Tests =====
+
+    /**
+     * Scenario: triggers embedding regeneration when onnx model is finalized
+     * Given requestKind = INITIALIZE_MODELS
+     * And downloaded_shas contains SHA for an ONNX model
+     * When the finalizer runs
+     * Then embeddingCoordinator.enqueueFullRegeneration() is called
+     */
+    @Test
+    fun `triggers embedding regeneration when onnx model is finalized`() = runTest {
+        // Given: INITIALIZE_MODELS with ONNX model SHA
+        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+        val inputData = workDataOf(
+            KEY_SESSION_ID to SESSION_ID,
+            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+            KEY_DOWNLOADED_SHAS to downloadedShas,
+        )
+        setInputData(inputData)
+
+        val onnxAsset = createTestAsset("model.onnx", SHA_ONNX).let { asset ->
+            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+        }
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+        // When: Run the worker
+        worker.doWork()
+
+        // Then: Embedding regeneration should be triggered
+        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+    }
+
+    /**
+     * Scenario: triggers embedding regeneration when onnx vocab is finalized
+     * Given requestKind = INITIALIZE_MODELS
+     * And downloaded_shas contains SHA for an ONNX vocab
+     * When the finalizer runs
+     * Then embeddingCoordinator.enqueueFullRegeneration() is called
+     */
+    @Test
+    fun `triggers embedding regeneration when onnx vocab is finalized`() = runTest {
+        // Given: INITIALIZE_MODELS with ONNX vocab SHA
+        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+        val inputData = workDataOf(
+            KEY_SESSION_ID to SESSION_ID,
+            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+            KEY_DOWNLOADED_SHAS to downloadedShas,
+        )
+        setInputData(inputData)
+
+        val onnxVocabAsset = createTestAsset("vocab.txt", SHA_ONNX).let { asset ->
+            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_VOCAB))
+        }
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxVocabAsset))
+        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+        // When: Run the worker
+        worker.doWork()
+
+        // Then: Embedding regeneration should be triggered
+        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+    }
+
+    /**
+     * Scenario: does not trigger embedding regeneration when no onnx assets are finalized
+     * Given requestKind = INITIALIZE_MODELS
+     * And downloaded_shas does not contain ONNX assets
+     * When the finalizer runs
+     * Then embeddingCoordinator.enqueueFullRegeneration() is NOT called
+     */
+    @Test
+    fun `does not trigger embedding regeneration when no onnx assets are finalized`() = runTest {
+        // Given: INITIALIZE_MODELS with standard model SHA
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
+        val inputData = workDataOf(
+            KEY_SESSION_ID to SESSION_ID,
+            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+            KEY_DOWNLOADED_SHAS to downloadedShas,
+        )
+        setInputData(inputData)
+
+        val standardAsset = createTestAsset("model1.gguf", SHA_1)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(standardAsset))
+        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+        // When: Run the worker
+        worker.doWork()
+
+        // Then: Embedding regeneration should NOT be triggered
+        coVerify(inverse = true) { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+    }
+
+    /**
+     * Scenario: triggers embedding regeneration when onnx model is restored
+     * Given requestKind = RESTORE_SOFT_DELETED_MODEL
+     * And the restored asset is an ONNX model
+     * When the finalizer runs
+     * Then embeddingCoordinator.enqueueFullRegeneration() is called
+     */
+    @Test
+    fun `triggers embedding regeneration when onnx model is restored`() = runTest {
+        // Given: RESTORE_SOFT_DELETED_MODEL with ONNX model
+        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+        val inputData = workDataOf(
+            KEY_SESSION_ID to SESSION_ID,
+            KEY_REQUEST_KIND to REQUEST_RESTORE,
+            KEY_TARGET_MODEL_ID to MODEL_ID,
+            KEY_DOWNLOADED_SHAS to downloadedShas,
+        )
+        setInputData(inputData)
+
+        val onnxAsset = createTestAsset("model.onnx", SHA_ONNX).let { asset ->
+            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+        }
+        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns onnxAsset
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+        coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns onnxAsset
+
+        // When: Run the worker
+        worker.doWork()
+
+        // Then: Embedding regeneration should be triggered
+        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+    }
+
 
     /**
      * Scenario: fails when requestKind is missing

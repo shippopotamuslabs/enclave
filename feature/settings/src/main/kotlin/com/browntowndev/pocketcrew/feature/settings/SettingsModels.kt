@@ -2,10 +2,11 @@ package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
@@ -29,6 +30,22 @@ data class StoredMemory(
 )
 
 @Immutable
+data class UserProfileUi(
+    val uid: String,
+    val displayName: String?,
+    val email: String?,
+    val photoUrl: String?
+)
+
+@Immutable
+sealed interface AuthStateUi {
+    data object Unauthenticated : AuthStateUi
+    data class Authenticated(val user: UserProfileUi) : AuthStateUi
+    data class Error(val message: String) : AuthStateUi
+    data object Loading : AuthStateUi
+}
+
+@Immutable
 data class SettingsUiState(
     val home: SettingsHomeUiState = SettingsHomeUiState(),
     val customization: CustomizationUiState = CustomizationUiState(),
@@ -40,6 +57,7 @@ data class SettingsUiState(
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
+    val xSearchEditor: XSearchEditorUiState = XSearchEditorUiState(),
     val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
     val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
     val mediaProvidersSheet: MediaProvidersSheetUiState = MediaProvidersSheetUiState(),
@@ -54,6 +72,7 @@ data class SettingsHomeUiState(
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
+    val auth: AuthStateUi = AuthStateUi.Loading,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,
     val isDataControlsSheetOpen: Boolean = false,
@@ -62,6 +81,10 @@ data class SettingsHomeUiState(
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
+    val isSearchSkillSheetOpen: Boolean = false,
+    val searchSkillTabIndex: Int = 0,
+    val isReindexing: Boolean = false,
+    val reindexProgress: Float = 0f,
 )
 
 @Immutable
@@ -165,7 +188,19 @@ data class ApiProviderEditorUiState(
 data class SearchSkillEditorUiState(
     val isEditing: Boolean = false,
     val enabled: Boolean = false,
+    val selectedProvider: SearchProvider = SearchProvider.TAVILY,
     val tavilyKeyPresent: Boolean = false,
+    val exaKeyPresent: Boolean = false,
+    val currentTavilyApiKey: String = "",
+    val currentExaApiKey: String = "",
+    val showSwitchAlert: Boolean = true,
+)
+
+@Immutable
+data class XSearchEditorUiState(
+    val enabled: Boolean = false,
+    val apiKeyPresent: Boolean = false,
+    val currentApiKey: String = "",
 )
 
 @Immutable
@@ -209,7 +244,8 @@ data class ReassignmentOptionUi(
 
 @Immutable
 data class TtsProviderAssetUi(
-    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId =
+        com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val voiceName: String = "",
@@ -301,6 +337,10 @@ data class DiscoveredApiModelUi(
     val completionPrice: Double? = null,
     val providerName: String? = null,
     val isMultimodal: Boolean? = null,
+    val isChatCapable: Boolean = true,
+    val isImageGenerationCapable: Boolean = false,
+    val isVideoGenerationCapable: Boolean = false,
+    val isAudioGenerationCapable: Boolean = false,
 )
 
 @Immutable
@@ -392,9 +432,24 @@ object MockSettingsData {
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = LocalModelId("1"), displayName = "Default", temperature = 0.7),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-1"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Default",
+                    temperature = 0.7
+                ),
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-2"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Creative",
+                    temperature = 1.2
+                ),
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-3"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Precise",
+                    temperature = 0.1
+                )
             ),
             isMultimodal = true
         ),
@@ -407,7 +462,12 @@ object MockSettingsData {
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-4"), localModelId = LocalModelId("2"), displayName = "Standard", temperature = 0.8)
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-4"),
+                    localModelId = LocalModelId("2"),
+                    displayName = "Standard",
+                    temperature = 0.8
+                )
             )
         )
     )
@@ -422,8 +482,18 @@ object MockSettingsData {
             isMultimodal = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = ApiCredentialsId("1"), displayName = "Balanced", temperature = 0.7),
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-2"), credentialsId = ApiCredentialsId("1"), displayName = "Creative", temperature = 1.0)
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-1"),
+                    credentialsId = ApiCredentialsId("1"),
+                    displayName = "Balanced",
+                    temperature = 0.7
+                ),
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-2"),
+                    credentialsId = ApiCredentialsId("1"),
+                    displayName = "Creative",
+                    temperature = 1.0
+                )
             )
         ),
         ApiModelAssetUi(
@@ -435,7 +505,12 @@ object MockSettingsData {
             isMultimodal = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = ApiCredentialsId("2"), displayName = "Standard", temperature = 0.7)
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-3"),
+                    credentialsId = ApiCredentialsId("2"),
+                    displayName = "Standard",
+                    temperature = 0.7
+                )
             )
         ),
         ApiModelAssetUi(
@@ -461,7 +536,14 @@ object MockSettingsData {
     val defaultAssignments = listOf(
         DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isMultimodal = true),
         DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isMultimodal = true),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isMultimodal = true),
+        DefaultModelAssignmentUi(
+            ModelType.VISION,
+            ModelSource.API,
+            "Claude 3.5 Sonnet (Standard)",
+            "Vision (API)",
+            "Anthropic",
+            isMultimodal = true
+        ),
         DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 
@@ -484,6 +566,21 @@ object MockSettingsData {
                     voiceName = "alloy"
                 )
             )
+        ),
+        searchSkillEditor = SearchSkillEditorUiState(
+            isEditing = false,
+            enabled = false,
+            selectedProvider = SearchProvider.TAVILY,
+            tavilyKeyPresent = false,
+            exaKeyPresent = false,
+            currentTavilyApiKey = "",
+            currentExaApiKey = "",
+            showSwitchAlert = true,
+        ),
+        xSearchEditor = XSearchEditorUiState(
+            enabled = false,
+            apiKeyPresent = false,
+            currentApiKey = "",
         ),
         assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
     )

@@ -9,12 +9,14 @@ import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadRequestKind
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.decodeFromString
@@ -44,6 +46,7 @@ class DownloadFinalizeWorker @AssistedInject constructor(
     private val localModelRepository: LocalModelRepositoryPort,
     private val modelConfigFetcher: ModelConfigFetcherPort,
     private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
+    private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
     private val logger: LoggingPort
 ) : CoroutineWorker(context, workerParams) {
 
@@ -134,6 +137,15 @@ class DownloadFinalizeWorker @AssistedInject constructor(
                         }
                     }
                 }
+            }
+
+            // Trigger embedding regeneration if any embedding models were finalized
+            val hasEmbeddingModel = matchingAssets.any {
+                it.metadata.utilityType == UtilityType.ONNX_MODEL || it.metadata.utilityType == UtilityType.ONNX_VOCAB
+            }
+            if (hasEmbeddingModel) {
+                logger.info(TAG, "Embedding model finalized, triggering regeneration")
+                embeddingCoordinator.enqueueFullRegeneration()
             }
 
             // Success output
@@ -231,6 +243,13 @@ class DownloadFinalizeWorker @AssistedInject constructor(
 
             // Restore the configurations
             localModelRepository.restoreSoftDeletedModel(targetModelId, rebuiltConfigs)
+
+            // Trigger embedding regeneration if the restored asset is an embedding model
+            if (assetToRestore.metadata.utilityType == UtilityType.ONNX_MODEL ||
+                assetToRestore.metadata.utilityType == UtilityType.ONNX_VOCAB) {
+                logger.info(TAG, "Embedding model restored, triggering regeneration")
+                embeddingCoordinator.enqueueFullRegeneration()
+            }
 
             // Success output (no SyncLocalModelRegistryUseCase for restore)
             Result.success(

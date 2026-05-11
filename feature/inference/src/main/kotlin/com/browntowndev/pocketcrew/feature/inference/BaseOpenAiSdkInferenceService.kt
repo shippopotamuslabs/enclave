@@ -20,7 +20,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -32,6 +33,9 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
@@ -43,6 +47,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 
+@Suppress("LargeClass")
 abstract class BaseOpenAiSdkInferenceService(
     protected val client: OpenAIClient,
     protected val modelId: String,
@@ -55,9 +60,18 @@ abstract class BaseOpenAiSdkInferenceService(
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
+
+        /** Checks if an exception message indicates a client error (400/Bad Request or 404/Not Found). */
+        internal fun isClientErrorMessage(message: String?): Boolean =
+            message?.contains("400") == true ||
+                message?.contains("Bad Request") == true ||
+                message?.contains("404") == true ||
+                message?.contains("Not Found") == true
     }
 
     protected abstract val tag: String
+
+    protected open val maxImages: Int = 20
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
@@ -71,9 +85,13 @@ abstract class BaseOpenAiSdkInferenceService(
         closeConversation: Boolean
     ): Flow<InferenceEvent> = flow {
         try {
+            if (options.imageUris.size > maxImages) {
+                throw IllegalArgumentException("$provider API supports a maximum of $maxImages images per request.")
+            }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(
                 tag,
+                @Suppress("MaxLineLength")
                 "sendPrompt start provider=$provider model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
             )
             executePrompt(prompt, options, requestHistory) { emit(it) }
@@ -86,19 +104,24 @@ abstract class BaseOpenAiSdkInferenceService(
             loggingPort.debug(tag, "sendPrompt cancelled provider=$provider model=$modelId")
             emit(InferenceEvent.Finished(modelType))
             throw e
-        } catch (e: Exception) {
-            if (e is IllegalArgumentException || e is IllegalStateException) {
-                loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            }
+        } catch (e: IllegalArgumentException) {
+            loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: IllegalStateException) {
+            loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: OpenAIServiceException) {
             var errorMsg = e.message ?: "Unknown error"
-            if (e is OpenAIServiceException) {
-                val bodyStr = safeSerializeBody(e)
-                if (bodyStr.isNotBlank() && !errorMsg.contains(bodyStr)) {
-                    errorMsg += " | Body: $bodyStr"
-                }
+            val bodyStr = safeSerializeBody(e)
+            if (bodyStr.isNotBlank() && !errorMsg.contains(bodyStr)) {
+                errorMsg += " | Body: $bodyStr"
             }
+            loggingPort.error(tag, "API request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(Exception("API Error ($provider): $errorMsg", e), modelType))
+        } catch (e: Exception) {
+            var errorMsg = e.message ?: "Unknown error"
             loggingPort.error(tag, "API request failed. ${describeException(e)}", e)
             emit(InferenceEvent.Error(Exception("API Error ($provider): $errorMsg", e), modelType))
         }
@@ -207,13 +230,13 @@ abstract class BaseOpenAiSdkInferenceService(
             initialParams = initialParams,
             tag = tag,
             maxToolCalls = options.maxToolCalls,
-            onInferencePass = { params, allowToolCall ->
+            onInferencePass = { params, _allowToolCall ->
 
                 streamResponses(
                     params = params,
-                    allowToolCall = allowToolCall,
                     chatId = options.chatId,
                     userMessageId = options.userMessageId,
+                    assistantMessageId = options.assistantMessageId,
                     emitEvent = emitEvent,
                 )
             },
@@ -232,6 +255,7 @@ abstract class BaseOpenAiSdkInferenceService(
                                 modelType = modelType,
                                 chatId = options.chatId,
                                 userMessageId = options.userMessageId,
+                                assistantMessageId = options.assistantMessageId,
                             )
                         )
                     } else {
@@ -257,31 +281,80 @@ abstract class BaseOpenAiSdkInferenceService(
                     appendStopToolsWarning = contextExceeded,
                 )
             },
-            onContextExceeded = { _, _ ->
-                estimateContextExceeded(
+            onContextExceeded = { _, results ->
+                val result = estimateContextExceeded(
                     requestHistory = requestHistory,
                     prompt = prompt,
                     options = options,
                     toolResultPayloads = toolLoopPayloads,
                 )
+
+                if (result.contextExceeded && 
+                    results.any { it.first.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
+                    // Try to compress history specifically for artifact loop
+                    loggingPort.info(tag, "Attempting artifact context compression provider=$provider")
+                    val compressedHistory = com.browntowndev.pocketcrew.domain.util.ArtifactContextCompressor.compress(
+                        requestHistory
+                    )
+                    
+                    // Rebuild params with compressed history
+                    val rebuiltParams = mapToolingResponseParams(
+                        prompt = prompt,
+                        options = options,
+                        requestHistory = compressedHistory,
+                    )
+                    ContextExceededResult(contextExceeded = false, rebuiltParams = rebuiltParams)
+                } else {
+                    ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
+                }
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
+                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                         }
                     }
                 }
 
-                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
-                    val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
-                    if (artifactParams != null) {
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            ArtifactGenerationRequest(
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
+                                        ),
+                                        modelType = modelType,
+                                    ),
+                                )
+                            }
+                    } catch (e: Exception) {
+                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
+                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                    if (mediaResult.uris.isNotEmpty()) {
                         emitEvent(
-                            InferenceEvent.Artifacts(
-                                artifacts = listOf(artifactParams.toRequest()),
+                            InferenceEvent.Media(
+                                mediaUris = mediaResult.uris,
+                                mediaIds = mediaResult.ids,
+                                mediaTypes = mediaResult.types,
+                                prompts = mediaResult.prompts,
                                 modelType = modelType
                             )
                         )
@@ -339,6 +412,7 @@ abstract class BaseOpenAiSdkInferenceService(
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Prepared request history provider=$provider model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
         )
         return historyWithSystemPrompt
@@ -346,9 +420,9 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected suspend fun streamResponses(
         params: ResponseCreateParams,
-        allowToolCall: Boolean = false,
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedOpenAiResponse {
         logResponsesRequest(params)
@@ -358,14 +432,15 @@ abstract class BaseOpenAiSdkInferenceService(
             modelType = modelType,
             loggingPort = loggingPort,
             tag = tag,
-            allowToolCall = allowToolCall,
             chatId = chatId,
             userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
             emitEvent = emitEvent,
         )
         val state = StreamState()
         client.responses().createStreaming(params).use { streamResponse ->
             val iterator = streamResponse.stream().iterator()
+            @Suppress("LoopWithTooManyJumpStatements")
             loop@ while (currentCoroutineContext().isActive) {
                 val hasNext = try {
                     runInterruptible { iterator.hasNext() }
@@ -413,12 +488,19 @@ abstract class BaseOpenAiSdkInferenceService(
             onInferencePass = { params, _ ->
                 streamChatCompletions(
                     params = params,
+                    chatId = options.chatId,
+                    userMessageId = options.userMessageId,
+                    assistantMessageId = options.assistantMessageId,
                     emitEvent = emitEvent,
                 )
             },
             onToolCallDetected = { response ->
                 val sdkCalls = response.functionCalls.map {
-                    it.copy(chatId = options.chatId, userMessageId = options.userMessageId)
+                    it.copy(
+                        chatId = options.chatId,
+                        userMessageId = options.userMessageId,
+                        assistantMessageId = options.assistantMessageId,
+                    )
                 }
                 sdkCalls.ifEmpty {
                     val rawText = response.assistantMessageText
@@ -433,6 +515,7 @@ abstract class BaseOpenAiSdkInferenceService(
                                 modelType = modelType,
                                 chatId = options.chatId,
                                 userMessageId = options.userMessageId,
+                                assistantMessageId = options.assistantMessageId,
                             )
                         )
                     } else {
@@ -468,22 +551,52 @@ abstract class BaseOpenAiSdkInferenceService(
                 ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
+                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                         }
                     }
                 }
 
-                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
-                    val artifactParams = toolCall.parameters as? GenerateArtifactParams
-                    if (artifactParams != null) {
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            ArtifactGenerationRequest(
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
+                                        ),
+                                        modelType = modelType,
+                                    ),
+                                )
+                            }
+                    } catch (e: Exception) {
+                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
+                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                    if (mediaResult.uris.isNotEmpty()) {
                         emitEvent(
-                            InferenceEvent.Artifacts(
-                                artifacts = listOf(artifactParams.toRequest()),
+                            InferenceEvent.Media(
+                                mediaUris = mediaResult.uris,
+                                mediaIds = mediaResult.ids,
+                                mediaTypes = mediaResult.types,
+                                prompts = mediaResult.prompts,
                                 modelType = modelType
                             )
                         )
@@ -497,6 +610,9 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected suspend fun streamChatCompletions(
         params: ChatCompletionCreateParams,
+        chatId: ChatId? = null,
+        userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedOpenAiResponse {
         logChatRequest(params)
@@ -553,6 +669,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 if (choice.finishReason().isPresent) {
                     loggingPort.debug(
                         tag,
+                        @Suppress("MaxLineLength")
                         "Chat stream finished model=$modelId finishReason=${choice.finishReason().get()} outputTextDeltas=$outputTextDeltaCount"
                     )
                     finishedEmitted = true
@@ -579,6 +696,9 @@ abstract class BaseOpenAiSdkInferenceService(
                         argumentsJson = tracked.arguments.toString(),
                         provider = provider,
                         modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
                     )
                 )
                 providerToolCallIds.add(tracked.id ?: "")
@@ -605,6 +725,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun logResponsesRequest(params: ResponseCreateParams) {
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Responses API request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(serializeBody(params._body()))}"
         )
     }
@@ -612,6 +733,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun logChatRequest(params: ChatCompletionCreateParams) {
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Chat Completions request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(serializeBody(params._body()))}"
         )
     }
@@ -659,6 +781,7 @@ abstract class BaseOpenAiSdkInferenceService(
             .getOrElse { error ->
                 loggingPort.warning(
                     tag,
+                    @Suppress("MaxLineLength")
                     "Skipping malformed API error field while formatting exception. fieldError=${error.message ?: error::class.java.simpleName}"
                 )
                 null

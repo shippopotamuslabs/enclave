@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
@@ -13,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -24,22 +26,13 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 
-/**
- * Tests for ChatUiState - specifically the isGenerating computed property.
- *
- * These tests verify that isGenerating correctly computes whether any message
- * is in a generating state (Thinking, Processing, or Generating).
- *
- * Uses MainDispatcherRule per Golden Reference pattern.
- *
- * REF: SPEC: Real-Time Inference via Flow, Persist on Completion
- */
 @ExtendWith(MainDispatcherRule::class)
 class ChatViewModelFlowTest {
 
@@ -54,6 +47,7 @@ class ChatViewModelFlowTest {
     private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
     private lateinit var toolExecutionEventPort: ToolExecutionEventPort
     private lateinit var loggingPort: LoggingPort
+    private lateinit var shareChatUseCase: ShareChatUseCase
 
     @BeforeEach
     fun setup() {
@@ -67,6 +61,7 @@ class ChatViewModelFlowTest {
         cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
+        shareChatUseCase = mockk(relaxed = true)
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
@@ -95,94 +90,17 @@ class ChatViewModelFlowTest {
             toolExecutionEventPort = toolExecutionEventPort,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-            
             playbackController = mockk(relaxed = true),
+            studioRepository = mockk(relaxed = true),
+            shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
     }
 
     @Test
-    fun `isGenerating is true when any message is in generating state`() {
-        val stateWithGenerating = ChatUiState(
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi("Thinking..."),
-                    formattedTimestamp = "Now",
-                    indicatorState = IndicatorState.Generating(null)
-                )
-            ),
-            isGenerating = true
-        )
-
-        assertTrue(stateWithGenerating.isGenerating)
-    }
-
-    @Test
-    fun `isGenerating is false when no message is generating`() {
-        val stateWithComplete = ChatUiState(
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi("Done"),
-                    formattedTimestamp = "Now",
-                    indicatorState = IndicatorState.Complete(null)
-                )
-            ),
-            isGenerating = false
-        )
-
-        assertFalse(stateWithComplete.isGenerating)
-    }
-
-    @Test
-    fun `isGenerating is false when messages are empty`() {
-        val emptyState = ChatUiState(
-            messages = emptyList(),
-            isGenerating = false
-        )
-
-        assertFalse(emptyState.isGenerating)
-    }
-
-    @Test
-    fun `isGenerating is true when message is in thinking state`() {
-        val stateWithThinking = ChatUiState(
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi("Thinking..."),
-                    formattedTimestamp = "Now",
-                    indicatorState = IndicatorState.Thinking("Thinking...", 0L)
-                )
-            ),
-            isGenerating = true
-        )
-
-        assertTrue(stateWithThinking.isGenerating)
-    }
-
-    @Test
-    fun `isGenerating is true when message is in processing state`() {
-        val stateWithProcessing = ChatUiState(
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi("Processing..."),
-                    formattedTimestamp = "Now",
-                    indicatorState = IndicatorState.Processing
-                )
-            ),
-            isGenerating = true
-        )
-
-        assertTrue(stateWithProcessing.isGenerating)
+    fun `isGenerating is false when no messages are in a generating state`() = runTest {
+        // Initial state is no messages, so isGenerating should be false
+        assertFalse(chatViewModel.uiState.value.isGenerating)
     }
 }

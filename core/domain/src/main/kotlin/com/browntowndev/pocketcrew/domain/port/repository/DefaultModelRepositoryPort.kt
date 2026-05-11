@@ -13,8 +13,8 @@ interface DefaultModelRepositoryPort {
     fun observeDefaults(): Flow<List<DefaultModelAssignment>>
     suspend fun setDefault(
         modelType: ModelType,
-        localConfigId: LocalModelConfigurationId?,
-        apiConfigId: ApiModelConfigurationId?,
+        localConfigId: LocalModelConfigurationId? = null,
+        apiConfigId: ApiModelConfigurationId? = null,
         ttsProviderId: TtsProviderId? = null,
         mediaProviderId: MediaProviderId? = null
     )

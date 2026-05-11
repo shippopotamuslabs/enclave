@@ -1,3 +1,5 @@
+@file:Suppress("FunctionNaming")
+
 package com.browntowndev.pocketcrew.feature.chat.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -49,9 +51,7 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun ThinkingIndicator(
-    thinkingRaw: String,
     modifier: Modifier = Modifier,
-    modelDisplayName: String = "",
     elapsedSeconds: Int = 0,
     isExpanded: Boolean = false,
     onToggleDetails: () -> Unit = {},
@@ -148,7 +148,6 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
 fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
         ThinkingIndicator(
-            thinkingRaw = "",
             elapsedSeconds = 0,
             modifier = Modifier.padding(16.dp)
         )
@@ -160,7 +159,6 @@ fun ThinkingIndicator_EmptyPreview() {
 fun ThinkingIndicator_WithContentPreview() {
     PreviewTheme {
         ThinkingIndicator(
-            thinkingRaw = "Analyzing the problem step by step:\n\n1. First, let me understand what we're dealing with\n2. Breaking down the requirements\n3. Planning the implementation",
             elapsedSeconds = 42,
             modifier = Modifier.padding(16.dp)
         )

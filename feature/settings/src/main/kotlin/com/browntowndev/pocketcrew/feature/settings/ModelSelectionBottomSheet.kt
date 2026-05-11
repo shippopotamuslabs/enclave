@@ -78,6 +78,7 @@ fun ModelSelectionBottomSheet(
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun ModelSelectionContent(
     availableModels: List<DiscoveredApiModelUi>,
@@ -93,6 +94,7 @@ fun ModelSelectionContent(
     onDismissRequest: () -> Unit
 ) {
     var isProviderFiltering by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    @Suppress("MagicNumber")
     Column(
         modifier = Modifier
             .fillMaxWidth()

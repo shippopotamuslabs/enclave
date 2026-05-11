@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -22,6 +23,7 @@ import javax.inject.Singleton
 
 @Singleton
 class DefaultModelRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val defaultModelsDao: DefaultModelsDao,
     private val localModelConfigurationsDao: LocalModelConfigurationsDao,
     private val localModelsDao: LocalModelsDao,
@@ -30,6 +32,8 @@ class DefaultModelRepositoryImpl @Inject constructor(
     private val ttsProviderDao: TtsProviderDao,
     private val mediaProviderDao: MediaProviderDao,
 ) : DefaultModelRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? {
         val entity = defaultModelsDao.getDefault(modelType) ?: return null
@@ -87,13 +91,16 @@ class DefaultModelRepositoryImpl @Inject constructor(
             localConfigId = localConfigId,
             apiConfigId = apiConfigId,
             ttsProviderId = ttsProviderId,
-            mediaProviderId = mediaProviderId
+            mediaProviderId = mediaProviderId,
+            pendingSync = 1,
         )
         defaultModelsDao.upsert(entity)
+        triggerSync()
     }
 
     override suspend fun clearDefault(modelType: ModelType) {
-        defaultModelsDao.delete(modelType)
+        defaultModelsDao.softDeleteById(modelType)
+        triggerSync()
     }
 
     private suspend fun resolveAssignment(entity: DefaultModelEntity): DefaultModelAssignment {

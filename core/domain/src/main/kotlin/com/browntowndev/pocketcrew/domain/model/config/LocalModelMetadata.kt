@@ -39,12 +39,11 @@ fun LocalModelMetadata.requiredArtifacts(): List<LocalModelArtifact> {
             huggingFacePath = huggingFacePath,
         )
     )
-    if (
-        !mmprojRemoteFileName.isNullOrBlank() &&
+    val hasMmprojArtifacts = !mmprojRemoteFileName.isNullOrBlank() &&
         !mmprojLocalFileName.isNullOrBlank() &&
         !mmprojSha256.isNullOrBlank() &&
         mmprojSizeInBytes != null
-    ) {
+    if (hasMmprojArtifacts) {
         artifacts += LocalModelArtifact(
             remoteFileName = mmprojRemoteFileName,
             localFileName = mmprojLocalFileName,

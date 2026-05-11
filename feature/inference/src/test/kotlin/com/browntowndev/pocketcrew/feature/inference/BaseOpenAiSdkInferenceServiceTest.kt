@@ -152,7 +152,7 @@ class BaseOpenAiSdkInferenceServiceTest {
     fun `executeToolingPrompt orchestrates single tool call round trip`() = runTest {
         val toolExecutor = mockk<ToolExecutorPort>()
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"test","results":[]}""",
         )
 
@@ -171,7 +171,7 @@ class BaseOpenAiSdkInferenceServiceTest {
                         emittedAny = true,
                         functionCalls = listOf(
                             ToolCallRequest(
-                                toolName = "tavily_web_search",
+                                toolName = "web_search",
                                 argumentsJson = """{"query":"test"}""",
                                 provider = "TEST_PROVIDER",
                                 modelType = ModelType.FAST,
@@ -200,8 +200,8 @@ class BaseOpenAiSdkInferenceServiceTest {
 
         assertEquals(2, inferencePassCount)
         coEvery { toolExecutor.execute(any()) } answers {
-            assertEquals("tavily_web_search", firstArg<ToolCallRequest>().toolName)
-            ToolExecutionResult("tavily_web_search", """{"query":"test","results":[]}""")
+            assertEquals("web_search", firstArg<ToolCallRequest>().toolName)
+            ToolExecutionResult("web_search", """{"query":"test","results":[]}""")
         }
     }
 
@@ -301,7 +301,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         // all of them, and providerToolCallIds preserves each call's ID.
         val toolExecutor = mockk<ToolExecutorPort>()
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"first search","results":[]}""",
         )
 
@@ -321,13 +321,13 @@ class BaseOpenAiSdkInferenceServiceTest {
                         emittedAny = true,
                         functionCalls = listOf(
                             ToolCallRequest(
-                                toolName = "tavily_web_search",
+                                toolName = "web_search",
                                 argumentsJson = """{"query":"first search"}""",
                                 provider = "TEST_PROVIDER",
                                 modelType = ModelType.FAST,
                             ),
                             ToolCallRequest(
-                                toolName = "tavily_web_search",
+                                toolName = "web_search",
                                 argumentsJson = """{"query":"second search"}""",
                                 provider = "TEST_PROVIDER",
                                 modelType = ModelType.FAST,

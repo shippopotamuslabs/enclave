@@ -12,6 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "GpuProfiler"
+private const val EGL_CONTEXT_CLIENT_VERSION = 0x3098
 
 /**
  * Backend type enumeration - must match C++ enum in llama-jni.cpp
@@ -131,6 +132,7 @@ class GpuProfiler @Inject constructor() {
     /**
      * Query GPU name via EGL - this is the most reliable method.
      */
+    @Suppress("ThrowsCount")
     private fun queryGpuViaEgl(): String {
         // Get EGL display
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
@@ -147,7 +149,6 @@ class GpuProfiler @Inject constructor() {
         try {
             // EGL constants (hardcoded for compatibility)
             val EGL_OPENGL_ES2_BIT = 4
-            val EGL_CONTEXT_CLIENT_VERSION = 0x3098
 
             // Configure EGL for OpenGL ES 2.0
             val configAttribs = intArrayOf(

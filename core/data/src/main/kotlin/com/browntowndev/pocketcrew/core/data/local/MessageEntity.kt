@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
@@ -37,8 +37,8 @@ data class MessageEntity(
     val chatId: ChatId,
     @ColumnInfo(name = "content")
     val content: String,
-    @ColumnInfo(name = "image_uri")
-    val imageUri: String? = null,
+    @ColumnInfo(name = "image_uris_json")
+    val imageUrisJson: String? = null,
     @ColumnInfo(name = "role")
     val role: Role,
     @ColumnInfo(name = "user_message_id")
@@ -61,4 +61,18 @@ data class MessageEntity(
     val pipelineStep: PipelineStep? = null,
     @ColumnInfo(name = "artifacts_json")
     val artifactsJson: String? = null,
+    @ColumnInfo(name = "generated_media_uris_json")
+    val generatedMediaUrisJson: String? = null,
+    @ColumnInfo(name = "generated_media_asset_ids_json")
+    val generatedMediaAssetIdsJson: String? = null,
+    @ColumnInfo(name = "generated_media_types_json")
+    val generatedMediaTypesJson: String? = null,
+    @ColumnInfo(name = "generated_media_prompts_json")
+    val generatedMediaPromptsJson: String? = null,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

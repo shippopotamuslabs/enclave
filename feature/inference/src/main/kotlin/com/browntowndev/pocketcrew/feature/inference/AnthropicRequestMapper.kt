@@ -20,6 +20,8 @@ import com.anthropic.models.messages.Tool
 object AnthropicRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
     private const val DEFAULT_MAX_TOKENS = 4096L
+    private const val THINKING_BUDGET_MEDIUM = 1536L
+    private const val THINKING_BUDGET_XHIGH = 3072L
 
     fun mapToMessageParams(
         modelId: String,
@@ -154,9 +156,9 @@ object AnthropicRequestMapper {
             else -> when (options.reasoningEffort) {
                 null -> null
                 ApiReasoningEffort.LOW -> 1024L
-                ApiReasoningEffort.MEDIUM -> 1536L
+                ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
                 ApiReasoningEffort.HIGH -> 2048L
-                ApiReasoningEffort.XHIGH -> 3072L
+                ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
             }
         }
 

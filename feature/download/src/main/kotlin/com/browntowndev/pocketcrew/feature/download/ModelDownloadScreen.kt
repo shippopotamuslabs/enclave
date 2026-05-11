@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.download
 import android.Manifest
+import java.util.Locale
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -77,6 +78,7 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
@@ -96,7 +98,16 @@ fun ModelDownloadScreen(
     viewModel: DownloadViewModel = hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
         key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
         creationCallback = { factory ->
-            factory.create(modelsResult, errorMessage, autoStartDownloads = true)
+            val safeModelsResult = modelsResult ?: DownloadModelsResult(
+                allModels = emptyMap(),
+                modelsToDownload = emptyList(),
+                scanResult = ModelScanResult(
+                    missingModels = emptyList(),
+                    partialDownloads = emptyMap(),
+                    allValid = true
+                )
+            )
+            factory.create(safeModelsResult, errorMessage, autoStartDownloads = true)
         }
     )
 ) {
@@ -363,7 +374,7 @@ private fun DownloadHeader(
             ) {
                 speedMBs?.let {
                     Text(
-                        text = String.format("%.1f MB/s", it),
+                        text = String.format(Locale.US, "%.1f MB/s", it),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -492,7 +503,7 @@ private fun FileProgressItem(
                         FileStatus.COMPLETE -> "Complete"
                         FileStatus.FAILED -> "Failed"
                         FileStatus.DOWNLOADING -> file.speedMBs?.let {
-                            String.format("%.1f MB/s", it)
+                            String.format(Locale.US, "%.1f MB/s", it)
                         } ?: "Downloading..."
                         FileStatus.PAUSED -> "Paused"
                         FileStatus.QUEUED -> "Waiting..."
@@ -790,7 +801,11 @@ private fun NotificationPermissionRationaleDialog(
             Text("Enable Download Notifications")
         },
         text = {
-            Text("Pocket Crew needs notification permission to show download progress when the app is in the background. This allows you to monitor AI model downloads even when you switch to other apps.\n\nYour notification will show real-time progress, speed, and ETA for the download.")
+            Text(
+                "Pocket Crew needs notification permission to show download progress when the app is " +
+                    "in the background. This allows you to monitor AI model downloads even when you switch " +
+                    "to other apps.\n\nYour notification will show real-time progress, speed, and ETA for the download."
+            )
         },
         confirmButton = {
             Button(onClick = onRequestPermission) {
@@ -905,6 +920,7 @@ private val fakeFilesAllComplete = listOf(
     )
 )
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Downloading - Multiple Files")
 @Composable
 private fun PreviewDownloadHeaderDownloading() {
@@ -934,6 +950,7 @@ private fun PreviewDownloadHeaderDownloading() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Mixed States")
 @Composable
 private fun PreviewDownloadMixedStates() {
@@ -967,6 +984,7 @@ private fun PreviewDownloadMixedStates() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Checking Status")
 @Composable
 private fun PreviewDownloadChecking() {
@@ -991,6 +1009,7 @@ private fun PreviewDownloadChecking() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Paused")
 @Composable
 private fun PreviewDownloadPaused() {
@@ -1020,6 +1039,7 @@ private fun PreviewDownloadPaused() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Error State")
 @Composable
 private fun PreviewDownloadError() {
@@ -1053,6 +1073,7 @@ private fun PreviewDownloadError() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Complete")
 @Composable
 private fun PreviewDownloadComplete() {
@@ -1082,6 +1103,7 @@ private fun PreviewDownloadComplete() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "File States")
 @Composable
 private fun PreviewFileProgressItems() {
@@ -1094,13 +1116,29 @@ private fun PreviewFileProgressItems() {
         ) {
             Text("Downloading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "sha256-1", "Qwen 3 8B", 2_500_000_000L, 5_000_000_000L, FileStatus.DOWNLOADING, 12.4),
+                file = FileProgressUiModel(
+                    filename = "model.gguf",
+                    sha256 = "sha256-1",
+                    displayName = "Qwen 3 8B",
+                    bytesDownloaded = 2_500_000_000L,
+                    totalBytes = 5_000_000_000L,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 12.4
+                ),
                 progress = { 0.5f }
             )
 
             Text("Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "sha256-2", "Embeddings", 2_000_000_000L, 2_000_000_000L, FileStatus.COMPLETE, null),
+                file = FileProgressUiModel(
+                    filename = "model.gguf",
+                    sha256 = "sha256-2",
+                    displayName = "Embeddings",
+                    bytesDownloaded = 2_000_000_000L,
+                    totalBytes = 2_000_000_000L,
+                    status = FileStatus.COMPLETE,
+                    speedMBs = null
+                ),
                 progress = { 1f }
             )
 
@@ -1112,7 +1150,15 @@ private fun PreviewFileProgressItems() {
 
             Text("Paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "sha256-4", "Vision Encoder", 400_000_000L, 1_200_000_000L, FileStatus.PAUSED, null),
+                file = FileProgressUiModel(
+                    filename = "model.gguf",
+                    sha256 = "sha256-4",
+                    displayName = "Vision Encoder",
+                    bytesDownloaded = 400_000_000L,
+                    totalBytes = 1_200_000_000L,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                ),
                 progress = { 0.33f }
             )
 
@@ -1125,6 +1171,7 @@ private fun PreviewFileProgressItems() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Long ETA")
 @Composable
 private fun PreviewDownloadLongETA() {
@@ -1149,6 +1196,7 @@ private fun PreviewDownloadLongETA() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Background Notice")
 @Composable
 private fun PreviewBackgroundNotice() {
@@ -1166,6 +1214,7 @@ private fun PreviewBackgroundNotice() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Notification Permission Dialog")
 @Composable
 private fun PreviewNotificationPermissionDialog() {

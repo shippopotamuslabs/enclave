@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.model.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
@@ -19,6 +19,10 @@ data class MessageSnapshot(
     val isComplete: Boolean = false,
     val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
     val pipelineStep: PipelineStep? = null,
-    val tavilySources: List<TavilySource> = emptyList(),
+    val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
+    val generatedMediaUris: List<String> = emptyList(),
+    val generatedMediaAssetIds: List<String> = emptyList(),
+    val generatedMediaTypes: List<String> = emptyList(),
+    val generatedMediaPrompts: List<String> = emptyList(),
 )

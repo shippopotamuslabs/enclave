@@ -89,13 +89,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `single tool call executes tool and produces follow-up params`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         val toolResult = ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
         coEvery { toolExecutor.execute(any()) } returns toolResult
@@ -133,19 +133,19 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `multiple sequential tool calls execute tools in order and continue loop`() = runTest {
         val toolRequest1 = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"first"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         val toolRequest2 = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"second"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -211,11 +211,11 @@ class LlmToolingOrchestratorTest {
         val maxToolCalls = 2
         var toolCallIndex = 0
         val toolRequests = listOf(
-            ToolCallRequest("tavily_web_search", """{"query":"q1"}""", "TEST", ModelType.FAST),
-            ToolCallRequest("tavily_web_search", """{"query":"q2"}""", "TEST", ModelType.FAST),
+            ToolCallRequest("web_search", """{"query":"q1"}""", "TEST", ModelType.FAST),
+            ToolCallRequest("web_search", """{"query":"q2"}""", "TEST", ModelType.FAST),
         )
         val allowToolCallValues = mutableListOf<Boolean>()
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
 
         var inferencePassCount = 0
         orchestrator.execute<String, String>(
@@ -255,13 +255,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `allowToolCall is false after context warning`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"context"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         val allowToolCallValues = mutableListOf<Boolean>()
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
 
         var inferencePassCount = 0
         orchestrator.execute<String, String>(
@@ -288,7 +288,7 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `tool execution failure is caught and reported as error JSON`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"fail"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
@@ -345,13 +345,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `handles tool call count exceeding maxToolCalls gracefully first then throws`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = "{}",
         )
 
@@ -393,7 +393,7 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `does not execute tool when maxToolCalls is zero and throws on second attempt`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
@@ -453,7 +453,7 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `toolExecutor receives the exact ToolCallRequest from onToolCallDetected`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"android news"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
@@ -461,7 +461,7 @@ class LlmToolingOrchestratorTest {
             userMessageId = com.browntowndev.pocketcrew.domain.model.chat.MessageId("msg-456"),
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -481,7 +481,7 @@ class LlmToolingOrchestratorTest {
 
         val capturedRequest = slot<ToolCallRequest>()
         coVerify { toolExecutor.execute(capture(capturedRequest)) }
-        assertEquals("tavily_web_search", capturedRequest.captured.toolName)
+        assertEquals("web_search", capturedRequest.captured.toolName)
         assertEquals("""{"query":"android news"}""", capturedRequest.captured.argumentsJson)
     }
 
@@ -490,12 +490,12 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onToolResultsMapped receives current params, response, and tool results`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
-        val toolResult = ToolExecutionResult("tavily_web_search", """{"results":[{"url":"https://example.com"}]}""")
+        val toolResult = ToolExecutionResult("web_search", """{"results":[{"url":"https://example.com"}]}""")
         coEvery { toolExecutor.execute(any()) } returns toolResult
 
         var mappedParams: String? = null
@@ -533,13 +533,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `default maxToolCalls allows sequential tool calls below limit`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = "{}",
         )
 
@@ -574,13 +574,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `logs tool call detection and completion`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -601,7 +601,7 @@ class LlmToolingOrchestratorTest {
         io.mockk.verify {
             loggingPort.info(
                 "TestTag",
-                match { it.contains("Tool call processed") && it.contains("tavily_web_search") && it.contains("iteration=1") }
+                match { it.contains("Tool call processed") && it.contains("web_search") && it.contains("iteration=1") }
             )
         }
     }
@@ -650,12 +650,12 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onFinished receives last response after tool call loop`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
 
         var inferencePassCount = 0
         var lastResponseReceived: String? = null
@@ -683,12 +683,12 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `initial params passed to first inference pass and updated params passed to subsequent passes`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", """{"result":"data"}""")
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", """{"result":"data"}""")
 
         val receivedParams = mutableListOf<String>()
         var inferencePassCount = 0
@@ -715,7 +715,7 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `parallel tool calls in a single response are all executed sequentially`() = runTest {
         val toolRequest1 = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"first"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
@@ -726,7 +726,7 @@ class LlmToolingOrchestratorTest {
             provider = "TEST",
             modelType = ModelType.FAST,
         )
-        val result1 = ToolExecutionResult("tavily_web_search", """{"results":[]}""")
+        val result1 = ToolExecutionResult("web_search", """{"results":[]}""")
         val result2 = ToolExecutionResult("attached_image_inspect", """{"answer":"an image"}""")
         coEvery { toolExecutor.execute(any()) } returnsMany listOf(result1, result2)
 
@@ -764,19 +764,19 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onToolResultsMapped receives all parallel tool call results at once`() = runTest {
         val toolRequest1 = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"first"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         val toolRequest2 = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"second"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
-        val result1 = ToolExecutionResult("tavily_web_search", """{"r1":"data1"}""")
-        val result2 = ToolExecutionResult("tavily_web_search", """{"r2":"data2"}""")
+        val result1 = ToolExecutionResult("web_search", """{"r1":"data1"}""")
+        val result2 = ToolExecutionResult("web_search", """{"r2":"data2"}""")
         coEvery { toolExecutor.execute(any()) } returnsMany listOf(result1, result2)
 
         val mappedParamsList = mutableListOf<String>()
@@ -806,9 +806,9 @@ class LlmToolingOrchestratorTest {
 
     @Test
     fun `parallel tool calls increment toolCallCount and hit recursion limit correctly`() = runTest {
-        val toolRequest1 = ToolCallRequest("tavily_web_search", """{"query":"1"}""", "TEST", ModelType.FAST)
-        val toolRequest2 = ToolCallRequest("tavily_web_search", """{"query":"2"}""", "TEST", ModelType.FAST)
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+        val toolRequest1 = ToolCallRequest("web_search", """{"query":"1"}""", "TEST", ModelType.FAST)
+        val toolRequest2 = ToolCallRequest("web_search", """{"query":"2"}""", "TEST", ModelType.FAST)
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
 
         orchestrator.execute<String, String>(
             providerName = "TEST",
@@ -833,13 +833,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onContextExceeded returning exceeded sets contextFullWarned and throws on next tool call`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -881,13 +881,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onContextExceeded returning not exceeded does not trigger hard error`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -921,13 +921,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onContextExceeded with rebuiltParams swaps params in loop`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -962,13 +962,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `context-full warning then no more tool calls completes normally`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -1006,13 +1006,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onContextExceeded returning both contextExceeded and rebuiltParams triggers warning and swaps params`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -1054,13 +1054,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `mid-loop history rebuild reduces context below threshold then model continues normally`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 
@@ -1108,13 +1108,13 @@ class LlmToolingOrchestratorTest {
     @Test
     fun `onContextExceeded rebuilds params multiple times if context stays exceeded`() = runTest {
         val toolRequest = ToolCallRequest(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             argumentsJson = """{"query":"test"}""",
             provider = "TEST",
             modelType = ModelType.FAST,
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"results":[]}""",
         )
 

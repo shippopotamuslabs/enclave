@@ -25,20 +25,6 @@ private data class SearchResponse(
 )
 
 @Serializable
-private data class SearchResult(
-    val title: String = "",
-    val url: String = "",
-    val content: String = "",
-    val score: Double = 0.0
-)
-
-@Serializable
-private data class MappedSearchResponse(
-    val query: String,
-    val results: List<SearchResult>
-)
-
-@Serializable
 private data class ExtractRequest(
     val urls: List<String>,
     val api_key: String,
@@ -48,17 +34,6 @@ private data class ExtractRequest(
 
 @Serializable
 private data class ExtractResponse(
-    val results: List<ExtractResult> = emptyList()
-)
-
-@Serializable
-private data class ExtractResult(
-    val url: String = "",
-    val raw_content: String = ""
-)
-
-@Serializable
-private data class MappedExtractResponse(
     val results: List<ExtractResult>
 )
 

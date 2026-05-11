@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
+import com.browntowndev.pocketcrew.core.data.artifact.SearchArtifactToolExecutor
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -27,6 +28,9 @@ class CompositeToolExecutorTest {
     private lateinit var getMessageContextToolExecutor: GetMessageContextToolExecutor
     private lateinit var manageMemoriesToolExecutor: ManageMemoriesToolExecutor
     private lateinit var artifactToolExecutor: ArtifactToolExecutor
+    private lateinit var searchArtifactToolExecutor: SearchArtifactToolExecutor
+    private lateinit var xSearchToolExecutor: XSearchToolExecutorImpl
+    private lateinit var mediaToolExecutor: MediaToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
@@ -40,6 +44,9 @@ class CompositeToolExecutorTest {
         getMessageContextToolExecutor = mockk()
         manageMemoriesToolExecutor = mockk()
         artifactToolExecutor = mockk()
+        searchArtifactToolExecutor = mockk()
+        xSearchToolExecutor = mockk()
+        mediaToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor = CompositeToolExecutor(
             searchToolExecutor = searchToolExecutor,
@@ -50,6 +57,9 @@ class CompositeToolExecutorTest {
             getMessageContextToolExecutor = getMessageContextToolExecutor,
             manageMemoriesToolExecutor = manageMemoriesToolExecutor,
             artifactToolExecutor = artifactToolExecutor,
+            searchArtifactToolExecutor = searchArtifactToolExecutor,
+            xSearchToolExecutor = xSearchToolExecutor,
+            mediaToolExecutor = mediaToolExecutor,
             eventBus = eventBus
         )
     }
@@ -60,7 +70,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-123"),
             userMessageId = MessageId("msg-123"),
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = "{\"query\": \"test\"}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -90,7 +100,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-123"),
             userMessageId = MessageId("msg-123"),
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = "{\"query\": \"test\"}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -124,7 +134,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-456"),
             userMessageId = MessageId("msg-456"),
-            toolName = ToolDefinition.TAVILY_EXTRACT.name,
+            toolName = ToolDefinition.WEB_EXTRACT.name,
             argumentsJson = "{\"urls\":[\"https://example.com\"]}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -146,7 +156,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-789"),
             userMessageId = MessageId("msg-789"),
-            toolName = ToolDefinition.TAVILY_EXTRACT.name,
+            toolName = ToolDefinition.WEB_EXTRACT.name,
             argumentsJson = "{\"urls\":[\"https://example.com\"]}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -165,25 +175,49 @@ class CompositeToolExecutorTest {
         }
     }
 
+
+
     @Test
-    fun `execute routes generate_artifact to artifactToolExecutor`() = runTest {
+    fun `execute routes search_x_recent to xSearchToolExecutor`() = runTest {
         // Given
         val request = ToolCallRequest(
-            chatId = ChatId("chat-abc"),
-            userMessageId = MessageId("msg-abc"),
-            toolName = ToolDefinition.GENERATE_ARTIFACT.name,
-            argumentsJson = "{\"documentType\":\"PDF\",\"title\":\"Report\",\"content\":\"{}\"}",
-            provider = "xai",
+            chatId = ChatId("chat-xyz"),
+            userMessageId = MessageId("msg-xyz"),
+            toolName = ToolDefinition.X_SEARCH.name,
+            argumentsJson = "{\"query\":\"test\"}",
+            provider = "x",
             modelType = ModelType.FAST
         )
         val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
-        coEvery { artifactToolExecutor.execute(request) } returns expectedResult
+        coEvery { xSearchToolExecutor.execute(request) } returns expectedResult
 
         // When
         val result = compositeToolExecutor.execute(request)
 
         // Then
-        coVerify { artifactToolExecutor.execute(request) }
+        coVerify { xSearchToolExecutor.execute(request) }
+        assertEquals(expectedResult, result)
+    }
+
+    @Test
+    fun `execute routes generate_image to mediaToolExecutor`() = runTest {
+        // Given
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-media"),
+            userMessageId = MessageId("msg-media"),
+            toolName = ToolDefinition.GENERATE_IMAGE.name,
+            argumentsJson = "{\"prompt\":\"test\"}",
+            provider = "replicate",
+            modelType = ModelType.FAST
+        )
+        val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
+        coEvery { mediaToolExecutor.execute(request) } returns expectedResult
+
+        // When
+        val result = compositeToolExecutor.execute(request)
+
+        // Then
+        coVerify { mediaToolExecutor.execute(request) }
         assertEquals(expectedResult, result)
     }
 
@@ -193,7 +227,8 @@ class CompositeToolExecutorTest {
         val executors = listOf(
             searchToolExecutor, extractToolExecutor, imageInspectToolExecutor,
             searchChatHistoryToolExecutor, searchChatToolExecutor,
-            getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor
+            getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor,
+            xSearchToolExecutor, mediaToolExecutor
         )
         executors.forEach {
             coEvery { it.execute(any()) } returns ToolExecutionResult("any", "{}")

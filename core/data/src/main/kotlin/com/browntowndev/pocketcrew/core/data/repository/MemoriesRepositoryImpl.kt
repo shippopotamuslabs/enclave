@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -16,10 +17,14 @@ import javax.inject.Singleton
 
 @Singleton
 class MemoriesRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val memoriesDao: MemoriesDao,
     private val embeddingDao: EmbeddingDao,
     private val embeddingEngine: EmbeddingEnginePort
 ) : MemoriesRepository {
+
+    private fun triggerSync() = syncTrigger.trigger()
+
     override fun getAllMemoriesFlow(): Flow<List<Memory>> = 
         memoriesDao.getAllMemoriesFlow().map { entities -> entities.map { it.toDomain() } }
 
@@ -30,9 +35,10 @@ class MemoriesRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertMemory(category: MemoryCategory, content: String): Memory {
-        val entity = MemoriesEntity(category = category, content = content)
+        val entity = MemoriesEntity(category = category, content = content, pendingSync = 1)
         memoriesDao.insertMemory(entity)
         updateEmbedding(entity.id, content)
+        triggerSync()
         return entity.toDomain()
     }
 
@@ -41,16 +47,22 @@ class MemoriesRepositoryImpl @Inject constructor(
         val updated = existing.copy(
             content = content, 
             category = category ?: existing.category, 
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            pendingSync = 1
         )
         memoriesDao.updateMemory(updated)
         updateEmbedding(updated.id, content)
+        triggerSync()
+    }
+
+    override suspend fun getMemoryById(id: String): Memory? {
+        return memoriesDao.getMemoryById(id)?.toDomain()
     }
 
     override suspend fun deleteMemory(id: String) {
-        val existing = memoriesDao.getMemoryById(id) ?: return
-        memoriesDao.deleteMemory(existing)
+        memoriesDao.softDeleteById(id)
         deleteEmbedding(id)
+        triggerSync()
     }
 
     private suspend fun updateEmbedding(id: String, content: String) {

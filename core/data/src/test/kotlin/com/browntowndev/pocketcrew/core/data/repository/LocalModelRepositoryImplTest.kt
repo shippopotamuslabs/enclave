@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -10,8 +11,8 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,17 +27,10 @@ import org.robolectric.annotation.Config
 class LocalModelRepositoryImplTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var repository: LocalModelRepositoryImpl
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     private val fakeTransactionProvider = object : TransactionProvider {
         override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
-    }
-
-    private val fakeLogger = object : LoggingPort {
-        override fun info(tag: String, message: String) {}
-        override fun debug(tag: String, message: String) {}
-        override fun warning(tag: String, message: String) {}
-        override fun error(tag: String, message: String, throwable: Throwable?) {}
-        override fun recordException(tag: String, message: String, throwable: Throwable) {}
     }
 
     @Before
@@ -47,11 +41,11 @@ class LocalModelRepositoryImplTest {
         ).allowMainThreadQueries().build()
 
         repository = LocalModelRepositoryImpl(
-            database.localModelsDao(),
-            database.localModelConfigurationsDao(),
-            database.defaultModelsDao(),
-            fakeTransactionProvider,
-            fakeLogger
+            syncTrigger = syncTrigger,
+            modelsDao = database.localModelsDao(),
+            configsDao = database.localModelConfigurationsDao(),
+            defaultModelsDao = database.defaultModelsDao(),
+            transactionProvider = fakeTransactionProvider
         )
     }
 

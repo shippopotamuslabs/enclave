@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -19,7 +20,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,9 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
+import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import kotlinx.coroutines.launch
 
@@ -65,7 +70,9 @@ fun AssistantResponse(
     isPreview: Boolean = false,
     hasTtsProviderAssigned: Boolean = false,
     onPlayAudio: (String) -> Unit = {},
-    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
+    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
+    onShareClick: (MessageId) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -99,7 +106,7 @@ fun AssistantResponse(
         DetailBottomSheet(
             config = DetailBottomSheetConfig.Sources(
                 isVisible = showSources,
-                sources = message.tavilySources,
+                sources = message.webSearchSources,
                 onDismiss = { showSources = false }
             )
         )
@@ -141,14 +148,37 @@ fun AssistantResponse(
                     contentPadding = PaddingValues(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(message.content.artifacts) { artifact ->
+                    items(message.content.artifacts) { card ->
                         ArtifactCard(
-                            artifact = artifact,
-                            onClick = { onNavigateToArtifact(artifact) }
+                            card = card,
+                            onClick = { onArtifactCardClick(message.id, card) },
                         )
                     }
                 }
             }
+            
+            // Generated Media Card (Aggregated)
+            if (message.content.generatedMediaUris.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                val mediaUris = message.content.generatedMediaUris
+                val mediaIds = message.content.generatedMediaAssetIds
+                val mediaTypes = message.content.generatedMediaTypes
+                val mediaPrompts = message.content.generatedMediaPrompts
+
+                MediaCard(
+                    uris = mediaUris,
+                    mediaTypes = mediaTypes,
+                    prompts = mediaPrompts,
+                    onClick = { u, t, p -> 
+                        onNavigateToStudio(mediaIds, u, t, p) 
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            val isComplete = message.indicatorState is IndicatorState.Complete || 
+                            message.indicatorState is IndicatorState.None || 
+                            isPreview
 
             Row(
                 modifier = Modifier
@@ -161,12 +191,19 @@ fun AssistantResponse(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    // Action Buttons - Copy and Sources
-                    val isComplete = message.indicatorState is IndicatorState.Complete || 
-                                    message.indicatorState is IndicatorState.None || 
-                                    isPreview
-                    
                     if (isComplete) {
+                        // Share Button
+                        IconButton(
+                            onClick = { onShareClick(message.id) },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
                         // Copy Button
                         IconButton(
                             onClick = {
@@ -206,7 +243,7 @@ fun AssistantResponse(
                         }
 
                         // Sources Pill Button
-                        if (message.tavilySources.isNotEmpty()) {
+                        if (message.webSearchSources.isNotEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -242,7 +279,7 @@ fun AssistantResponse(
                 }
 
                 // Timestamp
-                if (message.formattedTimestamp.isNotBlank()) {
+                if (isComplete && message.formattedTimestamp.isNotBlank()) {
                     Text(
                         text = message.formattedTimestamp,
                         style = MaterialTheme.typography.bodySmall,
@@ -372,7 +409,7 @@ private fun CompletedStepRow(
 }
 @Composable
 private fun ArtifactCard(
-    artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    card: ArtifactCardUiModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -415,7 +452,7 @@ private fun ArtifactCard(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            text = "PDF",
+                            text = card.badgeLabel,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Black,
@@ -433,7 +470,7 @@ private fun ArtifactCard(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = artifact.title,
+                    text = card.title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.sp
@@ -444,7 +481,7 @@ private fun ArtifactCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "PDF Document • Generated",
+                    text = card.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -456,7 +493,7 @@ private fun ArtifactCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Open in Studio",
+                        text = card.ctaLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -467,6 +504,133 @@ private fun ArtifactCard(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaCard(
+    uris: List<String>,
+    mediaTypes: List<String>,
+    prompts: List<String>,
+    onClick: (uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var loadError by remember { mutableStateOf(false) }
+    val primaryUri = uris.firstOrNull() ?: ""
+    val primaryType = mediaTypes.firstOrNull()
+    val count = uris.size
+
+    Surface(
+        onClick = { if (!loadError) onClick(uris, mediaTypes, prompts) },
+        modifier = modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(12.dp)
+        ) {
+            // Media Preview
+            Box(
+                modifier = Modifier
+                    .size(width = 80.dp, height = 80.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center
+            ) {
+                if (loadError) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Deleted",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                } else {
+                    coil3.compose.AsyncImage(
+                        model = primaryUri,
+                        contentDescription = "Generated media",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        onError = { loadError = true },
+                        error = painterResource(R.drawable.pocket_crew_icon)
+                    )
+                    
+                    if (count > 1) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "+${count - 1}",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = androidx.compose.ui.graphics.Color.White
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                val title = if (loadError) "Media Missing" else {
+                    val typeLabel = when (primaryType) {
+                        "VIDEO" -> "Video"
+                        "MUSIC" -> "Audio"
+                        else -> "Image"
+                    }
+                    if (count > 1) "$count ${typeLabel}s Generated" else "Generated $typeLabel"
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.sp
+                    ),
+                    color = if (loadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (loadError) "Deleted from storage" else "Available in Studio",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                if (!loadError) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Open in Studio",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

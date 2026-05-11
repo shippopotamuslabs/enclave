@@ -1,39 +1,54 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.util.Log
+import androidx.work.NetworkType
 import androidx.work.WorkInfo
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.util.Clock
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
-
 @Singleton
 class WorkProgressParser @Inject constructor(
-    private val sessionManager: DownloadSessionManager
+    private val sessionManager: DownloadSessionManager,
+    private val clock: Clock
 ) {
     companion object {
         private const val TAG = "WorkProgressParser"
+        private const val WIFI_BLOCKED_THRESHOLD_MS = 5_000L
     }
+
+    // Tracks when the downloader was first observed in ENQUEUED state.
+    // Reset whenever the state transitions away from ENQUEUED.
+    private var firstEnqueuedTime: Long? = null
 
     fun parse(
         workInfo: WorkInfo,
         currentDownloads: List<FileProgress>
     ): DownloadProgressUpdate? {
-        // Extract worker stage from output data (available on terminal states)
-        // or from progress data (available during running state).
-        // Safe to null: legacy single-worker chains don't set worker_stage.
-        val workerStage = runCatching {
-            workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
-        }.getOrNull()
-            ?: runCatching {
-                workInfo.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
-            }.getOrNull()
+        // Reset the ENQUEUED debounce timer whenever the worker leaves ENQUEUED state.
+        if (workInfo.state != WorkInfo.State.ENQUEUED) {
+            firstEnqueuedTime = null
+        }
+
+        // Derive worker stage: tags (always set at enqueue) take priority over
+        // output/progress data (only set after the worker runs).
+        val tagStage = try {
+            when {
+                workInfo.tags.any { it == ModelDownloadWorker::class.java.name } -> DownloadWorkKeys.STAGE_DOWNLOAD
+                workInfo.tags.any { it == DownloadFinalizeWorker::class.java.name } -> DownloadWorkKeys.STAGE_FINALIZE
+                else -> null
+            }
+        } catch (_: Exception) { null }
+
+        val workerStage = tagStage
+            ?: runCatching { workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
+            ?: runCatching { workInfo.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
 
         when (workInfo.state) {
             WorkInfo.State.SUCCEEDED -> {
@@ -67,14 +82,13 @@ class WorkProgressParser @Inject constructor(
                     parseRunning(workInfo, currentDownloads)
                 }
             }
-            WorkInfo.State.ENQUEUED -> {
-                DownloadProgressUpdate(status = DownloadStatus.CHECKING)
-            }
+            WorkInfo.State.ENQUEUED -> parseEnqueued(workInfo, workerStage)
             WorkInfo.State.BLOCKED -> {
-                DownloadProgressUpdate(
-                    status = DownloadStatus.WIFI_BLOCKED,
-                    waitingForUnmeteredNetwork = true
-                )
+                // BLOCKED = chain prerequisite not satisfied (always the finalizer waiting on the
+                // downloader, never a network-constraint issue). Return null so the UI preserves
+                // its current DOWNLOADING state instead of flipping to "Waiting for Wi-Fi".
+                Log.d(TAG, "BLOCKED state (chain dependency) — preserving current UI state")
+                null
             }
             WorkInfo.State.CANCELLED -> {
                 DownloadProgressUpdate(status = DownloadStatus.PAUSED)
@@ -243,6 +257,28 @@ class WorkProgressParser @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse file progress: $data", e)
             null
+        }
+    }
+
+    /**
+     * Returns WIFI_BLOCKED when the downloader has been ENQUEUED with an UNMETERED constraint
+     * for longer than the debounce threshold, indicating the network constraint is genuinely unmet.
+     * Returns CHECKING within the debounce window to avoid false positives during cold-start.
+     */
+    private fun parseEnqueued(workInfo: WorkInfo, workerStage: String?): DownloadProgressUpdate {
+        if (workerStage != DownloadWorkKeys.STAGE_DOWNLOAD) {
+            return DownloadProgressUpdate(status = DownloadStatus.CHECKING)
+        }
+        val now = clock.currentTimeMillis()
+        if (firstEnqueuedTime == null) firstEnqueuedTime = now
+        val elapsed = now - firstEnqueuedTime!!
+        val requiresUnmetered = try {
+            workInfo.constraints.requiredNetworkType == NetworkType.UNMETERED
+        } catch (_: Exception) { false }
+        return if (requiresUnmetered && elapsed >= WIFI_BLOCKED_THRESHOLD_MS) {
+            DownloadProgressUpdate(status = DownloadStatus.WIFI_BLOCKED, waitingForUnmeteredNetwork = true)
+        } else {
+            DownloadProgressUpdate(status = DownloadStatus.CHECKING)
         }
     }
 

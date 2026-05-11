@@ -61,7 +61,7 @@ internal const val MODEL_FORMAT_GGUF = "GGUF"
 internal const val MODEL_FORMAT_LITERT = "LiteRT"
 
 @Composable
-fun LocalModelConfigureRoute(
+internal fun LocalModelConfigureRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel,
 ) {
@@ -179,7 +179,9 @@ fun LocalModelConfigureScreen(
                             Text("System Prompt")
                             Spacer(modifier = Modifier.width(4.dp))
                             PersistentTooltip(
-                                description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                                description = "Certain pipeline slots (like Crew Mode or Vision) require " +
+                                    "specialized system prompts to function correctly. " +
+                                    "Use the Import button to load a template."
                             )
                         }
                     },
@@ -288,7 +290,10 @@ fun LocalModelConfigureScreen(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                        ),
                         readOnly = config.isSystemPreset,
                         enabled = !config.isSystemPreset
                     )
@@ -305,7 +310,10 @@ fun LocalModelConfigureScreen(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                        ),
                         readOnly = config.isSystemPreset,
                         enabled = !config.isSystemPreset
                     )
@@ -323,7 +331,10 @@ fun LocalModelConfigureScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                    ),
                     readOnly = config.isSystemPreset,
                     enabled = !config.isSystemPreset
                 )
@@ -343,7 +354,10 @@ fun LocalModelConfigureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                ),
                 readOnly = config.isSystemPreset,
                 enabled = !config.isSystemPreset
             )
@@ -371,7 +385,8 @@ fun LocalModelConfigureScreen(
             if (isGgufFormat) {
                 TuningSlider(
                     label = "Min P",
-                    description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
+                    description = "Limits the next token choice to tokens with probability " +
+                        "at least P times the probability of the most likely token.",
                     value = config.minP.toFloat(),
                     range = 0f..1f,
                     onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) },

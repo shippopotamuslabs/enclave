@@ -60,7 +60,13 @@ class SearchChatHistoryToolExecutor @Inject constructor(
         return try {
             executeInternal(request)
         } catch (e: Exception) {
-            loggingPort.error(TAG, "search_chat_history FAILED provider=${request.provider} modelType=${request.modelType} arguments=${request.argumentsJson} error=${e.message}", e)
+            loggingPort.error(
+                TAG,
+                "search_chat_history FAILED provider=${request.provider} " +
+                    "modelType=${request.modelType} arguments=${request.argumentsJson} " +
+                    "error=${e.message}",
+                e
+            )
             throw e
         }
     }
@@ -92,10 +98,10 @@ class SearchChatHistoryToolExecutor @Inject constructor(
             allMessages[msg.id] = msg to "direct"
         }
 
-        // Add context for top matches
+        // Add context for top matches — matches come from DB and always have a chatId
         initialMatches.take(5).forEach { match ->
             val context = messageRepository.getMessagesAround(
-                chatId = match.chatId,
+                chatId = match.chatId ?: return@forEach,
                 timestamp = match.createdAt ?: 0L,
                 before = CONTEXT_BEFORE,
                 after = CONTEXT_AFTER,
@@ -107,18 +113,20 @@ class SearchChatHistoryToolExecutor @Inject constructor(
             }
         }
 
-        val sortedMessages = allMessages.values.sortedWith(compareBy<Pair<Message, String>> { it.first.chatId.value }
+        val sortedMessages = allMessages.values.sortedWith(compareBy<Pair<Message, String>> { it.first.chatId?.value }
             .thenBy { it.first.createdAt ?: Long.MIN_VALUE })
 
-        // Get chat names for results
-        val chatIds = sortedMessages.map { it.first.chatId }.distinct()
+        // Get chat names for results — messages from DB always have a chatId
+        val chatIds = sortedMessages.mapNotNull { it.first.chatId }.distinct()
         val chatNames = chatRepository.getChatsByIds(chatIds).mapValues { it.value.name }
 
         val resultJson = buildChatHistoryResultJson(queries, totalMatchCount, sortedMessages, chatNames)
 
         loggingPort.info(
             TAG,
-            "search_chat_history complete provider=${request.provider} modelType=${request.modelType} queries=$queries totalMatched=$totalMatchCount returned=${sortedMessages.size}"
+            "search_chat_history complete provider=${request.provider} " +
+                "modelType=${request.modelType} queries=$queries " +
+                "totalMatched=$totalMatchCount returned=${sortedMessages.size}"
         )
 
         return ToolExecutionResult(
@@ -142,8 +150,8 @@ class SearchChatHistoryToolExecutor @Inject constructor(
             }
             SearchHistoryMessageResult(
                 message_id = message.id.value,
-                chat_id = message.chatId.value,
-                chat_name = chatNames[message.chatId] ?: "Unknown",
+                chat_id = message.chatId?.value ?: "",
+                chat_name = message.chatId?.let { chatNames[it] } ?: "Unknown",
                 role = message.role.name,
                 content = truncatedContent,
                 created_at = message.createdAt,

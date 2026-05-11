@@ -21,7 +21,7 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("Be concise."))
         assertTrue(
             composed.contains(
-                """ActionResult{"name":"tavily_web_search","arguments":{"""
+                """ActionResult{"name":"web_search","arguments":{"""
             )
         )
         assertEquals("Be concise.", basePrompt)
@@ -31,7 +31,7 @@ class SearchToolPromptComposerTest {
     fun `compose can include the image inspect contract when requested`() {
         val composed = composer.compose("Be concise.", includeImageInspectTool = true)
 
-        assertTrue(composed.contains("tavily_web_search"))
+        assertTrue(composed.contains("web_search"))
         assertTrue(composed.contains("attached_image_inspect"))
     }
 
@@ -43,7 +43,7 @@ class SearchToolPromptComposerTest {
             includeImageInspectTool = true
         )
 
-        assertFalse(composed.contains("tavily_web_search"), "Should not contain search contract")
+        assertFalse(composed.contains("web_search"), "Should not contain search contract")
         assertTrue(composed.contains("attached_image_inspect"), "Should contain image inspect contract")
         assertTrue(composed.contains("Be concise."), "Should contain base prompt")
     }
@@ -56,9 +56,10 @@ class SearchToolPromptComposerTest {
             strategy = ToolCallStrategy.LITE_RT_NATIVE
         )
 
-        assertTrue(composed.contains("call:tavily_web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(composed.contains("tavily_extract. Note that 'urls' must be a SINGLE string"))
-        assertTrue(composed.contains("April 16, 2026"))
+        assertTrue(composed.contains("call:web_search{query: <|\"|>...<|\"|>}"))
+        assertTrue(composed.contains("web_extract. Note that 'urls' must be a SINGLE string"))
+        assertFalse(composed.contains("May 3, 2026"))
+        assertTrue(composed.contains("# TEMPORAL CONTEXT:"))
         // tool_call may appear in strict rules
     }
 
@@ -71,7 +72,7 @@ class SearchToolPromptComposerTest {
             strategy = ToolCallStrategy.LITE_RT_NATIVE
         )
 
-        assertTrue(composed.contains("call:tavily_web_search"))
+        assertTrue(composed.contains("call:web_search"))
         assertTrue(composed.contains("call:attached_image_inspect"))
         assertTrue(composed.contains("STRICT EXECUTION RULES:"))
         assertTrue(composed.contains("Use exactly the 'call:tool_name{...}' format"))
@@ -117,7 +118,7 @@ class SearchToolPromptComposerTest {
 
         assertTrue(composed.contains("search_chat_history"))
         assertTrue(composed.contains("search_chat"))
-        assertFalse(composed.contains("tavily_web_search"))
+        assertFalse(composed.contains("web_search"))
     }
 
     @Test

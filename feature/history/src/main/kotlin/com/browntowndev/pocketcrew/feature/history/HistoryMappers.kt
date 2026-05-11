@@ -14,7 +14,8 @@ fun Chat.toHistoryChat(): HistoryChat {
         id = id,
         name = name,
         lastMessageDateTime = formatLastModified(lastModified),
-        isPinned = pinned
+        isPinned = pinned,
+        isSyncing = isSyncing
     )
 }
 

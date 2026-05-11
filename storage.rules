@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // 1. User-specific private data (Media, Studio photos, and File attachments)
+    // Only the owner can read or write these files.
+    match /users/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+                         && request.resource.size < 100 * 1024 * 1024; // 100MB Limit
+    }
+
+    // 2. Shared Chat Media
+    // Publicly readable so recipients can view images
+    match /shared_chat_media/{shareId}/{mediaId} {
+      allow read: if true;
+      // Only the owner of the shared chat can write to its media folder.
+      allow write: if request.auth != null && 
+                   firestore.get(/databases/(default)/documents/shared_chats/$(shareId)).data.ownerId == request.auth.uid
+                   && request.resource.size < 50 * 1024 * 1024; // 50MB Limit
+    }
+
+    // 3. Temporary Extraction Data
+    // Users can upload their documents for cloud processing.
+    // Only the owner can write or delete.
+    // Nobody can read (only Cloud Functions/Admin can).
+    match /temp_extractions/{userId}/{fileId} {
+      allow write, delete: if request.auth != null && request.auth.uid == userId
+                          && request.resource.size < 10 * 1024 * 1024; // 10MB Limit
+      allow read: if false;
+    }
+
+    // 4. Temporary Generation Data
+    // Users can upload markdown and read the generated result.
+    match /temp_generations/{userId}/{fileId} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId
+                          && (request.method == 'GET' || request.resource.size < 10 * 1024 * 1024); // 10MB Limit
+    }
+
+    // 4. Global Safety: Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

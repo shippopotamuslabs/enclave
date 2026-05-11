@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
@@ -59,6 +60,21 @@ class InferenceService : Service() {
         const val EXTRA_CHAT_ID = "chat_id"
         const val EXTRA_USER_MESSAGE = "user_message"
         const val EXTRA_STATE_JSON = "state_json"
+
+        // Token budget calculation constants
+        private const val CHARS_PER_TOKEN = 3.5
+        private const val CONTEXT_AVAILABLE_RATIO = 0.75
+        private const val DRAFT_TOKEN_RATIO = 0.40
+        private const val SYNTHESIS_CANDIDATE_RATIO = 0.74
+        private const val FINAL_USER_PROMPT_RATIO = 0.20
+        private const val REVIEW_AVAILABLE_RATIO = 0.80
+        private const val REVIEW_USER_PROMPT_RATIO = 0.13
+        private const val REVIEW_USER_SYSTEM_RATIO = 0.13
+        private const val REVIEW_CANDIDATE_RATIO = 0.74
+        private const val PROGRESS_DRAFT_ONE = 25
+        private const val PROGRESS_DRAFT_TWO = 50
+        private const val PROGRESS_SYNTHESIS = 75
+        private const val PROGRESS_FINAL = 100
     }
 
     @Inject
@@ -76,7 +92,8 @@ class InferenceService : Service() {
     @Inject
     lateinit var inferenceEventBus: InferenceEventBus
 
-    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    @VisibleForTesting
+    internal var serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
     private var currentChatId: String? = null
     private var isRunning = false
@@ -148,9 +165,10 @@ class InferenceService : Service() {
         // Execute pipeline in coroutine
         currentJob = serviceScope.launch {
             try {
-                executePipeline(chatId, userMessage, state)
+                executePipeline(chatId, state)
             } catch (e: CancellationException) {
                 logger.info(TAG, "Pipeline cancelled for chat: $chatId")
+                throw e
             } catch (e: Exception) {
                 logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
                 inferenceEventBus.emitPipelineState(
@@ -221,9 +239,10 @@ class InferenceService : Service() {
         currentJob = serviceScope.launch {
             try {
                 // Resume from saved state (currentStep is already set in savedState)
-                executePipeline(chatId, savedState.userMessage, savedState)
+                executePipeline(chatId, savedState)
             } catch (e: CancellationException) {
                 logger.info(TAG, "Pipeline cancelled for chat: $chatId")
+                throw e
             } catch (e: Exception) {
                 logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
                 inferenceEventBus.emitPipelineState(
@@ -258,7 +277,6 @@ class InferenceService : Service() {
      */
     private suspend fun executePipeline(
         chatId: String,
-        userMessage: String,
         initialState: PipelineState
     ) {
         // Make state mutable so we can update it as we progress through steps
@@ -266,6 +284,7 @@ class InferenceService : Service() {
         var currentStep = currentState.currentStep
         var stepOrder = 0
 
+        @Suppress("LoopWithTooManyJumpStatements")
         while (true) {
             logger.info(TAG, "Executing step: ${currentStep.name}")
             val prompt = buildPromptForStep(currentState)
@@ -370,9 +389,11 @@ class InferenceService : Service() {
                             MessageGenerationState.GeneratingText(event.chunk, getModelTypeForStep(step))
                         )
                     }
-                    is InferenceEvent.TavilyResults -> Unit
+                    is InferenceEvent.WebSearchResults -> Unit
                     is InferenceEvent.Artifacts -> Unit
-                    is InferenceEvent.Finished -> {                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
+                    is InferenceEvent.Media -> Unit
+                    is InferenceEvent.Finished -> {
+                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }
                     is InferenceEvent.SafetyBlocked -> {
                         throw SecurityException("Content blocked: ${event.reason}")
@@ -424,16 +445,16 @@ class InferenceService : Service() {
             PipelineStep.DRAFT_ONE, PipelineStep.DRAFT_TWO -> {
                 val synthConfig = activeModelProvider.getActiveConfiguration(getModelTypeForStep(PipelineStep.SYNTHESIS))
                 val synthContext = synthConfig?.contextWindow ?: 4096
-                val synthSystemTokens = (synthConfig?.systemPrompt?.length ?: 0) / 3.5
-                val available = (synthContext * 0.75) - synthSystemTokens
-                (available * 0.40).toInt().coerceAtLeast(100)
+                val synthSystemTokens = (synthConfig?.systemPrompt?.length ?: 0) / CHARS_PER_TOKEN
+                val available = (synthContext * CONTEXT_AVAILABLE_RATIO) - synthSystemTokens
+                (available * DRAFT_TOKEN_RATIO).toInt().coerceAtLeast(100)
             }
             PipelineStep.SYNTHESIS -> {
                 val finalConfig = activeModelProvider.getActiveConfiguration(getModelTypeForStep(PipelineStep.FINAL))
                 val finalContext = finalConfig?.contextWindow ?: 4096
-                val finalSystemTokens = (finalConfig?.systemPrompt?.length ?: 0) / 3.5
-                val available = (finalContext * 0.75) - finalSystemTokens
-                (available * 0.74).toInt().coerceAtLeast(100)
+                val finalSystemTokens = (finalConfig?.systemPrompt?.length ?: 0) / CHARS_PER_TOKEN
+                val available = (finalContext * CONTEXT_AVAILABLE_RATIO) - finalSystemTokens
+                (available * SYNTHESIS_CANDIDATE_RATIO).toInt().coerceAtLeast(100)
             }
             PipelineStep.FINAL -> null // Use default maxTokens from its own config
         }
@@ -441,15 +462,15 @@ class InferenceService : Service() {
 
     private fun truncateChars(text: String, maxTokens: Int): String {
         // Conservative heuristic: 3.5 chars per token for English text
-        val maxChars = (maxTokens * 3.5).toInt()
+        val maxChars = (maxTokens * CHARS_PER_TOKEN).toInt()
         if (text.length <= maxChars) return text
         return text.take(maxChars) + "\n... [truncated to fit context window]"
     }
 
     private fun buildAnalyticalDraftPrompt(userPrompt: String, systemPrompt: String, contextWindow: Int): String {
         // Simple draft budget: Reserve 20% for completion + system prompt, 80% for user prompt
-        val systemPromptTokens = (systemPrompt.length / 3.5).toInt()
-        val budget = (contextWindow * 0.80).toInt() - systemPromptTokens
+        val systemPromptTokens = (systemPrompt.length / CHARS_PER_TOKEN).toInt()
+        val budget = (contextWindow * REVIEW_AVAILABLE_RATIO).toInt() - systemPromptTokens
         val safeUserPrompt = truncateChars(userPrompt, budget.coerceAtLeast(100))
 
         return """
@@ -462,8 +483,8 @@ $safeUserPrompt
 
     private fun buildCreativeDraftPrompt(userPrompt: String, systemPrompt: String, contextWindow: Int): String {
         // Simple draft budget: Reserve 20% for completion + system prompt, 80% for user prompt
-        val systemPromptTokens = (systemPrompt.length / 3.5).toInt()
-        val budget = (contextWindow * 0.80).toInt() - systemPromptTokens
+        val systemPromptTokens = (systemPrompt.length / CHARS_PER_TOKEN).toInt()
+        val budget = (contextWindow * REVIEW_AVAILABLE_RATIO).toInt() - systemPromptTokens
         val safeUserPrompt = truncateChars(userPrompt, budget.coerceAtLeast(100))
 
         return """
@@ -474,15 +495,16 @@ $safeUserPrompt
 """.trimIndent()
     }
 
+    @Suppress("MaxLineLength")
     private fun buildMainSynthesisPrompt(userPrompt: String, draft1: String, draft2: String, modelSystemPrompt: String, contextWindow: Int): String {
         // Synthesis model budget strategy:
         // Reserve 25% for completion + native model system prompt + overhead
         // Divide remaining 75% as: 15% user prompt, 30% per draft
-        val systemPromptTokens = (modelSystemPrompt.length / 3.5).toInt()
-        val totalAvailable = (contextWindow * 0.75).toInt() - systemPromptTokens
+        val systemPromptTokens = (modelSystemPrompt.length / CHARS_PER_TOKEN).toInt()
+        val totalAvailable = (contextWindow * CONTEXT_AVAILABLE_RATIO).toInt() - systemPromptTokens
         
-        val draftBudget = (totalAvailable * 0.40).toInt() // 40% of available (30% of total) per draft
-        val promptBudget = (totalAvailable * 0.20).toInt() // 20% of available (15% of total) for user prompt
+        val draftBudget = (totalAvailable * DRAFT_TOKEN_RATIO).toInt() // 40% of available (30% of total) per draft
+        val promptBudget = (totalAvailable * FINAL_USER_PROMPT_RATIO).toInt() // 20% of available (15% of total) for user prompt
 
         val safeUserPrompt = truncateChars(userPrompt, promptBudget.coerceAtLeast(100))
         val safeDraft1 = truncateChars(draft1, draftBudget.coerceAtLeast(100))
@@ -502,16 +524,17 @@ $safeDraft2
 """.trimIndent()
     }
 
+    @Suppress("MaxLineLength")
     private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String, userSystemPrompt: String, modelSystemPrompt: String, contextWindow: Int): String {
         // Final Review budget strategy:
         // Reserve 25% for completion + native model system prompt + overhead
         // Divide remaining 75% as: 10% user prompt, 10% user custom system prompt, 55% synthesis candidate
-        val modelSystemPromptTokens = (modelSystemPrompt.length / 3.5).toInt()
-        val totalAvailable = (contextWindow * 0.75).toInt() - modelSystemPromptTokens
+        val modelSystemPromptTokens = (modelSystemPrompt.length / CHARS_PER_TOKEN).toInt()
+        val totalAvailable = (contextWindow * CONTEXT_AVAILABLE_RATIO).toInt() - modelSystemPromptTokens
         
-        val userPromptBudget = (totalAvailable * 0.13).toInt() // ~10% of total
-        val userSystemBudget = (totalAvailable * 0.13).toInt() // ~10% of total
-        val candidateBudget = (totalAvailable * 0.74).toInt() // ~55% of total (scaled to available)
+        val userPromptBudget = (totalAvailable * REVIEW_USER_PROMPT_RATIO).toInt() // ~10% of total
+        val userSystemBudget = (totalAvailable * REVIEW_USER_SYSTEM_RATIO).toInt() // ~10% of total
+        val candidateBudget = (totalAvailable * REVIEW_CANDIDATE_RATIO).toInt() // ~55% of total (scaled to available)
 
         val safeUserPrompt = truncateChars(userPrompt, userPromptBudget.coerceAtLeast(100))
         val safeCandidate = truncateChars(candidateAnswer, candidateBudget.coerceAtLeast(100))
@@ -530,6 +553,7 @@ USER_SYSTEM_PROMPT:
 ${safeUserSystemPrompt.ifEmpty { "(none provided)" }}
 
 OUTPUT_CONTRACT:
+@Suppress("MaxLineLength")
 Produce the final polished response for the user. Output ONLY the essay itself â€” no critique, no feedback, no suggestions, no headings. Just the clean final answer.
 """.trimIndent()
     }
@@ -578,7 +602,8 @@ Produce the final polished response for the user. Output ONLY the essay itself â
         notificationManager.createNotificationChannel(completionChannel)
     }
 
-    private fun createCancelPendingIntent(): PendingIntent {
+    @androidx.annotation.VisibleForTesting
+    internal fun createCancelPendingIntent(): PendingIntent {
         val cancelIntent = Intent(this, InferenceService::class.java).apply {
             action = ACTION_STOP
         }
@@ -590,16 +615,17 @@ Produce the final polished response for the user. Output ONLY the essay itself â
         )
     }
 
-    private fun createProgressNotification(
+    @androidx.annotation.VisibleForTesting
+    internal fun createProgressNotification(
         currentStep: PipelineStep,
         hasMoreSteps: Boolean,
         cancelPendingIntent: PendingIntent
     ): Notification {
         val progress = when (currentStep) {
-            PipelineStep.DRAFT_ONE -> 25
-            PipelineStep.DRAFT_TWO -> 50
-            PipelineStep.SYNTHESIS -> 75
-            PipelineStep.FINAL -> 100
+            PipelineStep.DRAFT_ONE -> PROGRESS_DRAFT_ONE
+            PipelineStep.DRAFT_TWO -> PROGRESS_DRAFT_TWO
+            PipelineStep.SYNTHESIS -> PROGRESS_SYNTHESIS
+            PipelineStep.FINAL -> PROGRESS_FINAL
         }
 
         val contentTitle = "Crew is thinking"

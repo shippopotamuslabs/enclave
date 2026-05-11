@@ -1,8 +1,7 @@
 package com.browntowndev.pocketcrew.feature.chat
 
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 
 /**
@@ -15,8 +14,12 @@ import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 data class ContentUi(
     val text: String,
     val pipelineStep: PipelineStep? = null,
-    val imageUri: String? = null,
-    val tavilySources: List<TavilySource> = emptyList(),
-    val artifacts: List<ArtifactGenerationRequest> = emptyList(),
+    val imageUris: List<String> = emptyList(),
+    val webSearchSources: List<WebSearchSource> = emptyList(),
+    val artifacts: List<ArtifactCardUiModel> = emptyList(),
     val fileAttachments: List<FileAttachment> = emptyList(),
+    val generatedMediaUris: List<String> = emptyList(),
+    val generatedMediaAssetIds: List<String> = emptyList(),
+    val generatedMediaTypes: List<String> = emptyList(),
+    val generatedMediaPrompts: List<String> = emptyList(),
 )

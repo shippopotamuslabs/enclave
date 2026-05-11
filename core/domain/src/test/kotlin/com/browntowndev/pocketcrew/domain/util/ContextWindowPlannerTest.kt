@@ -4,7 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -31,7 +31,7 @@ class ContextWindowPlannerTest {
     private fun makeTool(name: String, desc: String) = ToolDefinition(
         name = name,
         description = desc,
-        parametersClass = TavilyWebSearchParams::class,
+        parametersClass = WebSearchParams::class,
     )
 
     // ── budgetFor ──────────────────────────────────────────────────────────
@@ -56,11 +56,11 @@ class ContextWindowPlannerTest {
 
             // outputReserve = min(1024 default, 8192/4=2048) = 1024
             // reasoningReserve = 512
-            // toolSchemaTokens = tokens(tool schema JSON for TavilyWebSearchParams)
+            // toolSchemaTokens = tokens(tool schema JSON for WebSearchParams)
             // mediaReserve = 2 * 1024 = 2048
             // safetyBuffer = 256 (default)
             // We don't assert an exact value for reservedTokens since the
-            // TavilyWebSearchParams schema size may change, just that it's > 0
+            // WebSearchParams schema size may change, just that it's > 0
             assertTrue(budget.reservedTokens > 0)
             assertTrue(budget.reservedTokens > 1024 + 512 + 2048 + 256) // must include schema
         }

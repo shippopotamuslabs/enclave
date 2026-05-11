@@ -1,25 +1,30 @@
 package com.browntowndev.pocketcrew.core.data.remote.download
 
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.NetworkType
 import androidx.work.WorkInfo
+import com.browntowndev.pocketcrew.core.data.download.DownloadFinalizeWorker
+import com.browntowndev.pocketcrew.core.data.download.DownloadSessionManager
+import com.browntowndev.pocketcrew.core.data.download.ModelDownloadWorker
+import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
+import com.browntowndev.pocketcrew.core.testing.TestClock
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
-import com.browntowndev.pocketcrew.core.data.download.DownloadSessionManager
-import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
 import io.mockk.mockkStatic
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for WorkProgressParser.
@@ -30,6 +35,7 @@ class WorkProgressParserTest {
     @MockK
     private lateinit var mockSessionManager: DownloadSessionManager
 
+    private lateinit var testClock: TestClock
     private lateinit var parser: WorkProgressParser
 
     @BeforeEach
@@ -41,7 +47,8 @@ class WorkProgressParserTest {
         every { Log.w(any<String>(), any<String>(), any<Throwable>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
 
-        parser = WorkProgressParser(mockSessionManager)
+        testClock = TestClock()
+        parser = WorkProgressParser(mockSessionManager, testClock)
     }
 
     @Test
@@ -216,19 +223,116 @@ class WorkProgressParserTest {
     }
 
     @Test
-    fun `parse returns wifi_blocked status when blocked`() {
-        // Given: WorkInfo with BLOCKED state
+    fun `parse returns null for BLOCKED state (chain dependency, not a network issue)`() {
+        // BLOCKED = chain prerequisite not satisfied (finalizer waiting on downloader).
+        // This must NOT surface as WIFI_BLOCKED — it would incorrectly freeze the UI.
         val workInfo = mockk<WorkInfo> {
             every { state } returns WorkInfo.State.BLOCKED
+            every { tags } returns setOf(DownloadFinalizeWorker::class.java.name)
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { progress } returns androidx.work.Data.EMPTY
         }
 
-        // When: Parse
         val result = parser.parse(workInfo, emptyList())
 
-        // Then: Return WIFI_BLOCKED status
+        assertNull(result)
+    }
+
+    @Test
+    fun `parse returns CHECKING for ENQUEUED downloader within debounce window`() {
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.ENQUEUED
+            every { tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { progress } returns androidx.work.Data.EMPTY
+            every { constraints } returns Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.UNMETERED).build()
+        }
+        testClock.setTime(1_000L)
+
+        val result = parser.parse(workInfo, emptyList())
+
+        assertNotNull(result)
+        assertEquals(DownloadStatus.CHECKING, result!!.status)
+    }
+
+    @Test
+    fun `parse returns WIFI_BLOCKED for ENQUEUED downloader after debounce with UNMETERED constraint`() {
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.ENQUEUED
+            every { tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { progress } returns androidx.work.Data.EMPTY
+            every { constraints } returns Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.UNMETERED).build()
+        }
+        // First call sets firstEnqueuedTime = 0
+        testClock.setTime(0L)
+        parser.parse(workInfo, emptyList())
+
+        // Second call is 6s later — past the 5s threshold
+        testClock.setTime(6_000L)
+        val result = parser.parse(workInfo, emptyList())
+
         assertNotNull(result)
         assertEquals(DownloadStatus.WIFI_BLOCKED, result!!.status)
         assertEquals(true, result.waitingForUnmeteredNetwork)
+    }
+
+    @Test
+    fun `parse returns CHECKING for ENQUEUED downloader after debounce but with CONNECTED constraint`() {
+        // Constraint is CONNECTED (not UNMETERED), so WIFI_BLOCKED should never fire
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.ENQUEUED
+            every { tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { progress } returns androidx.work.Data.EMPTY
+            every { constraints } returns Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED).build()
+        }
+        testClock.setTime(0L)
+        parser.parse(workInfo, emptyList())
+        testClock.setTime(10_000L)
+
+        val result = parser.parse(workInfo, emptyList())
+
+        assertNotNull(result)
+        assertEquals(DownloadStatus.CHECKING, result!!.status)
+    }
+
+    @Test
+    fun `parse resets debounce timer when state transitions away from ENQUEUED`() {
+        val enqueuedWorkInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.ENQUEUED
+            every { tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { progress } returns androidx.work.Data.EMPTY
+            every { constraints } returns Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.UNMETERED).build()
+        }
+        val runningWorkInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.RUNNING
+            every { outputData } returns androidx.work.Data.EMPTY
+            every { tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { progress } returns mockk {
+                every { getFloat(any(), any()) } returns 0f
+                every { getInt(any(), any()) } returns 0
+                every { getDouble(any(), any()) } returns 0.0
+                every { getLong(any(), any()) } returns -1L
+                every { getStringArray(any()) } returns null
+            }
+        }
+        testClock.setTime(0L)
+        parser.parse(enqueuedWorkInfo, emptyList())  // sets firstEnqueuedTime = 0
+
+        parser.parse(runningWorkInfo, emptyList())   // state != ENQUEUED → resets timer
+
+        // Enqueued again: timer starts fresh from 1s
+        testClock.setTime(1_000L)
+        val result = parser.parse(enqueuedWorkInfo, emptyList())
+
+        assertNotNull(result)
+        assertEquals(DownloadStatus.CHECKING, result!!.status)  // < 5s threshold
     }
 
     @Test

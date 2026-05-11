@@ -66,6 +66,7 @@ class ApplyApiModelMetadataDefaultsUseCase @Inject constructor() {
         modelId = modelId,
     )
 
+    @Suppress("ReturnCount")
     private fun shouldAdoptSuggestedMaxTokens(
         currentMaxTokens: Int?,
         currentContextWindow: Int?,

@@ -178,6 +178,7 @@ class XAiMediaStreamService @Inject constructor(
     fun expectedMimeType(): String = MIME_TYPE_MP3
 
     /** Confirms this service uses WebSocket streaming. */
+    @Suppress("FunctionOnlyReturningConstant")
     fun usesWebSocketStreaming(): Boolean = true
 
     @Serializable

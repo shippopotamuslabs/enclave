@@ -63,7 +63,7 @@ Required changes:
 - `searchToolEnabled` continues to depend on settings.
 - `imageInspectToolEnabled` depends only on whether an in-scope image exists for the turn.
 - `GenerationOptions.availableTools` should contain:
-  - `TAVILY_WEB_SEARCH` when search is enabled
+  - `WEB_SEARCH` when search is enabled
   - `ATTACHED_IMAGE_INSPECT` when an in-scope image exists
   - both tools when both conditions are true
 

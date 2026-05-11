@@ -68,8 +68,7 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
-fun ModelConfigurationRoute(
-    modelType: ModelType,
+internal fun ModelConfigurationRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -287,7 +286,12 @@ fun AssignmentSelectionBottomSheet(
     ttsAssets: List<TtsProviderAssetUi>,
     mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?, mediaId: MediaProviderId?) -> Unit
+    onSelect: (
+        localId: LocalModelConfigurationId?,
+        apiId: ApiModelConfigurationId?,
+        ttsId: TtsProviderId?,
+        mediaId: MediaProviderId?
+    ) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -317,6 +321,7 @@ private sealed interface AssignmentSelectionView {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun AssignmentSelectionContent(
     modifier: Modifier = Modifier,
@@ -327,7 +332,12 @@ fun AssignmentSelectionContent(
     mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?, mediaId: MediaProviderId?) -> Unit
+    onSelect: (
+        localId: LocalModelConfigurationId?,
+        apiId: ApiModelConfigurationId?,
+        ttsId: TtsProviderId?,
+        mediaId: MediaProviderId?
+    ) -> Unit
 ) {
     var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
     var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
@@ -379,7 +389,10 @@ fun AssignmentSelectionContent(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    IconButton(onClick = { viewState = AssignmentSelectionView.AssetList }, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                    IconButton(
+                        onClick = { viewState = AssignmentSelectionView.AssetList },
+                        modifier = Modifier.size(40.dp).padding(end = 8.dp)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to models")
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -415,7 +428,10 @@ fun AssignmentSelectionContent(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    IconButton(onClick = { viewState = AssignmentSelectionView.AssetList }, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                    IconButton(
+                        onClick = { viewState = AssignmentSelectionView.AssetList },
+                        modifier = Modifier.size(40.dp).padding(end = 8.dp)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
                     }
                     Column(modifier = Modifier.weight(1f)) {

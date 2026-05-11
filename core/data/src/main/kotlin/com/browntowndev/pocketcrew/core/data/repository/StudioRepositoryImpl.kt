@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
@@ -22,8 +24,11 @@ class StudioRepositoryImpl @Inject constructor(
     private val studioMediaDao: StudioMediaDao,
     private val studioAlbumDao: StudioAlbumDao,
     private val transactionProvider: TransactionProvider,
+    private val syncTrigger: CloudSyncTrigger,
     @ApplicationContext private val context: Context
 ) : StudioRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     private val ephemeralMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val generationError = MutableStateFlow<String?>(null)
@@ -57,6 +62,7 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {
+        if (ephemeralMedia.value.any { it.id == asset.id }) return
         ephemeralMedia.value = ephemeralMedia.value + asset
     }
 
@@ -68,39 +74,91 @@ class StudioRepositoryImpl @Inject constructor(
         ephemeralMedia.value = ephemeralMedia.value.filter { it.id != id }
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
+    override suspend fun saveMedia(
+        localUri: String,
+        prompt: String,
+        mediaType: String,
+        albumId: String?,
+        createdAt: Long?
+    ): StudioMediaAsset {
         var finalUri = localUri
         // If the URI is in the cache directory, move it to files directory
-        if (localUri.contains(context.cacheDir.path)) {
+        if (localUri.startsWith("file://")) {
             val file = File(localUri.replace("file://", ""))
-            val fileName = file.name
-            val sourceFile = File(context.cacheDir, "studio_ephemeral/$fileName")
-            if (sourceFile.exists()) {
-                val destinationFile = File(context.filesDir, fileName)
-                sourceFile.copyTo(destinationFile, overwrite = true)
+            if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
+                val destinationFile = File(context.filesDir, file.name)
+                file.copyTo(destinationFile, overwrite = true)
+                file.delete()
                 finalUri = "file://${destinationFile.absolutePath}"
             }
         }
 
-        val newId = studioMediaDao.insertMedia(
+        val newId = java.util.UUID.randomUUID().toString()
+        studioMediaDao.insertMedia(
             StudioMediaEntity(
+                id = newId,
                 prompt = prompt,
                 mediaUri = finalUri,
                 mediaType = mediaType,
-                createdAt = System.currentTimeMillis(),
-                albumId = albumId?.toLongOrNull()
+                createdAt = createdAt ?: System.currentTimeMillis(),
+                albumId = albumId.toPersistentAlbumId(),
+                pendingSync = 1
             )
         )
-        return getMediaById(newId.toString())!!
+        triggerSync()
+        return getMediaById(newId)!!
     }
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
+    override suspend fun saveMedia(
+        bytes: ByteArray,
+        prompt: String,
+        mediaType: String,
+        albumId: String?,
+        createdAt: Long?
+    ): StudioMediaAsset {
         val fileName = "studio_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(context.filesDir, fileName)
         file.writeBytes(bytes)
         
         val persistedUri = "file://${file.absolutePath}"
-        return saveMedia(persistedUri, prompt, mediaType, albumId)
+        return saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
+    }
+    
+    override suspend fun updateMedia(asset: StudioMediaAsset) {
+        val existing = studioMediaDao.getMediaById(asset.id)
+        studioMediaDao.insertMedia(
+            StudioMediaEntity(
+                id = asset.id,
+                prompt = asset.prompt,
+                mediaUri = asset.localUri,
+                mediaType = asset.mediaType,
+                createdAt = asset.createdAt,
+                albumId = asset.albumId.toPersistentAlbumId(),
+                remoteUrl = existing?.remoteUrl,
+                remoteThumbnailUrl = existing?.remoteThumbnailUrl,
+                syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
+                pendingSync = 1
+            )
+        )
+        triggerSync()
+    }
+
+    override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset {
+        val ephemeral = ephemeralMedia.value.find { it.id == id } 
+            ?: throw IllegalArgumentException("Ephemeral media not found: $id")
+            
+        val savedAsset = saveMedia(
+            localUri = ephemeral.localUri,
+            prompt = ephemeral.prompt,
+            mediaType = ephemeral.mediaType,
+            albumId = albumId,
+            createdAt = ephemeral.createdAt
+        )
+        
+        // Remove from ephemeral list
+        removeEphemeralMedia(id)
+        
+        return savedAsset
     }
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String {
@@ -109,7 +167,7 @@ class StudioRepositoryImpl @Inject constructor(
             ephemeralDir.mkdirs()
         }
         
-        val fileName = "ephemeral_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
+        val fileName = "ephemeral_${java.util.UUID.randomUUID()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(ephemeralDir, fileName)
         file.writeBytes(bytes)
         val localUri = "file://${file.absolutePath}"
@@ -126,45 +184,42 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteMedia(id: String) {
-        val longId = id.toLongOrNull()
-        if (longId != null) {
-            studioMediaDao.deleteMedia(longId)
-        }
+        studioMediaDao.softDeleteById(id)
+        triggerSync()
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? {
-        val longId = id.toLongOrNull() ?: return null
-        return studioMediaDao.getMediaById(longId)?.toDomain()
+        return studioMediaDao.getMediaById(id)?.toDomain()
     }
 
     override suspend fun createAlbum(name: String): String {
-        return studioAlbumDao.insertAlbum(StudioAlbumEntity(name = name)).toString()
+        val id = java.util.UUID.randomUUID().toString()
+        studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = name, pendingSync = 1))
+        triggerSync()
+        return id
     }
 
     override suspend fun renameAlbum(id: String, name: String) {
-        val longId = id.toLongOrNull() ?: return
         val trimmedName = name.trim()
-        if (trimmedName.isEmpty()) {
-            return
-        }
-
-        studioAlbumDao.updateAlbumName(longId, trimmedName)
+        if (trimmedName.isEmpty()) return
+        studioAlbumDao.updateAlbumName(id, trimmedName)
+        triggerSync()
     }
 
     override suspend fun deleteAlbum(id: String) {
-        val longId = id.toLongOrNull() ?: return
-
         transactionProvider.runInTransaction {
-            studioMediaDao.reassignMediaToDefault(longId)
-            studioAlbumDao.deleteAlbum(longId)
+            studioMediaDao.reassignMediaToDefault(id)
+            studioAlbumDao.softDeleteById(id)
         }
+        triggerSync()
     }
 
     override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) {
         studioMediaDao.updateMediaAlbum(
-            mediaIds = mediaIds.map { it.toLong() },
-            albumId = albumId.toLong()
+            mediaIds = mediaIds,
+            albumId = albumId.toPersistentAlbumId()
         )
+        triggerSync()
     }
 
     override suspend fun readMediaBytes(localUri: String): ByteArray? {
@@ -184,6 +239,7 @@ class StudioRepositoryImpl @Inject constructor(
     private fun StudioMediaEntity.toDomain() = StudioMediaAsset(
         id = id.toString(),
         localUri = mediaUri,
+        remoteUrl = remoteUrl,
         prompt = prompt,
         mediaType = mediaType,
         createdAt = createdAt,
@@ -194,4 +250,6 @@ class StudioRepositoryImpl @Inject constructor(
         id = id.toString(),
         name = name
     )
+
+    private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this
 }

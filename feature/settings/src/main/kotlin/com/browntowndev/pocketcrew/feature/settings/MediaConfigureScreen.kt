@@ -60,7 +60,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun MediaConfigureRoute(
+internal fun MediaConfigureRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -85,7 +85,7 @@ fun MediaConfigureRoute(
         onNavigateBack = handleBack,
         onMediaAssetFieldChange = viewModel::onMediaAssetFieldChange,
         onApiKeyChange = viewModel::onApiKeyChange,
-        onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
+        onSelectReusableApiCredential = viewModel::onSelectReusableMediaApiCredential,
         onFetchMediaModels = viewModel::onFetchMediaModels,
         onUpdateModelSearchQuery = viewModel::onUpdateMediaModelSearchQuery,
         onToggleModelProviderFilter = viewModel::onToggleMediaModelProviderFilter,

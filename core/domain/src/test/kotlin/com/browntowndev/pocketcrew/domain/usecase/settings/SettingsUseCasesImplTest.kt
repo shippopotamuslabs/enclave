@@ -16,6 +16,8 @@ class SettingsUseCasesImplTest {
         val deletion = mockk<SettingsDeletionUseCases>()
         val tts = mockk<SettingsTtsUseCases>()
         val media = mockk<SettingsMediaUseCases>()
+        val auth = mockk<SettingsAuthUseCases>()
+        val memories = mockk<SettingsMemoriesUseCases>()
         val getSettings = mockk<GetSettingsUseCase>()
         every { preferences.getSettings } returns getSettings
 
@@ -27,6 +29,8 @@ class SettingsUseCasesImplTest {
             deletion = deletion,
             tts = tts,
             media = media,
+            auth = auth,
+            memories = memories,
         )
 
         assertSame(preferences, useCases.preferences)
@@ -36,6 +40,8 @@ class SettingsUseCasesImplTest {
         assertSame(deletion, useCases.deletion)
         assertSame(tts, useCases.tts)
         assertSame(media, useCases.media)
+        assertSame(auth, useCases.auth)
+        assertSame(memories, useCases.memories)
         assertSame(getSettings, useCases.getSettings)
     }
 }

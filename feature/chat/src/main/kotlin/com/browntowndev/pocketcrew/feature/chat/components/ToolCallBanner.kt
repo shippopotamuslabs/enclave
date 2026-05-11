@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 
 @Composable
 fun ToolCallBanner(
@@ -64,20 +66,31 @@ private fun BannerContent(banner: ToolCallBannerUi) {
             modifier = Modifier.size(32.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                painter = painterResource(
-                    id = when (banner.kind) {
-                        ToolCallBannerKind.SEARCH -> R.drawable.search
-                        ToolCallBannerKind.EXTRACT -> R.drawable.pageview
-                        ToolCallBannerKind.IMAGE -> R.drawable.image
-                        ToolCallBannerKind.MEMORY -> R.drawable.search
-                        ToolCallBannerKind.ARTIFACT -> R.drawable.document
-                    }
-                ),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(18.dp)
-            )
+            if (banner.kind == ToolCallBannerKind.X_SEARCH) {
+                Icon(
+                    imageVector = XIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Icon(
+                    painter = painterResource(
+                        id = when (banner.kind) {
+                            ToolCallBannerKind.SEARCH -> R.drawable.search
+                            ToolCallBannerKind.EXTRACT -> R.drawable.pageview
+                            ToolCallBannerKind.IMAGE -> R.drawable.image
+                            ToolCallBannerKind.MEMORY -> R.drawable.search
+                            ToolCallBannerKind.ARTIFACT -> R.drawable.document
+                            ToolCallBannerKind.X_SEARCH -> 0 // Handled above
+                            ToolCallBannerKind.MEDIA -> R.drawable.image // Reuse image icon for media
+                        }
+                    ),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))

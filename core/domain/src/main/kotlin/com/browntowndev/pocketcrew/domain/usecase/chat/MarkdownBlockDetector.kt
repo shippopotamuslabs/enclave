@@ -34,13 +34,7 @@ class MarkdownBlockDetector @Inject constructor() : SentenceBoundaryDetector {
     // List markers: -, *, +, or digit followed by . or )
     private val blockBoundaryRegex = Regex("""(\n\s*\n|\n\s*(?:[-*+]\s|\d+[.)]\s))""")
 
-    // Code block delimiter
-    private val codeBlockDelimiter = "```"
 
-    // Math block delimiters
-    private val inlineMathDelimiter = "$"
-    private val blockMathStart = "\\["
-    private val blockMathEnd = "\\]"
 
     /**
      * Finds boundaries based on Markdown structural elements.

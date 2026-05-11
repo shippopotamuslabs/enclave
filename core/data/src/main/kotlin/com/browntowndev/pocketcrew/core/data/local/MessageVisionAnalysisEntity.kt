@@ -41,4 +41,8 @@ data class MessageVisionAnalysisEntity(
     val createdAt: Long,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

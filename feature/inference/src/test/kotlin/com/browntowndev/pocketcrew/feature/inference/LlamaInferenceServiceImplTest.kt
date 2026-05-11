@@ -109,7 +109,7 @@ class LlamaInferenceServiceImplTest {
         every { sessionManager.streamAssistantResponseWithOptions(any()) } returnsMany listOf(
             flowOf(
                 GenerationEvent.Completed(
-                    """<think>Need to search first.</think><tool_call>{"name":"tavily_web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
+                    """<think>Need to search first.</think><tool_call>{"name":"web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
                 )
             ),
             flowOf(
@@ -119,7 +119,7 @@ class LlamaInferenceServiceImplTest {
             )
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -152,7 +152,7 @@ class LlamaInferenceServiceImplTest {
         every { sessionManager.streamAssistantResponseWithOptions(any()) } answers {
             passCount++
             if (passCount == 1) {
-                flowOf(GenerationEvent.Completed("""<tool_call>{"name":"tavily_web_search","arguments":"""))
+                flowOf(GenerationEvent.Completed("""<tool_call>{"name":"web_search","arguments":"""))
             } else {
                 flowOf(
                     GenerationEvent.Token("Corrected."),
@@ -184,13 +184,13 @@ class LlamaInferenceServiceImplTest {
         every { sessionManager.streamAssistantResponseWithOptions(any()) } returnsMany listOf(
             flowOf(
                 GenerationEvent.Completed(
-                    """<tool_call>{"name":"tavily_web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
+                    """<tool_call>{"name":"web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
                 )
             ),
             flowOf(GenerationEvent.Error(RuntimeException("resume boom")))
         )
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -328,6 +328,6 @@ class LlamaInferenceServiceImplTest {
             reasoningBudget = 0,
             modelType = ModelType.FAST,
             modelId = "7",
-            systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
+            systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
         )
 }

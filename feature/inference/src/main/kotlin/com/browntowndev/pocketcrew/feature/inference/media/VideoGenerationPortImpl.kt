@@ -42,7 +42,6 @@ class VideoGenerationPortImpl @Inject constructor(
                 modelId = provider.modelName ?: "veo-3.1-generate-preview",
                 baseUrl = provider.baseUrl,
                 settings = settings,
-                referenceImage = referenceImageBytes,
             )
             ApiProvider.XAI -> xaiAdapter.generateVideo(
                 prompt = prompt,

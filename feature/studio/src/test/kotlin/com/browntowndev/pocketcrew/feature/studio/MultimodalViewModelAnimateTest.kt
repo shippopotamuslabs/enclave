@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.feature.studio
 
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
@@ -10,9 +13,9 @@ import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
 import com.browntowndev.pocketcrew.domain.port.media.MusicGenerationPort
+import com.browntowndev.pocketcrew.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.VideoGenerationPort
@@ -37,9 +40,11 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MultimodalViewModelAnimateTest {
@@ -53,12 +58,13 @@ class MultimodalViewModelAnimateTest {
     private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>(relaxed = true)
     private val chatUseCases = mockk<ChatUseCases>(relaxed = true)
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
+    private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private lateinit var viewModel: MultimodalViewModel
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        val app = mockk<android.app.Application>(relaxed = true)
 
         val mediaProviderId = MediaProviderId("test-provider")
         val videoAssignment = DefaultModelAssignment(
@@ -92,18 +98,14 @@ class MultimodalViewModelAnimateTest {
         )
 
         viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            GenerateVideoUseCase(defaultModelRepository, mediaProviderRepository, videoGenerationPort),
-            generateMusicUseCase,
-            shareMediaPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            chatUseCases,
-            playbackController,
-            logger,
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            dispatcher = dispatcher,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+            chatUseCases = chatUseCases,
+            playbackController = playbackController,
         )
     }
 
@@ -134,8 +136,9 @@ class MultimodalViewModelAnimateTest {
         advanceUntilIdle()
 
         // Then
-        assertEquals(VideoGenerationState.Success(assetId, "cache://video.mp4"), viewModel.uiState.value.videoGenerationState)
-        assertEquals("Original Prompt", viewModel.uiState.value.prompt)
+        verify { dispatcher.startGeneration("Original Prompt", MediaCapability.VIDEO) }
+        assertTrue(viewModel.uiState.value.isGenerating)
+        assertEquals("", viewModel.uiState.value.prompt)
         job.cancel()
     }
 
@@ -162,9 +165,9 @@ class MultimodalViewModelAnimateTest {
 
         // Then
         assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
-        assertEquals("Original Prompt", viewModel.uiState.value.prompt)
+        assertEquals("", viewModel.uiState.value.prompt)
         val settings = viewModel.uiState.value.settings as VideoGenerationSettings
-        assertEquals("file://image.jpg", settings.referenceImageUri)
+        assertNull(settings.referenceImageUri)
         job.cancel()
     }
 
@@ -190,8 +193,8 @@ class MultimodalViewModelAnimateTest {
         advanceUntilIdle()
 
         // Then
-        coEvery { videoGenerationPort.generateVideo("Custom Prompt", any(), any()) }
-        assertEquals("Custom Prompt", viewModel.uiState.value.prompt)
+        verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO) }
+        assertEquals("", viewModel.uiState.value.prompt)
         job.cancel()
     }
 }

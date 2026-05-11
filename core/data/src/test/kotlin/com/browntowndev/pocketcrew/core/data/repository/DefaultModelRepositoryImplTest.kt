@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -23,6 +24,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -32,17 +34,19 @@ import org.junit.jupiter.api.Test
 class DefaultModelRepositoryImplTest {
 
     private lateinit var repo: DefaultModelRepositoryImpl
-    private val defaultModelsDao = mockk<DefaultModelsDao>()
+    private val defaultModelsDao = mockk<DefaultModelsDao>(relaxed = true)
     private val localConfigsDao = mockk<LocalModelConfigurationsDao>()
     private val localModelsDao = mockk<LocalModelsDao>()
     private val apiConfigsDao = mockk<ApiModelConfigurationsDao>()
     private val apiCredentialsDao = mockk<ApiCredentialsDao>()
     private val ttsProviderDao = mockk<TtsProviderDao>()
     private val mediaProviderDao = mockk<MediaProviderDao>()
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @BeforeEach
     fun setup() {
         repo = DefaultModelRepositoryImpl(
+            syncTrigger = syncTrigger,
             defaultModelsDao = defaultModelsDao,
             localModelConfigurationsDao = localConfigsDao,
             localModelsDao = localModelsDao,
@@ -60,7 +64,11 @@ class DefaultModelRepositoryImplTest {
         coEvery { defaultModelsDao.getDefault(ModelType.MAIN) } returns DefaultModelEntity(
             modelType = ModelType.MAIN,
             localConfigId = configId,
-            apiConfigId = null
+            apiConfigId = null,
+            ttsProviderId = null,
+            mediaProviderId = null,
+            updatedAt = 0L,
+            pendingSync = 0
         )
         coEvery { localConfigsDao.getById(configId) } returns LocalModelConfigurationEntity(
             id = configId,
@@ -93,7 +101,11 @@ class DefaultModelRepositoryImplTest {
         coEvery { defaultModelsDao.getDefault(ModelType.VISION) } returns DefaultModelEntity(
             modelType = ModelType.VISION,
             localConfigId = null,
-            apiConfigId = configId
+            apiConfigId = configId,
+            ttsProviderId = null,
+            mediaProviderId = null,
+            updatedAt = 0L,
+            pendingSync = 0
         )
         coEvery { apiConfigsDao.getById(configId) } returns ApiModelConfigurationEntity(
             id = configId,
@@ -123,7 +135,12 @@ class DefaultModelRepositoryImplTest {
         val ttsId = TtsProviderId("tts-1")
         coEvery { defaultModelsDao.getDefault(ModelType.TTS) } returns DefaultModelEntity(
             modelType = ModelType.TTS,
-            ttsProviderId = ttsId
+            localConfigId = null,
+            apiConfigId = null,
+            ttsProviderId = ttsId,
+            mediaProviderId = null,
+            updatedAt = 0L,
+            pendingSync = 0
         )
         coEvery { ttsProviderDao.getTtsProvider(ttsId.value) } returns TtsProviderEntity(
             id = ttsId.value,
@@ -139,5 +156,33 @@ class DefaultModelRepositoryImplTest {
         assertEquals("My Grok TTS", result?.displayName)
         assertEquals("xAI", result?.providerName)
         assertEquals("eve", result?.presetName)
+    }
+
+    @Test
+    fun `setDefault calls triggerSync once`() = runTest {
+        val configId = LocalModelConfigurationId("cfg-1")
+
+        repo.setDefault(ModelType.MAIN, localConfigId = configId)
+
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `clearDefault calls triggerSync once`() = runTest {
+        repo.clearDefault(ModelType.FAST)
+
+        verify(exactly = 1) { syncTrigger.trigger() }
+    }
+
+    @Test
+    fun `setDefault upserts entity with pendingSync true`() = runTest {
+        val configId = ApiModelConfigurationId("api-cfg-1")
+        coEvery { defaultModelsDao.upsert(any()) } returns Unit
+
+        repo.setDefault(ModelType.VISION, apiConfigId = configId)
+
+        io.mockk.coVerify {
+            defaultModelsDao.upsert(match { it.pendingSync == 1 })
+        }
     }
 }

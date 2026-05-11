@@ -1,6 +1,8 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.browntowndev.pocketcrew.feature.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -26,7 +28,7 @@ internal fun projectChatMessages(
         ?.messages
         .orEmpty()
 
-    val chatId = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId ?: ChatId("")
+    val chatId: ChatId? = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId
     val projectedMessages = LinkedHashMap<MessageId, Message>()
     dbMessagesMap.forEach { (id, dbMessage) ->
         val activeMessage = activeMessagesMap[id]
@@ -60,7 +62,7 @@ internal fun projectChatMessages(
 }
 
 private fun MessageSnapshot.toMessage(
-    chatId: ChatId,
+    chatId: ChatId?,
     createdAt: Long? = null,
 ): Message {
     return Message(
@@ -79,6 +81,6 @@ private fun MessageSnapshot.toMessage(
         createdAt = createdAt,
         messageState = messageState,
         modelType = modelType,
-        tavilySources = tavilySources,
+        webSearchSources = webSearchSources,
     )
 }

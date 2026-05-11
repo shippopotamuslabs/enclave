@@ -21,4 +21,13 @@ interface EmbeddingDao {
         insertEmbedding(deleteQuery)
         insertEmbedding(insertQuery)
     }
+
+    @androidx.room.Query("SELECT * FROM embeddings WHERE message_id = :messageId")
+    suspend fun getEmbeddingMetadata(messageId: String): EmbeddingEntity?
+
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertEmbeddingMetadata(entity: EmbeddingEntity)
+
+    @androidx.room.Query("DELETE FROM embeddings WHERE message_id = :messageId")
+    suspend fun deleteEmbeddingMetadata(messageId: String)
 }

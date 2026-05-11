@@ -1,12 +1,14 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -25,6 +27,7 @@ internal class ChatGenerationAccumulatorManager(
     internal val messages: Map<MessageId, MessageAccumulator>
         get() = _messages
 
+    @Suppress("CyclomaticComplexMethod")
     suspend fun reduce(state: MessageGenerationState): AccumulatedMessages {
         when (state) {
             is MessageGenerationState.EngineLoading -> {
@@ -48,17 +51,28 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
-            is MessageGenerationState.TavilySourcesAttached -> {
+            is MessageGenerationState.WebSearchSourcesAttached -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    tavilySources.addAll(state.sources)
+                    webSearchSources.addAll(state.sources)
                 }
             }
 
             is MessageGenerationState.ArtifactsAttached -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    state.artifacts.forEach { newArtifact ->
-                        if (artifacts.none { it.title == newArtifact.title }) {
-                            artifacts.add(newArtifact)
+                    val merged = mergeArtifactGenerationRequests(artifacts.toList(), state.artifacts)
+                    artifacts.clear()
+                    artifacts.addAll(merged)
+                }
+            }
+            is MessageGenerationState.MediaAttached -> {
+                getOrCreateAccumulator(state.modelType).apply {
+                    state.mediaUris.forEachIndexed { index, newUri ->
+                        if (generatedMediaUris.none { it == newUri }) {
+                            generatedMediaUris.add(newUri)
+                            // Assuming order is preserved between uris, ids, types, prompts
+                            if (index < state.mediaIds.size) generatedMediaAssetIds.add(state.mediaIds[index])
+                            if (index < state.mediaTypes.size) generatedMediaTypes.add(state.mediaTypes[index])
+                            if (index < state.prompts.size) generatedMediaPrompts.add(state.prompts[index])
                         }
                     }
                 }
@@ -128,17 +142,32 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
-            // Sync artifacts
-            messageSnapshot.artifacts.forEach { snapshotArtifact ->
-                if (accumulator.artifacts.none { it.title == snapshotArtifact.title }) {
-                    accumulator.artifacts.add(snapshotArtifact)
+            // Sync artifacts (merge so port-attached placeholders upgrade when inference emits the full doc)
+            val mergedArtifacts =
+                mergeArtifactGenerationRequests(accumulator.artifacts.toList(), messageSnapshot.artifacts)
+            accumulator.artifacts.clear()
+            accumulator.artifacts.addAll(mergedArtifacts)
+
+            // Sync web search sources
+            messageSnapshot.webSearchSources.forEach { snapshotSource ->
+                if (accumulator.webSearchSources.none { it.url == snapshotSource.url }) {
+                    accumulator.webSearchSources.add(snapshotSource)
                 }
             }
 
-            // Sync tavily sources
-            messageSnapshot.tavilySources.forEach { snapshotSource ->
-                if (accumulator.tavilySources.none { it.url == snapshotSource.url }) {
-                    accumulator.tavilySources.add(snapshotSource)
+            // Sync media
+            messageSnapshot.generatedMediaUris.forEachIndexed { index, snapshotUri ->
+                if (accumulator.generatedMediaUris.none { it == snapshotUri }) {
+                    accumulator.generatedMediaUris.add(snapshotUri)
+                    if (index < messageSnapshot.generatedMediaAssetIds.size) {
+                        accumulator.generatedMediaAssetIds.add(messageSnapshot.generatedMediaAssetIds[index])
+                    }
+                    if (index < messageSnapshot.generatedMediaTypes.size) {
+                        accumulator.generatedMediaTypes.add(messageSnapshot.generatedMediaTypes[index])
+                    }
+                    if (index < messageSnapshot.generatedMediaPrompts.size) {
+                        accumulator.generatedMediaPrompts.add(messageSnapshot.generatedMediaPrompts[index])
+                    }
                 }
             }
         }
@@ -166,16 +195,16 @@ internal class ChatGenerationAccumulatorManager(
     }
 
     /**
-     * Marks tavily sources as extracted for the given URLs across all accumulators.
+     * Marks web search sources as extracted for the given URLs across all accumulators.
      * Called when the extract tool completes so the UI reflects the read status immediately.
      */
-    fun markSourcesExtracted(urls: List<String>) {
+    fun markWebSearchSourcesExtracted(urls: List<String>) {
         _messages.values.forEach { accumulator ->
-            val updatedSources = accumulator.tavilySources.map { source ->
+            val updatedSources = accumulator.webSearchSources.map { source ->
                 if (source.url in urls) source.copy(extracted = true) else source
             }
-            accumulator.tavilySources.clear()
-            accumulator.tavilySources.addAll(updatedSources)
+            accumulator.webSearchSources.clear()
+            accumulator.webSearchSources.addAll(updatedSources)
         }
     }
 
@@ -214,8 +243,12 @@ internal class MessageAccumulator(
     var isComplete: Boolean = false,
     var currentState: MessageState = MessageState.GENERATING,
     var pipelineStep: PipelineStep? = null,
-    val tavilySources: MutableList<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = mutableListOf(),
+    val webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     val artifacts: MutableList<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = mutableListOf(),
+    val generatedMediaUris: MutableList<String> = mutableListOf(),
+    val generatedMediaAssetIds: MutableList<String> = mutableListOf(),
+    val generatedMediaTypes: MutableList<String> = mutableListOf(),
+    val generatedMediaPrompts: MutableList<String> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -249,8 +282,12 @@ internal class MessageAccumulator(
         isComplete = isComplete,
         messageState = currentState,
         pipelineStep = pipelineStep,
-        tavilySources = tavilySources.toList(),
+        webSearchSources = webSearchSources.toList(),
         artifacts = artifacts.toList(),
+        generatedMediaUris = generatedMediaUris.toList(),
+        generatedMediaAssetIds = generatedMediaAssetIds.toList(),
+        generatedMediaTypes = generatedMediaTypes.toList(),
+        generatedMediaPrompts = generatedMediaPrompts.toList(),
     )
 }
 

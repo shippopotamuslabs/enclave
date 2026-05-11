@@ -20,6 +20,7 @@ internal data class LocalToolResultDecision(
 internal object LocalToolResultPolicy {
 
     fun buildContextWindowExceededToolError(toolName: String): String =
+        @Suppress("MaxLineLength")
         """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"IllegalStateException","message":"${escapeJson(CONTEXT_WINDOW_EXCEEDED_MESSAGE)}"}"""
 
     fun evaluate(

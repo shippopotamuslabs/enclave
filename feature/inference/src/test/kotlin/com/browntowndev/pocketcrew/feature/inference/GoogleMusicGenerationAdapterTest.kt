@@ -58,7 +58,6 @@ class GoogleMusicGenerationAdapterTest {
             apiKey = "key",
             modelId = "lyria-3-clip-preview",
             baseUrl = null,
-            settings = ImageGenerationSettings(), // Dummy settings
         )
 
         assertTrue(result.isSuccess)
@@ -93,7 +92,6 @@ class GoogleMusicGenerationAdapterTest {
             apiKey = "key",
             modelId = "lyria-3-clip-preview",
             baseUrl = null,
-            settings = ImageGenerationSettings(),
         )
 
         assertTrue(result.isFailure)

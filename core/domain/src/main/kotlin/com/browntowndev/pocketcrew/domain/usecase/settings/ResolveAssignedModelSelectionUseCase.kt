@@ -15,6 +15,7 @@ class ResolveAssignedModelSelectionUseCase @Inject constructor(
     private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
     private val getTtsProvidersUseCase: GetTtsProvidersUseCase,
 ) {
+    @Suppress("ReturnCount")
     suspend operator fun invoke(modelType: ModelType): ResolvedAssignedModelSelection? {
         val assignment = getDefaultModelsUseCase()
             .first()

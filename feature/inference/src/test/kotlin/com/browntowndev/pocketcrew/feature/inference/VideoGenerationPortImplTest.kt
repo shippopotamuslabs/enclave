@@ -38,13 +38,13 @@ class VideoGenerationPortImplTest {
             googleAdapter = googleAdapter,
             xaiAdapter = xaiAdapter,
         )
-        every { apiKeyProvider.getApiKey("alias") } returns "key"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
         coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
     }
 
     @Test
     fun generateVideo_missingApiKey_returnsFailure() = runTest {
-        every { apiKeyProvider.getApiKey("alias") } returns null
+        coEvery { apiKeyProvider.getApiKey("alias") } returns null
 
         val result = port.generateVideo("prompt", provider(ApiProvider.OPENAI), VideoGenerationSettings())
 
@@ -81,7 +81,7 @@ class VideoGenerationPortImplTest {
     @Test
     fun generateVideo_googleProvider_routesToGoogleAdapter() = runTest {
         coEvery {
-            googleAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+            googleAdapter.generateVideo(any(), any(), any(), any(), any())
         } returns Result.success("google".toByteArray())
 
         val result = port.generateVideo("prompt", provider(ApiProvider.GOOGLE), VideoGenerationSettings())
@@ -95,7 +95,6 @@ class VideoGenerationPortImplTest {
                 modelId = "custom-model",
                 baseUrl = null,
                 settings = VideoGenerationSettings(),
-                referenceImage = null,
             )
         }
     }

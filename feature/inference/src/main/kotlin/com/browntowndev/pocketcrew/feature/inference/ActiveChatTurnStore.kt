@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
@@ -36,10 +37,20 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         val entry = entryFor(key)
         entry.mutex.withLock {
             entry.flow.update { current ->
-                // Merge current artifacts into the new snapshot if they exist
+                // Merge current artifacts and media into the new snapshot if they exist
                 val mergedMessages = snapshot.messages.mapValues { (id, newSnapshot) ->
                     val existingArtifacts = current?.messages?.get(id)?.artifacts ?: emptyList()
-                    newSnapshot.copy(artifacts = (newSnapshot.artifacts + existingArtifacts).distinct())
+                    val existingMediaUris = current?.messages?.get(id)?.generatedMediaUris ?: emptyList()
+                    val existingMediaIds = current?.messages?.get(id)?.generatedMediaAssetIds ?: emptyList()
+                    val existingMediaTypes = current?.messages?.get(id)?.generatedMediaTypes ?: emptyList()
+                    val existingMediaPrompts = current?.messages?.get(id)?.generatedMediaPrompts ?: emptyList()
+                    newSnapshot.copy(
+                        artifacts = mergeArtifactGenerationRequests(newSnapshot.artifacts, existingArtifacts),
+                        generatedMediaUris = (newSnapshot.generatedMediaUris + existingMediaUris).distinct(),
+                        generatedMediaAssetIds = (newSnapshot.generatedMediaAssetIds + existingMediaIds).distinct(),
+                        generatedMediaTypes = (newSnapshot.generatedMediaTypes + existingMediaTypes).distinct(),
+                        generatedMediaPrompts = (newSnapshot.generatedMediaPrompts + existingMediaPrompts).distinct(),
+                    )
                 }
                 snapshot.copy(messages = mergedMessages)
             }
@@ -51,7 +62,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         }
     }
 
-    override suspend fun markSourcesExtracted(
+    override suspend fun markWebSearchSourcesExtracted(
         key: ActiveChatTurnKey,
         urls: List<String>,
     ) {
@@ -63,7 +74,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
                 current?.copy(
                     messages = current.messages.mapValues { (_, snapshot) ->
                         snapshot.copy(
-                            tavilySources = snapshot.tavilySources.map { source ->
+                            webSearchSources = snapshot.webSearchSources.map { source ->
                                 if (source.url in urls) {
                                     source.copy(extracted = true)
                                 } else {
@@ -89,6 +100,35 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
                     messages = current.messages.mapValues { (id, snapshot) ->
                         if (id == assistantMessageId) {
                             snapshot.copy(artifacts = snapshot.artifacts + artifact)
+                        } else {
+                            snapshot
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    override suspend fun attachMedia(
+        key: ActiveChatTurnKey,
+        assistantMessageId: com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+        mediaUris: List<String>,
+        mediaIds: List<String>,
+        mediaTypes: List<String>,
+        prompts: List<String>,
+    ) {
+        val entry = entries[key] ?: return
+        entry.mutex.withLock {
+            entry.flow.update { current ->
+                current?.copy(
+                    messages = current.messages.mapValues { (id, snapshot) ->
+                        if (id == assistantMessageId) {
+                            snapshot.copy(
+                                generatedMediaUris = (snapshot.generatedMediaUris + mediaUris).distinct(),
+                                generatedMediaAssetIds = (snapshot.generatedMediaAssetIds + mediaIds).distinct(),
+                                generatedMediaTypes = (snapshot.generatedMediaTypes + mediaTypes).distinct(),
+                                generatedMediaPrompts = (snapshot.generatedMediaPrompts + prompts).distinct(),
+                            )
                         } else {
                             snapshot
                         }
