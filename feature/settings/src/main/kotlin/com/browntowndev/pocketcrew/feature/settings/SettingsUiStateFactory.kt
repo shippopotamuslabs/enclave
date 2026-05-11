@@ -33,6 +33,7 @@ internal data class LocalModelsTransientState(
     val isSheetOpen: Boolean = false,
     val availableToDownloadModels: List<LocalModelAsset> = emptyList(),
     val selectedAsset: LocalModelAssetUi? = null,
+    val selectedConfig: LocalModelConfigUi? = null,
     val configDraft: LocalModelConfigUi? = null,
 )
 

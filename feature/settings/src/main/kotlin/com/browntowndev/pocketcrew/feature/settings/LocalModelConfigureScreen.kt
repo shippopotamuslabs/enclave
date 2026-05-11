@@ -61,7 +61,7 @@ internal const val MODEL_FORMAT_GGUF = "GGUF"
 internal const val MODEL_FORMAT_LITERT = "LiteRT"
 
 @Composable
-fun LocalModelConfigureRoute(
+internal fun LocalModelConfigureRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel,
 ) {

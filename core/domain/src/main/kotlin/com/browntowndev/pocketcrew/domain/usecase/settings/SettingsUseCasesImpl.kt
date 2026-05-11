@@ -81,6 +81,17 @@ class SettingsAuthUseCasesImpl @Inject constructor(
     override val getAuthState: GetAuthStateUseCase,
 ) : SettingsAuthUseCases
 
+class SettingsMemoriesUseCasesImpl @Inject constructor(
+    private val memoriesRepository: com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository,
+) : SettingsMemoriesUseCases {
+    override fun getAllMemoriesFlow() = memoriesRepository.getAllMemoriesFlow()
+    override suspend fun insertMemory(category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory, content: String) = 
+        memoriesRepository.insertMemory(category, content)
+    override suspend fun updateMemory(id: String, content: String, category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?) = 
+        memoriesRepository.updateMemory(id, content, category)
+    override suspend fun deleteMemory(id: String) = memoriesRepository.deleteMemory(id)
+}
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
@@ -90,4 +101,5 @@ class SettingsUseCasesImpl @Inject constructor(
     override val tts: SettingsTtsUseCases,
     override val media: SettingsMediaUseCases,
     override val auth: SettingsAuthUseCases,
+    override val memories: SettingsMemoriesUseCases,
 ) : SettingsUseCases

@@ -28,6 +28,7 @@ import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
 import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -191,16 +192,24 @@ class SettingsViewModelTest {
                 loginWithGoogle = loginWithGoogleUseCase,
                 logout = logoutUseCase,
                 getAuthState = getAuthStateUseCase,
-            )
+            ),
+            memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
         )
 
         val embeddingProgressPort = mockk<com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort>()
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
+        val generalDelegate = SettingsGeneralDelegate(settingsUseCases.preferences, settingsUseCases.auth, errorHandler)
+        val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
+        val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
+        val localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
+        val apiProvidersDelegate = SettingsApiProvidersDelegate(settingsUseCases.apiProviders, settingsUseCases.tts, settingsUseCases.media, deletionHelper, apiModelAssetUiMapper, ttsProviderAssetUiMapper, errorHandler)
+        val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
+        val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
+
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
-            memoriesRepository = memoriesRepository,
             settingsUiStateFactory = SettingsUiStateFactory(
                 localModelAssetUiMapper,
                 apiModelAssetUiMapper,
@@ -209,10 +218,13 @@ class SettingsViewModelTest {
                 ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase
             ),
-            localModelAssetUiMapper = localModelAssetUiMapper,
-            apiModelAssetUiMapper = apiModelAssetUiMapper,
-            ttsProviderAssetUiMapper = ttsProviderAssetUiMapper,
-            reassignmentOptionUiMapper = reassignmentOptionUiMapper,
+            generalDelegate = generalDelegate,
+            memoriesDelegate = memoriesDelegate,
+            localModelsDelegate = localModelsDelegate,
+            apiProvidersDelegate = apiProvidersDelegate,
+            searchDelegate = searchDelegate,
+            assignmentsDelegate = assignmentsDelegate,
+            deletionHelper = deletionHelper,
             errorHandler = errorHandler,
             embeddingProgressPort = embeddingProgressPort,
         )

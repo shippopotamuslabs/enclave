@@ -68,7 +68,7 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
-fun ModelConfigurationRoute(
+internal fun ModelConfigurationRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
