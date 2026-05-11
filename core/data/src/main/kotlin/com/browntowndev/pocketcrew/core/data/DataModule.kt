@@ -218,6 +218,10 @@ object DataModule {
     fun provideStudioAlbumDao(database: PocketCrewDatabase): StudioAlbumDao = database.studioAlbumDao()
 
     @Provides
+    fun provideDocumentDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DocumentDao =
+        database.documentDao()
+
+    @Provides
     @Singleton
     fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
 
