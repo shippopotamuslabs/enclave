@@ -96,3 +96,4 @@ firebase-debug.log*
 .runtimeconfig.json
 functions/lib/
 functions/node_modules/
+.worktrees/
