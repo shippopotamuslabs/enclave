@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
@@ -235,6 +236,7 @@ abstract class BaseOpenAiSdkInferenceService(
                     params = params,
                     chatId = options.chatId,
                     userMessageId = options.userMessageId,
+                    assistantMessageId = options.assistantMessageId,
                     emitEvent = emitEvent,
                 )
             },
@@ -253,6 +255,7 @@ abstract class BaseOpenAiSdkInferenceService(
                                 modelType = modelType,
                                 chatId = options.chatId,
                                 userMessageId = options.userMessageId,
+                                assistantMessageId = options.assistantMessageId,
                             )
                         )
                     } else {
@@ -319,28 +322,23 @@ abstract class BaseOpenAiSdkInferenceService(
 
                 if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
                     try {
-                        val payload = Json.parseToJsonElement(resultJson).jsonObject
-                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
-                        if (isComplete) {
-                            val fullDoc = payload["fullDocument"]?.jsonObject
-                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
-                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
-                            
-                            if (fullDoc != null) {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
                                 emitEvent(
                                     InferenceEvent.Artifacts(
                                         artifacts = listOf(
-                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                                title = title,
-                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
-                                                content = fullDoc.toString()
-                                            )
+                                            ArtifactGenerationRequest(
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
                                         ),
-                                        modelType = modelType
-                                    )
+                                        modelType = modelType,
+                                    ),
                                 )
                             }
-                        }
                     } catch (e: Exception) {
                         loggingPort.error(tag, "Failed to parse append_blocks result", e)
                     }
@@ -424,6 +422,7 @@ abstract class BaseOpenAiSdkInferenceService(
         params: ResponseCreateParams,
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedOpenAiResponse {
         logResponsesRequest(params)
@@ -435,6 +434,7 @@ abstract class BaseOpenAiSdkInferenceService(
             tag = tag,
             chatId = chatId,
             userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
             emitEvent = emitEvent,
         )
         val state = StreamState()
@@ -488,12 +488,19 @@ abstract class BaseOpenAiSdkInferenceService(
             onInferencePass = { params, _ ->
                 streamChatCompletions(
                     params = params,
+                    chatId = options.chatId,
+                    userMessageId = options.userMessageId,
+                    assistantMessageId = options.assistantMessageId,
                     emitEvent = emitEvent,
                 )
             },
             onToolCallDetected = { response ->
                 val sdkCalls = response.functionCalls.map {
-                    it.copy(chatId = options.chatId, userMessageId = options.userMessageId)
+                    it.copy(
+                        chatId = options.chatId,
+                        userMessageId = options.userMessageId,
+                        assistantMessageId = options.assistantMessageId,
+                    )
                 }
                 sdkCalls.ifEmpty {
                     val rawText = response.assistantMessageText
@@ -508,6 +515,7 @@ abstract class BaseOpenAiSdkInferenceService(
                                 modelType = modelType,
                                 chatId = options.chatId,
                                 userMessageId = options.userMessageId,
+                                assistantMessageId = options.assistantMessageId,
                             )
                         )
                     } else {
@@ -556,28 +564,23 @@ abstract class BaseOpenAiSdkInferenceService(
 
                 if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
                     try {
-                        val payload = Json.parseToJsonElement(resultJson).jsonObject
-                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
-                        if (isComplete) {
-                            val fullDoc = payload["fullDocument"]?.jsonObject
-                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
-                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
-                            
-                            if (fullDoc != null) {
+                        val appendParams =
+                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
+                            ?.let { complete ->
                                 emitEvent(
                                     InferenceEvent.Artifacts(
                                         artifacts = listOf(
-                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                                title = title,
-                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
-                                                content = fullDoc.toString()
-                                            )
+                                            ArtifactGenerationRequest(
+                                                artifactId = appendParams.artifactId,
+                                                title = complete.title,
+                                                content = complete.documentJson,
+                                            ),
                                         ),
-                                        modelType = modelType
-                                    )
+                                        modelType = modelType,
+                                    ),
                                 )
                             }
-                        }
                     } catch (e: Exception) {
                         loggingPort.error(tag, "Failed to parse append_blocks result", e)
                     }
@@ -607,6 +610,9 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected suspend fun streamChatCompletions(
         params: ChatCompletionCreateParams,
+        chatId: ChatId? = null,
+        userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedOpenAiResponse {
         logChatRequest(params)
@@ -690,6 +696,9 @@ abstract class BaseOpenAiSdkInferenceService(
                         argumentsJson = tracked.arguments.toString(),
                         provider = provider,
                         modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
                     )
                 )
                 providerToolCallIds.add(tracked.id ?: "")

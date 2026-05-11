@@ -40,19 +40,71 @@ class ArtifactModelsTest {
     inner class ArtifactGenerationRequestTests {
 
         @Test
-        fun `defaults to PDF target format`() {
-            val request = ArtifactGenerationRequest(title = "Title", content = "Content")
-            assertEquals(MimeType.PDF, request.targetFormat)
+        fun `defaults target format to null until user chooses export preference`() {
+            val request = ArtifactGenerationRequest(
+                artifactId = "artifact-1",
+                title = "Title",
+                content = "Content",
+            )
+            assertEquals(null, request.targetFormat)
         }
 
         @Test
         fun `can create with specific target format`() {
             val wordRequest = ArtifactGenerationRequest(
+                artifactId = "artifact-2",
                 targetFormat = MimeType.WORD,
                 title = "Report",
                 content = "Content"
             )
             assertEquals(MimeType.WORD, wordRequest.targetFormat)
+        }
+    }
+
+    @Nested
+    @DisplayName("mergeArtifactGenerationRequests")
+    inner class MergeArtifactGenerationRequestsTests {
+
+        @Test
+        fun `replaces empty placeholder with richer same title entry`() {
+            val placeholder = ArtifactGenerationRequest(
+                artifactId = "artifact-same",
+                title = "T",
+                content = "",
+            )
+            val full = ArtifactGenerationRequest(
+                artifactId = "artifact-same",
+                title = "T",
+                content = """{"version":"1.0"}""",
+            )
+            val merged = mergeArtifactGenerationRequests(listOf(placeholder), listOf(full))
+            assertEquals(1, merged.size)
+            assertEquals(full.content, merged[0].content)
+        }
+
+        @Test
+        fun `keeps first when second is also empty`() {
+            val a = ArtifactGenerationRequest(
+                artifactId = "artifact-same-empty",
+                title = "T",
+                content = "",
+            )
+            val b = ArtifactGenerationRequest(
+                artifactId = "artifact-same-empty",
+                title = "T",
+                content = "",
+            )
+            val merged = mergeArtifactGenerationRequests(listOf(a), listOf(b))
+            assertEquals(1, merged.size)
+            assertEquals(a, merged[0])
+        }
+
+        @Test
+        fun `appends distinct titles`() {
+            val a = ArtifactGenerationRequest(artifactId = "artifact-a", title = "A", content = "x")
+            val b = ArtifactGenerationRequest(artifactId = "artifact-b", title = "B", content = "y")
+            val merged = mergeArtifactGenerationRequests(listOf(a), listOf(b))
+            assertEquals(2, merged.size)
         }
     }
 
@@ -63,7 +115,12 @@ class ArtifactModelsTest {
         @Test
         fun `isPdf returns true for PDF format`() {
             val pdfResult = ArtifactGenerationResult(
-                request = ArtifactGenerationRequest(targetFormat = MimeType.PDF, title = "T", content = "C")
+                request = ArtifactGenerationRequest(
+                    artifactId = "artifact-pdf",
+                    targetFormat = MimeType.PDF,
+                    title = "T",
+                    content = "C",
+                )
             )
             assertTrue(pdfResult.isPdf)
         }
@@ -71,7 +128,12 @@ class ArtifactModelsTest {
         @Test
         fun `isPdf returns false for Word format`() {
             val wordResult = ArtifactGenerationResult(
-                request = ArtifactGenerationRequest(targetFormat = MimeType.WORD, title = "T", content = "C")
+                request = ArtifactGenerationRequest(
+                    artifactId = "artifact-word",
+                    targetFormat = MimeType.WORD,
+                    title = "T",
+                    content = "C",
+                )
             )
             assertTrue(!wordResult.isPdf)
         }

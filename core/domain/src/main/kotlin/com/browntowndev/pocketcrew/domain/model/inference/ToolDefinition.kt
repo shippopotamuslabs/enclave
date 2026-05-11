@@ -101,7 +101,11 @@ data class ToolDefinition(
     @Suppress("UNCHECKED_CAST")
     fun <T : ToolParameters> decodeArguments(argumentsJson: String): T {
         val serializer = json.serializersModule.serializer(parametersClass.java) as KSerializer<T>
-        return json.decodeFromString(serializer, argumentsJson)
+        val payload = when (name) {
+            START_ARTIFACT.name -> StartArtifactParamsArgumentNormalizer.normalize(argumentsJson)
+            else -> argumentsJson
+        }
+        return json.decodeFromString(serializer, payload)
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -170,9 +174,12 @@ data class ToolDefinition(
 
         val START_ARTIFACT = ToolDefinition(
             name = "start_artifact",
-            description = "Initialize a new professional document (PDF or Word). " +
+            description = "Initialize a new professional document. " +
                 "Returns an artifact_id to be used with append_blocks. " +
-                "Use this as the first step for generating any report, plan, or summary.",
+                "Use this as the first step for generating any report, plan, or summary. " +
+                "Required: top-level `title` (string). Optional: `author`. " +
+                "Do not put the title only inside nested metadata; " +
+                "after this call succeeds once, use append_blocks only (do not call start_artifact again).",
             parametersClass = StartArtifactParams::class,
             displayName = "Starting Artifact...",
         )

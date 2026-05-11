@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -107,8 +106,8 @@ class SyncDaoTest {
         val msgId = MessageId("msg-f-1")
         messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val fileDao = database.messageFileDao()
-        fileDao.insert(MessageFileEntity("f-1", msgId.value, "file1.txt", "content1", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 1))
-        fileDao.insert(MessageFileEntity("f-2", msgId.value, "file2.txt", "content2", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 0))
+        fileDao.insert(MessageFileEntity("f-1", msgId.value, "file1.txt", "content1", mimeType = MimeType.PLAIN_TEXT, pendingSync = 1))
+        fileDao.insert(MessageFileEntity("f-2", msgId.value, "file2.txt", "content2", mimeType = MimeType.PLAIN_TEXT, pendingSync = 0))
 
         fileDao.claimPending()
         val pending = fileDao.getClaimedForSync()
@@ -124,7 +123,7 @@ class SyncDaoTest {
         val msgId = MessageId("msg-f-sync-1")
         messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val fileDao = database.messageFileDao()
-        fileDao.insert(MessageFileEntity("f-sync-1", msgId.value, "file.txt", "content", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 1))
+        fileDao.insert(MessageFileEntity("f-sync-1", msgId.value, "file.txt", "content", mimeType = MimeType.PLAIN_TEXT, pendingSync = 1))
 
         fileDao.claimPending()
         fileDao.markSynced(listOf("f-sync-1"))

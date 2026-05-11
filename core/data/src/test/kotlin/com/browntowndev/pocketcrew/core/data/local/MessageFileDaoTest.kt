@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -65,7 +64,6 @@ class MessageFileDaoTest {
             name = "file1.txt", 
             content = "c1", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "PENDING_UPLOAD",
             deleted = false
         ))
@@ -75,7 +73,6 @@ class MessageFileDaoTest {
             name = "file2.txt", 
             content = "c2", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "UPLOADED",
             deleted = false
         ))
@@ -85,7 +82,6 @@ class MessageFileDaoTest {
             name = "file3.txt", 
             content = "c3", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "PENDING_UPLOAD",
             deleted = true
         ))
@@ -105,7 +101,6 @@ class MessageFileDaoTest {
             name = "f1", 
             content = "c", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "UPLOADED",
             deleted = true
         ))
@@ -115,7 +110,6 @@ class MessageFileDaoTest {
             name = "f2", 
             content = "c", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "DELETED",
             deleted = true
         ))
@@ -125,7 +119,6 @@ class MessageFileDaoTest {
             name = "f3", 
             content = "c", 
             mimeType = MimeType.PLAIN_TEXT,
-            fileSource = FileSource.ATTACHMENT,
             syncStatus = "UPLOADED",
             deleted = false
         ))
@@ -138,7 +131,17 @@ class MessageFileDaoTest {
     @Test
     fun `markCloudDeleted updates syncStatus to DELETED`() = runTest {
         val (_, messageId) = createChatAndMessage()
-        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, syncStatus = "UPLOADED", deleted = true))
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f1",
+                messageId = messageId.value,
+                name = "f1",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                syncStatus = "UPLOADED",
+                deleted = true,
+            )
+        )
 
         fileDao.markCloudDeleted("f1")
 
@@ -150,8 +153,8 @@ class MessageFileDaoTest {
     @Test
     fun `claimPending updates pendingSync from 1 to 2`() = runTest {
         val (_, messageId) = createChatAndMessage()
-        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 1))
-        fileDao.insert(MessageFileEntity("f2", messageId.value, "f2", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 0))
+        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, pendingSync = 1))
+        fileDao.insert(MessageFileEntity("f2", messageId.value, "f2", "c", mimeType = MimeType.PLAIN_TEXT, pendingSync = 0))
 
         fileDao.claimPending()
 
@@ -164,8 +167,26 @@ class MessageFileDaoTest {
     @Test
     fun `getClaimedForSync returns only pendingSync = 2 files`() = runTest {
         val (_, messageId) = createChatAndMessage()
-        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 2))
-        fileDao.insert(MessageFileEntity("f2", messageId.value, "f2", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 1))
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f1",
+                messageId = messageId.value,
+                name = "f1",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                pendingSync = 2,
+            )
+        )
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f2",
+                messageId = messageId.value,
+                name = "f2",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                pendingSync = 1,
+            )
+        )
 
         val claimed = fileDao.getClaimedForSync()
         assertEquals(1, claimed.size)
@@ -175,8 +196,26 @@ class MessageFileDaoTest {
     @Test
     fun `markSynced updates pendingSync from 2 to 0`() = runTest {
         val (_, messageId) = createChatAndMessage()
-        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 2))
-        fileDao.insert(MessageFileEntity("f2", messageId.value, "f2", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, pendingSync = 2))
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f1",
+                messageId = messageId.value,
+                name = "f1",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                pendingSync = 2,
+            )
+        )
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f2",
+                messageId = messageId.value,
+                name = "f2",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                pendingSync = 2,
+            )
+        )
 
         fileDao.markSynced(listOf("f1"))
 
@@ -190,7 +229,17 @@ class MessageFileDaoTest {
     fun `updateStatus updates syncStatus and updatedAt`() = runTest {
         val (_, messageId) = createChatAndMessage()
         val initialTime = 1000L
-        fileDao.insert(MessageFileEntity("f1", messageId.value, "f1", "c", mimeType = MimeType.PLAIN_TEXT, fileSource = FileSource.ATTACHMENT, syncStatus = "PENDING_UPLOAD", updatedAt = initialTime))
+        fileDao.insert(
+            MessageFileEntity(
+                id = "f1",
+                messageId = messageId.value,
+                name = "f1",
+                content = "c",
+                mimeType = MimeType.PLAIN_TEXT,
+                syncStatus = "PENDING_UPLOAD",
+                updatedAt = initialTime,
+            )
+        )
 
         val updateTime = 2000L
         fileDao.updateStatus("f1", "UPLOADED", updateTime)
@@ -210,16 +259,12 @@ class MessageFileDaoTest {
             name = "f1", 
             content = "c", 
             mimeType = MimeType.PDF,
-            fileSource = FileSource.GENERATED,
-            targetFormat = MimeType.PDF,
             remoteUrl = "https://example.com/file.png"
         ))
 
         val file = fileDao.getByIdIncludingDeleted("f1")
         assertNotNull(file)
         assertEquals(MimeType.PDF, file?.mimeType)
-        assertEquals(FileSource.GENERATED, file?.fileSource)
-        assertEquals(MimeType.PDF, file?.targetFormat)
         assertEquals("https://example.com/file.png", file?.remoteUrl)
     }
 }

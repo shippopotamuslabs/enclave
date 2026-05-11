@@ -41,7 +41,7 @@ fun ChatScreen(
     onClearFile: () -> Unit,
     onShieldTap: () -> Unit,
     onMicClick: () -> Unit,
-    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
     onShareTurn: () -> Unit = {},
@@ -102,7 +102,7 @@ fun ChatScreen(
                     hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
                     onEditMessage = onEditMessage,
                     onPlayAudio = onPlayAudio,
-                    onNavigateToArtifact = onNavigateToArtifact,
+                    onArtifactCardClick = onArtifactCardClick,
                     onNavigateToStudio = onNavigateToStudio,
                     onShareClick = onShareClick,
                 )

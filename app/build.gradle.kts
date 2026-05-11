@@ -128,7 +128,6 @@ dependencies {
     implementation(project(":feature:chat-inference-service"))
     implementation(project(":feature:inference"))
     implementation(project(":feature:studio"))
-    implementation(project(":feature:artifact"))
     implementation(project(":core:docgen"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

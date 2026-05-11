@@ -46,6 +46,7 @@ import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
+import com.browntowndev.pocketcrew.core.data.media.AndroidSaveBinaryToDownloadsAdapter
 import com.browntowndev.pocketcrew.core.data.media.AndroidShareMediaAdapter
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
@@ -84,6 +85,7 @@ import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
 import com.browntowndev.pocketcrew.domain.port.media.AudioPlayerPort
 import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
+import com.browntowndev.pocketcrew.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -452,6 +454,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindShareMediaPort(impl: AndroidShareMediaAdapter): ShareMediaPort
+
+    @Binds
+    @Singleton
+    abstract fun bindSaveBinaryToDownloadsPort(
+        impl: AndroidSaveBinaryToDownloadsAdapter,
+    ): SaveBinaryToDownloadsPort
 
     @Binds
     @Singleton

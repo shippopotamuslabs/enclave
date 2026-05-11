@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -160,5 +162,36 @@ class ChatGenerationAccumulatorManagerTest {
             "Marked source should have extracted=true")
         assertFalse(snapshotAfter.webSearchSources.first { it.url == "https://example.com/page2" }.extracted,
             "Unmarked source should still have extracted=false")
+    }
+
+    @Test
+    fun `ArtifactsAttached upgrades placeholder with same title when final payload arrives`() = runTest {
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = mockk(relaxed = true),
+        )
+
+        val placeholder = ArtifactGenerationRequest(
+            artifactId = "artifact-covenant",
+            title = "Covenant",
+            content = "",
+            targetFormat = MimeType.PDF,
+        )
+        val full = ArtifactGenerationRequest(
+            artifactId = "artifact-covenant",
+            title = "Covenant",
+            content = """{"version":"1.0"}""",
+            targetFormat = MimeType.PDF,
+        )
+
+        manager.reduce(MessageGenerationState.ArtifactsAttached(listOf(placeholder), ModelType.FAST))
+        manager.reduce(MessageGenerationState.ArtifactsAttached(listOf(full), ModelType.FAST))
+
+        val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+        assertEquals(1, snapshot.artifacts.size)
+        assertEquals(full.content, snapshot.artifacts.first().content)
     }
 }

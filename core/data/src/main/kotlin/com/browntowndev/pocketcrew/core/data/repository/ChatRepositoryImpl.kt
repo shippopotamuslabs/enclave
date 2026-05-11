@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
@@ -15,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -35,7 +36,7 @@ class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val webSearchSourceDao: WebSearchSourceDao,
-    private val messageFileDao: com.browntowndev.pocketcrew.core.data.local.MessageFileDao,
+    private val documentDao: DocumentDao,
     private val transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider,
 ) : ChatRepository {
 
@@ -60,9 +61,16 @@ class ChatRepositoryImpl @Inject constructor(
         return combine(
             messageDao.getMessagesByChatIdFlow(chatId),
             webSearchSourceDao.getByChatIdFlow(chatId),
-        ) { messages, webSearchSources ->
+            documentDao.getDocumentsByChatIdFlow(chatId),
+        ) { messages, webSearchSources, documents ->
             val sourcesByMessageId = webSearchSources.groupBy { it.messageId }
-            messages.map { it.toDomain(sourcesByMessageId[it.message.id] ?: emptyList()) }
+            val documentsByMessageId = documents.groupBy { it.messageId }
+            messages.map {
+                it.toDomain(
+                    webSearchSources = sourcesByMessageId[it.message.id] ?: emptyList(),
+                    documents = documentsByMessageId[it.message.id] ?: emptyList(),
+                )
+            }
         }
     }
 
@@ -180,23 +188,15 @@ class ChatRepositoryImpl @Inject constructor(
         generatedMediaTypes: List<String>,
         generatedMediaPrompts: List<String>
     ) {
-        val artifactEntities = artifacts.map { artifact ->
-            val deterministicId = "${messageId.value}_${artifact.title.hashCode()}"
-            val existing = messageFileDao.getByIdIncludingDeleted(deterministicId)
-            
-            com.browntowndev.pocketcrew.core.data.local.MessageFileEntity(
-                id = deterministicId,
-                messageId = messageId.value,
-                name = artifact.title,
-                content = artifact.content,
-                mimeType = MimeType.MARKDOWN,
-                fileSource = FileSource.GENERATED,
+        val documentEntities = artifacts.map { artifact ->
+            DocumentEntity(
+                id = artifact.artifactId,
+                messageId = messageId,
+                json = artifact.content,
+                title = artifact.title,
+                author = null,
                 targetFormat = artifact.targetFormat,
-                remoteUrl = existing?.remoteUrl,
-                syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
-                pendingSync = existing?.pendingSync ?: 0,
-                updatedAt = System.currentTimeMillis(),
-                deleted = false
+                pendingSync = 1,
             )
         }
 
@@ -234,21 +234,19 @@ class ChatRepositoryImpl @Inject constructor(
                 mediaPromptsJson = mediaPromptsJson
             )
 
-            if (artifactEntities.isNotEmpty()) {
-                val currentArtifactIds = artifactEntities.map { it.id }.toSet()
-                val existingArtifacts = messageFileDao.getByMessageId(messageId)
-                
-                // Soft-delete artifacts that are no longer in the list
-                existingArtifacts.forEach { existing ->
-                    if (existing.fileSource != FileSource.ATTACHMENT && existing.id !in currentArtifactIds) {
-                        messageFileDao.softDeleteById(existing.id)
-                    }
-                }
-
-                // Upsert new/updated artifacts
-                artifactEntities.forEach { messageFileDao.insert(it) }
-            }
+            // Soft-delete all previous artifacts attached to this assistant message,
+            // then upsert the current set by stable `artifactId`.
+            documentDao.softDeleteByMessageId(messageId)
+            documentEntities.forEach { documentDao.insertDocument(it) }
         }
+        triggerSync()
+    }
+
+    override suspend fun updateArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
+    ) {
+        documentDao.updateTargetFormat(artifactId = artifactId, targetFormat = format)
         triggerSync()
     }
 
@@ -269,6 +267,8 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun deleteChat(chatId: ChatId) {
         val rowsAffected = chatDao.softDeleteById(chatId)
         require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        // Soft-delete related generated documents so sync doesn't resurrect them later.
+        documentDao.softDeleteByChatId(chatId)
         triggerSync()
     }
 

@@ -27,9 +27,15 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Compani
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.WEB_EXTRACT
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.WEB_SEARCH
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportDestination
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportFormat
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportOutcome
+import com.browntowndev.pocketcrew.domain.model.artifact.ExportArtifactDocumentsCommand
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
@@ -39,6 +45,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.pocketcrew.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
@@ -50,6 +57,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -76,6 +84,8 @@ import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 
 /**
@@ -101,11 +111,153 @@ class ChatViewModel @Inject constructor(
     private val playbackController: TtsPlaybackControllerPort,
     private val studioRepository: StudioRepositoryPort,
     private val shareChatUseCase: com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase,
+    private val chatRepository: ChatRepository,
+    private val exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
 ) : ViewModel() {
 
-    companion object {
-        private const val TAG = "ChatViewModel"
-        private val jsonParser = Json { ignoreUnknownKeys = true }
+    suspend fun persistArtifactExportPreference(
+        artifactId: String,
+        format: MimeType,
+    ) {
+        withContext(Dispatchers.IO) {
+            chatRepository.updateArtifactExportPreference(artifactId = artifactId, format = format)
+        }
+    }
+
+    fun onArtifactCardClick(messageId: MessageId, card: ArtifactCardUiModel) {
+        _artifactExportSheet.value =
+            ArtifactExportSheetState.Visible(
+                messageId = messageId,
+                artifactId = card.artifactId,
+                title = card.title,
+                step = ArtifactExportWizardStep.CHOOSE_FORMAT,
+                selectedFormat = null,
+                selectedDestination = null,
+                isExporting = false,
+            )
+    }
+
+    fun dismissArtifactExportSheet() {
+        _artifactExportSheet.value = ArtifactExportSheetState.Hidden
+    }
+
+    fun onArtifactExportSelectFormat(format: WizardExportFormat) {
+        val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
+        _artifactExportSheet.value = visible.copy(selectedFormat = format)
+    }
+
+    fun onArtifactExportSelectDestination(destination: WizardExportDestination) {
+        val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
+        _artifactExportSheet.value = visible.copy(selectedDestination = destination)
+    }
+
+    fun onArtifactExportWizardBack() {
+        when (val sheet = _artifactExportSheet.value) {
+            is ArtifactExportSheetState.Visible -> {
+                when (sheet.step) {
+                    ArtifactExportWizardStep.CHOOSE_DESTINATION -> {
+                        _artifactExportSheet.value =
+                            sheet.copy(
+                                step = ArtifactExportWizardStep.CHOOSE_FORMAT,
+                                selectedDestination = null,
+                            )
+                    }
+                    ArtifactExportWizardStep.CHOOSE_FORMAT -> {
+                        dismissArtifactExportSheet()
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    fun onArtifactExportWizardNext() {
+        val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
+        if (visible.selectedFormat == null) return
+        _artifactExportSheet.value =
+            visible.copy(step = ArtifactExportWizardStep.CHOOSE_DESTINATION)
+    }
+
+    fun onConfirmArtifactExport() {
+        val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
+        if (visible.selectedFormat == null || visible.selectedDestination == null) return
+        viewModelScope.launch {
+            _artifactExportSheet.update { prev: ArtifactExportSheetState ->
+                (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = true) ?: prev
+            }
+            val artifact =
+                resolveArtifactGenerationRequest(
+                    messageId = visible.messageId,
+                    artifactId = visible.artifactId,
+                )
+            if (artifact == null) {
+                _artifactExportMessages.emit("Could not find this document.")
+                dismissArtifactExportSheet()
+                return@launch
+            }
+            if (artifact.content.isBlank()) {
+                _artifactExportMessages.emit("Document is still generating. Try again in a moment.")
+                dismissArtifactExportSheet()
+                return@launch
+            }
+            val format =
+                when (visible.selectedFormat) {
+                    WizardExportFormat.PDF -> ArtifactExportFormat.PDF
+                    WizardExportFormat.WORD -> ArtifactExportFormat.WORD
+                    WizardExportFormat.BOTH -> ArtifactExportFormat.BOTH
+                }
+            val destination =
+                when (visible.selectedDestination) {
+                    WizardExportDestination.SHARE -> ArtifactExportDestination.SHARE
+                    WizardExportDestination.DOWNLOAD -> ArtifactExportDestination.DOWNLOAD
+                }
+            val result =
+                exportArtifactDocumentsUseCase(
+                    ExportArtifactDocumentsCommand(
+                        documentJson = artifact.content,
+                        baseTitle = artifact.title.ifBlank { "artifact" },
+                        format = format,
+                        destination = destination,
+                    ),
+                )
+            if (result.isSuccess) {
+                val outcome = result.getOrNull()!!
+                when (outcome) {
+                    is ArtifactExportOutcome.Shared ->
+                        _artifactExportMessages.emit(
+                            "Share sheet opened for ${outcome.fileCount} file(s).",
+                        )
+                    is ArtifactExportOutcome.Downloaded ->
+                        _artifactExportMessages.emit(
+                            "Saved to Downloads: ${outcome.savedDisplayNames.joinToString()}",
+                        )
+                }
+                when (format) {
+                    ArtifactExportFormat.PDF ->
+                        persistArtifactExportPreference(artifact.artifactId, MimeType.PDF)
+                    ArtifactExportFormat.WORD ->
+                        persistArtifactExportPreference(artifact.artifactId, MimeType.WORD)
+                    ArtifactExportFormat.BOTH -> Unit
+                }
+                dismissArtifactExportSheet()
+            } else {
+                val error = result.exceptionOrNull() ?: Exception("Export failed")
+                _artifactExportMessages.emit(error.message ?: "Export failed")
+                _artifactExportSheet.update { prev: ArtifactExportSheetState ->
+                    (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = false) ?: prev
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveArtifactGenerationRequest(
+        messageId: MessageId,
+        artifactId: String,
+    ): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest? {
+        val chatId = _currentChatId.value ?: initialChatId ?: return null
+        val messages = chatRepository.getMessagesForChat(chatId).first()
+        val message = messages.find { it.id == messageId } ?: return null
+        return message.content.artifacts.find { it.artifactId == artifactId }
     }
 
     /**
@@ -140,6 +292,10 @@ class ChatViewModel @Inject constructor(
     private val _shareState = MutableStateFlow<ShareState>(ShareState.Idle)
     private val _isReadOnly = MutableStateFlow(false)
     private val _sharedMessages = MutableStateFlow<List<Message>>(emptyList())
+
+    private val _artifactExportSheet = MutableStateFlow<ArtifactExportSheetState>(ArtifactExportSheetState.Hidden)
+    private val _artifactExportMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val artifactExportMessages = _artifactExportMessages.asSharedFlow()
     
     // Caches share URLs by ShareOption key to avoid redundant uploads
     private val shareUrlCache = mutableMapOf<com.browntowndev.pocketcrew.domain.model.share.ShareOption, String>()
@@ -152,7 +308,11 @@ class ChatViewModel @Inject constructor(
     private val activeToolJobs = mutableMapOf<String, Job>()
     private val toolStartTimes = mutableMapOf<String, Long>()
     private val activeToolNames = mutableMapOf<String, String>()
-    private val activeArtifacts = mutableMapOf<String, com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>()
+    private val pendingStartArtifacts = mutableMapOf<String, PendingStartArtifact>()
+
+    private data class PendingStartArtifact(
+        val title: String,
+    )
 
     private val photoAttachmentPolicyFlow = combine(
         settingsUseCases.getSettings(),
@@ -366,13 +526,11 @@ class ChatViewModel @Inject constructor(
                         try {
                             val params = jsonParser.decodeFromString<
                                 com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
-                                >(event.argumentsJson)
-                            // Initial artifact with no content yet
-                            activeArtifacts[event.eventId] = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                title = params.title,
-                                targetFormat = params.targetFormat,
-                                content = ""
+                                >(
+                                com.browntowndev.pocketcrew.domain.model.inference
+                                    .StartArtifactParamsArgumentNormalizer.normalize(event.argumentsJson),
                             )
+                            pendingStartArtifacts[event.eventId] = PendingStartArtifact(title = params.title)
                         } catch (e: Exception) {
                             loggingPort.error(TAG, "Failed to parse start_artifact request", e)
                         }
@@ -407,31 +565,44 @@ class ChatViewModel @Inject constructor(
 
                     // Capture the current key and artifact BEFORE the delay to avoid race conditions
                     val capturedKey = activeTurnKeyFlow.value
-                    val capturedArtifact = activeArtifacts[event.eventId]
+                    val capturedStart = pendingStartArtifacts[event.eventId]
+                    val toolNameAtFinish = (activeToolNames[event.eventId] ?: "").lowercase()
 
                     // Collect sources for the banner if available
                     val sources = event.resultJson?.let {
                         WebSearchResultParser.parse(MessageId("temp"), it)
                     } ?: emptyList()
 
+                    val artifactId = event.resultJson
+                        ?.let { raw -> runCatching { jsonParser.parseToJsonElement(raw).jsonObject["artifactId"]?.jsonPrimitive?.content }.getOrNull() }
+                        ?.takeIf { it.isNotBlank() }
+
                     activeToolJobs[event.eventId] = viewModelScope.launch {
                         if (sources.isNotEmpty()) {
                             _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(webSearchSources = sources)
                         }
-                        delay(remaining)
-                        val toolName = (activeToolNames[event.eventId] ?: "").lowercase()
-                        if (toolName == ToolDefinition.START_ARTIFACT.name.lowercase()) {
-                            if (capturedKey != null && capturedArtifact != null) {
-                                viewModelScope.launch {
-                                    activeChatTurnSnapshotPort.attachArtifact(
-                                        key = capturedKey,
-                                        assistantMessageId = capturedKey.assistantMessageId,
-                                        artifact = capturedArtifact
-                                    )
-                                    activeArtifacts.remove(event.eventId)
-                                }
-                            }
+
+                        // Attach artifact placeholder immediately so final persistence can pick it up.
+                        if (toolNameAtFinish == ToolDefinition.START_ARTIFACT.name.lowercase() &&
+                            capturedKey != null &&
+                            capturedStart != null &&
+                            artifactId != null
+                        ) {
+                            val artifact = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                artifactId = artifactId,
+                                title = capturedStart.title,
+                                content = "",
+                            )
+                            activeChatTurnSnapshotPort.attachArtifact(
+                                key = capturedKey,
+                                assistantMessageId = capturedKey.assistantMessageId,
+                                artifact = artifact
+                            )
+                            pendingStartArtifacts.remove(event.eventId)
                         }
+
+                        // Keep the banner visible for at least ~1s, but do not block artifact attachment.
+                        delay(remaining)
 
                         activeToolIds.remove(event.eventId)
                         activeToolNames.remove(event.eventId)
@@ -502,6 +673,7 @@ class ChatViewModel @Inject constructor(
         _shareState,
         _isReadOnly,
         _sharedMessages,
+        _artifactExportSheet,
     ) { args: Array<Any?> ->
         val inputsWithPolicy = args[0] as UiInputsWithPolicy
         val isBlocked = args[1] as Boolean
@@ -512,6 +684,7 @@ class ChatViewModel @Inject constructor(
         val shareState = args[6] as ShareState
         val isReadOnly = args[7] as Boolean
         val sharedMessages = args[8] as List<Message>
+        val artifactExportSheet = args[9] as ArtifactExportSheetState
 
         val messages = if (isReadOnly) sharedMessages else dbMessages
 
@@ -599,6 +772,7 @@ class ChatViewModel @Inject constructor(
             isPlayingTts = isPlayingTts,
             shareState = shareState,
             isReadOnly = isReadOnly,
+            artifactExportSheet = artifactExportSheet,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -641,7 +815,7 @@ class ChatViewModel @Inject constructor(
                 pipelineStep = message.content.pipelineStep,
                 imageUris = message.content.imageUris,
                 webSearchSources = message.webSearchSources,
-                artifacts = message.content.artifacts,
+                artifacts = message.content.artifacts.map { it.toArtifactCardUiModel() },
                 fileAttachments = message.content.fileAttachments,
                 generatedMediaUris = message.content.generatedMediaUris,
                 generatedMediaAssetIds = message.content.generatedMediaAssetIds,
@@ -981,7 +1155,7 @@ class ChatViewModel @Inject constructor(
         // Placeholder for future shield/security info interaction
     }
 
-    private val _shareUiEvents = kotlinx.coroutines.flow.MutableSharedFlow<ShareUiEvent>()
+    private val _shareUiEvents = kotlinx.coroutines.flow.MutableSharedFlow<ShareUiEvent>(extraBufferCapacity = 1)
     val shareUiEvents = _shareUiEvents.asSharedFlow()
 
     private var pendingShareMessageId: MessageId? = null
@@ -1218,6 +1392,11 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "ChatViewModel"
+        private val jsonParser = Json { ignoreUnknownKeys = true }
     }
 
     override fun onCleared() {

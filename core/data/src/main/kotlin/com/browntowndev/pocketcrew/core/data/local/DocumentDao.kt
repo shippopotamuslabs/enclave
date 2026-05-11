@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 import androidx.room.RawQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 
 @Dao
 interface DocumentDao {
@@ -18,6 +21,18 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :id AND deleted = 0")
     suspend fun getDocumentById(id: String): DocumentEntity?
 
+    @Query(
+        """
+        SELECT documents.* FROM documents
+        INNER JOIN message ON documents.message_id = message.id
+        WHERE message.chat_id = :chatId AND documents.deleted = 0
+        """
+    )
+    fun getDocumentsByChatIdFlow(chatId: ChatId): Flow<List<DocumentEntity>>
+
+    @Query("SELECT * FROM documents WHERE message_id = :messageId AND deleted = 0")
+    fun getDocumentsByMessageIdFlow(messageId: MessageId): Flow<List<DocumentEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDocument(document: DocumentEntity)
 
@@ -26,6 +41,37 @@ interface DocumentDao {
 
     @Query("UPDATE documents SET deleted = 1, updated_at = :timestamp, pending_sync = 1 WHERE id = :id")
     suspend fun deleteDocument(id: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query(
+        "UPDATE documents SET target_format = :targetFormat, updated_at = :timestamp, pending_sync = 1 WHERE id = :artifactId"
+    )
+    suspend fun updateTargetFormat(
+        artifactId: String,
+        targetFormat: MimeType,
+        timestamp: Long = System.currentTimeMillis(),
+    )
+
+    @Query(
+        "UPDATE documents SET deleted = 1, updated_at = :timestamp, pending_sync = 1 WHERE message_id = :messageId"
+    )
+    suspend fun softDeleteByMessageId(messageId: MessageId, timestamp: Long = System.currentTimeMillis())
+
+    @Query(
+        """
+        UPDATE documents
+        SET deleted = 1,
+            updated_at = :timestamp,
+            pending_sync = 1
+        WHERE deleted = 0
+          AND message_id IN (
+              SELECT id
+              FROM message
+              WHERE chat_id = :chatId
+                AND deleted = 0
+          )
+        """
+    )
+    suspend fun softDeleteByChatId(chatId: ChatId, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE documents SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()

@@ -246,7 +246,13 @@ class OpenRouterInferenceServiceImpl(
                 options = options,
                 routing = routing
             )
-            streamChatCompletions(chatParams, emitEvent)
+            streamChatCompletions(
+                params = chatParams,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+                assistantMessageId = options.assistantMessageId,
+                emitEvent = emitEvent,
+            )
             emitEvent(InferenceEvent.Finished(modelType))
         }
     }

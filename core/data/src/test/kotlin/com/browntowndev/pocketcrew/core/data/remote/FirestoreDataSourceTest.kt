@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
@@ -70,6 +71,7 @@ class FirestoreDataSourceTest {
     private val embeddingCoordinator = mockk<com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator>(relaxed = true)
     private val embeddingDao = mockk<com.browntowndev.pocketcrew.core.data.local.EmbeddingDao>(relaxed = true)
     private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
+    private val documentDao = mockk<DocumentDao>(relaxed = true)
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
@@ -87,7 +89,7 @@ class FirestoreDataSourceTest {
         every { firestore.collection(any()) } returns mockk(relaxed = true)
         every { firestore.document(any()) } returns mockk(relaxed = true)
 
-        dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
+        dataSource = FirestoreDataSource(documentDao = documentDao, 
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,
@@ -355,7 +357,10 @@ class FirestoreDataSourceTest {
             chatsListenerSlot.captured.onEvent(snapshot, null)
             advanceUntilIdle()
 
-            coVerify { chatDao.softDeleteById(ChatId("chat-1"), any()) }
+            coVerify {
+                chatDao.softDeleteById(ChatId("chat-1"), any())
+                documentDao.softDeleteByChatId(ChatId("chat-1"), any())
+            }
         }
 
         @Test
@@ -486,7 +491,10 @@ class FirestoreDataSourceTest {
             messagesListenerSlot.captured.onEvent(snapshot, null)
             advanceUntilIdle()
 
-            coVerify { messageDao.softDeleteById(MessageId("msg-1"), any()) }
+            coVerify {
+                messageDao.softDeleteById(MessageId("msg-1"), any())
+                documentDao.softDeleteByMessageId(MessageId("msg-1"), any())
+            }
         }
     }
 

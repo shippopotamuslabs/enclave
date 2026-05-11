@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.model.inference
 
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class GenerateArtifactParamsTest {
@@ -15,27 +16,29 @@ class GenerateArtifactParamsTest {
     }
 
     @Test
-    fun `toRequest maps fields correctly for PDF`() {
+    fun `toRequest maps title and content and leaves targetFormat unset for user preference`() {
         val params = GenerateArtifactParams(
             targetFormat = MimeType.PDF,
             title = "Title",
-            content = "Content"
+            content = "Content",
         )
         val request = params.toRequest()
-        assertEquals(MimeType.PDF, request.targetFormat)
+        assertNull(request.targetFormat)
+        assertEquals("legacy_${params.title.hashCode()}", request.artifactId)
         assertEquals("Title", request.title)
         assertEquals("Content", request.content)
     }
 
     @Test
-    fun `toRequest maps fields correctly for Word`() {
+    fun `toRequest ignores model Word hint for persisted user preference`() {
         val params = GenerateArtifactParams(
             targetFormat = MimeType.WORD,
             title = "Report",
-            content = "Content"
+            content = "Content",
         )
         val request = params.toRequest()
-        assertEquals(MimeType.WORD, request.targetFormat)
+        assertNull(request.targetFormat)
+        assertEquals("legacy_${params.title.hashCode()}", request.artifactId)
         assertEquals("Report", request.title)
         assertEquals("Content", request.content)
     }

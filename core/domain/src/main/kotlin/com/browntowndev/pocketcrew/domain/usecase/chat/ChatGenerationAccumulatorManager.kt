@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -58,11 +59,9 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.ArtifactsAttached -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    state.artifacts.forEach { newArtifact ->
-                        if (artifacts.none { it.title == newArtifact.title }) {
-                            artifacts.add(newArtifact)
-                        }
-                    }
+                    val merged = mergeArtifactGenerationRequests(artifacts.toList(), state.artifacts)
+                    artifacts.clear()
+                    artifacts.addAll(merged)
                 }
             }
             is MessageGenerationState.MediaAttached -> {
@@ -143,12 +142,11 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
-            // Sync artifacts
-            messageSnapshot.artifacts.forEach { snapshotArtifact ->
-                if (accumulator.artifacts.none { it.title == snapshotArtifact.title }) {
-                    accumulator.artifacts.add(snapshotArtifact)
-                }
-            }
+            // Sync artifacts (merge so port-attached placeholders upgrade when inference emits the full doc)
+            val mergedArtifacts =
+                mergeArtifactGenerationRequests(accumulator.artifacts.toList(), messageSnapshot.artifacts)
+            accumulator.artifacts.clear()
+            accumulator.artifacts.addAll(mergedArtifacts)
 
             // Sync web search sources
             messageSnapshot.webSearchSources.forEach { snapshotSource ->

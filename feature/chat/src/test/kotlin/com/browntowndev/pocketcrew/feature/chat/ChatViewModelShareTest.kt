@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import kotlinx.coroutines.Dispatchers
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -27,24 +28,32 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
 import app.cash.turbine.test
-import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
-import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import org.robolectric.RobolectricTestRunner
 
-@ExtendWith(MainDispatcherRule::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelShareTest {
 
     private lateinit var viewModel: ChatViewModel
     private lateinit var shareChatUseCase: ShareChatUseCase
+    private val testDispatcher = UnconfinedTestDispatcher()
 
-    @BeforeEach
+    @Before
     fun setup() {
+        Dispatchers.setMain(testDispatcher)
         shareChatUseCase = mockk(relaxed = true)
         
         // Mock all dependencies
@@ -89,8 +98,15 @@ class ChatViewModelShareTest {
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
             playbackController = playbackController,
             studioRepository = studioRepository,
-            shareChatUseCase = shareChatUseCase
+            shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test

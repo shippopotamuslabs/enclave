@@ -93,6 +93,8 @@ class ChatViewModelFlowTest {
             playbackController = mockk(relaxed = true),
             studioRepository = mockk(relaxed = true),
             shareChatUseCase = shareChatUseCase,
+            chatRepository = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = mockk(relaxed = true),
         )
     }
 

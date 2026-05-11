@@ -57,6 +57,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
+import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import kotlinx.coroutines.launch
 
@@ -69,7 +70,7 @@ fun AssistantResponse(
     isPreview: Boolean = false,
     hasTtsProviderAssigned: Boolean = false,
     onPlayAudio: (String) -> Unit = {},
-    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
 ) {
@@ -147,10 +148,10 @@ fun AssistantResponse(
                     contentPadding = PaddingValues(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(message.content.artifacts) { artifact ->
+                    items(message.content.artifacts) { card ->
                         ArtifactCard(
-                            artifact = artifact,
-                            onClick = { onNavigateToArtifact(artifact) }
+                            card = card,
+                            onClick = { onArtifactCardClick(message.id, card) },
                         )
                     }
                 }
@@ -408,7 +409,7 @@ private fun CompletedStepRow(
 }
 @Composable
 private fun ArtifactCard(
-    artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    card: ArtifactCardUiModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -451,7 +452,7 @@ private fun ArtifactCard(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            text = "PDF",
+                            text = card.badgeLabel,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Black,
@@ -469,7 +470,7 @@ private fun ArtifactCard(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = artifact.title,
+                    text = card.title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.sp
@@ -480,7 +481,7 @@ private fun ArtifactCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "PDF Document • Generated",
+                    text = card.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -492,7 +493,7 @@ private fun ArtifactCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Open in Studio",
+                        text = card.ctaLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold

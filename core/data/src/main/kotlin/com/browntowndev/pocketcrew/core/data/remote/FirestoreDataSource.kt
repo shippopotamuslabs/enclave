@@ -210,6 +210,8 @@ class FirestoreDataSource @Inject constructor(
 
         override suspend fun deleteLocal(id: String) {
             chatDao.softDeleteById(ChatId(id))
+            // Soft-delete linked documents too (documents are tied to messages via message_id).
+            documentDao.softDeleteByChatId(ChatId(id))
         }
     }
 
@@ -271,7 +273,12 @@ class FirestoreDataSource @Inject constructor(
             }
         }
 
-        override suspend fun deleteLocal(id: String) = messageDao.softDeleteById(MessageId(id))
+        override suspend fun deleteLocal(id: String) {
+            val messageId = MessageId(id)
+            messageDao.softDeleteById(messageId)
+            // Soft-delete linked documents too (documents are tied to messages via message_id).
+            documentDao.softDeleteByMessageId(messageId)
+        }
     }
 
     private val chatSummarySyncAdapter = object : EntitySyncAdapter<ChatSummaryEntity> {
@@ -438,8 +445,6 @@ class FirestoreDataSource @Inject constructor(
                 "message_id" to local.messageId,
                 "name" to local.name.encrypt(),
                 "mime_type" to local.mimeType.name,
-                "file_source" to local.fileSource.name,
-                "target_format" to local.targetFormat?.name,
                 "remote_url" to local.remoteUrl?.encrypt(),
                 "sync_status" to local.syncStatus,
                 "updated_at" to local.updatedAt,
@@ -461,30 +466,12 @@ class FirestoreDataSource @Inject constructor(
                 MimeType.PLAIN_TEXT
             }
 
-            val fileSourceStr = doc.getString("file_source") ?: FileSource.ATTACHMENT.name
-            val fileSource = try {
-                FileSource.valueOf(fileSourceStr)
-            } catch (e: Exception) {
-                FileSource.ATTACHMENT
-            }
-
-            val targetFormatStr = doc.getString("target_format")
-            val targetFormat = targetFormatStr?.let {
-                try {
-                    MimeType.valueOf(it)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-
             return MessageFileEntity(
                 id = doc.id,
                 messageId = messageIdStr,
                 name = name,
                 content = "", // Content will be downloaded from Storage if remoteUrl exists
                 mimeType = mimeType,
-                fileSource = fileSource,
-                targetFormat = targetFormat,
                 remoteUrl = remoteUrl,
                 syncStatus = doc.getString("sync_status") ?: "PENDING_UPLOAD",
                 updatedAt = doc.getLong("updated_at") ?: 0L,
@@ -1342,10 +1329,12 @@ class FirestoreDataSource @Inject constructor(
         override fun getEntityId(entity: com.browntowndev.pocketcrew.core.data.local.DocumentEntity) = entity.id
         
         override suspend fun toFirestore(local: com.browntowndev.pocketcrew.core.data.local.DocumentEntity) = mapOf(
+            "message_id" to local.messageId.value,
+            "chat_id" to messageDao.getMessageById(local.messageId)?.message?.chatId?.value,
             "json" to local.json.encrypt(),
             "title" to local.title.encrypt(),
             "author" to local.author?.encrypt(),
-            "target_format" to local.targetFormat,
+            "target_format" to local.targetFormat?.name,
             "created_at" to local.createdAt,
             "updated_at" to local.updatedAt,
             "deleted" to local.deleted
@@ -1353,7 +1342,16 @@ class FirestoreDataSource @Inject constructor(
 
         override fun fromFirestore(doc: DocumentSnapshot) = documentEntityFromDoc(doc)
 
-        override suspend fun upsertLocal(entity: com.browntowndev.pocketcrew.core.data.local.DocumentEntity, doc: DocumentSnapshot, overwrite: Boolean) {
+        override suspend fun upsertLocal(
+            entity: com.browntowndev.pocketcrew.core.data.local.DocumentEntity,
+            doc: DocumentSnapshot,
+            overwrite: Boolean,
+        ) {
+            val chatIdStr = doc.getString("chat_id")
+            val chatId = chatIdStr?.takeIf { it.isNotBlank() }?.let { ChatId(it) }
+            if (chatId != null) {
+                ensurePlaceholderMessage(entity.messageId, chatId)
+            }
             val existing = documentDao.getDocumentById(entity.id)
             if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 documentDao.insertDocument(entity.copy(pendingSync = 0))
@@ -1375,12 +1373,19 @@ class FirestoreDataSource @Inject constructor(
     private fun documentEntityFromDoc(doc: DocumentSnapshot): com.browntowndev.pocketcrew.core.data.local.DocumentEntity? {
         val json = doc.getBlob("json")?.decrypt() ?: return null
         val title = doc.getBlob("title")?.decrypt() ?: ""
+        val messageIdStr = doc.getString("message_id") ?: return null
+        val messageId = MessageId(messageIdStr)
+        val targetFormatStr = doc.getString("target_format")
+        val targetFormat = targetFormatStr?.let {
+            runCatching { MimeType.valueOf(it) }.getOrNull()
+        }
         return com.browntowndev.pocketcrew.core.data.local.DocumentEntity(
             id = doc.id,
+            messageId = messageId,
             json = json,
             title = title,
             author = doc.getBlob("author")?.decrypt(),
-            targetFormat = doc.getString("target_format") ?: "PDF",
+            targetFormat = targetFormat,
             createdAt = doc.getLong("created_at") ?: 0L,
             updatedAt = doc.getLong("updated_at") ?: 0L,
             deleted = doc.getBoolean("deleted") ?: false,

@@ -195,6 +195,7 @@ class ActiveChatTurnStoreTest {
 
     private fun artifact(title: String): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest {
         return com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+            artifactId = "artifact-$title",
             title = title,
             targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.PDF,
             content = "Stub content for $title"

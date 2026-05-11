@@ -10,11 +10,14 @@ import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
 import com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.port.docgen.DocumentValidationPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,7 +34,8 @@ class ArtifactToolExecutor @Inject constructor(
     private val documentDao: DocumentDao,
     private val embeddingDao: EmbeddingDao,
     private val embeddingEngine: EmbeddingEnginePort,
-    @ApplicationScope private val externalScope: CoroutineScope
+    private val documentValidation: DocumentValidationPort,
+    @ApplicationScope private val externalScope: CoroutineScope,
 ) : ToolExecutorPort {
 
     private val json = Json {
@@ -43,17 +47,26 @@ class ArtifactToolExecutor @Inject constructor(
         return when (request.toolName) {
             ToolDefinition.START_ARTIFACT.name -> {
                 val params = request.parameters as StartArtifactParams
-                startArtifact(params)
+                startArtifact(params, request.assistantMessageId)
             }
             ToolDefinition.APPEND_BLOCKS.name -> {
                 val params = request.parameters as AppendBlocksParams
-                appendBlocks(params)
+                appendBlocks(params, request.assistantMessageId)
             }
             else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
         }
     }
 
-    private suspend fun startArtifact(params: StartArtifactParams): ToolExecutionResult {
+    private suspend fun startArtifact(
+        params: StartArtifactParams,
+        assistantMessageId: MessageId?,
+    ): ToolExecutionResult {
+        val messageId =
+            assistantMessageId ?: return ToolExecutionResult(
+                toolName = ToolDefinition.START_ARTIFACT.name,
+                resultJson = """{"status":"error","message":"Missing assistantMessageId for start_artifact"}""",
+            )
+
         val artifactId = UUID.randomUUID().toString()
         
         // Initial empty document structure
@@ -68,13 +81,22 @@ class ArtifactToolExecutor @Inject constructor(
 
         val entity = DocumentEntity(
             id = artifactId,
+            messageId = messageId,
             title = params.title,
             author = params.author,
-            targetFormat = params.targetFormat.name,
+            targetFormat = null,
             json = initialDocJson.toString(),
             pendingSync = 1
         )
-        
+
+        documentValidation.validate(entity.json).onFailure { cause ->
+            return documentSchemaViolationResult(
+                toolName = ToolDefinition.START_ARTIFACT.name,
+                phase = "initial_empty_document",
+                cause = cause,
+            )
+        }
+
         documentDao.insertDocument(entity)
 
         return ToolExecutionResult(
@@ -83,7 +105,10 @@ class ArtifactToolExecutor @Inject constructor(
         )
     }
 
-    private suspend fun appendBlocks(params: AppendBlocksParams): ToolExecutionResult {
+    private suspend fun appendBlocks(
+        params: AppendBlocksParams,
+        assistantMessageId: MessageId?,
+    ): ToolExecutionResult {
         val entity = documentDao.getDocumentById(params.artifactId)
             ?: return ToolExecutionResult(
                 toolName = ToolDefinition.APPEND_BLOCKS.name,
@@ -106,12 +131,22 @@ class ArtifactToolExecutor @Inject constructor(
             }
         }
 
+        val mergedJson = updatedDoc.toString()
+        documentValidation.validate(mergedJson).onFailure { cause ->
+            return documentSchemaViolationResult(
+                toolName = ToolDefinition.APPEND_BLOCKS.name,
+                phase = "merged_document_after_append",
+                cause = cause,
+            )
+        }
+
         val updatedEntity = entity.copy(
-            json = updatedDoc.toString(),
+            messageId = assistantMessageId ?: entity.messageId,
+            json = mergedJson,
             updatedAt = System.currentTimeMillis(),
             pendingSync = 1
         )
-        
+
         documentDao.updateDocument(updatedEntity)
 
         // Real-time embedding (fire and forget on external scope)
@@ -157,12 +192,42 @@ class ArtifactToolExecutor @Inject constructor(
                 put("isComplete", JsonPrimitive(params.isComplete))
                 put("message", JsonPrimitive(message))
                 if (params.isComplete) {
-                    put("fullDocument", JsonPrimitive(updatedDoc.toString()))
+                    put("fullDocument", updatedDoc)
                     put("title", JsonPrimitive(entity.title))
-                    put("targetFormat", JsonPrimitive(entity.targetFormat))
                 }
             }.toString()
         )
+    }
+
+    private fun documentSchemaViolationResult(
+        toolName: String,
+        phase: String,
+        cause: Throwable,
+    ): ToolExecutionResult {
+        val details = cause.message ?: cause.toString()
+        val payload = buildJsonObject {
+            put("status", JsonPrimitive("error"))
+            put("code", JsonPrimitive("DOCUMENT_SCHEMA_VIOLATION"))
+            put("phase", JsonPrimitive(phase))
+            put(
+                "message",
+                JsonPrimitive(
+                    "The document JSON failed Rust-backed schema validation (Pocket Crew Document schema). " +
+                        "Fix the blocks in this tool call and try again.",
+                ),
+            )
+            put("validationDetails", JsonPrimitive(details))
+            put(
+                "schemaHint",
+                JsonPrimitive(
+                    "Each block is a tagged union: include \"type\" as one of heading, paragraph, list, " +
+                        "table, code, math, image, page_break, with the required fields for that variant " +
+                        "(e.g. heading requires integer \"level\" and string \"text\"). " +
+                        "The authoritative schema is exported from the same docgen library used for validation.",
+                ),
+            )
+        }
+        return ToolExecutionResult(toolName = toolName, resultJson = payload.toString())
     }
 
     private fun String.sha256(): String {

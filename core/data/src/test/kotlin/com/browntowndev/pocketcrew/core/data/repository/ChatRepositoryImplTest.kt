@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
@@ -32,7 +33,7 @@ class ChatRepositoryImplTest {
     private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
     private lateinit var tavilySourceDao: WebSearchSourceDao
-    private lateinit var messageFileDao: com.browntowndev.pocketcrew.core.data.local.MessageFileDao
+    private lateinit var documentDao: DocumentDao
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: ChatRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
@@ -44,7 +45,7 @@ class ChatRepositoryImplTest {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
         tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-        messageFileDao = mockk(relaxed = true)
+        documentDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
         
         // Mock transaction provider to run the block immediately
@@ -57,7 +58,7 @@ class ChatRepositoryImplTest {
             chatDao, 
             messageDao, 
             tavilySourceDao,
-            messageFileDao,
+            documentDao,
             transactionProvider
         )
     }
@@ -150,6 +151,7 @@ class ChatRepositoryImplTest {
             listOf(MessageWithFiles(message = messageEntity, files = emptyList()))
         )
         every { tavilySourceDao.getByChatIdFlow(chatId) } returns flowOf(listOf(sourceEntity))
+        every { documentDao.getDocumentsByChatIdFlow(chatId) } returns kotlinx.coroutines.flow.flowOf(emptyList())
 
         val result = repository.getMessagesForChat(chatId).first()
 

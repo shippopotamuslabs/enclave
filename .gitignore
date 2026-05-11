@@ -97,3 +97,5 @@ firebase-debug.log*
 functions/lib/
 functions/node_modules/
 .worktrees/
+
+node_modules/

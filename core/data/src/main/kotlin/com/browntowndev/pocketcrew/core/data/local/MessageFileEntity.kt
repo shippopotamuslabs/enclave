@@ -6,7 +6,6 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
-import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 
 @Entity(
     tableName = "message_file",
@@ -28,13 +27,6 @@ data class MessageFileEntity(
     
     @ColumnInfo(name = "mime_type")
     val mimeType: MimeType,
-    
-    @ColumnInfo(name = "file_source")
-    val fileSource: FileSource,
-    
-    @ColumnInfo(name = "target_format")
-    val targetFormat: MimeType? = null,
-    
     @ColumnInfo(name = "remote_url")
     val remoteUrl: String? = null,
     @ColumnInfo(name = "sync_status")

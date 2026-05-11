@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
@@ -44,7 +45,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
                     val existingMediaTypes = current?.messages?.get(id)?.generatedMediaTypes ?: emptyList()
                     val existingMediaPrompts = current?.messages?.get(id)?.generatedMediaPrompts ?: emptyList()
                     newSnapshot.copy(
-                        artifacts = (newSnapshot.artifacts + existingArtifacts).distinct(),
+                        artifacts = mergeArtifactGenerationRequests(newSnapshot.artifacts, existingArtifacts),
                         generatedMediaUris = (newSnapshot.generatedMediaUris + existingMediaUris).distinct(),
                         generatedMediaAssetIds = (newSnapshot.generatedMediaAssetIds + existingMediaIds).distinct(),
                         generatedMediaTypes = (newSnapshot.generatedMediaTypes + existingMediaTypes).distinct(),
