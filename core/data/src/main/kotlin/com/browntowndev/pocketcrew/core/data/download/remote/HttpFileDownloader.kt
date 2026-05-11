@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers
@@ -33,14 +32,14 @@ class HttpFileDownloader @Inject constructor(
         private const val HTTP_PARTIAL_CONTENT = 206
     }
 
-    @Suppress("CyclomaticComplexMethod")
     override suspend fun downloadFile(
         config: FileDownloaderPort.FileDownloadConfig,
         downloadUrl: String,
-        targetDir: File,
+        targetDirPath: String,
         existingBytes: Long,
         progressCallback: FileDownloaderPort.ProgressCallback?
     ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
+        val targetDir = File(targetDirPath)
         // Log model info for debugging
         logger.info(
             TAG,
@@ -204,7 +203,7 @@ class HttpFileDownloader @Inject constructor(
             }
 
             FileDownloaderPort.DownloadResult(
-                file = targetFile,
+                filePath = targetFile.absolutePath,
                 bytesDownloaded = totalBytesRead,
                 totalBytes = actualTotalSize.coerceAtLeast(config.expectedSizeBytes),
                 isResumed = isResuming
@@ -317,7 +316,7 @@ class HttpFileDownloader @Inject constructor(
             }
 
             FileDownloaderPort.DownloadResult(
-                file = targetFile,
+                filePath = targetFile.absolutePath,
                 bytesDownloaded = totalBytesRead,
                 totalBytes = actualTotalSize,
                 isResumed = false

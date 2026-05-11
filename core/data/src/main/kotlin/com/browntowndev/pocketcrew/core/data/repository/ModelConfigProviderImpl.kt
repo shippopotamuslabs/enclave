@@ -22,6 +22,6 @@ class ModelConfigProviderImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ModelConfigProvider {
 
-    override val modelsDirectory: File
-        get() = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+    override val modelsDirectoryPath: String
+        get() = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR).absolutePath
 }

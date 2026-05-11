@@ -87,7 +87,7 @@ class FirestoreDataSourceTest {
         every { firestore.collection(any()) } returns mockk(relaxed = true)
         every { firestore.document(any()) } returns mockk(relaxed = true)
 
-        dataSource = FirestoreDataSource(
+        dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,
@@ -141,7 +141,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("does nothing when userId is null")
         fun doesNothingWhenUserIdNull() {
-            val nullUserIdSource = FirestoreDataSource(
+            val nullUserIdSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -497,7 +497,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("returns failure when user not signed in")
         fun returnsFailureWhenNotSignedIn() = testScope.runTest {
-            val nullUserIdSource = FirestoreDataSource(
+            val nullUserIdSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -580,7 +580,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("returns failure when user not signed in")
         fun returnsFailureWhenNotSignedIn() = testScope.runTest {
-            val nullUserSource = FirestoreDataSource(
+            val nullUserSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -847,7 +847,7 @@ class FirestoreDataSourceTest {
 
         @BeforeEach
         fun setupListener() {
-            dataSource = FirestoreDataSource(
+            dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -935,7 +935,7 @@ class FirestoreDataSourceTest {
         @BeforeEach
         fun setupListener() {
             // Re-create dataSource with mocked vision analysis DAO
-            dataSource = FirestoreDataSource(
+            dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1102,7 +1102,7 @@ class FirestoreDataSourceTest {
         @DisplayName("vision analysis fromFirestore returns null when user_message_id is blank")
         fun visionAnalysis_fromFirestore_blankUserMessageId_returnsNull() = testScope.runTest {
             val messageVisionAnalysisDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1158,7 +1158,7 @@ class FirestoreDataSourceTest {
         @DisplayName("message file fromFirestore returns null when message_id is blank")
         fun messageFile_fromFirestore_blankMessageId_returnsNull() = testScope.runTest {
             val messageFileDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageFileDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1210,7 +1210,7 @@ class FirestoreDataSourceTest {
         @DisplayName("web search source fromFirestore returns null when message_id is blank")
         fun webSearchSource_fromFirestore_blankMessageId_returnsNull() = testScope.runTest {
             val webSearchSourceDao = mockk<com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1268,7 +1268,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("correctly syncs Message with artifactsJson and userMessageId")
         fun syncsMessage() = runTest {
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1331,7 +1331,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("decrypts generatedMediaAssetIdsJson from blob when syncing down")
         fun decryptsGeneratedMediaAssetIdsJsonFromBlob() = runTest {
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1392,7 +1392,7 @@ class FirestoreDataSourceTest {
         @DisplayName("correctly syncs MediaProvider with modelName and baseUrl")
         fun syncsMediaProvider() = runTest {
             val mediaProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.MediaProviderDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1459,7 +1459,7 @@ class FirestoreDataSourceTest {
         @DisplayName("correctly syncs TtsProvider with modelName and baseUrl")
         fun syncsTtsProvider() = runTest {
             val ttsProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.TtsProviderDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1526,7 +1526,7 @@ class FirestoreDataSourceTest {
         @DisplayName("correctly syncs ApiModelConfiguration with OpenRouter fields")
         fun syncsApiModelConfig() = runTest {
             val apiModelConfigurationsDao = mockk<com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1596,7 +1596,7 @@ class FirestoreDataSourceTest {
         @DisplayName("correctly syncs LocalModelConfiguration with isSystemPreset")
         fun syncsLocalModelConfig() = runTest {
             val localModelConfigurationsDao = mockk<com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
@@ -1690,7 +1690,7 @@ class FirestoreDataSourceTest {
         @DisplayName("studio_gallery snapshot: remaining documents are processed when one document throws")
         fun studioGallerySnapshot_continuesAfterDocumentError() = testScope.runTest {
             val studioMediaDao = mockk<com.browntowndev.pocketcrew.core.data.local.StudioMediaDao>(relaxed = true)
-            val localDataSource = FirestoreDataSource(
+            val localDataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,

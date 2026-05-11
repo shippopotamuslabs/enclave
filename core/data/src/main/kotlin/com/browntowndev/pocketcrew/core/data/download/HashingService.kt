@@ -10,9 +10,9 @@ import javax.inject.Singleton
 @Singleton
 class HashingService @Inject constructor() : HashingPort {
 
-    override fun calculateMd5(file: File): String {
+    override fun calculateMd5(filePath: String): String {
         val digest = MessageDigest.getInstance("MD5")
-        file.inputStream().use { inputStream ->
+        File(filePath).inputStream().use { inputStream ->
             val buffer = ByteArray(8192)
             var bytesRead: Int
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
@@ -23,9 +23,9 @@ class HashingService @Inject constructor() : HashingPort {
         return Base64.getEncoder().encodeToString(digest.digest())
     }
 
-    override fun calculateSha256(file: File): String {
+    override fun calculateSha256(filePath: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { inputStream ->
+        File(filePath).inputStream().use { inputStream ->
             val buffer = ByteArray(8192)
             var bytesRead: Int
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {

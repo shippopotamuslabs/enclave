@@ -319,7 +319,7 @@ class ModelDownloadWorker @AssistedInject constructor(
                 val downloadResult = fileDownloader.downloadFile(
                     config = downloadConfig,
                     downloadUrl = downloadUrl,
-                    targetDir = targetDir,
+                    targetDirPath = targetDir.absolutePath,
                     existingBytes = existingBytes,
                     progressCallback = object : FileDownloaderPort.ProgressCallback {
                         override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
