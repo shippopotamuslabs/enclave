@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -33,6 +34,7 @@ class EmbeddingRegenerationWorkerTest {
     private val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
     private val messageDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageDao>(relaxed = true)
     private val memoriesDao = mockk<com.browntowndev.pocketcrew.core.data.local.MemoriesDao>(relaxed = true)
+    private val documentDao = mockk<DocumentDao>(relaxed = true)
     private val embeddingDao = mockk<EmbeddingDao>(relaxed = true)
     private val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
@@ -50,15 +52,16 @@ class EmbeddingRegenerationWorkerTest {
         every { memoriesRepository.getAllMemoriesFlow() } returns kotlinx.coroutines.flow.flowOf(emptyList<com.browntowndev.pocketcrew.domain.model.memory.Memory>())
         coEvery { messageRepository.getMessageById(any()) } returns mockMessage
         coEvery { memoriesRepository.getMemoryById(any()) } returns mockk(relaxed = true)
-        coEvery { coordinator.consumePending() } returns PendingWork(emptyList(), emptyList())
+        coEvery { coordinator.consumePending() } returns PendingWork(emptyList(), emptyList(), emptyList())
     }
 
     @Test
     fun `worker drains coordinator queue`() = runTest {
         coEvery { coordinator.consumePending() } returns PendingWork(
             messageIds = listOf("msg1"),
-            memoryIds = listOf("mem1")
-        ) andThen PendingWork(emptyList(), emptyList())
+            memoryIds = listOf("mem1"),
+            documentIds = emptyList()
+        ) andThen PendingWork(emptyList(), emptyList(), emptyList())
 
         val worker = createWorker()
         val result = worker.doWork()
@@ -69,7 +72,7 @@ class EmbeddingRegenerationWorkerTest {
 
     @Test
     fun `worker handles empty queue gracefully`() = runTest {
-        coEvery { coordinator.consumePending() } returns PendingWork(emptyList(), emptyList())
+        coEvery { coordinator.consumePending() } returns PendingWork(emptyList(), emptyList(), emptyList())
 
         val worker = createWorker()
         val result = worker.doWork()
@@ -81,7 +84,8 @@ class EmbeddingRegenerationWorkerTest {
     fun `batches multiple changes into a single engine session`() = runTest {
         coEvery { coordinator.consumePending() } returns PendingWork(
             messageIds = listOf("msg1", "msg2"),
-            memoryIds = listOf("mem1")
+            memoryIds = listOf("mem1"),
+            documentIds = emptyList()
         )
 
         val worker = createWorker()
@@ -96,7 +100,8 @@ class EmbeddingRegenerationWorkerTest {
     fun `engine failure triggers retry and re-enqueues items`() = runTest {
         coEvery { coordinator.consumePending() } returns PendingWork(
             messageIds = listOf("msg1"),
-            memoryIds = emptyList()
+            memoryIds = emptyList(),
+            documentIds = emptyList()
         )
         coEvery { embeddingEngine.getEmbedding(any()) } throws RuntimeException("Engine error")
 
@@ -127,6 +132,7 @@ class EmbeddingRegenerationWorkerTest {
                 memoriesRepository,
                 messageDao,
                 memoriesDao,
+                documentDao,
                 embeddingDao,
                 embeddingEngine,
                 progressManager,

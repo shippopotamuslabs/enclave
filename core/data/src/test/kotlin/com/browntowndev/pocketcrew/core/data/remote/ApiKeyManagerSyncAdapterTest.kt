@@ -35,7 +35,7 @@ class ApiKeyManagerSyncAdapterTest {
         every { cryptoManager.hasCachedKey() } returns true
         every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())
         
-        dataSource = FirestoreDataSource(
+        dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
             firestore = firestore,
             chatDao = mockk(relaxed = true),
             messageDao = mockk(relaxed = true),

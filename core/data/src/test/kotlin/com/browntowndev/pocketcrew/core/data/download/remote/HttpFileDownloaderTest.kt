@@ -137,13 +137,13 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = null
         )
 
         // Then: File is created with correct size
-        assertTrue(result.file.exists())
+        assertTrue(File(result.filePath).exists())
         assertEquals(contentBytes.size.toLong(), result.bytesDownloaded)
         assertFalse(result.isResumed)
     }
@@ -185,14 +185,14 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = existingContent.length.toLong(),
             progressCallback = null
         )
 
         // Then: Result indicates resume and content is correct
         assertTrue(result.isResumed)
-        assertEquals(totalContent, result.file.readText())
+        assertEquals(totalContent, File(result.filePath).readText())
     }
 
     // ============ downloadFile Error Tests ============
@@ -225,7 +225,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -260,7 +260,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -299,7 +299,7 @@ class HttpFileDownloaderTest {
                 httpFileDownloader.downloadFile(
                     config = testConfig,
                     downloadUrl = "https://example.com/model.gguf",
-                    targetDir = tempDir,
+                    targetDirPath = tempDir.absolutePath,
                     existingBytes = 0L,
                     progressCallback = null
                 )
@@ -351,13 +351,13 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 100L, // Try to resume with existing bytes
             progressCallback = null
         )
 
         // Then: File is created after retry
-        assertTrue(result.file.exists())
+        assertTrue(File(result.filePath).exists())
     }
 
     @Test
@@ -406,7 +406,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 100L, // Try to resume with existing bytes
                 progressCallback = null
             )
@@ -450,7 +450,7 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = object : FileDownloaderPort.ProgressCallback {
                 override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
@@ -490,16 +490,16 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = null
         )
 
         // Then: Temp file is deleted, target file exists
-        val tempFile = File(tempDir, "test-model.gguf.tmp")
-        assertFalse(tempFile.exists())
-        assertTrue(result.file.exists())
-    }
+        val tempFile = File(tempDir, "test-model.gguf")
+        assertFalse(File(tempDir, "test-model.gguf.tmp").exists())
+        assertTrue(File(result.filePath).exists())
+        }
 
     @Test
     fun downloadFile_overwritesExistingTargetFile() = kotlinx.coroutines.test.runTest {
@@ -527,13 +527,13 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = null
         )
 
         // Then: Target file has new content
-        assertEquals(testContent, result.file.readText())
+        assertEquals(testContent, File(result.filePath).readText())
     }
 
     // ============ Logging Tests ============
@@ -561,13 +561,13 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = null
         )
 
         // Then: File is downloaded successfully (proves logger works without throwing)
-        assertTrue(result.file.exists())
+        assertTrue(File(result.filePath).exists())
     }
 
     // ============ Edge Case Tests ============
@@ -597,7 +597,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = nonExistentDir,
+                targetDirPath = nonExistentDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -621,7 +621,7 @@ class HttpFileDownloaderTest {
                 httpFileDownloader.downloadFile(
                     config = testConfig,
                     downloadUrl = "https://config.pocketcrew.app/model.gguf",
-                    targetDir = tempDir,
+                    targetDirPath = tempDir.absolutePath,
                     existingBytes = 0L,
                     progressCallback = null
                 )
@@ -638,7 +638,7 @@ class HttpFileDownloaderTest {
                 httpFileDownloader.downloadFile(
                     config = testConfig,
                     downloadUrl = "http://example.com/model.gguf",
-                    targetDir = tempDir,
+                    targetDirPath = tempDir.absolutePath,
                     existingBytes = 0L,
                     progressCallback = null
                 )
@@ -671,7 +671,7 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = object : FileDownloaderPort.ProgressCallback {
                 override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
@@ -681,7 +681,7 @@ class HttpFileDownloaderTest {
         )
 
         // Then: File is created and progress reports the configured expected size
-        assertTrue(result.file.exists())
+        assertTrue(File(result.filePath).exists())
         assertEquals(contentBytes.size.toLong(), result.bytesDownloaded)
         assertEquals(testConfig.expectedSizeBytes, result.totalBytes)
         assertTrue(progressUpdates.all { it.second == testConfig.expectedSizeBytes })
@@ -719,7 +719,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -764,7 +764,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -806,13 +806,13 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = null
         )
 
         // Either rename succeeded or temp file still exists as fallback
-        assertTrue(result.file.exists() || File(tempDir, "test-model.gguf.tmp").exists())
+        assertTrue(File(result.filePath).exists() || File(tempDir, "test-model.gguf.tmp").exists())
     }
 
     @Test
@@ -869,7 +869,7 @@ class HttpFileDownloaderTest {
                 httpFileDownloader.downloadFile(
                     config = testConfig,
                     downloadUrl = requestedUrl,
-                    targetDir = tempDir,
+                    targetDirPath = tempDir.absolutePath,
                     existingBytes = 0L,
                     progressCallback = null
                 )
@@ -902,7 +902,7 @@ class HttpFileDownloaderTest {
         val result = httpFileDownloader.downloadFile(
             config = testConfig,
             downloadUrl = "https://example.com/model.gguf",
-            targetDir = tempDir,
+            targetDirPath = tempDir.absolutePath,
             existingBytes = 0L,
             progressCallback = object : FileDownloaderPort.ProgressCallback {
                 override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
@@ -942,7 +942,7 @@ class HttpFileDownloaderTest {
             httpFileDownloader.downloadFile(
                 config = testConfig,
                 downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
+                targetDirPath = tempDir.absolutePath,
                 existingBytes = 0L,
                 progressCallback = null
             )
@@ -999,7 +999,7 @@ class HttpFileDownloaderTest {
                 httpFileDownloader.downloadFile(
                     config = testConfig,
                     downloadUrl = "https://example.com/model.gguf",
-                    targetDir = tempDir,
+                    targetDirPath = tempDir.absolutePath,
                     existingBytes = 0L,
                     progressCallback = null
                 )

@@ -46,7 +46,7 @@ class SyncReconciliationTest {
     fun setup() {
         every { cryptoManager.hasCachedKey() } returns true
         every { cryptoManager.decrypt(any()) } answers { Result.success(String(it.invocation.args[0] as ByteArray)) }
-        dataSource = FirestoreDataSource(
+        dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,

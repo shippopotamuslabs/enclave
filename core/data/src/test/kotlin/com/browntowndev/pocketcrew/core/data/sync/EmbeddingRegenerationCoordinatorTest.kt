@@ -76,7 +76,7 @@ class EmbeddingRegenerationCoordinatorTest {
 
     @Test
     fun `markFailed re-enqueues items`() = runTest {
-        val work = PendingWork(listOf("msg1"), listOf("mem1"))
+        val work = PendingWork(listOf("msg1"), listOf("mem1"), emptyList())
         coordinator.markFailed(work)
         runCurrent()
 

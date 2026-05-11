@@ -109,7 +109,7 @@ class ArtifactSyncIntegrationTest {
             transactionProvider = transactionProvider
         )
 
-        dataSource = FirestoreDataSource(
+        dataSource = FirestoreDataSource(documentDao = mockk(relaxed = true), 
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,
