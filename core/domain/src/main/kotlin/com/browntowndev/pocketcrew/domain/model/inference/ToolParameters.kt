@@ -117,6 +117,11 @@ object ToolSchemaGenerator {
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun generateSchemaForClass(klass: KClass<*>): JsonObject {
+        // JsonElement is a sealed type whose concrete classes (e.g. JsonObject) expose
+        // properties typed as JsonElement again, which would recurse until stack overflow.
+        if (klass == JsonElement::class || klass == JsonObject::class || klass == JsonArray::class) {
+            return buildJsonObject { }
+        }
         val type = mapType(klass)
         if (type != "object" && type != "array") {
             return buildJsonObject {

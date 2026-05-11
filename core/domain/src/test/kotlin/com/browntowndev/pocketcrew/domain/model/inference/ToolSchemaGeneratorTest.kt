@@ -77,4 +77,15 @@ class ToolSchemaGeneratorTest {
         assertEquals("string", properties["query"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
         assertFalse(properties["query"]?.jsonObject?.containsKey("description") == true)
     }
+
+    @Test
+    fun `generateSchema handles List of JsonElement without stack overflow`() {
+        val schema = ToolSchemaGenerator.generateSchema(
+            com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams::class
+        ).toJsonObject()
+        val properties = schema["properties"]?.jsonObject!!
+        val blocks = properties["blocks"]?.jsonObject!!
+        assertEquals("array", blocks["type"]?.jsonPrimitive?.content)
+        assertTrue(blocks.containsKey("items"))
+    }
 }
