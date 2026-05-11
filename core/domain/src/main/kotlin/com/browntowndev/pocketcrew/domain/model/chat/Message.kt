@@ -39,10 +39,19 @@ data class Message(
 ) {
     /**
      * Computed duration in seconds from timestamps.
-     * Returns null if either timestamp is missing.
+     * Returns null if either timestamp is missing or the span is non-positive.
+     * Sub-second spans round up to one second so denormalized UI does not read "0s".
      */
     val computedDurationSeconds: Long?
-        get() = if (thinkingStartTime != null && thinkingEndTime != null) {
-            (thinkingEndTime - thinkingStartTime) / 1000
-        } else null
+        get() {
+            val start = thinkingStartTime ?: return null
+            val end = thinkingEndTime ?: return null
+            if (end < start) return null
+            val ms = end - start
+            return when {
+                ms <= 0L -> null
+                ms < 1000L -> 1L
+                else -> ms / 1000
+            }
+        }
 }
