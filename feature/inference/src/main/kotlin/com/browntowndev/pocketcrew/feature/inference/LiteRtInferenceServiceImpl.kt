@@ -153,7 +153,9 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     Log.w(TAG, "LiteRT inference failed; resetting engine and retrying once", e)
                     try {
                         conversationManager.closeEngine()
-                    } catch (_: Throwable) {}
+                    } catch (teardownError: Throwable) {
+                        Log.w(TAG, "Failed to close engine during inference reset", teardownError)
+                    }
                     
                     // Reset accumulators before retry
                     isThinking = false

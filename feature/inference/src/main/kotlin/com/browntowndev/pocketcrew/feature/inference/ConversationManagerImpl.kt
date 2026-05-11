@@ -89,6 +89,7 @@ class ConversationManagerImpl @Inject constructor(
             1. Call `start_artifact` first to initialize.
             2. Call `append_blocks` repeatedly (10-15 blocks per call) until complete.
             3. Set `is_complete=true` in your final `append_blocks` call.
+            ONLY output the next batch of NEW blocks. Do NOT resend previously generated blocks.
             NEVER emit more than 15 blocks in a single tool call.
     """.trimIndent()
 
@@ -939,17 +940,26 @@ class ConversationManagerImpl @Inject constructor(
             )
         } catch (e: CancellationException) {
             Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
-            try { candidate?.close() } catch (_: Throwable) {}
+            try {
+                candidate?.close()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to close engine during cancellation cleanup", t)
+            }
             throw e
         } catch (e: JavaCancellationException) {
             Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
-            try { candidate?.close() } catch (_: Throwable) {}
+            try {
+                candidate?.close()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Failed to close engine during cancellation cleanup", t)
+            }
             throw e
         } catch (t: Throwable) {
             Log.w(TAG, "LiteRT GPU backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
             try {
                 candidate?.close()
-            } catch (_: Throwable) {
+            } catch (teardownError: Throwable) {
+                Log.w(TAG, "Failed to close engine during error cleanup", teardownError)
             }
             throw IllegalStateException(
                 "Failed to initialize LiteRT text engine with GPU backend",

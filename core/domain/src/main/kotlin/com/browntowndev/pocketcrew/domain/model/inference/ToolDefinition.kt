@@ -180,6 +180,7 @@ data class ToolDefinition(
         val APPEND_BLOCKS = ToolDefinition(
             name = "append_blocks",
             description = "Append content blocks to an existing artifact. " +
+                "ONLY include NEW blocks in each call. Do NOT resend previously appended blocks. " +
                 "Emit 10-15 blocks per call to respect token limits. " +
                 "Set isComplete to true only when the entire document is finished.",
             parametersClass = AppendBlocksParams::class,
