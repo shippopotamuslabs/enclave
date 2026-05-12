@@ -46,6 +46,31 @@ internal class SettingsViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SettingsViewModel"
+
+        private const val ARG_PERSISTED_SETTINGS = 0
+        private const val ARG_LOCAL_ASSETS = 1
+        private const val ARG_API_ASSETS = 2
+        private const val ARG_TTS_ASSETS = 3
+        private const val ARG_MEDIA_ASSETS = 4
+        private const val ARG_DEFAULT_MODELS = 5
+        private const val ARG_AUTH_STATE = 6
+        private const val ARG_SHEET_VISIBILITY = 7
+        private const val ARG_MEMORIES = 8
+        private const val ARG_FEEDBACK_TEXT = 9
+        private const val ARG_LOCAL_MODELS_STATE = 10
+        private const val ARG_API_STATE = 11
+        private const val ARG_TTS_STATE = 12
+        private const val ARG_MEDIA_STATE = 13
+        private const val ARG_SEARCH_SKILL_STATE = 14
+        private const val ARG_ASSIGNMENTS_STATE = 15
+        private const val ARG_DELETION_STATE = 16
+        private const val ARG_MEMORIES_STATE = 17
+        private const val ARG_CURRENT_TAVILY_API_KEY = 18
+        private const val ARG_CURRENT_EXA_API_KEY = 19
+        private const val ARG_CURRENT_X_API_KEY = 20
+        private const val ARG_X_SEARCH_STATE = 21
+        private const val ARG_IS_REINDEXING = 22
+        private const val ARG_REINDEX_PROGRESS = 23
     }
 
     private val _sheetVisibility = MutableStateFlow(SheetVisibilityState())
@@ -116,30 +141,30 @@ internal class SettingsViewModel @Inject constructor(
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         settingsUiStateFactory.create(
-            persistedSettings = args[0] as com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
-            localAssets = args[1] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
-            apiAssets = args[2] as List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
-            ttsAssets = args[3] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
-            mediaAssets = args[4] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
-            defaultModels = args[5] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
-            authState = args[6] as com.browntowndev.pocketcrew.domain.port.auth.AuthState,
-            sheetVisibility = args[7] as SheetVisibilityState,
-            memories = args[8] as List<StoredMemory>,
-            feedbackText = args[9] as String,
-            localModelsState = args[10] as LocalModelsTransientState,
-            apiState = args[11] as ApiProvidersTransientState,
-            ttsState = args[12] as TtsProvidersTransientState,
-            mediaState = args[13] as MediaProvidersTransientState,
-            searchSkillState = args[14] as SearchSkillTransientState,
-            assignmentsState = args[15] as AssignmentDialogTransientState,
-            deletionState = args[16] as DeletionTransientState,
-            memoriesState = args[17] as MemoriesTransientState,
-            currentTavilyApiKey = args[18] as String,
-            currentExaApiKey = args[19] as String,
-            currentXApiKey = args[20] as String,
-            xSearchState = args[21] as XSearchTransientState,
-            isReindexing = args[22] as Boolean,
-            reindexProgress = args[23] as Float,
+            persistedSettings = args[ARG_PERSISTED_SETTINGS] as com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
+            localAssets = args[ARG_LOCAL_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
+            apiAssets = args[ARG_API_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
+            ttsAssets = args[ARG_TTS_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
+            mediaAssets = args[ARG_MEDIA_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
+            defaultModels = args[ARG_DEFAULT_MODELS] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
+            authState = args[ARG_AUTH_STATE] as com.browntowndev.pocketcrew.domain.port.auth.AuthState,
+            sheetVisibility = args[ARG_SHEET_VISIBILITY] as SheetVisibilityState,
+            memories = args[ARG_MEMORIES] as List<StoredMemory>,
+            feedbackText = args[ARG_FEEDBACK_TEXT] as String,
+            localModelsState = args[ARG_LOCAL_MODELS_STATE] as LocalModelsTransientState,
+            apiState = args[ARG_API_STATE] as ApiProvidersTransientState,
+            ttsState = args[ARG_TTS_STATE] as TtsProvidersTransientState,
+            mediaState = args[ARG_MEDIA_STATE] as MediaProvidersTransientState,
+            searchSkillState = args[ARG_SEARCH_SKILL_STATE] as SearchSkillTransientState,
+            assignmentsState = args[ARG_ASSIGNMENTS_STATE] as AssignmentDialogTransientState,
+            deletionState = args[ARG_DELETION_STATE] as DeletionTransientState,
+            memoriesState = args[ARG_MEMORIES_STATE] as MemoriesTransientState,
+            currentTavilyApiKey = args[ARG_CURRENT_TAVILY_API_KEY] as String,
+            currentExaApiKey = args[ARG_CURRENT_EXA_API_KEY] as String,
+            currentXApiKey = args[ARG_CURRENT_X_API_KEY] as String,
+            xSearchState = args[ARG_X_SEARCH_STATE] as XSearchTransientState,
+            isReindexing = args[ARG_IS_REINDEXING] as Boolean,
+            reindexProgress = args[ARG_REINDEX_PROGRESS] as Float,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -185,38 +210,82 @@ internal class SettingsViewModel @Inject constructor(
     fun onSelectLocalModelAsset(asset: LocalModelAssetUi?) = localModelsDelegate.onSelectLocalModelAsset(_localModelsState, asset)
     fun onSelectLocalModelConfig(config: LocalModelConfigUi?) = localModelsDelegate.onSelectLocalModelConfig(_localModelsState, config)
     fun onLocalModelConfigFieldChange(config: LocalModelConfigUi) = localModelsDelegate.onModelConfigFieldChange(_localModelsState, config)
-    fun onSaveLocalModelConfig(onSuccess: () -> Unit) = localModelsDelegate.onSaveLocalModelConfig(viewModelScope, TAG, _localModelsState, onSuccess)
-    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) = localModelsDelegate.onDeleteLocalModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
-    fun onDeleteLocalModelAsset(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) = localModelsDelegate.onDeleteLocalModelAsset(viewModelScope, _deletionState, TAG, id)
-    fun onReDownloadLocalModel(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) = localModelsDelegate.onReDownloadLocalModel(viewModelScope, TAG, id)
+    fun onSaveLocalModelConfig(onSuccess: () -> Unit) =
+        localModelsDelegate.onSaveLocalModelConfig(viewModelScope, TAG, _localModelsState, onSuccess)
+
+    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) =
+        localModelsDelegate.onDeleteLocalModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
+
+    fun onDeleteLocalModelAsset(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) =
+        localModelsDelegate.onDeleteLocalModelAsset(viewModelScope, _deletionState, TAG, id)
+
+    fun onReDownloadLocalModel(id: com.browntowndev.pocketcrew.domain.model.config.LocalModelId) =
+        localModelsDelegate.onReDownloadLocalModel(viewModelScope, TAG, id)
+
     fun onClearSelectedLocalModel() {
         _localModelsState.value = _localModelsState.value.copy(selectedAsset = null, configDraft = null)
     }
 
     // --- API Providers (BYOK) ---
     fun onShowByokSheet(show: Boolean) = apiProvidersDelegate.onShowByokSheet(_apiState, show)
-    fun onSelectApiModelAsset(asset: ApiModelAssetUi?) = apiProvidersDelegate.onSelectApiProviderAsset(viewModelScope, _apiState, _currentApiKey, asset)
-    fun onApiProviderAssetDraftChange(asset: ApiModelAssetUi) = apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
-    fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) = apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
+    fun onSelectApiModelAsset(asset: ApiModelAssetUi?) =
+        apiProvidersDelegate.onSelectApiProviderAsset(viewModelScope, _apiState, _currentApiKey, asset)
+
+    fun onApiProviderAssetDraftChange(asset: ApiModelAssetUi) =
+        apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
+
+    fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) =
+        apiProvidersDelegate.onApiProviderAssetDraftChange(viewModelScope, _apiState, _currentApiKey, asset)
+
     fun onApiModelConfigFieldChange(config: ApiModelConfigUi) = apiProvidersDelegate.onApiModelConfigFieldChange(_apiState, config)
     fun onSelectApiModelConfig(config: ApiModelConfigUi?) = apiProvidersDelegate.onSelectApiModelConfig(_apiState, config)
     fun onFetchApiModels() = apiProvidersDelegate.onFetchApiModels(viewModelScope, TAG, _apiState, _currentApiKey)
-    fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) = apiProvidersDelegate.onSaveApiCredentials(viewModelScope, TAG, _apiState, _currentApiKey, onSuccess) { _snackbarMessages.tryEmit(it) }
+    fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) =
+        apiProvidersDelegate.onSaveApiCredentials(viewModelScope, TAG, _apiState, _currentApiKey, onSuccess) {
+            _snackbarMessages.tryEmit(it)
+        }
+
     fun onStartCreateApiModelAsset() = apiProvidersDelegate.onStartCreateApiModelAsset(_apiState)
     fun onShowTtsProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowTtsProvidersSheet(_ttsState, show)
     fun onFetchTtsModels() = apiProvidersDelegate.onFetchTtsModels(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey)
     fun onStartCreateTtsProviderAsset() = apiProvidersDelegate.onStartCreateTtsProviderAsset(_ttsState)
-    fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) = apiProvidersDelegate.onTtsAssetFieldChange(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, assignmentsUseCases = assignmentUseCases, asset = asset)
-    fun onSaveTtsProvider(onSuccess: () -> Unit) = apiProvidersDelegate.onSaveTtsProvider(viewModelScope, TAG, _ttsState, _currentApiKey, assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess)
-    fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) = apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, asset)
+    fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) =
+        apiProvidersDelegate.onTtsAssetFieldChange(
+            viewModelScope, TAG, _ttsState, _apiState, _currentApiKey,
+            assignmentsUseCases = assignmentUseCases, asset = asset
+        )
+
+    fun onSaveTtsProvider(onSuccess: () -> Unit) =
+        apiProvidersDelegate.onSaveTtsProvider(
+            viewModelScope, TAG, _ttsState, _currentApiKey,
+            assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess
+        )
+
+    fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) =
+        apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, asset)
+
     fun onShowMediaProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowMediaProvidersSheet(_mediaState, show)
     fun onStartCreateMediaProviderAsset() = apiProvidersDelegate.onStartCreateMediaProviderAsset(_mediaState)
-    fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) = apiProvidersDelegate.onMediaAssetFieldChange(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, assignmentsUseCases = assignmentUseCases, asset = asset)
+    fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) =
+        apiProvidersDelegate.onMediaAssetFieldChange(
+            viewModelScope, TAG, _mediaState, _apiState, _currentApiKey,
+            assignmentsUseCases = assignmentUseCases, asset = asset
+        )
+
     fun onFetchMediaModels() = apiProvidersDelegate.onFetchMediaModels(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey)
-    fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) = apiProvidersDelegate.onSelectMediaProviderAsset(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, asset)
-    fun onSaveMediaProvider(onSuccess: () -> Unit) = apiProvidersDelegate.onSaveMediaProvider(viewModelScope, TAG, _mediaState, _currentApiKey, assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess)
+    fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) =
+        apiProvidersDelegate.onSelectMediaProviderAsset(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, asset)
+
+    fun onSaveMediaProvider(onSuccess: () -> Unit) =
+        apiProvidersDelegate.onSaveMediaProvider(
+            viewModelScope, TAG, _mediaState, _currentApiKey,
+            assignmentsUseCases = assignmentUseCases, onSuccess = onSuccess
+        )
+
     fun onDeleteApiModelAsset(id: ApiCredentialsId) = apiProvidersDelegate.onDeleteApiModelAsset(viewModelScope, _deletionState, TAG, id)
-    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) = apiProvidersDelegate.onDeleteApiModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
+    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) =
+        apiProvidersDelegate.onDeleteApiModelConfig(viewModelScope, _deletionState, TAG, id, onSuccess)
+
     fun onDeleteTtsProviderAsset(id: TtsProviderId) = apiProvidersDelegate.onDeleteTtsProviderAsset(viewModelScope, TAG, id)
     fun onDeleteMediaProviderAsset(id: MediaProviderId) = apiProvidersDelegate.onDeleteMediaProviderAsset(viewModelScope, TAG, id)
     fun onApiKeyChange(key: String) { _currentApiKey.value = key }
@@ -343,17 +412,29 @@ internal class SettingsViewModel @Inject constructor(
     fun onShowSearchSkillSheet(show: Boolean) = generalDelegate.onShowSearchSkillSheet(_sheetVisibility, show)
     fun onSearchSkillTabChange(index: Int) = generalDelegate.onSearchSkillTabChange(_sheetVisibility, index)
     fun onSearchEnabledChange(enabled: Boolean) = searchDelegate.onSearchEnabledChange(_searchSkillState, enabled)
-    fun onTavilyApiKeyChange(key: String) = searchDelegate.onTavilyApiKeyChange(_currentTavilyApiKey, _searchSkillState, uiState.value.searchSkillEditor.tavilyKeyPresent, key)
+    fun onTavilyApiKeyChange(key: String) =
+        searchDelegate.onTavilyApiKeyChange(_currentTavilyApiKey, _searchSkillState, uiState.value.searchSkillEditor.tavilyKeyPresent, key)
+
     fun onClearTavilyApiKey() = searchDelegate.onClearTavilyApiKey(viewModelScope, TAG, _currentTavilyApiKey)
-    fun onExaApiKeyChange(key: String) = searchDelegate.onExaApiKeyChange(_currentExaApiKey, _searchSkillState, uiState.value.searchSkillEditor.exaKeyPresent, key)
+    fun onExaApiKeyChange(key: String) =
+        searchDelegate.onExaApiKeyChange(_currentExaApiKey, _searchSkillState, uiState.value.searchSkillEditor.exaKeyPresent, key)
+
     fun onClearExaApiKey() = searchDelegate.onClearExaApiKey(viewModelScope, TAG, _currentExaApiKey)
     fun onSearchProviderChange(provider: SearchProvider) = searchDelegate.onSearchProviderChange(_searchSkillState, provider)
-    fun onUpdateShowSearchProviderSwitchAlert(show: Boolean) = searchDelegate.onUpdateShowSearchProviderSwitchAlert(viewModelScope, TAG, show)
-    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) = searchDelegate.onSaveSearchSkillSettings(viewModelScope, TAG, uiState.value.searchSkillEditor, _searchSkillState, _currentTavilyApiKey, _currentExaApiKey, onSuccess)
+    fun onUpdateShowSearchProviderSwitchAlert(show: Boolean) =
+        searchDelegate.onUpdateShowSearchProviderSwitchAlert(viewModelScope, TAG, show)
+
+    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) =
+        searchDelegate.onSaveSearchSkillSettings(
+            viewModelScope, TAG, uiState.value.searchSkillEditor,
+            _searchSkillState, _currentTavilyApiKey, _currentExaApiKey, onSuccess
+        )
+
     fun onXSearchEnabledChange(enabled: Boolean) = searchDelegate.onXSearchEnabledChange(_xSearchState, enabled)
     fun onXApiKeyChange(key: String) = searchDelegate.onXApiKeyChange(_currentXApiKey, key)
     fun onClearXApiKey() = searchDelegate.onClearXApiKey(viewModelScope, TAG, _currentXApiKey)
-    fun onSaveXSearchSettings(onSuccess: () -> Unit) = searchDelegate.onSaveXSearchSettings(viewModelScope, TAG, uiState.value.xSearchEditor, _xSearchState, _currentXApiKey, onSuccess)
+    fun onSaveXSearchSettings(onSuccess: () -> Unit) =
+        searchDelegate.onSaveXSearchSettings(viewModelScope, TAG, uiState.value.xSearchEditor, _xSearchState, _currentXApiKey, onSuccess)
 
     // --- Assignments ---
     fun onSelectModelType(modelType: ModelType) {
@@ -363,11 +444,30 @@ internal class SettingsViewModel @Inject constructor(
             selection.apiAsset?.let { apiProvidersDelegate.onSelectApiAsset(viewModelScope, _apiState, _currentApiKey, it) }
         }
     }
-    fun onSetDefaultModel(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?, ttsProviderId: TtsProviderId? = null, mediaProviderId: MediaProviderId? = null) = assignmentsDelegate.onSetDefaultModel(viewModelScope, TAG, _assignmentState, modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
-    fun onShowAssignmentDialog(show: Boolean, modelType: ModelType?) = assignmentsDelegate.onShowAssignmentDialog(_assignmentState, show, modelType)
+
+    fun onSetDefaultModel(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId?,
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: TtsProviderId? = null,
+        mediaProviderId: MediaProviderId? = null
+    ) = assignmentsDelegate.onSetDefaultModel(
+        viewModelScope, TAG, _assignmentState, modelType,
+        localConfigId, apiConfigId, ttsProviderId, mediaProviderId
+    )
+
+    fun onShowAssignmentDialog(show: Boolean, modelType: ModelType?) =
+        assignmentsDelegate.onShowAssignmentDialog(_assignmentState, show, modelType)
 
     // --- Deletion Safety ---
-    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) = deletionHelper.onConfirmDeletionWithReassignment(viewModelScope, TAG, _deletionState, replacementLocalConfigId, replacementApiConfigId)
+    fun onConfirmDeletionWithReassignment(
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?
+    ) = deletionHelper.onConfirmDeletionWithReassignment(
+        viewModelScope, TAG, _deletionState,
+        replacementLocalConfigId, replacementApiConfigId
+    )
+
     fun onDismissDeletionSafety() = deletionHelper.onDismissDeletionSafety(_deletionState)
 
     // --- Navigation / Multi-State Resets ---
