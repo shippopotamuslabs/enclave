@@ -58,4 +58,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.kotlin.test.junit5)
 }
