@@ -50,7 +50,7 @@ class AndroidBiometricManager @Inject constructor(
         return Result.failure(UnsupportedOperationException("Use UI-layer prompt for raw authentication via getEncryptCipher and storeSecureValueWithCipher"))
     }
 
-    fun getEncryptCipher(key: String): Cipher? {
+    override fun getEncryptCipher(key: String): Cipher? {
         loggingPort.debug(TAG, "getEncryptCipher: key=$key")
         return try {
             deleteKey()
@@ -64,7 +64,7 @@ class AndroidBiometricManager @Inject constructor(
         }
     }
 
-    suspend fun storeSecureValueWithCipher(key: String, value: String, cipher: Cipher): Result<Unit> {
+    override suspend fun storeSecureValueWithCipher(key: String, value: String, cipher: Cipher): Result<Unit> {
         loggingPort.debug(TAG, "storeSecureValueWithCipher: key=$key")
         return try {
             val encryptedBytes = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
@@ -126,9 +126,9 @@ class AndroidBiometricManager @Inject constructor(
     }
     
     /**
-     * Internal helper for the UI layer to perform decryption with a CryptoObject.
+     * [BiometricPort] implementation: cipher for decrypt flow after IV is loaded from prefs.
      */
-    fun getDecryptCipher(key: String): Cipher? {
+    override fun getDecryptCipher(key: String): Cipher? {
         loggingPort.debug(TAG, "getDecryptCipher: key=$key")
         val ivBase64 = sharedPrefs.getString("${key}_iv", null) ?: return null
         val iv = Base64.decode(ivBase64, Base64.NO_WRAP)
@@ -149,7 +149,7 @@ class AndroidBiometricManager @Inject constructor(
         }
     }
 
-    fun decryptWithCipher(key: String, cipher: Cipher): String? {
+    override fun decryptWithCipher(key: String, cipher: Cipher): String? {
         loggingPort.debug(TAG, "decryptWithCipher: key=$key")
         return try {
             val dataBase64 = sharedPrefs.getString("${key}_data", null) ?: return null
