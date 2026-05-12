@@ -352,6 +352,34 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 }
 
 /**
+ * When interleaved transcript rows render thinking, the top [ThinkingIndicator] is omitted.
+ * Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
+ */
+internal fun transcriptLayoutShowsTopThinkingIndicator(
+    indicatorState: IndicatorState?,
+    suppressDuplicateThoughtForHeader: Boolean,
+): Boolean =
+    indicatorState is IndicatorState.Thinking && !suppressDuplicateThoughtForHeader
+
+/**
+ * Aggregate "Thought for …" header above the assistant body is omitted when transcript segments
+ * already carry per-chunk headers. Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
+ */
+internal fun transcriptLayoutShowsAggregateThoughtForHeader(
+    indicatorState: IndicatorState?,
+    suppressDuplicateThoughtForHeader: Boolean,
+): Boolean {
+    if (indicatorState == null || suppressDuplicateThoughtForHeader) return false
+    val raw =
+        when (indicatorState) {
+            is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingRaw
+            is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingRaw
+            else -> null
+        }
+    return !raw.isNullOrBlank()
+}
+
+/**
  * Shows the appropriate indicator(s) based on the message's indicator state.
  */
 @Composable
@@ -399,9 +427,7 @@ private fun Indicators(
                 EngineLoadingIndicator(modelDisplayName = modelDisplayName)
             }
             is IndicatorState.Thinking -> {
-                // Transcript path renders LiveThinkingTranscriptRow for the active
-                // thinking segment; skip the duplicate top ThinkingIndicator.
-                if (!suppressDuplicateThoughtForHeader) {
+                if (transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)) {
                     ThinkingIndicator(
                         elapsedSeconds = elapsedSeconds,
                         isExpanded = isThinkingSheetVisible,
@@ -416,9 +442,10 @@ private fun Indicators(
             }
             is IndicatorState.Generating -> {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val thinkingData = indicatorState.thinkingData
-                    if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank() &&
-                        !suppressDuplicateThoughtForHeader
+                    if (transcriptLayoutShowsAggregateThoughtForHeader(
+                            indicatorState,
+                            suppressDuplicateThoughtForHeader,
+                        )
                     ) {
                         ThoughtForHeader(
                             modifier = Modifier.padding(top = 8.dp),
@@ -436,10 +463,10 @@ private fun Indicators(
                 }
             }
             is IndicatorState.Complete -> {
-                val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null &&
-                    thinkingData.thinkingRaw.isNotBlank() &&
-                    !suppressDuplicateThoughtForHeader
+                if (transcriptLayoutShowsAggregateThoughtForHeader(
+                        indicatorState,
+                        suppressDuplicateThoughtForHeader,
+                    )
                 ) {
                     ThoughtForHeader(
                         modifier = Modifier.padding(top = 8.dp),
