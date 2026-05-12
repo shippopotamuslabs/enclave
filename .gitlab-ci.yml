@@ -1,0 +1,182 @@
+# =============================================================================
+# Pocket Crew — GitLab CI/CD Pipeline
+# =============================================================================
+# Android multi-module Kotlin/Compose app
+# Stages: validate → analyze → build → test → package
+#
+# Required CI/CD Variables (Settings → CI/CD → Variables):
+#   GOOGLE_SERVICES_JSON  — File variable: contents of app/google-services.json
+#   KEYSTORE_BASE64       — Variable (masked): base64-encoded .jks keystore
+#                           Generate with: base64 -w 0 pocket_crew_keystore.jks
+#   RELEASE_STORE_PASSWORD
+#   RELEASE_KEY_ALIAS
+#   RELEASE_KEY_PASSWORD
+# =============================================================================
+
+default:
+  # fabernovel/android:api-33-v1.7.0 is the highest available tag on Docker Hub.
+  # The API level in the tag refers to the bundled emulator image only —
+  # JDK 17 + Android build tools in this image support compileSdk 36 just fine.
+  image: fabernovel/android:api-33-v1.7.0
+  # Cache Gradle home and wrapper across all jobs to avoid re-downloading
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .gradle/
+      - gradle/wrapper/dists/
+    policy: pull-push
+
+stages:
+  - validate   # Fast style gate (ktlint) — fail early
+  - analyze    # Static analysis (detekt)
+  - build      # Compile debug APK
+  - test       # Unit tests (JUnit 5 + Robolectric)
+  - package    # Signed release APK (manual, main branch only)
+
+# =============================================================================
+# Hidden base job — common Gradle setup shared by all jobs
+# =============================================================================
+.gradle-base:
+  before_script:
+    # Inject Firebase google-services.json from CI file variable
+    - echo "Injecting google-services.json..."
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+    # Make gradlew executable (not always preserved in git)
+    - chmod +x ./gradlew
+
+# =============================================================================
+# STAGE: validate
+# Runs ktlint to enforce code style. Fails fast before expensive compilation.
+# =============================================================================
+ktlint:
+  extends: .gradle-base
+  stage: validate
+  script:
+    - ./gradlew ktlintCheck
+  # Cache is pull-only here — style checks don't produce new cache entries
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .gradle/
+      - gradle/wrapper/dists/
+    policy: pull
+  artifacts:
+    when: always
+    # Preserve ktlint reports for review even on failure
+    paths:
+      - "**/build/reports/ktlint/"
+    expire_in: 7 days
+
+# =============================================================================
+# STAGE: analyze
+# Runs detekt static analysis. Configured with maxIssues: 0 (zero tolerance).
+# Runs in parallel with ktlint — no dependency between style and analysis.
+# =============================================================================
+detekt:
+  extends: .gradle-base
+  stage: analyze
+  script:
+    - ./gradlew detekt
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .gradle/
+      - gradle/wrapper/dists/
+    policy: pull
+  artifacts:
+    when: always
+    # Preserve detekt HTML/XML reports for review
+    paths:
+      - "**/build/reports/detekt/"
+    expire_in: 7 days
+
+# =============================================================================
+# STAGE: build
+# Compiles the full debug APK across all modules.
+# Depends on both ktlint and detekt passing first (via needs DAG).
+# The APK artifact is retained for potential future instrumented test jobs.
+# Recompilation in downstream jobs is avoided via the shared Gradle cache,
+# not artifacts — build/intermediates is too large to transfer efficiently.
+# =============================================================================
+assemble-debug:
+  extends: .gradle-base
+  stage: build
+  needs:
+    - job: ktlint
+    - job: detekt
+  script:
+    - ./gradlew assembleDebug
+  artifacts:
+    paths:
+      - app/build/outputs/apk/debug/
+    expire_in: 1 day
+
+# =============================================================================
+# STAGE: test
+# Runs all module unit tests (JUnit 5 + MockK + Turbine + Robolectric).
+# Recompilation is avoided by the shared Gradle cache — unit tests do not
+# consume the APK artifact, so artifacts: true is not needed here.
+# =============================================================================
+unit-tests:
+  extends: .gradle-base
+  stage: test
+  needs:
+    - job: assemble-debug
+  script:
+    - ./gradlew testDebugUnitTest
+  artifacts:
+    when: always
+    reports:
+      # Publish JUnit XML results to GitLab's test report UI
+      junit: "**/build/test-results/testDebugUnitTest/TEST-*.xml"
+    paths:
+      - "**/build/reports/tests/"
+    expire_in: 7 days
+
+# =============================================================================
+# STAGE: package
+# Builds a signed release APK. Manual trigger only, restricted to main branch.
+# Signing credentials are injected via CI/CD Variables — never hardcoded.
+#
+# KEYSTORE_BASE64 is a base64-encoded copy of the .jks keystore file.
+# Generate it locally with: base64 -w 0 pocket_crew_keystore.jks
+# Then paste the output as a masked CI/CD variable named KEYSTORE_BASE64.
+# =============================================================================
+assemble-release:
+  extends: .gradle-base
+  stage: package
+  needs:
+    - job: unit-tests
+  before_script:
+    # Inject google-services.json (overrides .gradle-base before_script)
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+    - chmod +x ./gradlew
+    # Decode the base64-encoded keystore back to a binary .jks file
+    # KEYSTORE_BASE64 is a masked variable — generate with: base64 -w 0 <keystore.jks>
+    - mkdir -p .keystore
+    - echo "$KEYSTORE_BASE64" | base64 -d > .keystore/pocket_crew_keystore.jks
+    # Write local.properties with signing credentials from CI variables.
+    # This mirrors what app/build.gradle.kts reads at build time.
+    - |
+      cat > local.properties <<EOF
+      RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD}
+      RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS}
+      RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD}
+      EOF
+  script:
+    - ./gradlew assembleRelease
+  after_script:
+    # Remove both the decoded keystore and local.properties after the build.
+    # The keystore is a sensitive signing artifact and warrants the same
+    # cleanup treatment as the passwords written to local.properties.
+    - rm -f .keystore/pocket_crew_keystore.jks
+    - rm -f local.properties
+  artifacts:
+    paths:
+      - app/build/outputs/apk/release/
+    expire_in: 30 days
+  rules:
+    # Only allow manual trigger on the main branch
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+    - when: never
