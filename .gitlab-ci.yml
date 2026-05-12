@@ -93,7 +93,10 @@ detekt:
 # =============================================================================
 # STAGE: build
 # Compiles the full debug APK across all modules.
-# Depends on both validate and analyze passing first (via needs DAG).
+# Depends on both ktlint and detekt passing first (via needs DAG).
+# The APK artifact is retained for potential future instrumented test jobs.
+# Recompilation in downstream jobs is avoided via the shared Gradle cache,
+# not artifacts — build/intermediates is too large to transfer efficiently.
 # =============================================================================
 assemble-debug:
   extends: .gradle-base
@@ -104,24 +107,21 @@ assemble-debug:
   script:
     - ./gradlew assembleDebug
   artifacts:
-    # Pass compiled classes to the test job via artifacts to avoid recompilation
     paths:
       - app/build/outputs/apk/debug/
-      - "**/build/tmp/"
-      - "**/build/intermediates/"
     expire_in: 1 day
 
 # =============================================================================
 # STAGE: test
 # Runs all module unit tests (JUnit 5 + MockK + Turbine + Robolectric).
-# Uses needs: to start as soon as assemble-debug completes (DAG).
+# Recompilation is avoided by the shared Gradle cache — unit tests do not
+# consume the APK artifact, so artifacts: true is not needed here.
 # =============================================================================
 unit-tests:
   extends: .gradle-base
   stage: test
   needs:
     - job: assemble-debug
-      artifacts: true
   script:
     - ./gradlew testDebugUnitTest
   artifacts:
