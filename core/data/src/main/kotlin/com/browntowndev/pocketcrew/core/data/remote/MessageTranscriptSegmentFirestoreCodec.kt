@@ -31,18 +31,21 @@ internal fun messageTranscriptSegmentToFirestoreMap(
     return data
 }
 
-@Suppress("ReturnCount")
+@Suppress("ReturnCount", "ComplexCondition")
 internal fun messageTranscriptSegmentFromFirestore(
     doc: DocumentSnapshot,
     decryptTextBlob: (Blob) -> String?,
 ): MessageTranscriptSegmentEntity? {
     val chatIdStr = doc.getString("chat_id")
-    if (chatIdStr.isNullOrBlank()) return null
     val messageIdStr = doc.getString("message_id")
-    if (messageIdStr.isNullOrBlank()) return null
-    val text = doc.getBlob("text")?.let(decryptTextBlob) ?: return null
-    val kind = doc.getString("kind") ?: return null
-    val ordinalLong = doc.getLong("ordinal") ?: return null
+    val text = doc.getBlob("text")?.let(decryptTextBlob)
+    val kind = doc.getString("kind")
+    val ordinalLong = doc.getLong("ordinal")
+
+    if (chatIdStr.isNullOrBlank() || messageIdStr.isNullOrBlank() || text == null || kind == null || ordinalLong == null) {
+        return null
+    }
+
     return MessageTranscriptSegmentEntity(
         id = doc.id,
         messageId = MessageId(messageIdStr),
