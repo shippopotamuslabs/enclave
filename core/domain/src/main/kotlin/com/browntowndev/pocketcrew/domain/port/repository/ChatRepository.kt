@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -180,7 +181,8 @@ interface ChatRepository {
         generatedMediaUris: List<String> = emptyList(),
         generatedMediaAssetIds: List<String> = emptyList(),
         generatedMediaTypes: List<String> = emptyList(),
-        generatedMediaPrompts: List<String> = emptyList()
+        generatedMediaPrompts: List<String> = emptyList(),
+        transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
     )
 
     /**

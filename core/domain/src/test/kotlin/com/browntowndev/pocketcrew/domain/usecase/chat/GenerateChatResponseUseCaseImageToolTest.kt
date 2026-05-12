@@ -286,6 +286,12 @@ class GenerateChatResponseUseCaseImageToolTest {
                     messageState = any(),
                     pipelineStep = any(),
                     webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = any(),
                 )
             } returns Unit
 
