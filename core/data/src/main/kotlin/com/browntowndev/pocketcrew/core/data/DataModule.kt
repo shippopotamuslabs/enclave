@@ -53,7 +53,6 @@ import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
-import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
@@ -446,7 +445,6 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindApiModelCatalogRepository(impl: ApiModelCatalogRepositoryImpl): ApiModelCatalogPort
 
     @Binds
     @Singleton
