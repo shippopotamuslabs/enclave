@@ -838,13 +838,17 @@ class ChatViewModel @Inject constructor(
         val lastAnswerIndex = segments.indexOfLast { it is MessageTranscriptSegment.AssistantText }
         return segments.mapIndexed { index, seg ->
             when (seg) {
-                is MessageTranscriptSegment.Thinking -> TranscriptSegmentUi.ThinkingBlock(
-                    ordinal = seg.ordinal,
-                    text = seg.text,
-                    durationSeconds = seg.thinkingDurationSeconds,
-                    thinkingStartTimeMs = seg.thinkingStartTime,
-                    isStreaming = index == lastThinkingIndex && message.messageState == MessageState.THINKING,
-                )
+                is MessageTranscriptSegment.Thinking -> {
+                    val durationSeconds =
+                        seg.thinkingDurationSeconds ?: effectiveSegmentDurationSeconds(seg)
+                    TranscriptSegmentUi.ThinkingBlock(
+                        ordinal = seg.ordinal,
+                        text = seg.text,
+                        durationSeconds = durationSeconds,
+                        thinkingStartTimeMs = seg.thinkingStartTime,
+                        isStreaming = index == lastThinkingIndex && message.messageState == MessageState.THINKING,
+                    )
+                }
                 is MessageTranscriptSegment.AssistantText -> TranscriptSegmentUi.AnswerBlock(
                     ordinal = seg.ordinal,
                     text = seg.text,
@@ -853,6 +857,19 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    private fun effectiveSegmentDurationSeconds(seg: MessageTranscriptSegment.Thinking): Long? {
+        val start = seg.thinkingStartTime
+        val end = seg.thinkingEndTime
+        return if (start != null && end != null && end >= start) {
+            (end - start) / 1000
+        } else {
+            null
+        }
+    }
+
+    private fun aggregateThinkingDurationSeconds(message: Message): Long? =
+        message.thinkingDurationSeconds ?: message.computedDurationSeconds
 
     /**
      * Computes the indicator state based on the message's messageState.
@@ -873,32 +890,45 @@ class ChatViewModel @Inject constructor(
                 IndicatorState.Processing
             }
             MessageState.THINKING -> {
-                // Duration may be null during thinking - compute from timestamps if available
-                val duration = message.thinkingDurationSeconds
+                val duration = aggregateThinkingDurationSeconds(message)
                 IndicatorState.Thinking(
                     thinkingRaw = message.thinkingRaw ?: "",
                     thinkingDurationSeconds = duration ?: 0L,
-                    thinkingStartTime = message.thinkingStartTime ?: 0L
+                    thinkingStartTime = message.thinkingStartTime ?: 0L,
                 )
             }
             MessageState.GENERATING -> {
-                val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val duration = aggregateThinkingDurationSeconds(message)
                 val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Generating(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw, startTime)
-                    else null
+                    thinkingData =
+                        if (!raw.isNullOrBlank() && duration != null) {
+                            ThinkingDataUi(
+                                thinkingDurationSeconds = duration,
+                                thinkingRaw = raw,
+                                thinkingStartTime = startTime,
+                            )
+                        } else {
+                            null
+                        },
                 )
             }
             MessageState.COMPLETE -> {
-                val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val duration = aggregateThinkingDurationSeconds(message)
                 val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Complete(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw, startTime)
-                    else null
+                    thinkingData =
+                        if (!raw.isNullOrBlank() && duration != null) {
+                            ThinkingDataUi(
+                                thinkingDurationSeconds = duration,
+                                thinkingRaw = raw,
+                                thinkingStartTime = startTime,
+                            )
+                        } else {
+                            null
+                        },
                 )
             }
         }

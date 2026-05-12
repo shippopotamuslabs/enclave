@@ -399,13 +399,17 @@ private fun Indicators(
                 EngineLoadingIndicator(modelDisplayName = modelDisplayName)
             }
             is IndicatorState.Thinking -> {
-                ThinkingIndicator(
-                    elapsedSeconds = elapsedSeconds,
-                    isExpanded = isThinkingSheetVisible,
-                    onToggleDetails = {
-                        isThinkingSheetVisible = !isThinkingSheetVisible
-                    },
-                )
+                // Transcript path renders LiveThinkingTranscriptRow for the active
+                // thinking segment; skip the duplicate top ThinkingIndicator.
+                if (!suppressDuplicateThoughtForHeader) {
+                    ThinkingIndicator(
+                        elapsedSeconds = elapsedSeconds,
+                        isExpanded = isThinkingSheetVisible,
+                        onToggleDetails = {
+                            isThinkingSheetVisible = !isThinkingSheetVisible
+                        },
+                    )
+                }
             }
             is IndicatorState.Processing -> {
                 ProcessingIndicator()
@@ -433,7 +437,10 @@ private fun Indicators(
             }
             is IndicatorState.Complete -> {
                 val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
+                if (thinkingData != null &&
+                    thinkingData.thinkingRaw.isNotBlank() &&
+                    !suppressDuplicateThoughtForHeader
+                ) {
                     ThoughtForHeader(
                         modifier = Modifier.padding(top = 8.dp),
                         durationText = formatThinkingDuration(elapsedSeconds),
