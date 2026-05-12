@@ -88,4 +88,21 @@ class AndroidShareMediaAdapterTest {
         val sharedUris = targetIntent?.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         assertEquals(listOf(firstUri, secondUri), sharedUris)
     }
+
+    @Test
+    fun shareCacheFileName_insertsTimestampBeforeExtension() {
+        assertEquals(
+            "Quarterly_summary_1700000000000.pdf",
+            adapter.shareCacheFileName("Quarterly_summary.pdf", 1700000000000L),
+        )
+        assertEquals(
+            "My_Doc_1.docx",
+            adapter.shareCacheFileName("My_Doc.docx", 1L),
+        )
+    }
+
+    @Test
+    fun shareCacheFileName_withoutExtension_appendsTimestamp() {
+        assertEquals("nodots_42", adapter.shareCacheFileName("nodots", 42L))
+    }
 }
