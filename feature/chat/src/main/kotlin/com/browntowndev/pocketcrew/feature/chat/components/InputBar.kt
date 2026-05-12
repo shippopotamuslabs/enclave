@@ -450,7 +450,7 @@ fun PreviewChatInputBar() {
                 onFileAttach = {},
                 onClearImage = {},
                 onClearFile = {},
-                onMicClick = {},
+                onMicClick = {}
             )
         }
     }

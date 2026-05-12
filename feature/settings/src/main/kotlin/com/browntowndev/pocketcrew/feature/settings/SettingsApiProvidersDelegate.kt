@@ -404,7 +404,9 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         }
 
         if (asset.id.value.isNotBlank()) {
-            scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to update default media provider", "Failed to update setting")) {
+            scope.launch(
+                errorHandler.coroutineExceptionHandler(tag, "Failed to update default media provider", "Failed to update setting")
+            ) {
                 val modelType = when (asset.capability) {
                     MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
                     MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
