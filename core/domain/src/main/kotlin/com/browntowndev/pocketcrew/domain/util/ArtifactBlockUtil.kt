@@ -1,13 +1,11 @@
 package com.browntowndev.pocketcrew.domain.util
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 object ArtifactBlockUtil {
-    private val json = Json { ignoreUnknownKeys = true }
 
     fun getVisibleText(block: JsonElement): String {
         return try {

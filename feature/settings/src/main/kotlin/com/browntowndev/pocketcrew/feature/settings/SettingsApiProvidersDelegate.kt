@@ -427,7 +427,7 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
 
         if (discoveryScopeChanged) {
             apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
-            onFetchMediaModels(scope, tag, mediaState, apiState, currentApiKey)
+            onFetchMediaModels(scope, tag, mediaState, currentApiKey)
         }
     }
 
@@ -435,7 +435,6 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         scope: CoroutineScope,
         tag: String,
         mediaState: MutableStateFlow<MediaProvidersTransientState>,
-        apiState: MutableStateFlow<ApiProvidersTransientState>,
         currentApiKey: MutableStateFlow<String>
     ) {
         val draft = mediaState.value.assetDraft ?: mediaState.value.selectedAsset ?: return
@@ -491,7 +490,7 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
         currentApiKey.value = ""
         if (asset != null) {
-            onFetchMediaModels(scope, tag, mediaState, apiState, currentApiKey)
+            onFetchMediaModels(scope, tag, mediaState, currentApiKey)
         }
     }
 
