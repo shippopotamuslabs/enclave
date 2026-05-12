@@ -58,6 +58,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
+import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -78,6 +79,7 @@ fun MessageList(
     activeIndicatorMessageId: MessageId? = null,
     hasTtsProviderAssigned: Boolean = false,
     isPreview: Boolean = false,
+    chatMode: ChatModeUi = ChatModeUi.FAST,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
@@ -174,6 +176,7 @@ fun MessageList(
                         activeIndicatorMessageId = activeIndicatorMessageId,
                         activeToolCallBanner = activeToolCallBanner,
                         hasTtsProviderAssigned = hasTtsProviderAssigned,
+                        chatMode = chatMode,
                         onEditMessage = onEditMessage,
                         onPlayAudio = onPlayAudio,
                         onArtifactCardClick = onArtifactCardClick,
@@ -201,6 +204,7 @@ fun MessageList(
                                     activeIndicatorMessageId = activeIndicatorMessageId,
                                     activeToolCallBanner = activeToolCallBanner,
                                     hasTtsProviderAssigned = hasTtsProviderAssigned,
+                                    chatMode = chatMode,
                                     onEditMessage = onEditMessage,
                                     onPlayAudio = onPlayAudio,
                                     onArtifactCardClick = onArtifactCardClick,
@@ -274,6 +278,7 @@ private fun MessageItem(
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
+    chatMode: ChatModeUi,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit,
@@ -291,7 +296,9 @@ private fun MessageItem(
         // ============================================================
         Indicators(
             modelDisplayName = message.modelDisplayName,
-            indicatorState = message.indicatorState
+            indicatorState = message.indicatorState,
+            chatMode = chatMode,
+            suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
         )
 
         ToolCallBanner(
@@ -348,7 +355,12 @@ private fun EmptyState(modifier: Modifier = Modifier) {
  * Shows the appropriate indicator(s) based on the message's indicator state.
  */
 @Composable
-private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
+private fun Indicators(
+    modelDisplayName: String,
+    indicatorState: IndicatorState?,
+    chatMode: ChatModeUi,
+    suppressDuplicateThoughtForHeader: Boolean,
+) {
     if (indicatorState != null) {
         var isThinkingSheetVisible by remember { mutableStateOf(false) }
 
@@ -401,7 +413,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             is IndicatorState.Generating -> {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val thinkingData = indicatorState.thinkingData
-                    if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
+                    if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank() &&
+                        !suppressDuplicateThoughtForHeader
+                    ) {
                         ThoughtForHeader(
                             modifier = Modifier.padding(top = 8.dp),
                             durationText = formatThinkingDuration(elapsedSeconds),
@@ -412,7 +426,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                         )
                     }
 
-                    GeneratingIndicator()
+                    if (chatMode == ChatModeUi.CREW) {
+                        GeneratingIndicator()
+                    }
                 }
             }
             is IndicatorState.Complete -> {
@@ -464,7 +480,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
 }
 
 @Composable
-private fun ThoughtForHeader(
+internal fun ThoughtForHeader(
     modifier: Modifier = Modifier,
     durationText: String,
     isExpanded: Boolean = false,
@@ -521,7 +537,7 @@ private fun ThoughtForHeader(
 
 // ── "Thought for Xs" header that opens bottom sheet ──
 
-private fun formatThinkingDuration(seconds: Int): String = when {
+internal fun formatThinkingDuration(seconds: Int): String = when {
     seconds < 60 -> "${seconds}s"
     else -> "${seconds / 60}m ${seconds % 60}s"
 }
@@ -551,6 +567,7 @@ private fun PreviewMessageListThinking() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.THINKING,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),
@@ -623,6 +640,7 @@ private fun PreviewMessageListGenerating() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.FAST,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),
@@ -661,6 +679,7 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.CREW,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),

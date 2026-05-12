@@ -44,6 +44,24 @@ data class ToolCallBannerUi(
     val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
+sealed class TranscriptSegmentUi {
+    abstract val ordinal: Int
+
+    data class ThinkingBlock(
+        override val ordinal: Int,
+        val text: String,
+        val durationSeconds: Long?,
+        val thinkingStartTimeMs: Long? = null,
+        val isStreaming: Boolean = false,
+    ) : TranscriptSegmentUi()
+
+    data class AnswerBlock(
+        override val ordinal: Int,
+        val text: String,
+        val isStreaming: Boolean = false,
+    ) : TranscriptSegmentUi()
+}
+
 data class ChatMessage(
     val id: MessageId,
     val chatId: ChatId,
@@ -53,6 +71,7 @@ data class ChatMessage(
     val indicatorState: IndicatorState? = null,
     val modelDisplayName: String = "",
     val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
+    val transcriptSegments: List<TranscriptSegmentUi> = emptyList(),
 )
 
 data class ChatUiState(

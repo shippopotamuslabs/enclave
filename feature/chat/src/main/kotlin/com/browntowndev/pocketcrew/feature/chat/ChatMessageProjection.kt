@@ -82,5 +82,6 @@ private fun MessageSnapshot.toMessage(
         messageState = messageState,
         modelType = modelType,
         webSearchSources = webSearchSources,
+        transcriptSegments = transcriptSegments,
     )
 }

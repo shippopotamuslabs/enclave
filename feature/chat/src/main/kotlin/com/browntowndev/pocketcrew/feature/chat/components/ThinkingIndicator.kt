@@ -88,9 +88,9 @@ fun ThinkingIndicator(
                 modifier = Modifier.weight(1f)
             ) {
                 val thinkingText = if (elapsedSeconds > 0) {
-                    "Thinking • ${formatElapsedTime(elapsedSeconds)}"
+                    "Thinking... • ${formatElapsedTime(elapsedSeconds)}"
                 } else {
-                    "Thinking"
+                    "Thinking..."
                 }
 
                 val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
