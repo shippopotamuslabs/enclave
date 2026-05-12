@@ -472,6 +472,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
         takeIf { isFinite() && this >= 0.0 }
             ?.div(XAI_PER_TOKEN_TO_PER_MILLION)
 
+    @Suppress("CyclomaticComplexMethod")
     private fun DiscoveredApiModel.applyCapabilities(
         provider: ApiProvider,
         supportedGenerationMethods: List<String> = emptyList(),

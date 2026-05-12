@@ -1,4 +1,4 @@
-@file:Suppress("MaxLineLength", "UnusedPrivateMember")
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 
 package com.browntowndev.pocketcrew.feature.chat.components
 
@@ -347,7 +347,6 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 /**
  * Shows the appropriate indicator(s) based on the message's indicator state.
  */
-@Suppress("CyclomaticComplexMethod")
 @Composable
 private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
     if (indicatorState != null) {

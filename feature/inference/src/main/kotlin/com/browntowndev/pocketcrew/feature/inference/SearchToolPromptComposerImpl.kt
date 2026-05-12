@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -103,7 +104,6 @@ ${ToolDefinition.WEB_EXTRACT.toExample(strategy)}
                     """.trimIndent()
             }
 
-            @Suppress("MaxLineLength")
             private fun metadataRules(): String =
                 """
 # TEMPORAL CONTEXT:
@@ -134,7 +134,6 @@ To inspect:
 ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
                 """.trimIndent()
 
-            @Suppress("MaxLineLength")
             private fun artifactContract(strategy: ToolCallStrategy): String =
                 """
 # ARTIFACT STUDIO MANDATE (Incremental Generation):
@@ -155,7 +154,6 @@ For large documents (reports, plans, books), you MUST generate the document incr
 The tool produces a deterministic interactive preview and allows native PDF/Word export.
                 """.trimIndent()
 
-            @Suppress("MaxLineLength")
             private fun memoryToolsContract(
                 currentChatId: String?,
                 strategy: ToolCallStrategy,

@@ -29,6 +29,7 @@ class MediaCloudSyncWorker @AssistedInject constructor(
         private const val TAG = "MediaCloudSyncWorker"
     }
 
+    @Suppress("LoopWithTooManyJumpStatements", "MaxLineLength")
     override suspend fun doWork(): Result {
         val userId = userIdProvider() ?: return Result.failure()
 

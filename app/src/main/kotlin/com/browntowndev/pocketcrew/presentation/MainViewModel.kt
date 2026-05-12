@@ -54,6 +54,7 @@ sealed interface AppStartupState {
 }
 
 @HiltViewModel
+@Suppress("MaxLineLength")
 class MainViewModel
     @Inject
     constructor(

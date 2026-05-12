@@ -40,6 +40,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+@Suppress("MaxLineLength", "MagicNumber")
 class AnthropicInferenceServiceImpl(
     private val client: AnthropicClient,
     private val modelId: String,

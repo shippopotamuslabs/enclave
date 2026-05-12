@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName")
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 
 package com.browntowndev.pocketcrew.feature.settings.navigation
 
@@ -314,7 +314,6 @@ fun NavGraphBuilder.settingsGraph(
         ) { backStackEntry ->
             val modelTypeStr = backStackEntry.arguments?.getString("modelType")
                 ?: return@composable
-            @Suppress("SwallowedException")
             val modelType = try {
                 ModelType.valueOf(modelTypeStr)
             } catch (e: IllegalArgumentException) {

@@ -23,6 +23,7 @@ object AppendBlocksToolResultParser {
         val documentJson: String,
     )
 
+    @Suppress("ReturnCount")
     fun parseCompleteArtifact(resultJson: String): CompleteArtifact? {
         val payload = unwrapToJsonObject(resultJson) ?: return null
         if ((payload["status"] as? JsonPrimitive)?.content == "error") return null

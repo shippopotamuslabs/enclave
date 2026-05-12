@@ -29,6 +29,7 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
         private const val TAG = "MessageFileSyncWorker"
     }
 
+    @Suppress("LoopWithTooManyJumpStatements", "MaxLineLength")
     override suspend fun doWork(): Result {
         val userId = userIdProvider() ?: return Result.failure()
 

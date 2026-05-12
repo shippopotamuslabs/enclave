@@ -32,6 +32,7 @@ class HttpFileDownloader @Inject constructor(
         private const val HTTP_PARTIAL_CONTENT = 206
     }
 
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun downloadFile(
         config: FileDownloaderPort.FileDownloadConfig,
         downloadUrl: String,

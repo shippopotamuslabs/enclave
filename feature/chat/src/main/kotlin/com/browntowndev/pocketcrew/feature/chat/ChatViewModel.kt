@@ -94,7 +94,7 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
-@Suppress("LargeClass")
+@Suppress("TooManyFunctions", "ComplexCondition", "MaxLineLength", "LargeClass")
 class ChatViewModel @Inject constructor(
     private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
@@ -660,7 +660,7 @@ class ChatViewModel @Inject constructor(
         studioRepository.observeAllMedia()
     ) { ephemeral, persisted ->
         (ephemeral + persisted).associateBy { it.id }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
@@ -776,7 +776,7 @@ class ChatViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
         initialValue = ChatUiState()
     )
 
@@ -1358,12 +1358,12 @@ class ChatViewModel @Inject constructor(
         val maxItems = when {
             activeVisionCapable -> when {
                 activeConfig?.isLocal == true -> 1
-                activeConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
-                else -> 20
+                activeConfig?.apiProvider == ApiProvider.GOOGLE -> GOOGLE_VISION_MAX_IMAGES
+                else -> DEFAULT_API_VISION_MAX_IMAGES
             }
             apiVisionConfigured -> when {
-                visionConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
-                else -> 20
+                visionConfig?.apiProvider == ApiProvider.GOOGLE -> GOOGLE_VISION_MAX_IMAGES
+                else -> DEFAULT_API_VISION_MAX_IMAGES
             }
             else -> 0
         }
@@ -1396,6 +1396,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private const val SUBSCRIBE_TIMEOUT_MS = 5000L
+        private const val GOOGLE_VISION_MAX_IMAGES = 3600
+        private const val DEFAULT_API_VISION_MAX_IMAGES = 20
         private val jsonParser = Json { ignoreUnknownKeys = true }
     }
 
