@@ -17,13 +17,17 @@ import kotlinx.serialization.json.Json
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.serialization.encodeToString
 
+private const val SYNC_STATE_NONE = 0
+private const val SYNC_STATE_PENDING = 1
+private const val UNINITIALIZED_TIME = 0L
+
 fun ChatEntity.toDomain(): Chat = Chat(
     id = id,
     name = name,
     created = created,
     lastModified = lastModified,
     pinned = pinned,
-    isSyncing = created.time == 0L
+    isSyncing = created.time == UNINITIALIZED_TIME
 )
 
 fun Chat.toEntity(): ChatEntity = ChatEntity(
@@ -32,7 +36,7 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     created = created,
     lastModified = lastModified,
     pinned = pinned,
-    pendingSync = 1
+    pendingSync = SYNC_STATE_PENDING
 )
 
 fun MessageWithFiles.toDomain(
@@ -147,7 +151,7 @@ fun Message.toEntity(): MessageEntity {
         generatedMediaAssetIdsJson = mediaAssetIdsJson,
         generatedMediaTypesJson = mediaTypesJson,
         generatedMediaPromptsJson = mediaPromptsJson,
-        pendingSync = 1
+        pendingSync = SYNC_STATE_PENDING
     )
 }
 
@@ -163,7 +167,7 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     content = content,
     mimeType = MimeType.PLAIN_TEXT,
     syncStatus = "PENDING_UPLOAD",
-    pendingSync = 0 // Will be set to 1 by the worker after binary upload
+    pendingSync = SYNC_STATE_NONE // Will be set to 1 by the worker after binary upload
 )
 
 fun WebSearchSourceEntity.toDomain(): WebSearchSource = WebSearchSource(
@@ -184,5 +188,5 @@ fun WebSearchSource.toEntity(): WebSearchSourceEntity = WebSearchSourceEntity(
     content = content,
     score = score,
     extracted = extracted,
-    pendingSync = 1
+    pendingSync = SYNC_STATE_PENDING
 )
