@@ -445,9 +445,6 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-
-    @Binds
-    @Singleton
     abstract fun bindTtsProviderRepository(impl: TtsProviderRepositoryImpl): TtsProviderRepositoryPort
 
     @Binds

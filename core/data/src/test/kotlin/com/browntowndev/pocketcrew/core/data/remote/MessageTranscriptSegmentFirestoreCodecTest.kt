@@ -75,7 +75,7 @@ class MessageTranscriptSegmentFirestoreCodecTest {
     @Test
     @DisplayName("fromFirestore returns null when chat_id is blank")
     fun fromFirestoreReturnsNullWhenChatIdMissing() {
-        val doc = mockk<DocumentSnapshot>()
+        val doc = mockk<DocumentSnapshot>(relaxed = true)
         every { doc.getString("chat_id") } returns "   "
         assertNull(messageTranscriptSegmentFromFirestore(doc) { "ignored" })
     }

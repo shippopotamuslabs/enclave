@@ -116,6 +116,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
+                                    isUnlocking = currentState.isUnlocking,
                                     errorMessage = currentState.vaultErrorMessage,
                                     isReindexing = currentState.isReindexing,
                                     reindexProgress = currentState.reindexProgress,

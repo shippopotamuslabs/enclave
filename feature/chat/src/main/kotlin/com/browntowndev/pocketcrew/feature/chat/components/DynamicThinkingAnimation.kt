@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 // Pairs of dot indices (0–8 in a 3×3 grid) that light up together.
 // No consecutive pair shares a dot, so every step produces a clean crossfade.
@@ -40,7 +41,7 @@ fun DynamicThinkingAnimation(modifier: Modifier = Modifier) {
     var stepIndex by remember { mutableIntStateOf((0 until ACTIVATION_SEQUENCE.size).random()) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(500L)
+            delay(500L.milliseconds)
             stepIndex = (stepIndex + 1) % ACTIVATION_SEQUENCE.size
         }
     }
@@ -65,7 +66,7 @@ fun DynamicThinkingAnimation(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
         modifier = modifier,
     ) {
-        Canvas(modifier = Modifier.size(24.dp)) {
+        Canvas(modifier = Modifier.size(18.dp)) {
             val dotAlphas = floatArrayOf(a0, a1, a2, a3, a4, a5, a6, a7, a8)
             val baseRadius = size.minDimension / 11f
             val pad = size.width * 0.08f
