@@ -11,7 +11,6 @@ import com.browntowndev.pocketcrew.domain.model.media.ShareDocumentBytesInput
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,8 +52,10 @@ class AndroidShareMediaAdapter @Inject constructor(
         }
         val resolver = context.contentResolver
         val uris = ArrayList<Uri>(items.size)
+        val batchTimestampMs = System.currentTimeMillis()
         for (item in items) {
-            val f = File(context.cacheDir, "share_${UUID.randomUUID()}_${item.suggestedFileName.replace('/', '_')}")
+            val cacheName = shareCacheFileName(item.suggestedFileName, batchTimestampMs)
+            val f = File(context.cacheDir, cacheName)
             f.writeBytes(item.bytes)
             uris.add(FileProvider.getUriForFile(context, fileProviderAuthority, f))
         }
@@ -116,4 +117,17 @@ class AndroidShareMediaAdapter @Inject constructor(
 
     private val fileProviderAuthority: String
         get() = "${context.packageName}.fileprovider"
+
+    /** Cache filename for shared documents: `[stem]_[epochMs].[ext]`. */
+    internal fun shareCacheFileName(suggestedFileName: String, timestampMs: Long): String {
+        val safe = suggestedFileName.replace('/', '_')
+        val lastDot = safe.lastIndexOf('.')
+        return if (lastDot > 0) {
+            val base = safe.substring(0, lastDot)
+            val ext = safe.substring(lastDot)
+            "${base}_${timestampMs}$ext"
+        } else {
+            "${safe}_${timestampMs}"
+        }
+    }
 }
