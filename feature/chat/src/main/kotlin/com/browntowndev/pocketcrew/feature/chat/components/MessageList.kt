@@ -138,24 +138,24 @@ fun MessageList(
 
             // FAB is logically visible when not at bottom; auto-hides 3s after scrolling stops
             var fabVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(listState) {
+            // Incrementing this key cancels and restarts the 3-second hide timer.
+            var fabAutoHideSignal by remember { mutableIntStateOf(0) }
+            LaunchedEffect(listState, lastLazyItemIndex) {
                 snapshotFlow {
                     listState.isScrollInProgress to
                         (listState.firstVisibleItemIndex < lastLazyItemIndex)
                 }.collect { (isScrolling, isAboveLastItem) ->
-                    if (isScrolling) {
-                        // Show immediately only when the user has scrolled above the active item
-                        fabVisible = isAboveLastItem
-                    } else {
-                        if (!isAboveLastItem) {
-                            // User is on the last item — hide immediately
-                            fabVisible = false
-                        } else {
-                            // Still above the last item — keep visible for 3 more seconds then hide
-                            delay(3_000)
-                            fabVisible = false
-                        }
+                    when {
+                        isScrolling -> fabVisible = isAboveLastItem
+                        !isAboveLastItem -> fabVisible = false
+                        else -> fabAutoHideSignal++ // restart the auto-hide timer
                     }
+                }
+            }
+            LaunchedEffect(fabAutoHideSignal) {
+                if (fabAutoHideSignal > 0) {
+                    delay(3_000)
+                    fabVisible = false
                 }
             }
 
@@ -419,14 +419,17 @@ private fun Indicators(
                     kotlinx.coroutines.delay(1000L)
                 }
             }
-        } else {
-            // For completed states, use the final duration
-            elapsedSeconds = when (indicatorState) {
-                is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
-                is IndicatorState.EngineLoading -> 0
-                is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                else -> 0
+        }
+        // Sync the final duration after state settles — must not write state during composition.
+        LaunchedEffect(indicatorState) {
+            if (!isThinkingActive) {
+                elapsedSeconds = when (indicatorState) {
+                    is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
+                    is IndicatorState.EngineLoading -> 0
+                    is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                    is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                    else -> 0
+                }
             }
         }
 
