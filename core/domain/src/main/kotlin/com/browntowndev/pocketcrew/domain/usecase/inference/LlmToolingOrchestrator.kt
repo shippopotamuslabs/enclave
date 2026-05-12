@@ -153,10 +153,11 @@ class LlmToolingOrchestrator @Inject constructor(
                             "Recursive tool call limit reached provider=$providerName tool=${toolCall.toolName}"
                         )
                         // Report limit as an error to the model instead of crashing
-                        @Suppress("MaxLineLength")
                         ToolExecutionResult(
                             toolName = toolCall.toolName,
-                            resultJson = """{"error": "Recursion limit reached. You have called too many tools. Do not call any more tools. Provide a final response based on the information you already have."}"""
+                            resultJson = """{"error": "Recursion limit reached. You have called too many tools. """ +
+                                """Do not call any more tools. Provide a final response based on the """ +
+                                """information you already have."}"""
                         )
                     } else if (toolCall.toolName == "error_reporter") {
                         // This is our own synthetic error from extraction failure
