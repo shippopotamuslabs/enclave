@@ -86,16 +86,6 @@ class MainViewModel
                     // Suspends until network fetch, DB update, and cache init complete
                     // Returns DownloadModelsResult with scan result to avoid duplicate scanning
                     val modelsResult = initializeModelsUseCase()
-                    
-                    if (!cryptoManager.hasCachedKey()) {
-                        val saltResult = cloudSyncPort.getVaultSalt()
-                        if (saltResult.isSuccess) {
-                            val cloudSalt = saltResult.getOrNull()
-                            if (cloudSalt != null) {
-                                // Salt found
-                            }
-                        }
-                    }
 
                     val isLocked = !cryptoManager.hasCachedKey()
                     val isBioPossible = isLocked && 
@@ -249,17 +239,27 @@ class MainViewModel
             }
         }
 
-        fun getBiometricEncryptCipher(): Cipher? {
-            return (biometricPort as? com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager)
-                ?.getEncryptCipher(VAULT_PASSWORD_SECURE_KEY)
-        }
+        fun getBiometricEncryptCipher(): Cipher? =
+            biometricPort.getEncryptCipher(VAULT_PASSWORD_SECURE_KEY)
 
         fun finalizeBiometricEnrollment(password: String, cipher: Cipher) {
             viewModelScope.launch {
-                val manager = biometricPort as? com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager
-                manager?.storeSecureValueWithCipher(VAULT_PASSWORD_SECURE_KEY, password, cipher)
-                _startupState.update { 
-                    if (it is AppStartupState.Ready) it.copy(pendingBiometricEnrollmentPassword = null) else it 
+                val result = biometricPort.storeSecureValueWithCipher(VAULT_PASSWORD_SECURE_KEY, password, cipher)
+                _startupState.update {
+                    if (it is AppStartupState.Ready) {
+                        if (result.isSuccess) {
+                            it.copy(pendingBiometricEnrollmentPassword = null)
+                        } else {
+                            loggingPort.error(
+                                TAG,
+                                "finalizeBiometricEnrollment: Failed to store encrypted password",
+                                result.exceptionOrNull(),
+                            )
+                            it.copy(pendingBiometricEnrollmentPassword = null)
+                        }
+                    } else {
+                        it
+                    }
                 }
             }
         }
@@ -270,21 +270,24 @@ class MainViewModel
              }
         }
 
-        fun getBiometricDecryptCipher(): Cipher? {
-            return (biometricPort as? com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager)
-                ?.getDecryptCipher(VAULT_PASSWORD_SECURE_KEY)
-        }
+        fun getBiometricDecryptCipher(): Cipher? =
+            biometricPort.getDecryptCipher(VAULT_PASSWORD_SECURE_KEY)
 
         fun unlockWithBiometricCipher(cipher: Cipher) {
             viewModelScope.launch {
-                val manager = biometricPort as? com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager
-                val password = manager?.decryptWithCipher(VAULT_PASSWORD_SECURE_KEY, cipher)
-                
+                val password = biometricPort.decryptWithCipher(VAULT_PASSWORD_SECURE_KEY, cipher)
                 if (password != null) {
                     loggingPort.debug(TAG, "unlockWithBiometricCipher: Successfully decrypted password, unlocking vault")
                     unlockVault(password)
                 } else {
                     loggingPort.error(TAG, "unlockWithBiometricCipher: Failed to decrypt password")
+                    _startupState.update {
+                        if (it is AppStartupState.Ready) {
+                            it.copy(vaultErrorMessage = "Could not unlock with biometrics. Enter your vault password.")
+                        } else {
+                            it
+                        }
+                    }
                 }
             }
         }
