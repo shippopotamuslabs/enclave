@@ -51,8 +51,15 @@ abstract class MessageDao {
     @Query("SELECT * FROM message WHERE deleted = 0 ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageWithFiles>>
 
-    @Suppress("MaxLineLength")
-    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    @Query("""
+        UPDATE message 
+        SET content = :content, 
+            thinking_duration_seconds = :thinkingDuration, 
+            thinking_raw = :thinkingRaw, 
+            pending_sync = 1, 
+            updated_at = :timestamp 
+        WHERE id = :id
+    """)
     abstract suspend fun updateMessageContent(
         id: MessageId,
         content: String,
@@ -66,13 +73,25 @@ abstract class MessageDao {
     abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageWithFiles>
 
     @Transaction
-    @Suppress("MaxLineLength")
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
+    @Query("""
+        SELECT * FROM message 
+        WHERE chat_id = :chatId 
+        AND created_at IS NOT NULL 
+        AND created_at < :timestamp 
+        ORDER BY created_at DESC 
+        LIMIT :limit
+    """)
     abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
     @Transaction
-    @Suppress("MaxLineLength")
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
+    @Query("""
+        SELECT * FROM message 
+        WHERE chat_id = :chatId 
+        AND created_at IS NOT NULL 
+        AND created_at > :timestamp 
+        ORDER BY created_at ASC 
+        LIMIT :limit
+    """)
     abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
     @Transaction
