@@ -86,8 +86,8 @@ class AnthropicInferenceServiceImpl(
         closeConversation: Boolean
     ): Flow<InferenceEvent> = flow {
         try {
-            if (options.imageUris.size > 20) {
-                throw IllegalArgumentException("Anthropic API supports a maximum of 20 images per request.")
+            require(options.imageUris.size <= 20) {
+                "Anthropic API supports a maximum of 20 images per request."
             }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(

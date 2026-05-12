@@ -23,12 +23,11 @@ class ShareChatUseCase @Inject constructor(
             val messagesToShare = when (option) {
                 is ShareOption.SingleTurn -> {
                     val assistantIdx = allMessages.indexOfFirst { it.id == option.assistantMessageId }
+                    require(assistantIdx >= 0) { "Assistant message not found" }
                     if (assistantIdx > 0 && allMessages[assistantIdx - 1].role == Role.USER) {
                         listOf(allMessages[assistantIdx - 1], allMessages[assistantIdx])
-                    } else if (assistantIdx >= 0) {
-                        listOf(allMessages[assistantIdx])
                     } else {
-                        throw IllegalArgumentException("Assistant message not found")
+                        listOf(allMessages[assistantIdx])
                     }
                 }
                 is ShareOption.FullConversation -> allMessages

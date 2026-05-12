@@ -1,10 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.security
 
-import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -15,33 +11,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Base64
 
-import android.content.SharedPreferences
-import androidx.annotation.VisibleForTesting
-
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 @Singleton
-class CryptoManagerImpl @VisibleForTesting internal constructor(
-    private val prefsProvider: () -> SharedPreferences
-) : CryptoManagerPort {
-
-    @Inject constructor(
-        @ApplicationContext context: Context
-    ) : this({
-        EncryptedSharedPreferences.create(
-            context,
-            "crypto_manager_prefs",
-            MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build(),
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    })
-
-    private val prefs: SharedPreferences by lazy { prefsProvider() }
+class CryptoManagerImpl @Inject constructor() : CryptoManagerPort {
 
     private var inMemoryKey: SecretKeySpec? = null
         set(value) {
@@ -187,7 +162,6 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
     }
 
     companion object {
-        private const val PREF_CACHED_KEY = "cached_derived_key"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val ITERATION_COUNT = 100000 // NIST recommended minimum for PBKDF2
         private const val KEY_LENGTH = 256
