@@ -41,7 +41,7 @@ class CryptoManagerImplTest {
         every { mockEditor.apply() } returns Unit
         every { mockPrefs.getString(any(), any()) } returns null
 
-        cryptoManager = CryptoManagerImpl { mockPrefs }
+        cryptoManager = CryptoManagerImpl()
     }
 
     @AfterEach
