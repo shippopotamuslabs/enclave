@@ -318,21 +318,20 @@ private fun WizardSelectableCard(
     }
 }
 
-@Preview(showBackground = true, name = "Export — format")
+@Preview(showBackground = true, name = "Export - format")
 @Composable
 private fun ArtifactExportWizardContentPreviewFormat() {
     PocketCrewTheme {
         ArtifactExportWizardContent(
-            state =
-                ArtifactExportSheetState.Visible(
-                    messageId = MessageId("m1"),
-                    artifactId = "a1",
-                    title = "Quarterly summary",
-                    step = ArtifactExportWizardStep.CHOOSE_FORMAT,
-                    selectedFormat = WizardExportFormat.PDF,
-                    selectedDestination = null,
-                    isExporting = false,
-                ),
+            state = ArtifactExportSheetState.Visible(
+                messageId = MessageId("m1"),
+                artifactId = "a1",
+                title = "Quarterly summary",
+                step = ArtifactExportWizardStep.CHOOSE_FORMAT,
+                selectedFormat = WizardExportFormat.PDF,
+                selectedDestination = null,
+                isExporting = false,
+            ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},
@@ -343,21 +342,20 @@ private fun ArtifactExportWizardContentPreviewFormat() {
     }
 }
 
-@Preview(showBackground = true, name = "Export — destination")
+@Preview(showBackground = true, name = "Export - destination")
 @Composable
 private fun ArtifactExportWizardContentPreviewDestination() {
     PocketCrewTheme {
         ArtifactExportWizardContent(
-            state =
-                ArtifactExportSheetState.Visible(
-                    messageId = MessageId("m1"),
-                    artifactId = "a1",
-                    title = "Quarterly summary",
-                    step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
-                    selectedFormat = WizardExportFormat.BOTH,
-                    selectedDestination = WizardExportDestination.SHARE,
-                    isExporting = false,
-                ),
+            state = ArtifactExportSheetState.Visible(
+                messageId = MessageId("m1"),
+                artifactId = "a1",
+                title = "Quarterly summary",
+                step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
+                selectedFormat = WizardExportFormat.BOTH,
+                selectedDestination = WizardExportDestination.SHARE,
+                isExporting = false,
+            ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},

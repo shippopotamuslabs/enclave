@@ -433,7 +433,7 @@ fun PreviewChatInputBar() {
             InputBar(
                 inputText = "Hello World",
                 speechState = SpeechState.Idle,
-                selectedImageUris = emptyList(),
+                selectedImageUris = emptyList<String>(),
                 selectedFileName = "test_file.txt",
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentMaxItems = 1,
@@ -441,6 +441,7 @@ fun PreviewChatInputBar() {
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
                 canStop = true,
+                isGlobalInferenceBlocked = false,
                 onInputChange = {},
                 onModeChange = {},
                 onSend = {},
