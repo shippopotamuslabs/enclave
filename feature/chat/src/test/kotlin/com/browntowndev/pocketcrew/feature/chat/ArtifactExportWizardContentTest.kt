@@ -45,11 +45,11 @@ class ArtifactExportWizardContentTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Continue").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Next").assertIsNotEnabled()
     }
 
     @Test
-    fun `when format preselected continue is enabled`() {
+    fun `when format preselected next is enabled`() {
         composeTestRule.setContent {
             PocketCrewTheme {
                 ArtifactExportWizardContent(
@@ -72,8 +72,8 @@ class ArtifactExportWizardContentTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Continue").assertIsEnabled()
+        composeTestRule.onNodeWithText("Next").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Next").assertIsEnabled()
     }
 
     @Test
