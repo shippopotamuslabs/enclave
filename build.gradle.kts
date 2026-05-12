@@ -156,6 +156,10 @@ subprojects {
             allRules = false
             ignoreFailures = false
         }
+
+        tasks.matching { it.name.startsWith("assemble") }.configureEach {
+            dependsOn("detekt")
+        }
     }
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
