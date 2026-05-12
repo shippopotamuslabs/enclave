@@ -166,7 +166,10 @@ assemble-release:
   script:
     - ./gradlew assembleRelease
   after_script:
-    # Remove local.properties immediately after build to avoid credential leakage
+    # Remove both the decoded keystore and local.properties after the build.
+    # The keystore is a sensitive signing artifact and warrants the same
+    # cleanup treatment as the passwords written to local.properties.
+    - rm -f .keystore/pocket_crew_keystore.jks
     - rm -f local.properties
   artifacts:
     paths:
