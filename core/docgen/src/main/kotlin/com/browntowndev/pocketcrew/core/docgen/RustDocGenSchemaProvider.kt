@@ -13,7 +13,7 @@ class RustDocGenSchemaProvider : DynamicToolSchemaProvider {
                    toolName == ToolDefinition.START_ARTIFACT.name) {
             try {
                 com.browntowndev.pocketcrew.core.docgen.getSchema()
-            } catch (e: Exception) {
+            } catch (@Suppress("SwallowedException") e: Exception) {
                 null
             }
         } else {

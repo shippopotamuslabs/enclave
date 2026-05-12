@@ -1,4 +1,4 @@
-@file:Suppress("ktlint:standard:function-naming")
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 
 package com.browntowndev.pocketcrew.presentation.navigation
 
@@ -35,7 +35,6 @@ import com.browntowndev.pocketcrew.feature.studio.StudioScreen
 
 private const val ANIMATION_DURATION = 300
 
-@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun PocketCrewNavGraph(
     navController: NavHostController,

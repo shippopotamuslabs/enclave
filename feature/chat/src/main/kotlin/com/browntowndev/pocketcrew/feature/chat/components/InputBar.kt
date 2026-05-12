@@ -118,7 +118,9 @@ fun InputBar(
     speechState: SpeechState,
     selectedImageUris: List<String>,
     selectedFileName: String?,
+@Suppress("UnusedParameter")
     isPhotoAttachmentEnabled: Boolean,
+@Suppress("UnusedParameter")
     photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,

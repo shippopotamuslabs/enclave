@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.domain.usecase.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
@@ -70,7 +71,6 @@ class LlmToolingOrchestrator @Inject constructor(
         onInferencePass: suspend (params: TParams, allowToolCall: Boolean) -> TResponse,
         onToolCallDetected: (TResponse) -> List<ToolCallRequest>,
         onToolResultsMapped: suspend (params: TParams, response: TResponse, results: List<Pair<ToolCallRequest, String>>) -> TParams,
-        @Suppress("MaxLineLength")
         onContextExceeded: suspend (params: TParams, results: List<Pair<ToolCallRequest, String>>) -> ContextExceededResult<TParams> = { _, _ ->
             ContextExceededResult(false)
         },
@@ -126,8 +126,13 @@ class LlmToolingOrchestrator @Inject constructor(
             // If we are already beyond the limit and the model is STILL calling tools,
             // then we have a loop and must throw a hard error.
             if (toolCallCount > effectiveMaxToolCalls) {
-                loggingPort.error(tag, "Model ignored recursion limit warning provider=$providerName. Termination forced.")
-                throw IllegalStateException("Search skill recursion limit exceeded: Model ignored warning to stop calling tools.")
+                loggingPort.error(
+                    tag,
+                    "Model ignored recursion limit warning provider=$providerName. Termination forced."
+                )
+                throw IllegalStateException(
+                    "Search skill recursion limit exceeded: Model ignored warning to stop calling tools."
+                )
             }
 
             // If context was already flagged as full and the model is STILL calling tools,

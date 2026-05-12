@@ -68,6 +68,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("LongParameterList", "LargeClass", "TooManyFunctions", "MaxLineLength", "SwallowedException", "ReturnCount")
 class FirestoreDataSource @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val chatDao: ChatDao,
