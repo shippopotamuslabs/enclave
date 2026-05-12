@@ -17,334 +17,347 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import javax.inject.Inject
 
-class HttpFileDownloader @Inject constructor(
-    private val okHttpClient: OkHttpClient,
-    private val logger: LoggingPort
-) : FileDownloaderPort {
+class HttpFileDownloader
+    @Inject
+    constructor(
+        private val okHttpClient: OkHttpClient,
+        private val logger: LoggingPort,
+    ) : FileDownloaderPort {
+        companion object {
+            private const val TAG = "HttpFileDownloader"
 
-    companion object {
-        private const val TAG = "HttpFileDownloader"
+            // Sync to disk every 64MB to balance durability with download performance.
+            // Per-chunk fsync (every 8KB) caused 20-30x slowdown due to blocking I/O.
+            private const val SYNC_INTERVAL_BYTES = 64L * 1024 * 1024
+            private const val HTTP_RANGE_NOT_SATISFIABLE = 416
+            private const val HTTP_PARTIAL_CONTENT = 206
+        }
 
-        // Sync to disk every 64MB to balance durability with download performance.
-        // Per-chunk fsync (every 8KB) caused 20-30x slowdown due to blocking I/O.
-        private const val SYNC_INTERVAL_BYTES = 64L * 1024 * 1024
-        private const val HTTP_RANGE_NOT_SATISFIABLE = 416
-        private const val HTTP_PARTIAL_CONTENT = 206
-    }
-
-    @Suppress("CyclomaticComplexMethod")
-    override suspend fun downloadFile(
-        config: FileDownloaderPort.FileDownloadConfig,
-        downloadUrl: String,
-        targetDirPath: String,
-        existingBytes: Long,
-        progressCallback: FileDownloaderPort.ProgressCallback?
-    ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
-        val targetDir = File(targetDirPath)
-        // Log model info for debugging
-        logger.info(
-            TAG,
-            "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.expectedSizeBytes}, " +
-                "existingBytes=$existingBytes filename=${config.filename}"
-        )
-
-        val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(downloadUrl)
-        val filename = DownloadSecurity.requireSafeFileName(config.filename)
-        val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
-        val targetFile = downloadPaths.targetFile
-        val tempFile = downloadPaths.tempFile
-        val metaFile = downloadPaths.metaFile
-
-        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
-
-        val request = Request.Builder()
-            .url(requestUrl)
-            .apply {
-                if (existingBytes > 0) {
-                    addHeader("Range", "bytes=$existingBytes-")
-                }
-            }
-            .build()
-
-        okHttpClient.newCall(request).execute().use { response ->
-            if (response.priorResponse?.isRedirect == true) {
-                DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
-            }
-
-            if (response.code == HTTP_RANGE_NOT_SATISFIABLE) {
-                logger.warning(
+        @Suppress("CyclomaticComplexMethod")
+        override suspend fun downloadFile(
+            config: FileDownloaderPort.FileDownloadConfig,
+            downloadUrl: String,
+            targetDirPath: String,
+            existingBytes: Long,
+            progressCallback: FileDownloaderPort.ProgressCallback?,
+        ): FileDownloaderPort.DownloadResult =
+            withContext(Dispatchers.IO) {
+                val targetDir = File(targetDirPath)
+                // Log model info for debugging
+                logger.info(
                     TAG,
-                    "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting."
+                    "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.expectedSizeBytes}, " +
+                        "existingBytes=$existingBytes filename=${config.filename}",
                 )
-                tempFile.delete()
-                metaFile.delete()
-                val retryRequest = Request.Builder()
-                    .url(requestUrl)
-                    .build()
-                return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
-            }
 
-            if (!response.isSuccessful) {
-                val errorMsg = "HTTP ${response.code}: ${response.message}"
-                logger.error(TAG, "Download failed for $filename: $errorMsg")
-                throw Exception(errorMsg)
-            }
+                val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(downloadUrl)
+                val filename = DownloadSecurity.requireSafeFileName(config.filename)
+                val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
+                val targetFile = downloadPaths.targetFile
+                val tempFile = downloadPaths.tempFile
+                val metaFile = downloadPaths.metaFile
 
-            val isResuming = response.code == HTTP_PARTIAL_CONTENT
-            val actualExistingBytes = if (isResuming) existingBytes else 0L
+                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
-            val body = response.body ?: run {
-                logger.error(TAG, "Download failed for $filename: Empty response body")
-                throw IOException("Empty response body")
-            }
+                val request =
+                    Request
+                        .Builder()
+                        .url(requestUrl)
+                        .apply {
+                            if (existingBytes > 0) {
+                                addHeader("Range", "bytes=$existingBytes-")
+                            }
+                        }.build()
 
-            // Use Content-Length when no resume (existingBytes == 0)
-            // Use Content-Range total when resuming (existingBytes > 0)
-            val serverContentLength = response.header("Content-Length")?.toLongOrNull()
-            val contentRange = response.header("Content-Range")
-            val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
-
-            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.expectedSizeBytes
-            logger.info(TAG, "[SIZE] Server Content-Length: $serverContentLength bytes")
-            logger.info(TAG, "[SIZE] Using $actualTotalSize bytes for progress")
-
-            var totalBytesRead = actualExistingBytes
-
-            val digest = MessageDigest.getInstance("SHA-256")
-
-            // If resuming, seed the digest with existing bytes from the temp file
-            if (isResuming && actualExistingBytes > 0 && tempFile.exists()) {
-                tempFile.inputStream().use { fis ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalRead = 0L
-                    while (totalRead < actualExistingBytes) {
-                        val toRead = minOf(buffer.size.toLong(), actualExistingBytes - totalRead).toInt()
-                        bytesRead = fis.read(buffer, 0, toRead)
-                        if (bytesRead == -1) break
-                        digest.update(buffer, 0, bytesRead)
-                        totalRead += bytesRead
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (response.priorResponse?.isRedirect == true) {
+                        DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
                     }
-                }
-            }
 
-            // Use FileChannel with force(true) for atomic write+flush to disk
-            val channel = FileChannel.open(
-                tempFile.toPath(),
-                if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.APPEND
-            )
+                    if (response.code == HTTP_RANGE_NOT_SATISFIABLE) {
+                        logger.warning(
+                            TAG,
+                            "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting.",
+                        )
+                        tempFile.delete()
+                        metaFile.delete()
+                        val retryRequest =
+                            Request
+                                .Builder()
+                                .url(requestUrl)
+                                .build()
+                        return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
+                    }
 
-            try {
-                DigestInputStream(body.byteStream(), digest).use { inputStream ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead = 0
-                    var bytesSinceLastSync = 0L
+                    if (!response.isSuccessful) {
+                        val errorMsg = "HTTP ${response.code}: ${response.message}"
+                        logger.error(TAG, "Download failed for $filename: $errorMsg")
+                        throw Exception(errorMsg)
+                    }
 
-                    while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
-                        channel.write(byteBuffer)
-                        totalBytesRead += bytesRead
-                        bytesSinceLastSync += bytesRead
+                    val isResuming = response.code == HTTP_PARTIAL_CONTENT
+                    val actualExistingBytes = if (isResuming) existingBytes else 0L
 
-                        // Periodic sync to disk (every 64MB) for durability
-                        if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
-                            channel.force(true)
-                            bytesSinceLastSync = 0L
+                    val body =
+                        response.body ?: run {
+                            logger.error(TAG, "Download failed for $filename: Empty response body")
+                            throw IOException("Empty response body")
                         }
 
-                        // Report progress
-                        progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.expectedSizeBytes))
+                    // Use Content-Length when no resume (existingBytes == 0)
+                    // Use Content-Range total when resuming (existingBytes > 0)
+                    val serverContentLength = response.header("Content-Length")?.toLongOrNull()
+                    val contentRange = response.header("Content-Range")
+                    val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
+
+                    val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.expectedSizeBytes
+                    logger.info(TAG, "[SIZE] Server Content-Length: $serverContentLength bytes")
+                    logger.info(TAG, "[SIZE] Using $actualTotalSize bytes for progress")
+
+                    var totalBytesRead = actualExistingBytes
+
+                    val digest = MessageDigest.getInstance("SHA-256")
+
+                    // If resuming, seed the digest with existing bytes from the temp file
+                    if (isResuming && actualExistingBytes > 0 && tempFile.exists()) {
+                        tempFile.inputStream().use { fis ->
+                            val buffer = ByteArray(8192)
+                            var bytesRead: Int
+                            var totalRead = 0L
+                            while (totalRead < actualExistingBytes) {
+                                val toRead = minOf(buffer.size.toLong(), actualExistingBytes - totalRead).toInt()
+                                bytesRead = fis.read(buffer, 0, toRead)
+                                if (bytesRead == -1) break
+                                digest.update(buffer, 0, bytesRead)
+                                totalRead += bytesRead
+                            }
+                        }
                     }
-                }
 
-                // Final sync before hash verification to ensure data is durable
-                channel.force(true)
-            } finally {
-                channel.close()
-            }
+                    // Use FileChannel with force(true) for atomic write+flush to disk
+                    val channel =
+                        FileChannel.open(
+                            tempFile.toPath(),
+                            if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
+                            StandardOpenOption.WRITE,
+                            StandardOpenOption.APPEND,
+                        )
 
-            // Ensure we don't proceed to hash verification or rename if cancelled
-            ensureActive()
+                    try {
+                        DigestInputStream(body.byteStream(), digest).use { inputStream ->
+                            val buffer = ByteArray(8192)
+                            var bytesRead = 0
+                            var bytesSinceLastSync = 0L
 
-            // Verify SHA-256 hash after download completes
-            val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
-            val expectedHash = config.expectedSha256.lowercase()
-            if (computedHash != expectedHash) {
-                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                tempFile.delete()
-                metaFile.delete()
-                throw IOException("SHA-256 hash mismatch after download")
-            }
-            logger.info(TAG, "SHA-256 verified for ${config.filename}")
+                            while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
+                                channel.write(byteBuffer)
+                                totalBytesRead += bytesRead
+                                bytesSinceLastSync += bytesRead
 
-            if (totalBytesRead != config.expectedSizeBytes) {
-                logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${config.filename}")
-                logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${config.expectedSizeBytes}")
-                logger.error(TAG, "[MISMATCHED FILE SIZE] Downloaded Size: $totalBytesRead")
-                throw Exception("Incomplete download")
-            } else {
-                logger.info(TAG, "[COMPLETED DOWNLOAD] ${config.filename}. Size: $totalBytesRead")
-            }
+                                // Periodic sync to disk (every 64MB) for durability
+                                if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
+                                    channel.force(true)
+                                    bytesSinceLastSync = 0L
+                                }
 
-            // Rename temp file to target file
-            if (targetFile.exists()) {
-                targetFile.delete()
-            }
-            val renameSucceeded = tempFile.renameTo(targetFile)
-            if (!renameSucceeded) {
-                logger.error(TAG, "Failed to rename temp file to target for ${config.filename}")
-                // If rename fails, throw exception since we can't return a valid file
-                if (tempFile.exists()) {
-                    throw Exception("Failed to rename downloaded file to target location")
-                }
-            } else {
-                metaFile.delete()
-            }
-
-            FileDownloaderPort.DownloadResult(
-                filePath = targetFile.absolutePath,
-                bytesDownloaded = totalBytesRead,
-                totalBytes = actualTotalSize.coerceAtLeast(config.expectedSizeBytes),
-                isResumed = isResuming
-            )
-        }
-    }
-
-    private suspend fun downloadWithRetry(
-        request: Request,
-        config: FileDownloaderPort.FileDownloadConfig,
-        targetDir: File,
-        progressCallback: FileDownloaderPort.ProgressCallback?
-    ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
-        val filename = DownloadSecurity.requireSafeFileName(config.filename)
-        val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
-        val targetFile = downloadPaths.targetFile
-        val tempFile = downloadPaths.tempFile
-        val metaFile = downloadPaths.metaFile
-
-        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
-
-        okHttpClient.newCall(request).execute().use { response ->
-            if (response.priorResponse?.isRedirect == true) {
-                DownloadSecurity.requireTrustedRedirect(request.url, response.request.url)
-            }
-
-            if (!response.isSuccessful) {
-                val errorMsg = "HTTP ${response.code}: ${response.message}"
-                logger.error(TAG, "Download retry failed for $filename: $errorMsg")
-                throw Exception(errorMsg)
-            }
-
-            val body = response.body ?: run {
-                logger.error(TAG, "Download retry failed for $filename: Empty response body")
-                throw IOException("Empty response body")
-            }
-
-            val serverContentLength = response.header("Content-Length")?.toLongOrNull()
-            val contentRange = response.header("Content-Range")
-            val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
-
-            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.expectedSizeBytes
-            logger.info(TAG, "[SIZE] Non-resume path - Using: $actualTotalSize")
-
-            var totalBytesRead = 0L
-            val digest = MessageDigest.getInstance("SHA-256")
-
-            val channel = FileChannel.open(
-                tempFile.toPath(),
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
-            )
-
-            try {
-                DigestInputStream(body.byteStream(), digest).use { inputStream ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead = 0
-                    var bytesSinceLastSync = 0L
-
-                    while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
-                        channel.write(byteBuffer)
-                        totalBytesRead += bytesRead
-                        bytesSinceLastSync += bytesRead
-
-                        // Periodic sync to disk (every 64MB) for durability
-                        if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
-                            channel.force(true)
-                            bytesSinceLastSync = 0L
+                                // Report progress
+                                progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.expectedSizeBytes))
+                            }
                         }
 
-                        // Report progress
-                        progressCallback?.onProgress(totalBytesRead, actualTotalSize)
+                        // Final sync before hash verification to ensure data is durable
+                        channel.force(true)
+                    } finally {
+                        channel.close()
                     }
+
+                    // Ensure we don't proceed to hash verification or rename if cancelled
+                    ensureActive()
+
+                    // Verify SHA-256 hash after download completes
+                    val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
+                    val expectedHash = config.expectedSha256.lowercase()
+                    if (computedHash != expectedHash) {
+                        logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                        tempFile.delete()
+                        metaFile.delete()
+                        throw IOException("SHA-256 hash mismatch after download")
+                    }
+                    logger.info(TAG, "SHA-256 verified for ${config.filename}")
+
+                    if (totalBytesRead != config.expectedSizeBytes) {
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${config.filename}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${config.expectedSizeBytes}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Downloaded Size: $totalBytesRead")
+                        throw Exception("Incomplete download")
+                    } else {
+                        logger.info(TAG, "[COMPLETED DOWNLOAD] ${config.filename}. Size: $totalBytesRead")
+                    }
+
+                    // Rename temp file to target file
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+                    val renameSucceeded = tempFile.renameTo(targetFile)
+                    if (!renameSucceeded) {
+                        logger.error(TAG, "Failed to rename temp file to target for ${config.filename}")
+                        // If rename fails, throw exception since we can't return a valid file
+                        if (tempFile.exists()) {
+                            throw Exception("Failed to rename downloaded file to target location")
+                        }
+                    } else {
+                        metaFile.delete()
+                    }
+
+                    FileDownloaderPort.DownloadResult(
+                        filePath = targetFile.absolutePath,
+                        bytesDownloaded = totalBytesRead,
+                        totalBytes = actualTotalSize.coerceAtLeast(config.expectedSizeBytes),
+                        isResumed = isResuming,
+                    )
                 }
-
-                // Final sync before hash verification to ensure data is durable
-                channel.force(true)
-            } finally {
-                channel.close()
             }
 
-            // Ensure we don't proceed to hash verification or rename if cancelled
-            ensureActive()
+        private suspend fun downloadWithRetry(
+            request: Request,
+            config: FileDownloaderPort.FileDownloadConfig,
+            targetDir: File,
+            progressCallback: FileDownloaderPort.ProgressCallback?,
+        ): FileDownloaderPort.DownloadResult =
+            withContext(Dispatchers.IO) {
+                val filename = DownloadSecurity.requireSafeFileName(config.filename)
+                val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
+                val targetFile = downloadPaths.targetFile
+                val tempFile = downloadPaths.tempFile
+                val metaFile = downloadPaths.metaFile
 
-            // Verify SHA-256 hash after download completes
-            val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
-            val expectedHash = config.expectedSha256.lowercase()
-            if (computedHash != expectedHash) {
-                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                tempFile.delete()
-                metaFile.delete()
-                throw IOException("SHA-256 hash mismatch after download")
-            }
-            logger.info(TAG, "SHA-256 verified for ${config.filename}")
+                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
-            // Rename temp file to target file
-            if (targetFile.exists()) {
-                targetFile.delete()
-            }
-            val renameSucceeded = tempFile.renameTo(targetFile)
-            if (!renameSucceeded) {
-                logger.error(TAG, "Failed to rename temp file to target for ${config.filename}")
-                // If rename fails, throw exception since we can't return a valid file
-                if (tempFile.exists()) {
-                    throw Exception("Failed to rename downloaded file to target location")
+                okHttpClient.newCall(request).execute().use { response ->
+                    if (response.priorResponse?.isRedirect == true) {
+                        DownloadSecurity.requireTrustedRedirect(request.url, response.request.url)
+                    }
+
+                    if (!response.isSuccessful) {
+                        val errorMsg = "HTTP ${response.code}: ${response.message}"
+                        logger.error(TAG, "Download retry failed for $filename: $errorMsg")
+                        throw Exception(errorMsg)
+                    }
+
+                    val body =
+                        response.body ?: run {
+                            logger.error(TAG, "Download retry failed for $filename: Empty response body")
+                            throw IOException("Empty response body")
+                        }
+
+                    val serverContentLength = response.header("Content-Length")?.toLongOrNull()
+                    val contentRange = response.header("Content-Range")
+                    val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
+
+                    val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.expectedSizeBytes
+                    logger.info(TAG, "[SIZE] Non-resume path - Using: $actualTotalSize")
+
+                    var totalBytesRead = 0L
+                    val digest = MessageDigest.getInstance("SHA-256")
+
+                    val channel =
+                        FileChannel.open(
+                            tempFile.toPath(),
+                            StandardOpenOption.CREATE_NEW,
+                            StandardOpenOption.WRITE,
+                        )
+
+                    try {
+                        DigestInputStream(body.byteStream(), digest).use { inputStream ->
+                            val buffer = ByteArray(8192)
+                            var bytesRead = 0
+                            var bytesSinceLastSync = 0L
+
+                            while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
+                                channel.write(byteBuffer)
+                                totalBytesRead += bytesRead
+                                bytesSinceLastSync += bytesRead
+
+                                // Periodic sync to disk (every 64MB) for durability
+                                if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
+                                    channel.force(true)
+                                    bytesSinceLastSync = 0L
+                                }
+
+                                // Report progress
+                                progressCallback?.onProgress(totalBytesRead, actualTotalSize)
+                            }
+                        }
+
+                        // Final sync before hash verification to ensure data is durable
+                        channel.force(true)
+                    } finally {
+                        channel.close()
+                    }
+
+                    // Ensure we don't proceed to hash verification or rename if cancelled
+                    ensureActive()
+
+                    // Verify SHA-256 hash after download completes
+                    val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
+                    val expectedHash = config.expectedSha256.lowercase()
+                    if (computedHash != expectedHash) {
+                        logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                        tempFile.delete()
+                        metaFile.delete()
+                        throw IOException("SHA-256 hash mismatch after download")
+                    }
+                    logger.info(TAG, "SHA-256 verified for ${config.filename}")
+
+                    // Rename temp file to target file
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+                    val renameSucceeded = tempFile.renameTo(targetFile)
+                    if (!renameSucceeded) {
+                        logger.error(TAG, "Failed to rename temp file to target for ${config.filename}")
+                        // If rename fails, throw exception since we can't return a valid file
+                        if (tempFile.exists()) {
+                            throw Exception("Failed to rename downloaded file to target location")
+                        }
+                    } else {
+                        metaFile.delete()
+                    }
+
+                    FileDownloaderPort.DownloadResult(
+                        filePath = targetFile.absolutePath,
+                        bytesDownloaded = totalBytesRead,
+                        totalBytes = actualTotalSize,
+                        isResumed = false,
+                    )
                 }
-            } else {
-                metaFile.delete()
             }
 
-            FileDownloaderPort.DownloadResult(
-                filePath = targetFile.absolutePath,
-                bytesDownloaded = totalBytesRead,
-                totalBytes = actualTotalSize,
-                isResumed = false
-            )
-        }
-    }
+        override suspend fun getServerFileSize(url: String): Long? =
+            withContext(Dispatchers.IO) {
+                try {
+                    val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(url)
+                    val request =
+                        Request
+                            .Builder()
+                            .url(requestUrl)
+                            .head()
+                            .build()
 
-    override suspend fun getServerFileSize(url: String): Long? = withContext(Dispatchers.IO) {
-        try {
-            val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(url)
-            val request = Request.Builder()
-                .url(requestUrl)
-                .head()
-                .build()
-
-            okHttpClient.newCall(request).execute().use { response ->
-                if (response.priorResponse?.isRedirect == true) {
-                    DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
-                }
-                if (response.isSuccessful) {
-                    response.header("Content-Length")?.toLongOrNull()
-                } else {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        if (response.priorResponse?.isRedirect == true) {
+                            DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
+                        }
+                        if (response.isSuccessful) {
+                            response.header("Content-Length")?.toLongOrNull()
+                        } else {
+                            null
+                        }
+                    }
+                } catch (_: Exception) {
                     null
                 }
             }
-        } catch (_: Exception) {
-            null
-        }
     }
-}

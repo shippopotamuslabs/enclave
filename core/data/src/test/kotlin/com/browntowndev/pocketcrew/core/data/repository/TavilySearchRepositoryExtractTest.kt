@@ -18,7 +18,6 @@ import org.junit.jupiter.api.assertThrows
 import java.io.IOException
 
 class TavilySearchRepositoryExtractTest {
-
     private val okHttpClient = mockk<OkHttpClient>()
     private val apiKeyManager = mockk<ApiKeyManager>()
     private val repository = TavilySearchRepository(okHttpClient, apiKeyManager)
@@ -29,18 +28,21 @@ class TavilySearchRepositoryExtractTest {
         val requestSlot = slot<Request>()
         every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns "tavily-secret"
         every { okHttpClient.newCall(capture(requestSlot)) } returns call
-        every { call.execute() } returns httpResponse(
-            code = 200,
-            body = """
-                {"results":[{"url":"https://developer.android.com","raw_content":"# Title\nContent"}]}
-            """.trimIndent()
-        )
+        every { call.execute() } returns
+            httpResponse(
+                code = 200,
+                body =
+                    """
+                    {"results":[{"url":"https://developer.android.com","raw_content":"# Title\nContent"}]}
+                    """.trimIndent(),
+            )
 
-        val result = repository.extract(
-            urls = listOf("https://developer.android.com"),
-            extractDepth = "basic",
-            format = "markdown",
-        )
+        val result =
+            repository.extract(
+                urls = listOf("https://developer.android.com"),
+                extractDepth = "basic",
+                format = "markdown",
+            )
 
         assertEquals("https://api.tavily.com/extract", requestSlot.captured.url.toString())
 
@@ -61,13 +63,14 @@ class TavilySearchRepositoryExtractTest {
     fun `extract throws when API key is missing`() {
         every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns null
 
-        val error = assertThrows<IllegalStateException> {
-            repository.extract(
-                urls = listOf("https://example.com"),
-                extractDepth = "basic",
-                format = "markdown",
-            )
-        }
+        val error =
+            assertThrows<IllegalStateException> {
+                repository.extract(
+                    urls = listOf("https://example.com"),
+                    extractDepth = "basic",
+                    format = "markdown",
+                )
+            }
 
         assertEquals("Tavily API key is required when search is enabled", error.message)
     }
@@ -79,26 +82,28 @@ class TavilySearchRepositoryExtractTest {
         every { okHttpClient.newCall(any()) } returns call
         every { call.execute() } returns httpResponse(code = 503, body = """{"error":"unavailable"}""")
 
-        val error = assertThrows<IOException> {
-            repository.extract(
-                urls = listOf("https://example.com"),
-                extractDepth = "basic",
-                format = "markdown",
-            )
-        }
+        val error =
+            assertThrows<IOException> {
+                repository.extract(
+                    urls = listOf("https://example.com"),
+                    extractDepth = "basic",
+                    format = "markdown",
+                )
+            }
 
         assertEquals("Tavily request failed with HTTP 503", error.message)
     }
 
     @Test
     fun `mapExtractResponse normalizes extract payload`() {
-        val body = """
+        val body =
+            """
             {
               "results": [
                 {"url":"https://developer.android.com","raw_content":"# Title\nContent"}
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val mapped = repository.mapExtractResponse(body)
 
@@ -107,8 +112,12 @@ class TavilySearchRepositoryExtractTest {
         assertTrue(mapped.contains("# Title"), "Mapped response should contain the raw content text")
     }
 
-    private fun httpResponse(code: Int, body: String): Response =
-        Response.Builder()
+    private fun httpResponse(
+        code: Int,
+        body: String,
+    ): Response =
+        Response
+            .Builder()
             .request(Request.Builder().url("https://api.tavily.com/extract").build())
             .protocol(Protocol.HTTP_1_1)
             .code(code)

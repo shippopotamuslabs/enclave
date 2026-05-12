@@ -21,7 +21,6 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class AndroidShareMediaAdapterTest {
-
     private lateinit var context: Context
     private lateinit var adapter: AndroidShareMediaAdapter
 
@@ -41,9 +40,10 @@ class AndroidShareMediaAdapterTest {
 
     @Test
     fun shareMedia_singleFileUri_startsChooserWithConvertedContentUri() {
-        val sourceFile = File(context.cacheDir, "share-single.png").apply {
-            writeBytes(byteArrayOf(1, 2, 3, 4))
-        }
+        val sourceFile =
+            File(context.cacheDir, "share-single.png").apply {
+                writeBytes(byteArrayOf(1, 2, 3, 4))
+            }
 
         adapter.shareMedia(listOf(sourceFile.toURI().toString()), "image/png")
 
@@ -58,11 +58,12 @@ class AndroidShareMediaAdapterTest {
         assertEquals("image/png", targetIntent?.type)
         assertTrue(targetIntent?.flags?.and(Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0)
 
-        val expectedUri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            sourceFile,
-        )
+        val expectedUri =
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                sourceFile,
+            )
         val sharedUri = targetIntent?.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         assertEquals(expectedUri, sharedUri)
     }

@@ -15,151 +15,170 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
 class SearchToolExecutorImplTest {
-
     @Test
-    fun `execute delegates to Tavily repository when search is enabled and Tavily is selected`() = runTest {
-        val settingsRepository = mockk<SettingsRepository>()
-        val tavilySearchRepository = mockk<TavilySearchRepository>()
-        val exaSearchRepository = mockk<ExaSearchRepository>()
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
-        every { tavilySearchRepository.search("android 17 local network") } returns """{"query":"android 17 local network","results":[]}"""
+    fun `execute delegates to Tavily repository when search is enabled and Tavily is selected`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            every { settingsRepository.settingsFlow } returns
+                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            every { tavilySearchRepository.search("android 17 local network") } returns
+                """{"query":"android 17 local network","results":[]}"""
 
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = settingsRepository,
-            tavilySearchRepository = tavilySearchRepository,
-            exaSearchRepository = exaSearchRepository,
-        )
-
-        val result = executor.execute(
-            ToolCallRequest(
-                toolName = "web_search",
-                argumentsJson = """{"query":"android 17 local network"}""",
-                provider = "OPENAI",
-                modelType = ModelType.FAST,
-            )
-        )
-
-        assertEquals("""{"query":"android 17 local network","results":[]}""", result.resultJson)
-    }
-
-    @Test
-    fun `execute delegates to Exa repository when search is enabled and Exa is selected`() = runTest {
-        val settingsRepository = mockk<SettingsRepository>()
-        val tavilySearchRepository = mockk<TavilySearchRepository>()
-        val exaSearchRepository = mockk<ExaSearchRepository>()
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.EXA))
-        every { exaSearchRepository.search("android 17 local network") } returns """{"query":"android 17 local network","results":[]}"""
-
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = settingsRepository,
-            tavilySearchRepository = tavilySearchRepository,
-            exaSearchRepository = exaSearchRepository,
-        )
-
-        val result = executor.execute(
-            ToolCallRequest(
-                toolName = "web_search",
-                argumentsJson = """{"query":"android 17 local network"}""",
-                provider = "OPENAI",
-                modelType = ModelType.FAST,
-            )
-        )
-
-        assertEquals("""{"query":"android 17 local network","results":[]}""", result.resultJson)
-    }
-
-    @Test
-    fun `execute throws IllegalStateException when search is disabled`() = runTest {
-        val settingsRepository = mockk<SettingsRepository>()
-        val tavilySearchRepository = mockk<TavilySearchRepository>()
-        val exaSearchRepository = mockk<ExaSearchRepository>()
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = false))
-
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = settingsRepository,
-            tavilySearchRepository = tavilySearchRepository,
-            exaSearchRepository = exaSearchRepository,
-        )
-
-        assertFailsWith<IllegalStateException> {
-            executor.execute(
-                ToolCallRequest(
-                    toolName = "web_search",
-                    argumentsJson = """{"query":"test"}""",
-                    provider = "OPENAI",
-                    modelType = ModelType.FAST,
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
                 )
-            )
-        }
-    }
 
-    @Test
-    fun `execute rejects unsupported tool names`() = runTest {
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = mockk(),
-            tavilySearchRepository = mockk(),
-            exaSearchRepository = mockk(),
-        )
-        assertFailsWith<IllegalArgumentException> {
-            executor.execute(
-                ToolCallRequest(
-                    toolName = "weather_lookup",
-                    argumentsJson = """{"query":"Boston"}""",
-                    provider = "OPENAI",
-                    modelType = ModelType.FAST,
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"android 17 local network"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
                 )
-            )
+
+            assertEquals("""{"query":"android 17 local network","results":[]}""", result.resultJson)
         }
-    }
 
     @Test
-    fun `execute rejects missing query arguments`() = runTest {
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = mockk(),
-            tavilySearchRepository = mockk(),
-            exaSearchRepository = mockk(),
-        )
-        assertFailsWith<IllegalArgumentException> {
-            executor.execute(
-                ToolCallRequest(
-                    toolName = "web_search",
-                    argumentsJson = "{}",
-                    provider = "OPENAI",
-                    modelType = ModelType.FAST,
+    fun `execute delegates to Exa repository when search is enabled and Exa is selected`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            every { settingsRepository.settingsFlow } returns
+                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.EXA))
+            every { exaSearchRepository.search("android 17 local network") } returns """{"query":"android 17 local network","results":[]}"""
+
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
                 )
-            )
+
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"android 17 local network"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertEquals("""{"query":"android 17 local network","results":[]}""", result.resultJson)
         }
-    }
 
     @Test
-    fun `execute preserves escaped quotes in query arguments`() = runTest {
-        val settingsRepository = mockk<SettingsRepository>()
-        val tavilySearchRepository = mockk<TavilySearchRepository>()
-        val exaSearchRepository = mockk<ExaSearchRepository>()
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
-        every { tavilySearchRepository.search("""android "agent" news""") } returns """{"query":"android \"agent\" news","results":[]}"""
+    fun `execute throws IllegalStateException when search is disabled`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = false))
 
-        val executor = SearchToolExecutorImpl(
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            settingsRepository = settingsRepository,
-            tavilySearchRepository = tavilySearchRepository,
-            exaSearchRepository = exaSearchRepository,
-        )
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
+                )
 
-        val result = executor.execute(
-            ToolCallRequest(
-                toolName = "web_search",
-                argumentsJson = """{"query":"android \"agent\" news"}""",
-                provider = "OPENAI",
-                modelType = ModelType.FAST,
-            )
-        )
+            assertFailsWith<IllegalStateException> {
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"test"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+            }
+        }
 
-        assertEquals("""{"query":"android \"agent\" news","results":[]}""", result.resultJson)
-    }
+    @Test
+    fun `execute rejects unsupported tool names`() =
+        runTest {
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = mockk(),
+                    tavilySearchRepository = mockk(),
+                    exaSearchRepository = mockk(),
+                )
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "weather_lookup",
+                        argumentsJson = """{"query":"Boston"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `execute rejects missing query arguments`() =
+        runTest {
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = mockk(),
+                    tavilySearchRepository = mockk(),
+                    exaSearchRepository = mockk(),
+                )
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = "{}",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `execute preserves escaped quotes in query arguments`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            every { settingsRepository.settingsFlow } returns
+                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            every { tavilySearchRepository.search("""android "agent" news""") } returns
+                """{"query":"android \"agent\" news","results":[]}"""
+
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
+                )
+
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"android \"agent\" news"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertEquals("""{"query":"android \"agent\" news","results":[]}""", result.resultJson)
+        }
 }

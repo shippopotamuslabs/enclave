@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.ColumnInfo
-import androidx.room.ForeignKey
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
 @Entity(
     tableName = "documents",

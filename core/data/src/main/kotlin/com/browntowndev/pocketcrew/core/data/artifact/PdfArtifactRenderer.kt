@@ -15,19 +15,24 @@ import javax.inject.Singleton
  * Renders an ArtifactGenerationResult into a professional PDF file using the Rust docgen library.
  */
 @Singleton
-class PdfArtifactRenderer @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+class PdfArtifactRenderer
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+    ) {
+        /**
+         * Renders the artifact to a PDF file and returns the File handle.
+         */
+        suspend fun renderToPdf(
+            result: ArtifactGenerationResult,
+            fileName: String? = null,
+        ): File =
+            withContext(Dispatchers.IO) {
+                val safeFileName = fileName ?: "Artifact_${System.currentTimeMillis()}.pdf"
+                val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), safeFileName)
 
-    /**
-     * Renders the artifact to a PDF file and returns the File handle.
-     */
-    suspend fun renderToPdf(result: ArtifactGenerationResult, fileName: String? = null): File = withContext(Dispatchers.IO) {
-        val safeFileName = fileName ?: "Artifact_${System.currentTimeMillis()}.pdf"
-        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), safeFileName)
-
-        val bytes = generatePdf(result.request.content)
-        file.writeBytes(bytes)
-        file
+                val bytes = generatePdf(result.request.content)
+                file.writeBytes(bytes)
+                file
+            }
     }
-}

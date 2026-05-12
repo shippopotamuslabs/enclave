@@ -18,7 +18,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ApiModelRepositorySyncTest {
-
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
     private val apiCredentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
     private val apiModelConfigurationsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
@@ -29,57 +28,63 @@ class ApiModelRepositorySyncTest {
 
     @BeforeEach
     fun setup() {
-        repository = ApiModelRepositoryImpl(
-            syncTrigger = syncTrigger,
-            apiCredentialsDao = apiCredentialsDao,
-            apiModelConfigurationsDao = apiModelConfigurationsDao,
-            apiKeyManager = apiKeyManager,
-            cryptoManager = cryptoManager
-        )
+        repository =
+            ApiModelRepositoryImpl(
+                syncTrigger = syncTrigger,
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = apiModelConfigurationsDao,
+                apiKeyManager = apiKeyManager,
+                cryptoManager = cryptoManager,
+            )
     }
 
     @Test
-    fun `saveCredentials sets pendingSync to 1 and triggers sync`() = runTest {
-        val credentials = ApiCredentials(
-            id = ApiCredentialsId(""),
-            displayName = "Test",
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4",
-            credentialAlias = "alias"
-        )
+    fun `saveCredentials sets pendingSync to 1 and triggers sync`() =
+        runTest {
+            val credentials =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4",
+                    credentialAlias = "alias",
+                )
 
-        repository.saveCredentials(credentials, "key", null)
+            repository.saveCredentials(credentials, "key", null)
 
-        coVerify {
-            apiCredentialsDao.insert(match { it.pendingSync == 1 })
-            syncTrigger.trigger()
+            coVerify {
+                apiCredentialsDao.insert(match { it.pendingSync == 1 })
+                syncTrigger.trigger()
+            }
         }
-    }
 
     @Test
-    fun `saveConfiguration sets pendingSync to 1 and triggers sync`() = runTest {
-        val config = ApiModelConfiguration(
-            id = ApiModelConfigurationId(""),
-            apiCredentialsId = ApiCredentialsId("cred-id"),
-            displayName = "Config"
-        )
+    fun `saveConfiguration sets pendingSync to 1 and triggers sync`() =
+        runTest {
+            val config =
+                ApiModelConfiguration(
+                    id = ApiModelConfigurationId(""),
+                    apiCredentialsId = ApiCredentialsId("cred-id"),
+                    displayName = "Config",
+                )
 
-        repository.saveConfiguration(config)
+            repository.saveConfiguration(config)
 
-        coVerify {
-            apiModelConfigurationsDao.upsert(match { it.pendingSync == 1 })
-            syncTrigger.trigger()
+            coVerify {
+                apiModelConfigurationsDao.upsert(match { it.pendingSync == 1 })
+                syncTrigger.trigger()
+            }
         }
-    }
 
     @Test
-    fun `deleteCredentials triggers sync`() = runTest {
-        coEvery { apiCredentialsDao.getById(any()) } returns mockk(relaxed = true)
-        
-        repository.deleteCredentials(ApiCredentialsId("id"))
+    fun `deleteCredentials triggers sync`() =
+        runTest {
+            coEvery { apiCredentialsDao.getById(any()) } returns mockk(relaxed = true)
 
-        coVerify {
-            syncTrigger.trigger()
+            repository.deleteCredentials(ApiCredentialsId("id"))
+
+            coVerify {
+                syncTrigger.trigger()
+            }
         }
-    }
 }

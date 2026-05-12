@@ -10,7 +10,6 @@ import java.io.File
 import java.io.FileWriter
 
 class HashingServiceTest {
-
     private lateinit var hashingService: HashingService
 
     @TempDir

@@ -15,21 +15,21 @@ import javax.inject.Singleton
  * knowing about Room-specific APIs.
  */
 @Singleton
-class RoomTransactionProvider @Inject constructor(
-    private val database: PocketCrewDatabase
-) : TransactionProvider {
-
-    /**
-     * Executes the given suspend function within a Room transaction.
-     * If any exception is thrown, the transaction will be rolled back automatically.
-     *
-     * @param T The return type of the block
-     * @param block The suspend function to execute within the transaction
-     * @return The result of the block
-     */
-    override suspend fun <T> runInTransaction(block: suspend () -> T): T {
-        return database.withTransaction {
-            block()
-        }
+class RoomTransactionProvider
+    @Inject
+    constructor(
+        private val database: PocketCrewDatabase,
+    ) : TransactionProvider {
+        /**
+         * Executes the given suspend function within a Room transaction.
+         * If any exception is thrown, the transaction will be rolled back automatically.
+         *
+         * @param T The return type of the block
+         * @param block The suspend function to execute within the transaction
+         * @return The result of the block
+         */
+        override suspend fun <T> runInTransaction(block: suspend () -> T): T =
+            database.withTransaction {
+                block()
+            }
     }
-}

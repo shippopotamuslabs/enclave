@@ -13,5 +13,5 @@ data class StudioAlbumEntity(
     @androidx.room.ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @androidx.room.ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
 )

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MappedSearchResponse(
     val query: String,
-    val results: List<SearchResult>
+    val results: List<SearchResult>,
 )
 
 @Serializable
@@ -13,16 +13,16 @@ data class SearchResult(
     val title: String,
     val url: String,
     val content: String,
-    val score: Double
+    val score: Double,
 )
 
 @Serializable
 data class MappedExtractResponse(
-    val results: List<ExtractResult>
+    val results: List<ExtractResult>,
 )
 
 @Serializable
 data class ExtractResult(
     val url: String,
-    val raw_content: String
+    val raw_content: String,
 )

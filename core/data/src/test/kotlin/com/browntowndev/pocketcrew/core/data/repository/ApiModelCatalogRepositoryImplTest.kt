@@ -16,17 +16,16 @@ import com.google.genai.types.Model
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import okhttp3.Call
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.util.Optional
 import kotlinx.coroutines.test.runTest
+import okhttp3.Call
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.util.Optional
 
 class ApiModelCatalogRepositoryImplTest {
-
     private val openAiClientProvider = mockk<OpenAiClientProvider>()
     private val anthropicClientProvider = mockk<AnthropicClientProvider>()
     private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
@@ -48,12 +47,13 @@ class ApiModelCatalogRepositoryImplTest {
 
     @BeforeEach
     fun setup() {
-        repo = ApiModelCatalogRepositoryImpl(
-            openAiClientProvider = openAiClientProvider,
-            anthropicClientProvider = anthropicClientProvider,
-            googleGenAiClientProvider = googleGenAiClientProvider,
-            httpClient = httpClient,
-        )
+        repo =
+            ApiModelCatalogRepositoryImpl(
+                openAiClientProvider = openAiClientProvider,
+                anthropicClientProvider = anthropicClientProvider,
+                googleGenAiClientProvider = googleGenAiClientProvider,
+                httpClient = httpClient,
+            )
 
         every { anthropicClientProvider.getClient(any(), any(), any()) } returns anthropicClient
         every { anthropicClient.models() } returns modelService
@@ -85,94 +85,97 @@ class ApiModelCatalogRepositoryImplTest {
     }
 
     @Test
-    fun `fetchModels uses anthropic model discovery path for anthropic provider`() = runTest {
-        val models = repo.fetchModels(ApiProvider.ANTHROPIC, apiKey = "key", baseUrl = null)
+    fun `fetchModels uses anthropic model discovery path for anthropic provider`() =
+        runTest {
+            val models = repo.fetchModels(ApiProvider.ANTHROPIC, apiKey = "key", baseUrl = null)
 
-        assertEquals(
-            listOf(
-                DiscoveredApiModel(
-                    id = "claude-haiku-4-5-20251001",
-                    name = "Claude Haiku 4.5",
-                    created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
-                    isMultimodal = false,
-                    isChatCapable = true,
+            assertEquals(
+                listOf(
+                    DiscoveredApiModel(
+                        id = "claude-haiku-4-5-20251001",
+                        name = "Claude Haiku 4.5",
+                        created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
+                        isMultimodal = false,
+                        isChatCapable = true,
+                    ),
+                    DiscoveredApiModel(
+                        id = "claude-sonnet-4-20250514",
+                        name = "Claude Sonnet 4",
+                        created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
+                        isMultimodal = true,
+                        isChatCapable = true,
+                    ),
                 ),
-                DiscoveredApiModel(
-                    id = "claude-sonnet-4-20250514",
-                    name = "Claude Sonnet 4",
-                    created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
-                    isMultimodal = true,
-                    isChatCapable = true,
-                ),
-            ),
-            models,
-        )
-    }
-
-    @Test
-    fun `fetchModels uses google model discovery path for google provider`() = runTest {
-        val models = repo.fetchModels(ApiProvider.GOOGLE, apiKey = "key", baseUrl = null)
-
-        assertEquals(
-            listOf(
-                DiscoveredApiModel(
-                    id = "gemini-2.5-flash",
-                    contextWindowTokens = 1_048_576,
-                    maxOutputTokens = 8_192,
-                    isChatCapable = true,
-                ),
-                DiscoveredApiModel(
-                    id = "gemini-2.5-pro",
-                    contextWindowTokens = 2_097_152,
-                    maxOutputTokens = 65_536,
-                    isChatCapable = true,
-                ),
-            ),
-            models,
-        )
-        verify {
-            googleGenAiClientProvider.listModels(
-                apiKey = "key",
-                baseUrl = ApiProvider.GOOGLE.defaultBaseUrl(),
-                headers = emptyMap(),
-                apiVersion = any(),
+                models,
             )
         }
-    }
+
+    @Test
+    fun `fetchModels uses google model discovery path for google provider`() =
+        runTest {
+            val models = repo.fetchModels(ApiProvider.GOOGLE, apiKey = "key", baseUrl = null)
+
+            assertEquals(
+                listOf(
+                    DiscoveredApiModel(
+                        id = "gemini-2.5-flash",
+                        contextWindowTokens = 1_048_576,
+                        maxOutputTokens = 8_192,
+                        isChatCapable = true,
+                    ),
+                    DiscoveredApiModel(
+                        id = "gemini-2.5-pro",
+                        contextWindowTokens = 2_097_152,
+                        maxOutputTokens = 65_536,
+                        isChatCapable = true,
+                    ),
+                ),
+                models,
+            )
+            verify {
+                googleGenAiClientProvider.listModels(
+                    apiKey = "key",
+                    baseUrl = ApiProvider.GOOGLE.defaultBaseUrl(),
+                    headers = emptyMap(),
+                    apiVersion = any(),
+                )
+            }
+        }
 
     @Test
     fun `parseOpenRouterModels extracts context window and max tokens when present`() {
-        val models = repo.parseOpenRouterModels(
-            """
-            {
-              "data": [
+        val models =
+            repo.parseOpenRouterModels(
+                """
                 {
-                  "id": "openai/gpt-5.2",
-                  "name": "GPT 5.2",
-                  "created": 1715644800,
-                  "architecture": {
-                    "input_modalities": ["text", "image"]
-                  },
-                  "pricing": {
-                    "prompt": "0.000005",
-                    "completion": "0.000015"
-                  },
-                  "context_length": 400000,
-                  "top_provider": {
-                    "max_completion_tokens": 128000
-                  }
-                },
-                {
-                  "id": "anthropic/claude-sonnet-4",
-                  "architecture": {
-                    "input_modalities": ["text"]
-                  },
-                  "context_length": 200000
+                  "data": [
+                    {
+                      "id": "openai/gpt-5.2",
+                      "name": "GPT 5.2",
+                      "created": 1715644800,
+                      "architecture": {
+                        "input_modalities": ["text", "image"]
+                      },
+                      "pricing": {
+                        "prompt": "0.000005",
+                        "completion": "0.000015"
+                      },
+                      "context_length": 400000,
+                      "top_provider": {
+                        "max_completion_tokens": 128000
+                      }
+                    },
+                    {
+                      "id": "anthropic/claude-sonnet-4",
+                      "architecture": {
+                        "input_modalities": ["text"]
+                      },
+                      "context_length": 200000
+                    }
+                  ]
                 }
-              ]
-            }
-            """.trimIndent()
-        )
+                """.trimIndent(),
+            )
 
         assertEquals(
             listOf(
@@ -200,22 +203,24 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `parseXaiModels extracts correct fields`() {
-        val models = repo.parseXaiModels(
-            responseBody = """
-            {
-              "data": [
-                {
-                  "id": "grok-2",
-                  "created": 1723507200,
-                  "input_modalities": ["text", "image"],
-                  "prompt_token_price": 2000,
-                  "completion_token_price": 4000
-                }
-              ]
-            }
-            """.trimIndent(),
-            isChat = true
-        )
+        val models =
+            repo.parseXaiModels(
+                responseBody =
+                    """
+                    {
+                      "data": [
+                        {
+                          "id": "grok-2",
+                          "created": 1723507200,
+                          "input_modalities": ["text", "image"],
+                          "prompt_token_price": 2000,
+                          "completion_token_price": 4000
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                isChat = true,
+            )
 
         assertEquals(
             listOf(
@@ -229,7 +234,7 @@ class ApiModelCatalogRepositoryImplTest {
                     isChatCapable = true,
                     isImageGenerationCapable = false,
                     isVideoGenerationCapable = false,
-                )
+                ),
             ),
             models,
         )
@@ -237,23 +242,25 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `parseXaiModels supports language-models payload`() {
-        val models = repo.parseXaiModels(
-            responseBody = """
-            {
-              "models": [
-                {
-                  "id": "grok-4.1-fast-reasoning",
-                  "created": 1743465600,
-                  "input_modalities": ["text"],
-                  "prompt_text_token_price": 2000,
-                  "completion_text_token_price": 5000,
-                  "max_prompt_length": 131072
-                }
-              ]
-            }
-            """.trimIndent(),
-            isChat = true
-        )
+        val models =
+            repo.parseXaiModels(
+                responseBody =
+                    """
+                    {
+                      "models": [
+                        {
+                          "id": "grok-4.1-fast-reasoning",
+                          "created": 1743465600,
+                          "input_modalities": ["text"],
+                          "prompt_text_token_price": 2000,
+                          "completion_text_token_price": 5000,
+                          "max_prompt_length": 131072
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                isChat = true,
+            )
 
         assertEquals(
             listOf(
@@ -268,7 +275,7 @@ class ApiModelCatalogRepositoryImplTest {
                     isChatCapable = true,
                     isImageGenerationCapable = false,
                     isVideoGenerationCapable = false,
-                )
+                ),
             ),
             models,
         )
@@ -276,22 +283,24 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `parseXaiModelDetail keeps requested alias and extracts context window`() {
-        val model = repo.parseXaiModelDetail(
-            responseBody = """
-            {
-              "id": "grok-4-fast-reasoning-2025-04-09",
-              "name": "Grok 4 Fast",
-              "aliases": ["grok-4-fast-reasoning"],
-              "created": 1743465600,
-              "input_modalities": ["text", "image"],
-              "prompt_text_token_price": 2000,
-              "completion_text_token_price": 5000,
-              "max_prompt_length": 256000
-            }
-            """.trimIndent(),
-            requestedModelId = "grok-4-fast-reasoning",
-            isChat = true
-        )
+        val model =
+            repo.parseXaiModelDetail(
+                responseBody =
+                    """
+                    {
+                      "id": "grok-4-fast-reasoning-2025-04-09",
+                      "name": "Grok 4 Fast",
+                      "aliases": ["grok-4-fast-reasoning"],
+                      "created": 1743465600,
+                      "input_modalities": ["text", "image"],
+                      "prompt_text_token_price": 2000,
+                      "completion_text_token_price": 5000,
+                      "max_prompt_length": 256000
+                    }
+                    """.trimIndent(),
+                requestedModelId = "grok-4-fast-reasoning",
+                isChat = true,
+            )
 
         assertEquals(
             DiscoveredApiModel(
@@ -312,21 +321,23 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `parseXaiModels marks models from image-generation-models as image generation capable`() {
-        val models = repo.parseXaiModels(
-            responseBody = """
-            {
-              "models": [
-                {
-                  "id": "grok-imagine-image",
-                  "created": 1743465600,
-                  "input_modalities": ["text"],
-                  "image_price": 200
-                }
-              ]
-            }
-            """.trimIndent(),
-            isImageGen = true
-        )
+        val models =
+            repo.parseXaiModels(
+                responseBody =
+                    """
+                    {
+                      "models": [
+                        {
+                          "id": "grok-imagine-image",
+                          "created": 1743465600,
+                          "input_modalities": ["text"],
+                          "image_price": 200
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                isImageGen = true,
+            )
 
         assertEquals(1, models.size)
         val model = models[0]
@@ -337,20 +348,22 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `parseXaiModels marks models from video-generation-models as video generation capable`() {
-        val models = repo.parseXaiModels(
-            responseBody = """
-            {
-              "models": [
-                {
-                  "id": "grok-imagine-video",
-                  "created": 1743465600,
-                  "input_modalities": ["text"]
-                }
-              ]
-            }
-            """.trimIndent(),
-            isVideoGen = true
-        )
+        val models =
+            repo.parseXaiModels(
+                responseBody =
+                    """
+                    {
+                      "models": [
+                        {
+                          "id": "grok-imagine-video",
+                          "created": 1743465600,
+                          "input_modalities": ["text"]
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                isVideoGen = true,
+            )
 
         assertEquals(1, models.size)
         val model = models[0]
@@ -360,22 +373,36 @@ class ApiModelCatalogRepositoryImplTest {
     }
 
     @Test
-    fun `fetchModels filters out blacklisted OpenAI models`() = runTest {
-        every { openAiClientProvider.getClient(any(), any(), any()) } returns mockk {
-            every { models() } returns mockk {
-                every { list() } returns mockk {
-                    every { data() } returns listOf(
-                        mockk { every { id() } returns "gpt-4o"; every { created() } returns 123L },
-                        mockk { every { id() } returns "dall-e-2"; every { created() } returns 123L },
-                        mockk { every { id() } returns "whisper-1"; every { created() } returns 123L },
-                    )
+    fun `fetchModels filters out blacklisted OpenAI models`() =
+        runTest {
+            every { openAiClientProvider.getClient(any(), any(), any()) } returns
+                mockk {
+                    every { models() } returns
+                        mockk {
+                            every { list() } returns
+                                mockk {
+                                    every { data() } returns
+                                        listOf(
+                                            mockk {
+                                                every { id() } returns "gpt-4o"
+                                                every { created() } returns 123L
+                                            },
+                                            mockk {
+                                                every { id() } returns "dall-e-2"
+                                                every { created() } returns 123L
+                                            },
+                                            mockk {
+                                                every { id() } returns "whisper-1"
+                                                every { created() } returns 123L
+                                            },
+                                        )
+                                }
+                        }
                 }
-            }
+
+            val models = repo.fetchModels(ApiProvider.OPENAI, apiKey = "key", baseUrl = null)
+
+            assertEquals(1, models.size)
+            assertEquals("gpt-4o", models[0].id)
         }
-
-        val models = repo.fetchModels(ApiProvider.OPENAI, apiKey = "key", baseUrl = null)
-
-        assertEquals(1, models.size)
-        assertEquals("gpt-4o", models[0].id)
-    }
 }

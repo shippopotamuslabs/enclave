@@ -13,8 +13,8 @@ import androidx.room.PrimaryKey
             parentColumns = ["id"],
             childColumns = ["albumId"],
             onDelete = ForeignKey.SET_NULL,
-        )
-    ]
+        ),
+    ],
 )
 data class StudioMediaEntity(
     @PrimaryKey

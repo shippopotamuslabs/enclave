@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
@@ -9,7 +10,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import android.database.sqlite.SQLiteConstraintException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -19,10 +19,13 @@ class StudioMediaDaoTest {
 
     @Before
     fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
         dao = database.studioMediaDao()
     }
 
@@ -32,62 +35,70 @@ class StudioMediaDaoTest {
     }
 
     @Test(expected = SQLiteConstraintException::class)
-    fun `inserting media with invalid albumId throws constraint exception`() = runTest {
-        val media = StudioMediaEntity(
-            id = "media-1",
-            prompt = "prompt",
-            mediaUri = "uri",
-            mediaType = "IMAGE",
-            albumId = "non-existent-album"
-        )
-        dao.insertMedia(media)
-    }
+    fun `inserting media with invalid albumId throws constraint exception`() =
+        runTest {
+            val media =
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "prompt",
+                    mediaUri = "uri",
+                    mediaType = "IMAGE",
+                    albumId = "non-existent-album",
+                )
+            dao.insertMedia(media)
+        }
 
     @Test(expected = SQLiteConstraintException::class)
-    fun `inserting media with default albumId throws constraint exception`() = runTest {
-        val media = StudioMediaEntity(
-            id = "media-1",
-            prompt = "prompt",
-            mediaUri = "uri",
-            mediaType = "IMAGE",
-            albumId = "default"
-        )
-        dao.insertMedia(media)
-    }
+    fun `inserting media with default albumId throws constraint exception`() =
+        runTest {
+            val media =
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "prompt",
+                    mediaUri = "uri",
+                    mediaType = "IMAGE",
+                    albumId = "default",
+                )
+            dao.insertMedia(media)
+        }
 
     @Test
-    fun `inserting media with null albumId succeeds`() = runTest {
-        val media = StudioMediaEntity(
-            id = "media-1",
-            prompt = "prompt",
-            mediaUri = "uri",
-            mediaType = "IMAGE",
-            albumId = null
-        )
-        dao.insertMedia(media)
-        
-        val retrieved = dao.getMediaById("media-1")
-        org.junit.Assert.assertNotNull(retrieved)
-        org.junit.Assert.assertNull(retrieved?.albumId)
-    }
+    fun `inserting media with null albumId succeeds`() =
+        runTest {
+            val media =
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "prompt",
+                    mediaUri = "uri",
+                    mediaType = "IMAGE",
+                    albumId = null,
+                )
+            dao.insertMedia(media)
+
+            val retrieved = dao.getMediaById("media-1")
+            org.junit.Assert.assertNotNull(retrieved)
+            org.junit.Assert.assertNull(retrieved?.albumId)
+        }
 
     @Test
-    fun `updating media album to null succeeds`() = runTest {
-        val albumId = "album-1"
-        database.studioAlbumDao().insertAlbum(StudioAlbumEntity(id = albumId, name = "Album 1"))
-        
-        val media = StudioMediaEntity(
-            id = "media-1",
-            prompt = "prompt",
-            mediaUri = "uri",
-            mediaType = "IMAGE",
-            albumId = albumId
-        )
-        dao.insertMedia(media)
-        
-        dao.updateMediaAlbum(listOf("media-1"), null)
-        
-        val retrieved = dao.getMediaById("media-1")
-        org.junit.Assert.assertNull(retrieved?.albumId)
-    }
+    fun `updating media album to null succeeds`() =
+        runTest {
+            val albumId = "album-1"
+            database.studioAlbumDao().insertAlbum(StudioAlbumEntity(id = albumId, name = "Album 1"))
+
+            val media =
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "prompt",
+                    mediaUri = "uri",
+                    mediaType = "IMAGE",
+                    albumId = albumId,
+                )
+            dao.insertMedia(media)
+
+            dao.updateMediaAlbum(listOf("media-1"), null)
+
+            val retrieved = dao.getMediaById("media-1")
+            org.junit.Assert.assertNull(retrieved?.albumId)
+        }
 }

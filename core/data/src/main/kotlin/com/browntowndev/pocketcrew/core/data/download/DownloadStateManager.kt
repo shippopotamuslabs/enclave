@@ -1,14 +1,14 @@
 package com.browntowndev.pocketcrew.core.data.download
 
+import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult
-import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 class DownloadStateManager(
-    private val stateFlow: MutableStateFlow<DownloadState>
+    private val stateFlow: MutableStateFlow<DownloadState>,
 ) {
     fun updateStatus(status: DownloadStatus) {
         stateFlow.update { it.copy(status = status) }
@@ -24,7 +24,7 @@ class DownloadStateManager(
                 currentDownloads = result.fileProgressList,
                 modelsTotal = result.modelsTotal,
                 modelsComplete = result.modelsComplete,
-                overallProgress = result.overallProgress
+                overallProgress = result.overallProgress,
             )
         }
     }
@@ -42,7 +42,7 @@ class DownloadStateManager(
                 estimatedTimeRemaining = update.estimatedTimeRemaining ?: it.estimatedTimeRemaining,
                 currentSpeedMBs = update.currentSpeedMBs ?: it.currentSpeedMBs,
                 waitingForUnmeteredNetwork = update.waitingForUnmeteredNetwork ?: it.waitingForUnmeteredNetwork,
-                errorMessage = update.errorMessage
+                errorMessage = update.errorMessage,
             )
         }
     }

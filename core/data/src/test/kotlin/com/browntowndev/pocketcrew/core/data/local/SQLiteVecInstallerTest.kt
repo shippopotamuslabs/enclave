@@ -12,7 +12,7 @@ import kotlin.test.assertSame
 
 class SQLiteVecInstallerTest {
     @Test
-    fun installSQLiteVecExtension_apkContainsSupportedAbi_extractsLibraryAndReturnsSuffixlessPath(): Unit {
+    fun installSQLiteVecExtension_apkContainsSupportedAbi_extractsLibraryAndReturnsSuffixlessPath() {
         val tempDir = Files.createTempDirectory("sqlite-vec-installer").toFile()
         val apkFile = File(tempDir, "base.apk")
         val outputDir = File(tempDir, "no_backup")
@@ -23,28 +23,31 @@ class SQLiteVecInstallerTest {
             bytes = libraryBytes,
         )
 
-        val path = SQLiteVecInstaller.installSQLiteVecExtension(
-            apkSourceFiles = listOf(apkFile),
-            outputDirectory = outputDir,
-            supportedAbis = listOf("arm64-v8a"),
-        )
+        val path =
+            SQLiteVecInstaller.installSQLiteVecExtension(
+                apkSourceFiles = listOf(apkFile),
+                outputDirectory = outputDir,
+                supportedAbis = listOf("arm64-v8a"),
+            )
 
         assertEquals(File(outputDir, "libsqlite_vec").absolutePath, path)
         assertEquals(libraryBytes.toList(), File(outputDir, "libsqlite_vec.so").readBytes().toList())
     }
 
     @Test
-    fun configureSQLiteVecExtension_configuration_addsNativeExtension(): Unit {
-        val configuration = SQLiteDatabaseConfiguration(
-            "/data/data/com.browntowndev.pocketcrew/databases/pocketcrew.db",
-            SQLiteDatabase.OPEN_READWRITE,
-        )
+    fun configureSQLiteVecExtension_configuration_addsNativeExtension() {
+        val configuration =
+            SQLiteDatabaseConfiguration(
+                "/data/data/com.browntowndev.pocketcrew/databases/pocketcrew.db",
+                SQLiteDatabase.OPEN_READWRITE,
+            )
         val extensionPath = "/data/app/example/lib/arm64/libsqlite_vec"
 
-        val updatedConfiguration = SQLiteVecInstaller.configureSQLiteVecExtension(
-            configuration = configuration,
-            extensionPath = extensionPath,
-        )
+        val updatedConfiguration =
+            SQLiteVecInstaller.configureSQLiteVecExtension(
+                configuration = configuration,
+                extensionPath = extensionPath,
+            )
 
         assertSame(configuration, updatedConfiguration)
         assertEquals(1, updatedConfiguration.customExtensions.size)

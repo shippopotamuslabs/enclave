@@ -1,13 +1,10 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
-import androidx.room.Upsert
 import androidx.room.Update
+import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +18,10 @@ interface MemoriesDao {
     suspend fun updateMemory(memory: MemoriesEntity)
 
     @Query("UPDATE memories SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM memories WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)

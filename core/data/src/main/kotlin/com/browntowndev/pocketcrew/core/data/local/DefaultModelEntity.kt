@@ -18,58 +18,52 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
             entity = LocalModelConfigurationEntity::class,
             parentColumns = ["id"],
             childColumns = ["local_config_id"],
-            onDelete = ForeignKey.RESTRICT
+            onDelete = ForeignKey.RESTRICT,
         ),
         ForeignKey(
             entity = ApiModelConfigurationEntity::class,
             parentColumns = ["id"],
             childColumns = ["api_config_id"],
-            onDelete = ForeignKey.RESTRICT
+            onDelete = ForeignKey.RESTRICT,
         ),
         ForeignKey(
             entity = TtsProviderEntity::class,
             parentColumns = ["id"],
             childColumns = ["tts_provider_id"],
-            onDelete = ForeignKey.RESTRICT
+            onDelete = ForeignKey.RESTRICT,
         ),
         ForeignKey(
             entity = MediaProviderEntity::class,
             parentColumns = ["id"],
             childColumns = ["media_provider_id"],
-            onDelete = ForeignKey.RESTRICT
-        )
+            onDelete = ForeignKey.RESTRICT,
+        ),
     ],
     indices = [
         Index(value = ["local_config_id"]),
         Index(value = ["api_config_id"]),
         Index(value = ["tts_provider_id"]),
-        Index(value = ["media_provider_id"])
-    ]
+        Index(value = ["media_provider_id"]),
+    ],
 )
 data class DefaultModelEntity(
     @PrimaryKey
     @ColumnInfo(name = "model_type")
     val modelType: ModelType,
-
     @ColumnInfo(name = "local_config_id")
     val localConfigId: LocalModelConfigurationId? = null,
-
     @ColumnInfo(name = "api_config_id")
     val apiConfigId: ApiModelConfigurationId? = null,
-
     @ColumnInfo(name = "tts_provider_id")
     val ttsProviderId: TtsProviderId? = null,
-
     @ColumnInfo(name = "media_provider_id")
     val mediaProviderId: MediaProviderId? = null,
-
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
-
     @ColumnInfo(name = "pending_sync")
     val pendingSync: Int = 0,
     @ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
 ) {
     init {
         val nonNullCount = listOf(localConfigId, apiConfigId, ttsProviderId, mediaProviderId).count { it != null }

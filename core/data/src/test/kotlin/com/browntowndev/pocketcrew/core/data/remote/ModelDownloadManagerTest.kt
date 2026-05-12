@@ -1,18 +1,16 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
-import com.browntowndev.pocketcrew.domain.model.download.DownloadState
-import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
-import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ModelDownloadManagerTest {
-
     private lateinit var mockOrchestrator: ModelDownloadOrchestratorPort
 
     @BeforeEach
@@ -30,4 +28,3 @@ class ModelDownloadManagerTest {
         assert(mockOrchestrator.downloadState.value.status == DownloadStatus.IDLE)
     }
 }
-

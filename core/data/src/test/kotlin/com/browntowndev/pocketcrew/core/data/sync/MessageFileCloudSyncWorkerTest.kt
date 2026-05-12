@@ -43,16 +43,17 @@ class MessageFileCloudSyncWorkerTest {
         mockkStatic("kotlinx.coroutines.tasks.TasksKt")
         val context = mockk<Context>(relaxed = true)
         val workerParams = mockk<WorkerParameters>(relaxed = true)
-        worker = MessageFileCloudSyncWorker(
-            context,
-            workerParams,
-            messageFileDao,
-            storage,
-            loggingPort,
-            cryptoManager,
-            userIdProvider,
-            syncTrigger
-        )
+        worker =
+            MessageFileCloudSyncWorker(
+                context,
+                workerParams,
+                messageFileDao,
+                storage,
+                loggingPort,
+                cryptoManager,
+                userIdProvider,
+                syncTrigger,
+            )
     }
 
     @After
@@ -61,35 +62,37 @@ class MessageFileCloudSyncWorkerTest {
     }
 
     @Test
-    fun `doWork recovers from stagingRemoteUrl if present`() = runTest {
-        // Arrange
-        val fileId = "file1"
-        val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Ffiles%2Ffile1?alt=media"
-        val file = MessageFileEntity(
-            id = fileId,
-            messageId = "msg1",
-            name = "test.txt",
-            mimeType = MimeType.PLAIN_TEXT,
-            content = "test content",
-            stagingRemoteUrl = stagingUrl
-        )
+    fun `doWork recovers from stagingRemoteUrl if present`() =
+        runTest {
+            // Arrange
+            val fileId = "file1"
+            val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Ffiles%2Ffile1?alt=media"
+            val file =
+                MessageFileEntity(
+                    id = fileId,
+                    messageId = "msg1",
+                    name = "test.txt",
+                    mimeType = MimeType.PLAIN_TEXT,
+                    content = "test content",
+                    stagingRemoteUrl = stagingUrl,
+                )
 
-        coEvery { messageFileDao.getPendingUploads() } returns listOf(file)
-        coEvery { messageFileDao.getPendingDeletions() } returns emptyList()
+            coEvery { messageFileDao.getPendingUploads() } returns listOf(file)
+            coEvery { messageFileDao.getPendingDeletions() } returns emptyList()
 
-        val storageRef = mockk<StorageReference>(relaxed = true)
-        val metadataTask = mockk<Task<StorageMetadata>>(relaxed = true)
-        val metadata = mockk<StorageMetadata>(relaxed = true)
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            val metadataTask = mockk<Task<StorageMetadata>>(relaxed = true)
+            val metadata = mockk<StorageMetadata>(relaxed = true)
 
-        every { storage.reference.child(any()) } returns storageRef
-        every { storageRef.metadata } returns metadataTask
-        coEvery { metadataTask.await() } returns metadata
+            every { storage.reference.child(any()) } returns storageRef
+            every { storageRef.metadata } returns metadataTask
+            coEvery { metadataTask.await() } returns metadata
 
-        // Act
-        val result = worker.doWork()
+            // Act
+            val result = worker.doWork()
 
-        // Assert
-        assertEquals(ListenableWorker.Result.success(), result)
-        coVerify { messageFileDao.markUploaded(fileId, stagingUrl, any()) }
-    }
+            // Assert
+            assertEquals(ListenableWorker.Result.success(), result)
+            coVerify { messageFileDao.markUploaded(fileId, stagingUrl, any()) }
+        }
 }

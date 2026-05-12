@@ -11,7 +11,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CleanupRepositoryImplTest {
-
     private val database = mockk<PocketCrewDatabase>()
     private val cleanupDao = mockk<CleanupDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
@@ -24,15 +23,16 @@ class CleanupRepositoryImplTest {
     }
 
     @Test
-    fun `clearAllData clears database and ApiKeyManager`() = runTest {
-        cleanupRepository.clearAllData()
+    fun `clearAllData clears database and ApiKeyManager`() =
+        runTest {
+            cleanupRepository.clearAllData()
 
-        coVerify { cleanupDao.clearUserData() }
-        verify {
-            apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
-            apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
-            apiKeyManager.delete(ApiKeyManager.X_SEARCH_ALIAS)
+            coVerify { cleanupDao.clearUserData() }
+            verify {
+                apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
+                apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
+                apiKeyManager.delete(ApiKeyManager.X_SEARCH_ALIAS)
+            }
+            coVerify { apiKeyManager.clearAllPending() }
         }
-        coVerify { apiKeyManager.clearAllPending() }
-    }
 }

@@ -2,10 +2,8 @@ package com.browntowndev.pocketcrew.core.data
 
 import android.content.Context
 import androidx.room.DatabaseConfiguration
-import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import io.mockk.every
 import io.mockk.mockk
@@ -24,14 +22,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class DataModuleTest {
-
     private lateinit var context: Context
 
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         mockkObject(SQLiteVecInstaller)
-        
+
         // Mock the factory creation to avoid native library loading issues in Robolectric
         val mockFactory = mockk<SupportSQLiteOpenHelper.Factory>(relaxed = true)
         every { SQLiteVecInstaller.createOpenHelperFactory(any()) } returns mockFactory
@@ -46,7 +43,7 @@ class DataModuleTest {
     fun `providePocketCrewDatabase configures sqlite-vec open helper factory`() {
         // ACT
         val database = DataModule.providePocketCrewDatabase(context)
-        
+
         // ASSERT
         verify { SQLiteVecInstaller.createOpenHelperFactory(context) }
         database.close()
@@ -67,7 +64,7 @@ class DataModuleTest {
                 current = current.superclass
             }
         }
-        
+
         if (configField == null) {
             // Try without the 'm' prefix
             current = database.javaClass
@@ -83,7 +80,7 @@ class DataModuleTest {
         assertNotNull("Could not find configuration field in RoomDatabase hierarchy", configField)
         configField!!.isAccessible = true
         val config = configField.get(database) as? DatabaseConfiguration
-        
+
         val callbacks = config?.callbacks
         assertTrue("Database should have at least one callback registered in configuration", !callbacks.isNullOrEmpty())
         database.close()

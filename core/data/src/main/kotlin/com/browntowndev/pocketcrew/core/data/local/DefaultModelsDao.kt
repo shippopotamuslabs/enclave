@@ -14,7 +14,8 @@ interface DefaultModelsDao {
     @Query("SELECT * FROM default_models WHERE deleted = 0")
     fun observeAll(): Flow<List<DefaultModelEntity>>
 
-    @Query("""
+    @Query(
+        """
         SELECT 
             dm.model_type as modelType,
             dm.local_config_id as localConfigId,
@@ -40,7 +41,8 @@ interface DefaultModelsDao {
         LEFT JOIN tts_providers tp ON dm.tts_provider_id = tp.id
         LEFT JOIN media_providers mp ON dm.media_provider_id = mp.id
         WHERE dm.deleted = 0
-    """)
+    """,
+    )
     fun observeAllWithDetails(): Flow<List<DefaultModelAssignmentView>>
 
     @Query("SELECT * FROM default_models WHERE deleted = 0")
@@ -50,7 +52,10 @@ interface DefaultModelsDao {
     suspend fun upsert(entity: DefaultModelEntity)
 
     @Query("UPDATE default_models SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE model_type = :modelType")
-    suspend fun softDeleteById(modelType: ModelType, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        modelType: ModelType,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM default_models WHERE model_type IN (:modelTypes) AND deleted = 1")
     suspend fun purgeDeleted(modelTypes: List<ModelType>)

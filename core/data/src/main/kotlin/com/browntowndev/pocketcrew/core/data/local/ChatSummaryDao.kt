@@ -31,10 +31,16 @@ abstract class ChatSummaryDao {
     abstract suspend fun markSynced(ids: List<Long>)
 
     @Query("UPDATE chat_summary SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun softDeleteById(id: Long, timestamp: Long = System.currentTimeMillis()): Int
+    abstract suspend fun softDeleteById(
+        id: Long,
+        timestamp: Long = System.currentTimeMillis(),
+    ): Int
 
     @Query("UPDATE chat_summary SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE chat_id = :chatId")
-    abstract suspend fun deleteSummaryForChat(chatId: ChatId, timestamp: Long = System.currentTimeMillis()): Int
+    abstract suspend fun deleteSummaryForChat(
+        chatId: ChatId,
+        timestamp: Long = System.currentTimeMillis(),
+    ): Int
 
     @Query("SELECT * FROM chat_summary WHERE chat_id = :chatId LIMIT 1")
     abstract suspend fun getSummaryByChatIdIncludingDeletedSync(chatId: ChatId): ChatSummaryEntity?

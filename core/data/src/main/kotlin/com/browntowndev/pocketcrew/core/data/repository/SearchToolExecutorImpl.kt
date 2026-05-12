@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -13,60 +13,62 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SearchToolExecutorImpl @Inject constructor(
-    private val loggingPort: LoggingPort,
-    private val settingsRepository: SettingsRepository,
-    private val tavilySearchRepository: TavilySearchRepository,
-    private val exaSearchRepository: ExaSearchRepository,
-) : ToolExecutorPort {
+class SearchToolExecutorImpl
+    @Inject
+    constructor(
+        private val loggingPort: LoggingPort,
+        private val settingsRepository: SettingsRepository,
+        private val tavilySearchRepository: TavilySearchRepository,
+        private val exaSearchRepository: ExaSearchRepository,
+    ) : ToolExecutorPort {
+        companion object {
+            private const val TAG = "SearchToolExecutor"
+        }
 
-    companion object {
-        private const val TAG = "SearchToolExecutor"
+        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            requireSupportedTool(request.toolName)
+            val params = request.parameters as WebSearchParams
+            val query = params.query.trim()
+
+            if (query.isEmpty()) {
+                require(false) { "Tool argument 'query' is required" }
+            }
+
+            val settings = settingsRepository.settingsFlow.first()
+            if (!settings.searchEnabled) {
+                loggingPort.warning(TAG, "Search tool invoked but search is disabled in settings")
+                throw IllegalStateException("Search is disabled in settings")
+            }
+
+            loggingPort.info(
+                TAG,
+                "Executing search tool provider=${request.provider} " +
+                    "modelType=${request.modelType} tool=${request.toolName} " +
+                    "searchProvider=${settings.searchProvider} query=$query",
+            )
+
+            val resultJson =
+                when (settings.searchProvider) {
+                    SearchProvider.TAVILY -> tavilySearchRepository.search(query)
+                    SearchProvider.EXA -> exaSearchRepository.search(query)
+                }
+
+            loggingPort.info(
+                TAG,
+                "Search tool execution complete provider=${request.provider} " +
+                    "modelType=${request.modelType} tool=${request.toolName} " +
+                    "resultChars=${resultJson.length}",
+            )
+
+            return ToolExecutionResult(
+                toolName = request.toolName,
+                resultJson = resultJson,
+            )
+        }
+
+        private fun requireSupportedTool(toolName: String) {
+            require(toolName == ToolDefinition.WEB_SEARCH.name) {
+                "Unsupported tool: $toolName"
+            }
+        }
     }
-
-    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
-        requireSupportedTool(request.toolName)
-        val params = request.parameters as WebSearchParams
-        val query = params.query.trim()
-        
-        if (query.isEmpty()) {
-            require(false) { "Tool argument 'query' is required" }
-        }
-        
-        val settings = settingsRepository.settingsFlow.first()
-        if (!settings.searchEnabled) {
-            loggingPort.warning(TAG, "Search tool invoked but search is disabled in settings")
-            throw IllegalStateException("Search is disabled in settings")
-        }
-
-        loggingPort.info(
-            TAG,
-            "Executing search tool provider=${request.provider} " +
-                "modelType=${request.modelType} tool=${request.toolName} " +
-                "searchProvider=${settings.searchProvider} query=$query"
-        )
-        
-        val resultJson = when (settings.searchProvider) {
-            SearchProvider.TAVILY -> tavilySearchRepository.search(query)
-            SearchProvider.EXA -> exaSearchRepository.search(query)
-        }
-        
-        loggingPort.info(
-            TAG,
-            "Search tool execution complete provider=${request.provider} " +
-                "modelType=${request.modelType} tool=${request.toolName} " +
-                "resultChars=${resultJson.length}"
-        )
-        
-        return ToolExecutionResult(
-            toolName = request.toolName,
-            resultJson = resultJson,
-        )
-    }
-
-    private fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.WEB_SEARCH.name) {
-            "Unsupported tool: $toolName"
-        }
-    }
-}
