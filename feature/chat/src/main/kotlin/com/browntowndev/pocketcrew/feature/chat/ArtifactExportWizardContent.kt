@@ -330,14 +330,14 @@ private fun ArtifactExportWizardContentPreviewFormat() {
                 step = ArtifactExportWizardStep.CHOOSE_FORMAT,
                 selectedFormat = WizardExportFormat.PDF,
                 selectedDestination = null,
-                isExporting = false,
+                isExporting = false
             ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},
             onBack = {},
             onNext = {},
-            onConfirmExport = {},
+            onConfirmExport = {}
         )
     }
 }
@@ -354,14 +354,14 @@ private fun ArtifactExportWizardContentPreviewDestination() {
                 step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
                 selectedFormat = WizardExportFormat.BOTH,
                 selectedDestination = WizardExportDestination.SHARE,
-                isExporting = false,
+                isExporting = false
             ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},
             onBack = {},
             onNext = {},
-            onConfirmExport = {},
+            onConfirmExport = {}
         )
     }
 }
