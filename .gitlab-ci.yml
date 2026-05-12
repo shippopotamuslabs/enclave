@@ -14,8 +14,10 @@
 # =============================================================================
 
 default:
-  # Android SDK image with NDK 27 support (API 34+)
-  image: fabernovel/android:api-34-v1.7.0
+  # fabernovel/android:api-33-v1.7.0 is the highest available tag on Docker Hub.
+  # The API level in the tag refers to the bundled emulator image only —
+  # JDK 17 + Android build tools in this image support compileSdk 36 just fine.
+  image: fabernovel/android:api-33-v1.7.0
   # Cache Gradle home and wrapper across all jobs to avoid re-downloading
   cache:
     key: "$CI_COMMIT_REF_SLUG"
