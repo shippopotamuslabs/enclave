@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
@@ -826,7 +827,31 @@ class ChatViewModel @Inject constructor(
             indicatorState = computeIndicatorState(message),
             modelDisplayName = modelDisplayName,
             webSearchSources = message.webSearchSources,
+            transcriptSegments = mapTranscriptSegmentsToUi(message),
         )
+    }
+
+    private fun mapTranscriptSegmentsToUi(message: Message): List<TranscriptSegmentUi> {
+        val segments = message.transcriptSegments
+        if (segments.isEmpty()) return emptyList()
+        val lastThinkingIndex = segments.indexOfLast { it is MessageTranscriptSegment.Thinking }
+        val lastAnswerIndex = segments.indexOfLast { it is MessageTranscriptSegment.AssistantText }
+        return segments.mapIndexed { index, seg ->
+            when (seg) {
+                is MessageTranscriptSegment.Thinking -> TranscriptSegmentUi.ThinkingBlock(
+                    ordinal = seg.ordinal,
+                    text = seg.text,
+                    durationSeconds = seg.thinkingDurationSeconds,
+                    thinkingStartTimeMs = seg.thinkingStartTime,
+                    isStreaming = index == lastThinkingIndex && message.messageState == MessageState.THINKING,
+                )
+                is MessageTranscriptSegment.AssistantText -> TranscriptSegmentUi.AnswerBlock(
+                    ordinal = seg.ordinal,
+                    text = seg.text,
+                    isStreaming = index == lastAnswerIndex && message.messageState == MessageState.GENERATING,
+                )
+            }
+        }
     }
 
     /**

@@ -108,6 +108,7 @@ fun ChatScreen(
                     activeToolCallBanner = uiState.activeToolCallBanner,
                     activeIndicatorMessageId = uiState.activeIndicatorMessageId,
                     hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
+                    chatMode = uiState.selectedMode,
                     onEditMessage = onEditMessage,
                     onPlayAudio = onPlayAudio,
                     onArtifactCardClick = onArtifactCardClick,
