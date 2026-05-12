@@ -19,6 +19,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -271,7 +272,7 @@ internal class SettingsViewModel @Inject constructor(
             assignmentsUseCases = assignmentUseCases, asset = asset
         )
 
-    fun onFetchMediaModels() = apiProvidersDelegate.onFetchMediaModels(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey)
+    fun onFetchMediaModels() = apiProvidersDelegate.onFetchMediaModels(viewModelScope, TAG, _mediaState, _currentApiKey)
     fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) =
         apiProvidersDelegate.onSelectMediaProviderAsset(viewModelScope, TAG, _mediaState, _apiState, _currentApiKey, asset)
 
