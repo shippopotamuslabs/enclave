@@ -105,6 +105,28 @@ class ChatGenerationAccumulatorManagerTest {
     }
 
     @Test
+    fun `snapshot keeps active thinking segment open until answer starts`() = runTest {
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = mockk(relaxed = true),
+        )
+
+        val snapshot = manager.reduce(MessageGenerationState.ThinkingLive("still thinking", ModelType.FAST))
+            .messages
+            .getValue(MessageId("assistant"))
+        val thinking = snapshot.transcriptSegments.single() as MessageTranscriptSegment.Thinking
+        val accumulator = manager.messages.getValue(MessageId("assistant"))
+
+        assertEquals(MessageState.THINKING, snapshot.messageState)
+        assertNull(thinking.thinkingEndTime)
+        assertNull(thinking.thinkingDurationSeconds)
+        assertNull(accumulator.thinkingEndTime)
+    }
+
+    @Test
     fun `crew mode creates distinct assistant messages per model step`() = runTest {
         val chatRepository = mockk<ChatRepository>()
         coEvery {

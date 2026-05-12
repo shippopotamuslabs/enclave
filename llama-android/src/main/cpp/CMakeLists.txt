@@ -10,6 +10,10 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Force 16KB page size alignment for all targets
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384")
+add_link_options("-Wl,--gc-sections")
+
 # Android specific settings
 set(CMAKE_ANDROID_STL_TYPE c++_shared)
 set(CMAKE_ANDROID_NDK_DEPRECATED_HEADERS ON)
@@ -196,7 +200,12 @@ target_link_libraries(llama-jni
 # Compiler options for optimization
 set_target_properties(llama-jni PROPERTIES
     COMPILE_OPTIONS "-O3;-fPIC;-ffunction-sections;-fdata-sections;-march=armv8.2-a+dotprod+fp16"
-    LINK_OPTIONS "-Wl,--gc-sections"
+    LINK_OPTIONS "-Wl,--gc-sections;-Wl,-z,max-page-size=16384;-Wl,-z,common-page-size=16384"
+)
+
+# Apply 16KB alignment to cpudetect as well
+set_target_properties(cpudetect PROPERTIES
+    LINK_OPTIONS "-Wl,-z,max-page-size=16384;-Wl,-z,common-page-size=16384"
 )
 
 # =============================================================================

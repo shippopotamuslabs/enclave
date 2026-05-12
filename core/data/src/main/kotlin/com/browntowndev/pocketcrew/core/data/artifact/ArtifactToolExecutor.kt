@@ -68,10 +68,24 @@ class ArtifactToolExecutor
         override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
             when (request.toolName) {
                 ToolDefinition.START_ARTIFACT.name -> {
+                    documentValidation.validateStartArtifactArgs(request.argumentsJson).onFailure { cause ->
+                        return toolArgumentsViolationResult(
+                            toolName = ToolDefinition.START_ARTIFACT.name,
+                            phase = "start_artifact_arguments",
+                            cause = cause,
+                        )
+                    }
                     val params = request.parameters as StartArtifactParams
                     startArtifact(params, request.assistantMessageId)
                 }
                 ToolDefinition.APPEND_BLOCKS.name -> {
+                    documentValidation.validateAppendBlocksArgs(request.argumentsJson).onFailure { cause ->
+                        return toolArgumentsViolationResult(
+                            toolName = ToolDefinition.APPEND_BLOCKS.name,
+                            phase = "append_blocks_arguments",
+                            cause = cause,
+                        )
+                    }
                     val params = request.parameters as AppendBlocksParams
                     appendBlocks(params, request.assistantMessageId)
                 }
@@ -127,7 +141,20 @@ class ArtifactToolExecutor
 
             return ToolExecutionResult(
                 toolName = ToolDefinition.START_ARTIFACT.name,
-                resultJson = """{"status":"success","artifactId":"$artifactId","message":"Artifact initialized. Use this artifactId to append blocks."}""",
+                resultJson =
+                    buildJsonObject {
+                        put("status", JsonPrimitive("success"))
+                        put("artifactId", JsonPrimitive(artifactId))
+                        put(
+                            "message",
+                            JsonPrimitive(
+                                "Artifact initialized. artifactId is \"$artifactId\". " +
+                                    "Call append_blocks with this exact artifactId. " +
+                                    "On your LAST append_blocks call you MUST set isComplete:true " +
+                                    "or the document will not be delivered to the user.",
+                            ),
+                        )
+                    }.toString(),
             )
         }
 
@@ -214,7 +241,11 @@ class ArtifactToolExecutor
                 if (params.isComplete) {
                     "Document complete. Total blocks: ${currentBlocks.size}. PDF/Word export is now available."
                 } else {
-                    "Appended ${params.blocks.size} blocks. Total so far: ${currentBlocks.size}. Please continue generating the next section."
+                    "Appended ${params.blocks.size} blocks. Total so far: ${currentBlocks.size}. " +
+                        "Please continue generating the next section. " +
+                        "REMINDER: when the document is fully written, call append_blocks again with " +
+                        "isComplete:true (and blocks empty if nothing remains to add); " +
+                        "otherwise the user will see no finished document."
                 }
 
             return ToolExecutionResult(
@@ -231,6 +262,38 @@ class ArtifactToolExecutor
                         }
                     }.toString(),
             )
+        }
+
+        private fun toolArgumentsViolationResult(
+            toolName: String,
+            phase: String,
+            cause: Throwable,
+        ): ToolExecutionResult {
+            val details = cause.message ?: cause.toString()
+            val payload =
+                buildJsonObject {
+                    put("status", JsonPrimitive("error"))
+                    put("code", JsonPrimitive("TOOL_ARGUMENTS_VIOLATION"))
+                    put("phase", JsonPrimitive(phase))
+                    put(
+                        "message",
+                        JsonPrimitive(
+                            "Tool arguments failed Rust-backed validation. Fix the JSON and try again.",
+                        ),
+                    )
+                    put("validationDetails", JsonPrimitive(details))
+                    put(
+                        "schemaHint",
+                        JsonPrimitive(
+                            "start_artifact: {\"title\":\"string\",\"author?\":\"string\"} (camelCase). " +
+                                "append_blocks: {\"artifactId\":\"uuid-from-start_artifact\",\"blocks\":[block...]," +
+                                "\"isComplete\":boolean}. " +
+                                "Each block needs \"type\": heading|paragraph|list|table|code|math|image|page_break " +
+                                "with the required fields for that variant.",
+                        ),
+                    )
+                }
+            return ToolExecutionResult(toolName = toolName, resultJson = payload.toString())
         }
 
         private fun documentSchemaViolationResult(

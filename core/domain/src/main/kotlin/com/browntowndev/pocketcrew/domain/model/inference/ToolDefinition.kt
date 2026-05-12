@@ -63,9 +63,29 @@ data class ToolDefinition(
                         "integer", "number" -> put(key, 0)
                         "boolean" -> put(key, false)
                         "array" -> {
-                            val itemType = jsonObject["items"]?.jsonObject?.get("type")?.jsonPrimitive?.content ?: "string"
+                            val itemsObj = jsonObject["items"]?.jsonObject
+                            val exampleElement: JsonElement =
+                                when {
+                                    itemsObj?.containsKey("oneOf") == true ||
+                                        itemsObj?.get("type")?.jsonPrimitive?.content == "object" -> {
+                                        buildJsonObject {
+                                            put("type", "paragraph")
+                                            put("text", "...")
+                                        }
+                                    }
+                                    else -> {
+                                        val itemType =
+                                            itemsObj?.get("type")?.jsonPrimitive?.content ?: "string"
+                                        when (itemType) {
+                                            "string" -> JsonPrimitive("...")
+                                            "integer", "number" -> JsonPrimitive(0)
+                                            "boolean" -> JsonPrimitive(false)
+                                            else -> JsonPrimitive("...")
+                                        }
+                                    }
+                                }
                             putJsonArray(key) {
-                                if (itemType == "string") add(JsonPrimitive("...")) else add(JsonPrimitive(0))
+                                add(exampleElement)
                             }
                         }
                         else -> putJsonObject(key) {}
@@ -90,7 +110,18 @@ data class ToolDefinition(
                     "string" -> "<|\"|>...<|\"|>"
                     "integer", "number" -> "0"
                     "boolean" -> "false"
-                    "array" -> "<|\"|>...<|\"|>" // LiteRT expects comma-sep string for arrays
+                    "array" -> {
+                        val itemsObj = jsonObject["items"]?.jsonObject
+                        val inner =
+                            when {
+                                itemsObj?.containsKey("oneOf") == true ||
+                                    itemsObj?.get("type")?.jsonPrimitive?.content == "object" -> {
+                                    """[{"type":"paragraph","text":"..."}]"""
+                                }
+                                else -> "..."
+                            }
+                        "<|\"|>$inner<|\"|>"
+                    }
                     else -> "<|\"|>...<|\"|>"
                 }
             }
@@ -101,11 +132,7 @@ data class ToolDefinition(
     @Suppress("UNCHECKED_CAST")
     fun <T : ToolParameters> decodeArguments(argumentsJson: String): T {
         val serializer = json.serializersModule.serializer(parametersClass.java) as KSerializer<T>
-        val payload = when (name) {
-            START_ARTIFACT.name -> StartArtifactParamsArgumentNormalizer.normalize(argumentsJson)
-            else -> argumentsJson
-        }
-        return json.decodeFromString(serializer, payload)
+        return json.decodeFromString(serializer, argumentsJson)
     }
 
     @Suppress("UNCHECKED_CAST")

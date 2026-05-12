@@ -1,13 +1,20 @@
 @file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.domain.usecase.inference
 
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 
 /**
@@ -78,6 +85,10 @@ class LlmToolingOrchestrator @Inject constructor(
         onNoToolCallOnFirstPass: suspend (TResponse) -> Unit = {},
         onFinished: suspend (params: TParams, toolCallCount: Int, lastResponse: TResponse?) -> Unit
     ) {
+        val pendingArtifactIds = mutableSetOf<String>()
+        var lastArtifactToolCall: ToolCallRequest? = null
+        val json = Json { ignoreUnknownKeys = true }
+
         var currentParams = initialParams
         var toolCallCount = 0
         var lastResponse: TResponse? = null
@@ -193,7 +204,15 @@ class LlmToolingOrchestrator @Inject constructor(
                     "Tool call processed provider=$providerName tool=${toolCall.toolName} " +
                         "iteration=$toolCallCount resultChars=${toolResult.resultJson.length}"
                 )
-                
+
+                recordArtifactLoopProgress(
+                    json = json,
+                    pendingArtifactIds = pendingArtifactIds,
+                    updateLastArtifact = { lastArtifactToolCall = it },
+                    toolCall = toolCall,
+                    resultJson = toolResult.resultJson,
+                )
+
                 onToolResult(toolCall, toolResult.resultJson)
                 turnResults.add(toolCall to toolResult.resultJson)
             }
@@ -215,6 +234,109 @@ class LlmToolingOrchestrator @Inject constructor(
             }
         }
 
+        lastArtifactToolCall?.let { ctx ->
+            if (pendingArtifactIds.isEmpty()) return@let
+            for (artifactId in pendingArtifactIds.toList()) {
+                loggingPort.warning(
+                    tag,
+                    "Auto-finalizing artifactId=$artifactId (model ended tool loop without " +
+                        "append_blocks isComplete=true) provider=$providerName",
+                )
+                val argsJson =
+                    buildJsonObject {
+                        put("artifactId", JsonPrimitive(artifactId))
+                        put("blocks", JsonArray(emptyList()))
+                        put("isComplete", JsonPrimitive(true))
+                    }.toString()
+                val synth =
+                    ToolCallRequest(
+                        toolName = ToolDefinition.APPEND_BLOCKS.name,
+                        argumentsJson = argsJson,
+                        provider = ctx.provider,
+                        modelType = ctx.modelType,
+                        chatId = ctx.chatId,
+                        userMessageId = ctx.userMessageId,
+                        assistantMessageId = ctx.assistantMessageId,
+                    )
+                val synthResult =
+                    try {
+                        toolExecutor.execute(synth)
+                    } catch (e: Exception) {
+                        loggingPort.error(
+                            tag,
+                            "Auto-finalize append_blocks failed artifactId=$artifactId provider=$providerName",
+                            e,
+                        )
+                        continue
+                    }
+                toolCallCount++
+                loggingPort.info(
+                    tag,
+                    "Auto-finalize processed artifactId=$artifactId resultChars=${synthResult.resultJson.length}",
+                )
+                onToolResult(synth, synthResult.resultJson)
+            }
+            pendingArtifactIds.clear()
+        }
+
         onFinished(currentParams, toolCallCount, lastResponse)
     }
+
+    private fun recordArtifactLoopProgress(
+        json: Json,
+        pendingArtifactIds: MutableSet<String>,
+        updateLastArtifact: (ToolCallRequest) -> Unit,
+        toolCall: ToolCallRequest,
+        resultJson: String,
+    ) {
+        when (toolCall.toolName) {
+            ToolDefinition.START_ARTIFACT.name -> {
+                updateLastArtifact(toolCall)
+                val id = extractArtifactIdFromStartSuccess(json, resultJson) ?: return
+                pendingArtifactIds.add(id)
+            }
+            ToolDefinition.APPEND_BLOCKS.name -> {
+                updateLastArtifact(toolCall)
+                val complete = parseAppendBlocksSuccessIsComplete(json, resultJson) ?: return
+                val artifactId = extractArtifactIdFromAppendArgs(json, toolCall.argumentsJson) ?: return
+                if (complete) {
+                    pendingArtifactIds.remove(artifactId)
+                } else {
+                    pendingArtifactIds.add(artifactId)
+                }
+            }
+        }
+    }
+
+    private fun extractArtifactIdFromStartSuccess(json: Json, resultJson: String): String? =
+        try {
+            val o = json.parseToJsonElement(resultJson).jsonObject
+            if (o["status"]?.jsonPrimitive?.content != "success") return null
+            (o["artifactId"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun parseAppendBlocksSuccessIsComplete(json: Json, resultJson: String): Boolean? =
+        try {
+            val o = json.parseToJsonElement(resultJson).jsonObject
+            if (o["status"]?.jsonPrimitive?.content != "success") return null
+            when (val e = o["isComplete"]) {
+                is JsonPrimitive ->
+                    e.booleanOrNull == true ||
+                        e.content.equals("true", ignoreCase = true) ||
+                        e.content == "1"
+                else -> false
+            }
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun extractArtifactIdFromAppendArgs(json: Json, argumentsJson: String): String? =
+        try {
+            val o = json.parseToJsonElement(argumentsJson).jsonObject
+            (o["artifactId"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
 }
