@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.google
+package com.browntowndev.pocketcrew.feature.inference.google
 
 import android.util.LruCache
 import com.browntowndev.pocketcrew.domain.model.inference.GoogleApiConstants

@@ -1,26 +1,24 @@
-package com.browntowndev.pocketcrew.core.data.openai
+package com.browntowndev.pocketcrew.feature.inference.anthropic
 
 import android.util.LruCache
-import com.openai.client.OpenAIClient
-import com.openai.client.okhttp.OpenAIOkHttpClient
+import com.anthropic.client.AnthropicClient
+import com.anthropic.client.okhttp.AnthropicOkHttpClient
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class OpenAiClientProvider
+class AnthropicClientProvider
     @Inject
     constructor() {
         private val clientCache =
-            object : LruCache<String, OpenAIClient>(8) {
+            object : LruCache<String, AnthropicClient>(8) {
                 override fun entryRemoved(
                     evicted: Boolean,
                     key: String,
-                    oldValue: OpenAIClient,
-                    newValue: OpenAIClient?,
+                    oldValue: AnthropicClient,
+                    newValue: AnthropicClient?,
                 ) {
-                    // Explicitly close the evicted client to free wrapper resources,
-                    // which also shuts down its internal OkHttpClient dispatcher and connection pool.
                     oldValue.close()
                 }
             }
@@ -28,17 +26,15 @@ class OpenAiClientProvider
         fun getClient(
             apiKey: String,
             baseUrl: String?,
-            organizationId: String? = null,
-            projectId: String? = null,
             headers: Map<String, String> = emptyMap(),
-        ): OpenAIClient {
+        ): AnthropicClient {
             val normalizedHeaders =
                 headers
                     .filterValues { it.isNotBlank() }
                     .toSortedMap()
                     .entries
                     .joinToString(separator = "|") { (name, value) -> "$name=$value" }
-            val key = "${apiKey.sha256Hex()}_${baseUrl}_${organizationId}_${projectId}_$normalizedHeaders"
+            val key = "${apiKey.sha256Hex()}_${baseUrl}_$normalizedHeaders"
 
             var client = clientCache.get(key)
             if (client == null) {
@@ -46,20 +42,12 @@ class OpenAiClientProvider
                     client = clientCache.get(key)
                     if (client == null) {
                         val builder =
-                            OpenAIOkHttpClient
+                            AnthropicOkHttpClient
                                 .builder()
                                 .apiKey(apiKey)
-                                .apply {
-                                    if (!baseUrl.isNullOrBlank()) {
-                                        baseUrl(baseUrl)
-                                    }
-                                    if (!organizationId.isNullOrBlank()) {
-                                        organization(organizationId)
-                                    }
-                                    if (!projectId.isNullOrBlank()) {
-                                        project(projectId)
-                                    }
-                                }
+                        if (!baseUrl.isNullOrBlank()) {
+                            builder.baseUrl(baseUrl)
+                        }
                         headers
                             .filterValues { it.isNotBlank() }
                             .forEach { (name, value) ->
@@ -75,6 +63,6 @@ class OpenAiClientProvider
 
         private fun String.sha256Hex(): String {
             val digest = MessageDigest.getInstance("SHA-256")
-            return digest.digest(this.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+            return digest.digest(toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
         }
     }
