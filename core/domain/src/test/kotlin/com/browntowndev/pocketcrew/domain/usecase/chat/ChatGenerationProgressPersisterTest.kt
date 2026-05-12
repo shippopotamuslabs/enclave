@@ -53,6 +53,12 @@ class ChatGenerationProgressPersisterTest {
                 messageState = any(),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         }
     }
@@ -74,6 +80,12 @@ class ChatGenerationProgressPersisterTest {
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         } returns Unit
         val embeddingEngine = mockk<EmbeddingEnginePort>()
@@ -129,6 +141,12 @@ class ChatGenerationProgressPersisterTest {
                 messageState = any(),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         }
     }
@@ -165,6 +183,12 @@ class ChatGenerationProgressPersisterTest {
                 messageState = any(),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         }
     }

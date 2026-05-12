@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -193,7 +194,8 @@ class FakeChatRepository : ChatRepository {
         generatedMediaUris: List<String>,
         generatedMediaAssetIds: List<String>,
         generatedMediaTypes: List<String>,
-        generatedMediaPrompts: List<String>
+        generatedMediaPrompts: List<String>,
+        transcriptSegments: List<MessageTranscriptSegment>,
     ) {
         persistedMessageData.add(
             PersistedMessageData(
@@ -211,7 +213,8 @@ class FakeChatRepository : ChatRepository {
                 generatedMediaUris = generatedMediaUris,
                 generatedMediaAssetIds = generatedMediaAssetIds,
                 generatedMediaTypes = generatedMediaTypes,
-                generatedMediaPrompts = generatedMediaPrompts
+                generatedMediaPrompts = generatedMediaPrompts,
+                transcriptSegments = transcriptSegments,
             )
         )
     }
@@ -238,7 +241,8 @@ class FakeChatRepository : ChatRepository {
         val generatedMediaUris: List<String> = emptyList(),
         val generatedMediaAssetIds: List<String> = emptyList(),
         val generatedMediaTypes: List<String> = emptyList(),
-        val generatedMediaPrompts: List<String> = emptyList()
+        val generatedMediaPrompts: List<String> = emptyList(),
+        val transcriptSegments: List<com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment> = emptyList(),
     )
 
     override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {

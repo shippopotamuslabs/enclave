@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -39,6 +40,12 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -93,6 +100,12 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 messageState = any(),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -146,6 +159,12 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
                 webSearchSources = any(),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -167,7 +186,12 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         )
         persistUseCase(manager)
 
-        coVerify(exactly = 1) { chatRepository.persistAllMessageData(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) {
+            chatRepository.persistAllMessageData(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(),
+            )
+        }
         assertEquals(MessageState.PROCESSING, stateSlot.captured)
     }
 
@@ -187,6 +211,12 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 messageState = any(),
                 pipelineStep = any(),
                 webSearchSources = capture(sourcesSlot),
+                artifacts = any(),
+                generatedMediaUris = any(),
+                generatedMediaAssetIds = any(),
+                generatedMediaTypes = any(),
+                generatedMediaPrompts = any(),
+                transcriptSegments = any(),
             )
         } returns Unit
 
@@ -240,4 +270,68 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         // markWebSearchSourcesExtracted should also be called as a safety net
         coVerify(exactly = 1) { chatRepository.markWebSearchSourcesExtracted(extractedUrls.toList()) }
     }
+
+    @Test
+    fun `persist passes transcript segments stitched consistently with thinking_raw and content`() =
+        runTest {
+            val chatRepository = mockk<ChatRepository>(relaxed = true)
+            val transcriptSlot =
+                slot<List<MessageTranscriptSegment>>()
+            coEvery {
+                chatRepository.persistAllMessageData(
+                    messageId = any(),
+                    modelType = any(),
+                    thinkingStartTime = any(),
+                    thinkingEndTime = any(),
+                    thinkingDuration = any(),
+                    thinkingRaw = any(),
+                    content = any(),
+                    messageState = any(),
+                    pipelineStep = any(),
+                    webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = capture(transcriptSlot),
+                )
+            } returns Unit
+
+            val manager = ChatGenerationAccumulatorManager(
+                mode = Mode.FAST,
+                chatId = ChatId("chat"),
+                userMessageId = MessageId("user"),
+                defaultAssistantMessageId = MessageId("assistant"),
+                chatRepository = chatRepository,
+            )
+            manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
+            manager.reduce(MessageGenerationState.ThinkingLive("wave-a-", ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("reply1", ModelType.FAST))
+            manager.reduce(MessageGenerationState.ThinkingLive("wave-b-", ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("reply2", ModelType.FAST))
+            manager.reduce(MessageGenerationState.Finished(ModelType.FAST))
+
+            val embeddingEngine = mockk<EmbeddingEnginePort>()
+            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+            val persistUseCase = PersistAccumulatedChatMessagesUseCase(
+                chatRepository = chatRepository,
+                messageRepository = mockk(relaxed = true),
+                embeddingEngine = embeddingEngine,
+                extractedUrls = emptySet(),
+            )
+            persistUseCase(manager)
+
+            val assistantAcc = manager.messages.getValue(MessageId("assistant"))
+            val segments = transcriptSlot.captured
+            assertEquals(4, segments.size)
+
+            val stitchedThinking = segments.filterIsInstance<MessageTranscriptSegment.Thinking>()
+                .joinToString("") { it.text }
+            val stitchedAnswer = segments.filterIsInstance<MessageTranscriptSegment.AssistantText>()
+                .joinToString("") { it.text }
+
+            assertEquals(assistantAcc.thinkingRaw.toString(), stitchedThinking)
+            assertEquals(assistantAcc.content.toString(), stitchedAnswer)
+        }
 }
