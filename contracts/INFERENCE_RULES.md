@@ -1,4 +1,3 @@
-# INFERENCE_RULES.md
 **Pocket Crew – Inference Layer Contract v2.5**
 
 Non-negotiable rules for the `:inference` module and all model/runtime operations. 
@@ -10,7 +9,7 @@ Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Ne
 
 | Always | Never |
 | :--- | :--- |
-| Target LiteRT only (`com.google.ai.edge.litert:2.x`). | Use legacy TensorFlow Lite, ML Kit, or cloud/API fallbacks. |
+| Target LiteRT only (`com.google.ai.edge.litert:2.x`). | Use legacy TensorFlow Lite or ML Kit. Cloud/API fallbacks are strictly opt-in via user-provided keys (BYOK). |
 | Use `PowerManager` for thermal & `onTrimMemory` for RAM. | Rely on `BatteryManager` or JVM heap metrics for throttling. |
 | Isolate KV cache explicitly per chat session via CoW. | Share KV cache state across different chat sessions. |
 | Use `val` and immutable collections for Model Configuration. | Use `var` or mutable lists in the Inference State. |
@@ -20,7 +19,7 @@ Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Ne
 ---
 
 ## 1. Core Constraints & API
-- **100% On-Device:** Operations proceed entirely on-device after model initialization. No network calls for inference.
+- **On-Device Priority:** Default operations proceed entirely on-device. Network calls are only permitted for explicitly configured "BYOK" cloud providers.
 - **Runtime:** Must use LiteRT (`litert:2.x`) + LiteRT-LM sessions.
 - **API:** Use the `CompiledModel` API for model loading and execution to ensure zero-copy buffer interoperability.
 - **Target:** Android 14+ (minSdk 34).
