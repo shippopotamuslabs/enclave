@@ -16,38 +16,41 @@ import java.nio.file.Path
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsRepositoryImplTest {
-
     @TempDir
     lateinit var tempDir: Path
 
     @Test
-    fun `settingsFlow defaults background inference enabled when preference is absent`() = runTest {
-        val repository = createRepository(backgroundScope)
+    fun `settingsFlow defaults background inference enabled when preference is absent`() =
+        runTest {
+            val repository = createRepository(backgroundScope)
 
-        val settings = repository.settingsFlow.first()
+            val settings = repository.settingsFlow.first()
 
-        assertTrue(settings.backgroundInferenceEnabled)
-    }
+            assertTrue(settings.backgroundInferenceEnabled)
+        }
 
     @Test
-    fun `updateBackgroundInferenceEnabled persists explicit false`() = runTest {
-        val repository = createRepository(backgroundScope)
+    fun `updateBackgroundInferenceEnabled persists explicit false`() =
+        runTest {
+            val repository = createRepository(backgroundScope)
 
-        repository.updateBackgroundInferenceEnabled(false)
+            repository.updateBackgroundInferenceEnabled(false)
 
-        assertFalse(repository.settingsFlow.first().backgroundInferenceEnabled)
-    }
+            assertFalse(repository.settingsFlow.first().backgroundInferenceEnabled)
+        }
 
     private fun createRepository(scope: CoroutineScope): SettingsRepositoryImpl {
-        val dataStore = PreferenceDataStoreFactory.create(
-            scope = scope,
-            produceFile = { tempDir.resolve("settings.preferences_pb").toFile() },
-        )
-        val apiKeyManager = mockk<ApiKeyManager> {
-            every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
-            every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
-            every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
-        }
+        val dataStore =
+            PreferenceDataStoreFactory.create(
+                scope = scope,
+                produceFile = { tempDir.resolve("settings.preferences_pb").toFile() },
+            )
+        val apiKeyManager =
+            mockk<ApiKeyManager> {
+                every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
+                every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
+                every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
+            }
         return SettingsRepositoryImpl(
             dataStore = dataStore,
             apiKeyManager = apiKeyManager,

@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
     entities = [
         ChatEntity::class,
         MessageEntity::class,
+        MessageTranscriptSegmentEntity::class,
         ChatSummaryEntity::class,
         LocalModelEntity::class,
         LocalModelConfigurationEntity::class,
@@ -25,27 +26,47 @@ import androidx.room.TypeConverters
         MessageFileEntity::class,
         DocumentEntity::class,
     ],
-    version = 3
+    version = 5,
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
+
     abstract fun messageDao(): MessageDao
+
     abstract fun chatSummaryDao(): ChatSummaryDao
+
     abstract fun localModelsDao(): LocalModelsDao
+
     abstract fun localModelConfigurationsDao(): LocalModelConfigurationsDao
+
     abstract fun apiModelConfigurationsDao(): ApiModelConfigurationsDao
+
     abstract fun apiCredentialsDao(): ApiCredentialsDao
+
     abstract fun defaultModelsDao(): DefaultModelsDao
+
     abstract fun webSearchSourceDao(): WebSearchSourceDao
+
     abstract fun messageVisionAnalysisDao(): MessageVisionAnalysisDao
+
     abstract fun embeddingDao(): EmbeddingDao
+
     abstract fun ttsProviderDao(): TtsProviderDao
+
     abstract fun memoriesDao(): MemoriesDao
+
     abstract fun mediaProviderDao(): MediaProviderDao
+
     abstract fun studioMediaDao(): StudioMediaDao
+
     abstract fun studioAlbumDao(): StudioAlbumDao
+
     abstract fun messageFileDao(): MessageFileDao
+
+    abstract fun messageTranscriptSegmentDao(): MessageTranscriptSegmentDao
+
     abstract fun cleanupDao(): CleanupDao
+
     abstract fun documentDao(): DocumentDao
 }

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "4758a40785e5d69e68853264e37b48c4",
+    "identityHash": "2662aac5838afdcbe117d5bf4acbdb79",
     "entities": [
       {
         "tableName": "chat",
@@ -231,6 +231,115 @@
             "onUpdate": "NO ACTION",
             "columns": [
               "chat_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "message_transcript_segment",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `ordinal` INTEGER NOT NULL, `kind` TEXT NOT NULL, `text` TEXT NOT NULL, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `thinking_duration_seconds` INTEGER, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ordinal",
+            "columnName": "ordinal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thinkingStartTime",
+            "columnName": "thinking_start_time",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "thinkingEndTime",
+            "columnName": "thinking_end_time",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "thinkingDurationSeconds",
+            "columnName": "thinking_duration_seconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pendingSync",
+            "columnName": "pending_sync",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deleted",
+            "columnName": "deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_message_transcript_segment_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_message_transcript_segment_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          },
+          {
+            "name": "index_message_transcript_segment_message_id_ordinal",
+            "unique": false,
+            "columnNames": [
+              "message_id",
+              "ordinal"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_message_transcript_segment_message_id_ordinal` ON `${TABLE_NAME}` (`message_id`, `ordinal`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
             ],
             "referencedColumns": [
               "id"
@@ -1607,7 +1716,7 @@
       },
       {
         "tableName": "message_file",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `name` TEXT NOT NULL, `content` TEXT NOT NULL, `mime_type` TEXT NOT NULL, `file_source` TEXT NOT NULL, `target_format` TEXT, `remote_url` TEXT, `sync_status` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `staging_remote_url` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `name` TEXT NOT NULL, `content` TEXT NOT NULL, `mime_type` TEXT NOT NULL, `remote_url` TEXT, `sync_status` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `staging_remote_url` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1638,17 +1747,6 @@
             "columnName": "mime_type",
             "affinity": "TEXT",
             "notNull": true
-          },
-          {
-            "fieldPath": "fileSource",
-            "columnName": "file_source",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "targetFormat",
-            "columnName": "target_format",
-            "affinity": "TEXT"
           },
           {
             "fieldPath": "remoteUrl",
@@ -1718,11 +1816,17 @@
       },
       {
         "tableName": "documents",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `json` TEXT NOT NULL, `title` TEXT NOT NULL, `author` TEXT, `target_format` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `json` TEXT NOT NULL, `title` TEXT NOT NULL, `author` TEXT, `target_format` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -1746,8 +1850,7 @@
           {
             "fieldPath": "targetFormat",
             "columnName": "target_format",
-            "affinity": "TEXT",
-            "notNull": true
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "createdAt",
@@ -1779,12 +1882,36 @@
           "columnNames": [
             "id"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "index_documents_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_documents_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4758a40785e5d69e68853264e37b48c4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2662aac5838afdcbe117d5bf4acbdb79')"
     ]
   }
 }

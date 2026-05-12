@@ -14,11 +14,10 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class CryptoManagerImplTest {
-
     private lateinit var cryptoManager: CryptoManagerImpl
     private lateinit var mockPrefs: SharedPreferences
     private lateinit var mockEditor: SharedPreferences.Editor
-    
+
     // Use a fixed salt for deterministic tests, but random for real usage
     private val testSalt = "test-salt-1234567890".toByteArray(Charsets.UTF_8)
     private val testPassword = "my-super-secret-vault-password"
@@ -26,11 +25,15 @@ class CryptoManagerImplTest {
     @BeforeEach
     fun setup() {
         mockkStatic(Base64::class)
-        every { Base64.encodeToString(any(), any()) } answers { 
-            java.util.Base64.getEncoder().encodeToString(firstArg() as ByteArray)
+        every { Base64.encodeToString(any(), any()) } answers {
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(firstArg() as ByteArray)
         }
-        every { Base64.decode(any<String>(), any()) } answers { 
-            java.util.Base64.getDecoder().decode(firstArg() as String)
+        every { Base64.decode(any<String>(), any()) } answers {
+            java.util.Base64
+                .getDecoder()
+                .decode(firstArg() as String)
         }
 
         mockPrefs = mockk()
@@ -65,7 +68,7 @@ class CryptoManagerImplTest {
     fun `clearKey removes cached key`() {
         cryptoManager.deriveAndCacheKey(testPassword, testSalt)
         assertTrue(cryptoManager.hasCachedKey())
-        
+
         cryptoManager.clearKey()
         assertFalse(cryptoManager.hasCachedKey())
     }
@@ -73,13 +76,13 @@ class CryptoManagerImplTest {
     @Test
     fun `encrypt and decrypt cycle returns original plaintext`() {
         cryptoManager.deriveAndCacheKey(testPassword, testSalt)
-        
+
         val plaintext = "my-secret-api-key-sk-12345"
         val encryptedResult = cryptoManager.encrypt(plaintext)
         assertTrue(encryptedResult.isSuccess)
-        
+
         val ciphertext = encryptedResult.getOrNull()!!
-        
+
         val decryptedResult = cryptoManager.decrypt(ciphertext)
         assertTrue(decryptedResult.isSuccess)
         assertEquals(plaintext, decryptedResult.getOrNull())
@@ -104,10 +107,10 @@ class CryptoManagerImplTest {
         cryptoManager.deriveAndCacheKey(testPassword, testSalt)
         val encryptedResult = cryptoManager.encrypt("plaintext")
         val ciphertext = encryptedResult.getOrNull()!!
-        
+
         // Corrupt the ciphertext by flipping a bit
         ciphertext[ciphertext.size - 1] = (ciphertext[ciphertext.size - 1] + 1).toByte()
-        
+
         val decryptedResult = cryptoManager.decrypt(ciphertext)
         assertTrue(decryptedResult.isFailure)
     }
@@ -129,10 +132,10 @@ class CryptoManagerImplTest {
         val key = cryptoManager.generateRandomKey(32)
         val iv = cryptoManager.generateRandomIv(12)
         val data = "test-data".toByteArray()
-        
+
         val result = cryptoManager.encryptWithKey(data, key, iv)
         assertTrue(result.isSuccess)
-        
+
         // We can't easily decrypt without adding decryptWithKey to the port,
         // but we can verify it doesn't crash and returns data.
         assertTrue(result.getOrNull()!!.isNotEmpty())
@@ -143,12 +146,12 @@ class CryptoManagerImplTest {
         val key = cryptoManager.generateRandomKey(32)
         val iv = cryptoManager.generateRandomIv(12)
         val data = "test-data-for-cloud-generation".toByteArray()
-        
+
         val encryptedResult = cryptoManager.encryptWithKey(data, key, iv)
         assertTrue(encryptedResult.isSuccess)
-        
+
         val ciphertext = encryptedResult.getOrNull()!!
-        
+
         val decryptedResult = cryptoManager.decryptWithKey(ciphertext, key, iv)
         assertTrue(decryptedResult.isSuccess)
         assertEquals("test-data-for-cloud-generation", String(decryptedResult.getOrNull()!!))

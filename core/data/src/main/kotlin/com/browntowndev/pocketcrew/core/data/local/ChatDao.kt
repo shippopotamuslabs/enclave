@@ -44,18 +44,29 @@ abstract class ChatDao {
     abstract suspend fun markSynced(ids: List<ChatId>)
 
     @Query("UPDATE chat SET pinned = NOT pinned, pending_sync = 1, updated_at = :timestamp WHERE id = :chatId")
-    abstract suspend fun updatePinStatus(chatId: ChatId, timestamp: Long = System.currentTimeMillis()): Int
+    abstract suspend fun updatePinStatus(
+        chatId: ChatId,
+        timestamp: Long = System.currentTimeMillis(),
+    ): Int
 
     @Query("UPDATE chat SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :chatId")
-    abstract suspend fun softDeleteById(chatId: ChatId, timestamp: Long = System.currentTimeMillis()): Int
+    abstract suspend fun softDeleteById(
+        chatId: ChatId,
+        timestamp: Long = System.currentTimeMillis(),
+    ): Int
 
     @Query("DELETE FROM chat WHERE id IN (:ids) AND deleted = 1")
     abstract suspend fun purgeDeleted(ids: List<ChatId>): Int
 
     @Query("UPDATE chat SET name = :newName, pending_sync = 1, updated_at = :timestamp WHERE id = :chatId")
-    abstract suspend fun updateName(chatId: ChatId, newName: String, timestamp: Long = System.currentTimeMillis()): Int
+    abstract suspend fun updateName(
+        chatId: ChatId,
+        newName: String,
+        timestamp: Long = System.currentTimeMillis(),
+    ): Int
 
-    @Query("""
+    @Query(
+        """
         SELECT * FROM chat
         WHERE deleted = 0 AND (
             id IN (
@@ -64,6 +75,10 @@ abstract class ChatDao {
             ) OR name LIKE '%' || :query || '%'
         )
         ORDER BY pinned DESC, last_modified DESC
-    """)
-    abstract fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<ChatEntity>>
+    """,
+    )
+    abstract fun searchChats(
+        query: String,
+        messageIds: List<MessageId>,
+    ): Flow<List<ChatEntity>>
 }

@@ -16,41 +16,45 @@ import javax.inject.Singleton
  * Uses a dedicated DataStore with @PipelineDataStore qualifier to avoid conflicts.
  */
 @Singleton
-class PipelineStateRepositoryImpl @Inject constructor(
-    @PipelineDataStore private val dataStore: DataStore<Preferences>
-) : PipelineStateRepository {
-    
-    companion object {
-        private fun pipelineStateKey(chatId: String) = stringPreferencesKey("pipeline_state_$chatId")
-    }
-    
-    override suspend fun persistPipelineState(chatId: String, state: PipelineState) {
-        val key = pipelineStateKey(chatId)
-        val serialized = state.toJson()
-        
-        dataStore.edit { preferences ->
-            preferences[key] = serialized
+class PipelineStateRepositoryImpl
+    @Inject
+    constructor(
+        @PipelineDataStore private val dataStore: DataStore<Preferences>,
+    ) : PipelineStateRepository {
+        companion object {
+            private fun pipelineStateKey(chatId: String) = stringPreferencesKey("pipeline_state_$chatId")
+        }
+
+        override suspend fun persistPipelineState(
+            chatId: String,
+            state: PipelineState,
+        ) {
+            val key = pipelineStateKey(chatId)
+            val serialized = state.toJson()
+
+            dataStore.edit { preferences ->
+                preferences[key] = serialized
+            }
+        }
+
+        override suspend fun getPipelineState(chatId: String): PipelineState? {
+            val key = pipelineStateKey(chatId)
+            val preferences = dataStore.data.firstOrNull() ?: return null
+
+            val serialized = preferences[key] ?: return null
+
+            return try {
+                PipelineState.fromJson(serialized)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        override suspend fun clearPipelineState(chatId: String) {
+            val key = pipelineStateKey(chatId)
+
+            dataStore.edit { preferences ->
+                preferences.remove(key)
+            }
         }
     }
-    
-    override suspend fun getPipelineState(chatId: String): PipelineState? {
-        val key = pipelineStateKey(chatId)
-        val preferences = dataStore.data.firstOrNull() ?: return null
-        
-        val serialized = preferences[key] ?: return null
-        
-        return try {
-            PipelineState.fromJson(serialized)
-        } catch (_: Exception) {
-            null
-        }
-    }
-    
-    override suspend fun clearPipelineState(chatId: String) {
-        val key = pipelineStateKey(chatId)
-        
-        dataStore.edit { preferences ->
-            preferences.remove(key)
-        }
-    }
-}

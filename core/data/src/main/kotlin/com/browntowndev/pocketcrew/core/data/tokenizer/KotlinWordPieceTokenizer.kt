@@ -3,10 +3,14 @@ package com.browntowndev.pocketcrew.core.data.tokenizer
 import java.io.File
 import java.text.Normalizer
 
-class KotlinWordPieceTokenizer(vocabFile: File) {
-    private val vocab: Map<String, Int> = vocabFile.readLines()
-        .mapIndexed { index, s -> s to index }
-        .toMap()
+class KotlinWordPieceTokenizer(
+    vocabFile: File,
+) {
+    private val vocab: Map<String, Int> =
+        vocabFile
+            .readLines()
+            .mapIndexed { index, s -> s to index }
+            .toMap()
 
     private val UNK_TOKEN = "[UNK]"
     private val CLS_TOKEN = "[CLS]"
@@ -18,13 +22,16 @@ class KotlinWordPieceTokenizer(vocabFile: File) {
     private val sepId = vocab[SEP_TOKEN] ?: 102
     private val padId = vocab[PAD_TOKEN] ?: 0
 
-    fun tokenize(text: String, maxLength: Int = 256): TokenizationResult {
+    fun tokenize(
+        text: String,
+        maxLength: Int = 256,
+    ): TokenizationResult {
         val cleanText = cleanText(text)
         val tokens = mutableListOf<String>()
-        
+
         for (word in cleanText.split(Regex("\\s+"))) {
             if (word.isEmpty()) continue
-            
+
             var start = 0
             while (start < word.length) {
                 var end = word.length
@@ -54,12 +61,12 @@ class KotlinWordPieceTokenizer(vocabFile: File) {
 
         inputIds[0] = clsId.toLong()
         attentionMask[0] = 1L
-        
+
         for (i in limitedTokens.indices) {
             inputIds[i + 1] = (vocab[limitedTokens[i]] ?: unkId).toLong()
             attentionMask[i + 1] = 1L
         }
-        
+
         inputIds[limitedTokens.size + 1] = sepId.toLong()
         attentionMask[limitedTokens.size + 1] = 1L
 
@@ -80,6 +87,6 @@ class KotlinWordPieceTokenizer(vocabFile: File) {
     data class TokenizationResult(
         val inputIds: LongArray,
         val attentionMask: LongArray,
-        val tokenTypeIds: LongArray
+        val tokenTypeIds: LongArray,
     )
 }

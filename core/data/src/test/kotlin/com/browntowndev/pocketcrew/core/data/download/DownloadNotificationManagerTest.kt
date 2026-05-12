@@ -1,27 +1,24 @@
 package com.browntowndev.pocketcrew.core.data.download
 
+import android.Manifest
 import android.app.Application
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import androidx.work.ForegroundInfo
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import androidx.test.core.app.ApplicationProvider
 import org.robolectric.Shadows.shadowOf
-import android.Manifest
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest=Config.NONE, sdk = [34])
+@Config(manifest = Config.NONE, sdk = [34])
 class DownloadNotificationManagerTest {
-
     private lateinit var context: Context
     private lateinit var notificationManager: DownloadNotificationManager
     private lateinit var systemNotificationManager: NotificationManager
@@ -56,12 +53,13 @@ class DownloadNotificationManagerTest {
     fun createForegroundInfoForProgress_returnsValidForegroundInfo() {
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
-        val foregroundInfo = notificationManager.createForegroundInfoForProgress(
-            progress = 0.5f,
-            currentFile = "test.litertlm",
-            subText = "50%",
-            cancelPendingIntent = pendingIntent
-        )
+        val foregroundInfo =
+            notificationManager.createForegroundInfoForProgress(
+                progress = 0.5f,
+                currentFile = "test.litertlm",
+                subText = "50%",
+                cancelPendingIntent = pendingIntent,
+            )
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
@@ -71,12 +69,13 @@ class DownloadNotificationManagerTest {
     fun createForegroundInfoForProgress_calculatesProgressPercentage() {
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
-        val foregroundInfo = notificationManager.createForegroundInfoForProgress(
-            progress = 0.75f,
-            currentFile = "test.litertlm",
-            subText = "75%",
-            cancelPendingIntent = pendingIntent
-        )
+        val foregroundInfo =
+            notificationManager.createForegroundInfoForProgress(
+                progress = 0.75f,
+                currentFile = "test.litertlm",
+                subText = "75%",
+                cancelPendingIntent = pendingIntent,
+            )
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         val notification = foregroundInfo.notification
@@ -96,7 +95,7 @@ class DownloadNotificationManagerTest {
             progress = 0.5f,
             currentFile = "test.litertlm",
             subText = "50%",
-            cancelPendingIntent = null
+            cancelPendingIntent = null,
         )
 
         val notifications = shadowOf(systemNotificationManager).allNotifications
@@ -112,7 +111,7 @@ class DownloadNotificationManagerTest {
             progress = 0.5f,
             currentFile = "test.litertlm",
             subText = "50%",
-            cancelPendingIntent = null
+            cancelPendingIntent = null,
         )
 
         val notifications = shadowOf(systemNotificationManager).allNotifications
@@ -128,7 +127,7 @@ class DownloadNotificationManagerTest {
             progress = 0.75f,
             currentFile = "test.litertlm",
             subText = "75%",
-            cancelPendingIntent = null
+            cancelPendingIntent = null,
         )
 
         val notifications = shadowOf(systemNotificationManager).allNotifications
@@ -144,7 +143,7 @@ class DownloadNotificationManagerTest {
             progress = 0.5f,
             currentFile = "main.litertlm",
             subText = "50%",
-            cancelPendingIntent = null
+            cancelPendingIntent = null,
         )
 
         val notifications = shadowOf(systemNotificationManager).allNotifications
@@ -161,7 +160,7 @@ class DownloadNotificationManagerTest {
             progress = 0.5f,
             currentFile = "test.litertlm",
             subText = "50%",
-            cancelPendingIntent = pendingIntent
+            cancelPendingIntent = pendingIntent,
         )
 
         val notifications = shadowOf(systemNotificationManager).allNotifications
@@ -171,29 +170,31 @@ class DownloadNotificationManagerTest {
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withSpeedAndEta() {
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
-        val snapshot = ProgressSnapshot(
-            overallProgress = 0.5f,
-            totalBytesDownloaded = 5242880L, // 5 MB
-            totalSize = 10485760L, // 10 MB
-            completedFiles = 0,
-            totalFiles = 1,
-            currentFile = "test.litertlm",
-            currentSpeedMBps = 1.5,
-            etaSeconds = 60L,
-            filesProgress = emptyList()
-        )
+        val snapshot =
+            ProgressSnapshot(
+                overallProgress = 0.5f,
+                totalBytesDownloaded = 5242880L, // 5 MB
+                totalSize = 10485760L, // 10 MB
+                completedFiles = 0,
+                totalFiles = 1,
+                currentFile = "test.litertlm",
+                currentSpeedMBps = 1.5,
+                etaSeconds = 60L,
+                filesProgress = emptyList(),
+            )
 
         val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
         val formatEta: (Long) -> String = { secs -> "$secs s" }
 
-        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
-            snapshot = snapshot,
-            formatBytes = formatBytes,
-            formatEta = formatEta,
-            cancelPendingIntent = pendingIntent
-        )
+        val foregroundInfo =
+            notificationManager.createForegroundInfoForSnapshot(
+                snapshot = snapshot,
+                formatBytes = formatBytes,
+                formatEta = formatEta,
+                cancelPendingIntent = pendingIntent,
+            )
 
-                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         val notification = foregroundInfo.notification
         val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
         assertEquals("5 MB / 10 MB • 1.5 MB/s • ETA: 60 s", subText)
@@ -202,29 +203,31 @@ class DownloadNotificationManagerTest {
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutSpeed() {
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
-        val snapshot = ProgressSnapshot(
-            overallProgress = 0.5f,
-            totalBytesDownloaded = 5242880L, // 5 MB
-            totalSize = 10485760L, // 10 MB
-            completedFiles = 0,
-            totalFiles = 1,
-            currentFile = "test.litertlm",
-            currentSpeedMBps = 0.0, // No speed
-            etaSeconds = 60L,
-            filesProgress = emptyList()
-        )
+        val snapshot =
+            ProgressSnapshot(
+                overallProgress = 0.5f,
+                totalBytesDownloaded = 5242880L, // 5 MB
+                totalSize = 10485760L, // 10 MB
+                completedFiles = 0,
+                totalFiles = 1,
+                currentFile = "test.litertlm",
+                currentSpeedMBps = 0.0, // No speed
+                etaSeconds = 60L,
+                filesProgress = emptyList(),
+            )
 
         val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
         val formatEta: (Long) -> String = { secs -> "$secs s" }
 
-        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
-            snapshot = snapshot,
-            formatBytes = formatBytes,
-            formatEta = formatEta,
-            cancelPendingIntent = pendingIntent
-        )
+        val foregroundInfo =
+            notificationManager.createForegroundInfoForSnapshot(
+                snapshot = snapshot,
+                formatBytes = formatBytes,
+                formatEta = formatEta,
+                cancelPendingIntent = pendingIntent,
+            )
 
-                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         val notification = foregroundInfo.notification
         val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
         assertEquals("5 MB / 10 MB • ETA: 60 s", subText)
@@ -233,29 +236,31 @@ class DownloadNotificationManagerTest {
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutEta() {
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
-        val snapshot = ProgressSnapshot(
-            overallProgress = 0.5f,
-            totalBytesDownloaded = 5242880L, // 5 MB
-            totalSize = 10485760L, // 10 MB
-            completedFiles = 0,
-            totalFiles = 1,
-            currentFile = "test.litertlm",
-            currentSpeedMBps = 1.5,
-            etaSeconds = -1L, // No ETA
-            filesProgress = emptyList()
-        )
+        val snapshot =
+            ProgressSnapshot(
+                overallProgress = 0.5f,
+                totalBytesDownloaded = 5242880L, // 5 MB
+                totalSize = 10485760L, // 10 MB
+                completedFiles = 0,
+                totalFiles = 1,
+                currentFile = "test.litertlm",
+                currentSpeedMBps = 1.5,
+                etaSeconds = -1L, // No ETA
+                filesProgress = emptyList(),
+            )
 
         val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
         val formatEta: (Long) -> String = { secs -> "$secs s" }
 
-        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
-            snapshot = snapshot,
-            formatBytes = formatBytes,
-            formatEta = formatEta,
-            cancelPendingIntent = pendingIntent
-        )
+        val foregroundInfo =
+            notificationManager.createForegroundInfoForSnapshot(
+                snapshot = snapshot,
+                formatBytes = formatBytes,
+                formatEta = formatEta,
+                cancelPendingIntent = pendingIntent,
+            )
 
-                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         val notification = foregroundInfo.notification
         val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
         assertEquals("5 MB / 10 MB • 1.5 MB/s", subText)

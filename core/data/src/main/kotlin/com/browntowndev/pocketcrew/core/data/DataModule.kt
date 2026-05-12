@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.core.data.auth.FirebaseGoogleAuthManager
@@ -33,22 +32,26 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
-import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
+import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabaseMigrations
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
-import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
-import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidSaveBinaryToDownloadsAdapter
 import com.browntowndev.pocketcrew.core.data.media.AndroidShareMediaAdapter
+import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
+import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
+import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
@@ -74,7 +77,6 @@ import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -83,7 +85,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
 import com.browntowndev.pocketcrew.domain.port.media.AudioPlayerPort
-import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
@@ -92,6 +93,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
@@ -99,6 +101,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -106,8 +109,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
-import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
-import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
@@ -125,7 +126,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -137,37 +137,46 @@ private val Context.pipelineDataStore: DataStore<Preferences> by preferencesData
 object DataModule {
     @Provides
     @Singleton
-    fun providePocketCrewDatabase(@ApplicationContext context: Context): PocketCrewDatabase {
-        return Room.databaseBuilder(
-            context,
-            PocketCrewDatabase::class.java,
-            "pocketcrew.db"
-        )
-        .fallbackToDestructiveMigration(dropAllTables = true)
-        .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
-        .addCallback(object : RoomDatabase.Callback() {
-            override fun onCreate(db: SupportSQLiteDatabase) {
-                super.onCreate(db)
-                SQLiteVecInstaller.createEmbeddingTable(db)
-                SQLiteVecInstaller.createMemoryEmbeddingTable(db)
-                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
-            }
+    fun providePocketCrewDatabase(
+        @ApplicationContext context: Context,
+    ): PocketCrewDatabase =
+        Room
+            .databaseBuilder(
+                context,
+                PocketCrewDatabase::class.java,
+                "pocketcrew.db",
+            ).addMigrations(
+                PocketCrewDatabaseMigrations.MIGRATION_3_4,
+                PocketCrewDatabaseMigrations.MIGRATION_4_5,
+            ).fallbackToDestructiveMigration(dropAllTables = true)
+            .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
+            .addCallback(
+                object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        SQLiteVecInstaller.createEmbeddingTable(db)
+                        SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                        SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
+                    }
 
-            override fun onOpen(db: SupportSQLiteDatabase) {
-                super.onOpen(db)
-                SQLiteVecInstaller.createEmbeddingTable(db)
-                SQLiteVecInstaller.createMemoryEmbeddingTable(db)
-                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
-            }
-        })
-        .build()
-    }
+                    override fun onOpen(db: SupportSQLiteDatabase) {
+                        super.onOpen(db)
+                        SQLiteVecInstaller.createEmbeddingTable(db)
+                        SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                        SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
+                    }
+                },
+            ).build()
 
     @Provides
     fun provideChatDao(database: PocketCrewDatabase): ChatDao = database.chatDao()
 
     @Provides
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    fun provideMessageTranscriptSegmentDao(database: PocketCrewDatabase): MessageTranscriptSegmentDao =
+        database.messageTranscriptSegmentDao()
 
     @Provides
     fun provideMessageFileDao(database: PocketCrewDatabase): MessageFileDao = database.messageFileDao()
@@ -179,8 +188,7 @@ object DataModule {
     fun provideWebSearchSourceDao(database: PocketCrewDatabase): WebSearchSourceDao = database.webSearchSourceDao()
 
     @Provides
-    fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =
-        database.messageVisionAnalysisDao()
+    fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao = database.messageVisionAnalysisDao()
 
     @Provides
     fun provideLocalModelsDao(database: PocketCrewDatabase): LocalModelsDao = database.localModelsDao()
@@ -190,16 +198,13 @@ object DataModule {
         database.localModelConfigurationsDao()
 
     @Provides
-    fun provideApiModelConfigurationsDao(database: PocketCrewDatabase): ApiModelConfigurationsDao =
-        database.apiModelConfigurationsDao()
+    fun provideApiModelConfigurationsDao(database: PocketCrewDatabase): ApiModelConfigurationsDao = database.apiModelConfigurationsDao()
 
     @Provides
-    fun provideMemoriesDao(database: PocketCrewDatabase): MemoriesDao =
-        database.memoriesDao()
+    fun provideMemoriesDao(database: PocketCrewDatabase): MemoriesDao = database.memoriesDao()
 
     @Provides
-    fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao =
-        database.apiCredentialsDao()
+    fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao = database.apiCredentialsDao()
 
     @Provides
     fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()
@@ -220,21 +225,26 @@ object DataModule {
     fun provideStudioAlbumDao(database: PocketCrewDatabase): StudioAlbumDao = database.studioAlbumDao()
 
     @Provides
-    fun provideDocumentDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DocumentDao =
-        database.documentDao()
+    fun provideDocumentDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DocumentDao = database.documentDao()
 
     @Provides
     @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.dataStore
+    fun provideDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.dataStore
 
     @Provides
     @Singleton
     @PipelineDataStore
-    fun providePipelineDataStore(@ApplicationContext context: Context): DataStore<Preferences> = context.pipelineDataStore
+    fun providePipelineDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.pipelineDataStore
 
     @Provides
     @Singleton
-    fun provideWorkManager(@ApplicationContext context: Context): WorkManager = WorkManager.getInstance(context)
+    fun provideWorkManager(
+        @ApplicationContext context: Context,
+    ): WorkManager = WorkManager.getInstance(context)
 
     @Provides
     @Singleton
@@ -246,13 +256,15 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions = 
-        com.google.firebase.functions.FirebaseFunctions.getInstance()
+    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions =
+        com.google.firebase.functions.FirebaseFunctions
+            .getInstance()
 
     @Provides
     @Singleton
-    fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage = 
-        com.google.firebase.storage.FirebaseStorage.getInstance()
+    fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage =
+        com.google.firebase.storage.FirebaseStorage
+            .getInstance()
 
     @Provides
     @Singleton
@@ -261,17 +273,22 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideUserIdProvider(firebaseAuth: FirebaseAuth): () -> String? = {
-        firebaseAuth.currentUser?.uid
-    }
+    fun provideUserIdProvider(firebaseAuth: FirebaseAuth): () -> String? =
+        {
+            firebaseAuth.currentUser?.uid
+        }
 
     @Provides
     @Singleton
-    fun provideCredentialManager(@ApplicationContext context: Context): CredentialManager = CredentialManager.create(context)
+    fun provideCredentialManager(
+        @ApplicationContext context: Context,
+    ): CredentialManager = CredentialManager.create(context)
 
     @Provides
     @Singleton
-    fun provideNotificationManager(@ApplicationContext context: Context): DownloadNotificationManager {
+    fun provideNotificationManager(
+        @ApplicationContext context: Context,
+    ): DownloadNotificationManager {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return DownloadNotificationManager(context, notificationManager)
     }
@@ -286,9 +303,8 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideDownloadProgressTracker(speedTracker: DownloadSpeedTrackerPort): DownloadProgressTracker {
-        return DownloadProgressTracker(speedTracker)
-    }
+    fun provideDownloadProgressTracker(speedTracker: DownloadSpeedTrackerPort): DownloadProgressTracker =
+        DownloadProgressTracker(speedTracker)
 
     @Provides
     @Singleton
@@ -298,7 +314,7 @@ object DataModule {
     @Singleton
     fun provideHttpFileDownloader(
         okHttpClient: OkHttpClient,
-        logger: LoggingPort
+        logger: LoggingPort,
     ): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 
     @Provides
@@ -314,7 +330,6 @@ object DataModule {
 @InstallIn(SingletonComponent::class)
 @Suppress("TooManyFunctions")
 abstract class DataRepositoryModule {
-
     @Binds
     @Singleton
     abstract fun bindAuthManager(impl: FirebaseGoogleAuthManager): AuthManager
@@ -326,13 +341,13 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBiometricPort(
-        impl: com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager
+        impl: com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager,
     ): com.browntowndev.pocketcrew.domain.port.security.BiometricPort
 
     @Binds
     @Singleton
     abstract fun bindCleanupRepository(
-        impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl
+        impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl,
     ): com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 
     @Binds
@@ -362,7 +377,7 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindFileAttachmentPort(
-        impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort,
     ): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
 
     @Binds
@@ -448,7 +463,7 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindMediaSaver(
-        impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver,
     ): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
 
     @Binds
@@ -457,14 +472,12 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindSaveBinaryToDownloadsPort(
-        impl: AndroidSaveBinaryToDownloadsAdapter,
-    ): SaveBinaryToDownloadsPort
+    abstract fun bindSaveBinaryToDownloadsPort(impl: AndroidSaveBinaryToDownloadsAdapter): SaveBinaryToDownloadsPort
 
     @Binds
     @Singleton
     abstract fun bindShareRepository(
-        impl: com.browntowndev.pocketcrew.core.data.repository.FirestoreShareRepository
+        impl: com.browntowndev.pocketcrew.core.data.repository.FirestoreShareRepository,
     ): com.browntowndev.pocketcrew.domain.port.repository.ShareRepositoryPort
 
     @Binds
@@ -474,7 +487,7 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCryptoManager(
-        impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl
+        impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl,
     ): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 
     @Binds
@@ -488,6 +501,6 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindEmbeddingProgressPort(
-        impl: com.browntowndev.pocketcrew.core.data.sync.EmbeddingProgressManager
+        impl: com.browntowndev.pocketcrew.core.data.sync.EmbeddingProgressManager,
     ): com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
 }

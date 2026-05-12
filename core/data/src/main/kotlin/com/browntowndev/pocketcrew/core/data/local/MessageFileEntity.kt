@@ -14,17 +14,16 @@ import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
             entity = MessageEntity::class,
             parentColumns = ["id"],
             childColumns = ["message_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index("message_id")]
+    indices = [Index("message_id")],
 )
 data class MessageFileEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "message_id") val messageId: String,
     val name: String,
     val content: String,
-    
     @ColumnInfo(name = "mime_type")
     val mimeType: MimeType,
     @ColumnInfo(name = "remote_url")

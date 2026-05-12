@@ -21,7 +21,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class AndroidAudioPlayerTest {
-
     private lateinit var player: AndroidAudioPlayer
     private val mockLogger: LoggingPort = mockk(relaxed = true)
     private val mockContext: Context = mockk(relaxed = true)
@@ -47,53 +46,56 @@ class AndroidAudioPlayerTest {
     }
 
     @Test
-    fun `playAudio handles empty audio data gracefully`() = runTest {
-        // Empty byte array should be handled without crashing
-        try {
-            player.playAudio(byteArrayOf())
-        } catch (e: Exception) {
-            // Empty audio data may cause a MediaPlayer error, which is expected.
-            // The important thing is that the player doesn't crash on stop() afterward.
+    fun `playAudio handles empty audio data gracefully`() =
+        runTest {
+            // Empty byte array should be handled without crashing
+            try {
+                player.playAudio(byteArrayOf())
+            } catch (e: Exception) {
+                // Empty audio data may cause a MediaPlayer error, which is expected.
+                // The important thing is that the player doesn't crash on stop() afterward.
+            }
+            player.stop() // Should be safe regardless of playAudio result
         }
-        player.stop() // Should be safe regardless of playAudio result
-    }
 
     @Test
-    fun `stop after playAudio completion release does not crash`() = runTest {
-        // Simulate: playAudio completes, then stop() is called externally.
-        // The key crash scenario: playAudio's setOnCompletionListener releases
-        // the MediaPlayer, then stop() tries to access the released player.
-        // With the fix, stop() should handle null mediaPlayer gracefully.
+    fun `stop after playAudio completion release does not crash`() =
+        runTest {
+            // Simulate: playAudio completes, then stop() is called externally.
+            // The key crash scenario: playAudio's setOnCompletionListener releases
+            // the MediaPlayer, then stop() tries to access the released player.
+            // With the fix, stop() should handle null mediaPlayer gracefully.
 
-        // Use a small valid WAV header for Robolectric
-        val audioBytes = createMinimalWavBytes()
+            // Use a small valid WAV header for Robolectric
+            val audioBytes = createMinimalWavBytes()
 
-        try {
-            player.playAudio(audioBytes)
-        } catch (e: Exception) {
-            // Robolectric may not fully support MediaPlayer - that's OK
-            // We just need to verify stop() is safe afterward
+            try {
+                player.playAudio(audioBytes)
+            } catch (e: Exception) {
+                // Robolectric may not fully support MediaPlayer - that's OK
+                // We just need to verify stop() is safe afterward
+            }
+
+            // This should NOT throw even if MediaPlayer was released by completion listener
+            player.stop()
+            player.stop() // Double stop should also be safe
         }
-
-        // This should NOT throw even if MediaPlayer was released by completion listener
-        player.stop()
-        player.stop() // Double stop should also be safe
-    }
 
     @Test
-    fun `stop called during playAudio cancels playback safely`() = runTest {
-        // Verify that calling stop() during playback doesn't crash
-        val audioBytes = createMinimalWavBytes()
+    fun `stop called during playAudio cancels playback safely`() =
+        runTest {
+            // Verify that calling stop() during playback doesn't crash
+            val audioBytes = createMinimalWavBytes()
 
-        try {
-            player.playAudio(audioBytes)
-        } catch (e: Exception) {
-            // Expected in Robolectric
+            try {
+                player.playAudio(audioBytes)
+            } catch (e: Exception) {
+                // Expected in Robolectric
+            }
+
+            // Stop should be safe even if called "during" or "after" playback
+            player.stop()
         }
-
-        // Stop should be safe even if called "during" or "after" playback
-        player.stop()
-    }
 
     private fun createMinimalWavBytes(): ByteArray {
         // Minimal WAV file: 44-byte header + 4 bytes of PCM data
@@ -136,14 +138,22 @@ class AndroidAudioPlayerTest {
         }
     }
 
-    private fun writeInt32(buf: ByteArray, offset: Int, value: Int) {
+    private fun writeInt32(
+        buf: ByteArray,
+        offset: Int,
+        value: Int,
+    ) {
         buf[offset] = (value and 0xFF).toByte()
         buf[offset + 1] = (value shr 8 and 0xFF).toByte()
         buf[offset + 2] = (value shr 16 and 0xFF).toByte()
         buf[offset + 3] = (value shr 24 and 0xFF).toByte()
     }
 
-    private fun writeInt16(buf: ByteArray, offset: Int, value: Short) {
+    private fun writeInt16(
+        buf: ByteArray,
+        offset: Int,
+        value: Short,
+    ) {
         buf[offset] = (value.toInt() and 0xFF).toByte()
         buf[offset + 1] = (value.toInt() shr 8 and 0xFF).toByte()
     }

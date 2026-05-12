@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import android.database.sqlite.SQLiteConstraintException
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.first
@@ -27,10 +27,13 @@ class ApiCredentialsDaoTest {
 
     @Before
     fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
         dao = database.apiCredentialsDao()
     }
 
@@ -42,99 +45,110 @@ class ApiCredentialsDaoTest {
     private fun nextId() = ApiCredentialsId(UUID.randomUUID().toString())
 
     @Test
-    fun `insert and retrieve API credentials`() = runTest {
-        val entityId = nextId()
-        val entity = ApiCredentialsEntity(
-            id = entityId,
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "my_openai_key",
-            displayName = "GPT-4o"
-        )
-        dao.upsert(entity)
-        val retrieved = dao.getById(entityId)
-        assertNotNull(retrieved)
-        assertEquals("my_openai_key", retrieved?.credentialAlias)
-    }
+    fun `insert and retrieve API credentials`() =
+        runTest {
+            val entityId = nextId()
+            val entity =
+                ApiCredentialsEntity(
+                    id = entityId,
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "my_openai_key",
+                    displayName = "GPT-4o",
+                )
+            dao.upsert(entity)
+            val retrieved = dao.getById(entityId)
+            assertNotNull(retrieved)
+            assertEquals("my_openai_key", retrieved?.credentialAlias)
+        }
 
     @Test
-    fun `observe all credentials ordered by updated_at DESC`() = runTest {
-        val entity1 = ApiCredentialsEntity(
-            id = nextId(),
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4",
-            credentialAlias = "key1",
-            displayName = "GPT-4",
-            updatedAt = 1000
-        )
-        val entity2 = ApiCredentialsEntity(
-            id = nextId(),
-            provider = ApiProvider.ANTHROPIC,
-            modelId = "claude",
-            credentialAlias = "key2",
-            displayName = "Claude",
-            updatedAt = 2000
-        )
-        dao.upsert(entity1)
-        dao.upsert(entity2)
+    fun `observe all credentials ordered by updated_at DESC`() =
+        runTest {
+            val entity1 =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4",
+                    credentialAlias = "key1",
+                    displayName = "GPT-4",
+                    updatedAt = 1000,
+                )
+            val entity2 =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.ANTHROPIC,
+                    modelId = "claude",
+                    credentialAlias = "key2",
+                    displayName = "Claude",
+                    updatedAt = 2000,
+                )
+            dao.upsert(entity1)
+            dao.upsert(entity2)
 
-        val list = dao.observeAll().first()
-        assertEquals(2, list.size)
-        assertEquals("key2", list[0].credentialAlias)
-        assertEquals("key1", list[1].credentialAlias)
-    }
-    
-    @Test
-    fun `duplicate API credential identity can be inserted as separate rows`() = runTest {
-        val entity1 = ApiCredentialsEntity(
-            id = nextId(),
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "key1",
-            displayName = "GPT-4o",
-            baseUrl = "https://api.openai.com/v1",
-            updatedAt = 1_000L
-        )
-        val entity2 = ApiCredentialsEntity(
-            id = nextId(),
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "key2",
-            displayName = "GPT-4o Duplicate",
-            baseUrl = "https://api.openai.com/v1",
-            updatedAt = 2_000L
-        )
-        dao.upsert(entity1)
-        dao.upsert(entity2)
-        
-        val list = dao.getAll()
-        assertEquals(2, list.size)
-        assertEquals(listOf("key2", "key1"), list.map { it.credentialAlias })
-    }
+            val list = dao.observeAll().first()
+            assertEquals(2, list.size)
+            assertEquals("key2", list[0].credentialAlias)
+            assertEquals("key1", list[1].credentialAlias)
+        }
 
     @Test
-    fun `duplicate API key signature is rejected`() = runTest {
-        val signature = "duplicate-signature"
-        val entity1 = ApiCredentialsEntity(
-            id = nextId(),
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "key1",
-            displayName = "GPT-4o",
-            baseUrl = "https://api.openai.com/v1",
-            apiKeySignature = signature,
-        )
-        val entity2 = entity1.copy(
-            id = nextId(),
-            credentialAlias = "key2",
-            displayName = "GPT-4o Duplicate",
-        )
-        dao.insert(entity1)
+    fun `duplicate API credential identity can be inserted as separate rows`() =
+        runTest {
+            val entity1 =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "key1",
+                    displayName = "GPT-4o",
+                    baseUrl = "https://api.openai.com/v1",
+                    updatedAt = 1_000L,
+                )
+            val entity2 =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "key2",
+                    displayName = "GPT-4o Duplicate",
+                    baseUrl = "https://api.openai.com/v1",
+                    updatedAt = 2_000L,
+                )
+            dao.upsert(entity1)
+            dao.upsert(entity2)
 
-        assertFailsWith<SQLiteConstraintException> {
-            runBlocking {
-                dao.insert(entity2)
+            val list = dao.getAll()
+            assertEquals(2, list.size)
+            assertEquals(listOf("key2", "key1"), list.map { it.credentialAlias })
+        }
+
+    @Test
+    fun `duplicate API key signature is rejected`() =
+        runTest {
+            val signature = "duplicate-signature"
+            val entity1 =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "key1",
+                    displayName = "GPT-4o",
+                    baseUrl = "https://api.openai.com/v1",
+                    apiKeySignature = signature,
+                )
+            val entity2 =
+                entity1.copy(
+                    id = nextId(),
+                    credentialAlias = "key2",
+                    displayName = "GPT-4o Duplicate",
+                )
+            dao.insert(entity1)
+
+            assertFailsWith<SQLiteConstraintException> {
+                runBlocking {
+                    dao.insert(entity2)
+                }
             }
         }
-    }
 }

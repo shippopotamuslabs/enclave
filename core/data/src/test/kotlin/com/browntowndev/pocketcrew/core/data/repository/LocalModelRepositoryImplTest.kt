@@ -29,24 +29,29 @@ class LocalModelRepositoryImplTest {
     private lateinit var repository: LocalModelRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
-    private val fakeTransactionProvider = object : TransactionProvider {
-        override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
-    }
+    private val fakeTransactionProvider =
+        object : TransactionProvider {
+            override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
+        }
 
     @Before
     fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
-        repository = LocalModelRepositoryImpl(
-            syncTrigger = syncTrigger,
-            modelsDao = database.localModelsDao(),
-            configsDao = database.localModelConfigurationsDao(),
-            defaultModelsDao = database.defaultModelsDao(),
-            transactionProvider = fakeTransactionProvider
-        )
+        repository =
+            LocalModelRepositoryImpl(
+                syncTrigger = syncTrigger,
+                modelsDao = database.localModelsDao(),
+                configsDao = database.localModelConfigurationsDao(),
+                defaultModelsDao = database.defaultModelsDao(),
+                transactionProvider = fakeTransactionProvider,
+            )
     }
 
     @After
@@ -55,98 +60,106 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
-    fun `upsertLocalAsset stores and retrieves asset with isMultimodal`() = runTest {
-        val metadata = LocalModelMetadata(
-            id = LocalModelId(""),
-            huggingFaceModelName = "vision-model",
-            remoteFileName = "model.gguf",
-            localFileName = "model.gguf",
-            sha256 = "test-sha256",
-            sizeInBytes = 1000,
-            modelFileFormat = ModelFileFormat.GGUF,
-            isMultimodal = true
-        )
-        val config = LocalModelConfiguration(
-            id = LocalModelConfigurationId("config-1"),
-            localModelId = LocalModelId(""),
-            displayName = "Vision Config",
-            maxTokens = 100,
-            contextWindow = 100,
-            temperature = 0.7,
-            topP = 0.9,
-            topK = 40,
-            repetitionPenalty = 1.1,
-            systemPrompt = "sys",
-            defaultAssignments = listOf(ModelType.FAST)
-        )
-        val asset = LocalModelAsset(metadata = metadata, configurations = listOf(config))
+    fun `upsertLocalAsset stores and retrieves asset with isMultimodal`() =
+        runTest {
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId(""),
+                    huggingFaceModelName = "vision-model",
+                    remoteFileName = "model.gguf",
+                    localFileName = "model.gguf",
+                    sha256 = "test-sha256",
+                    sizeInBytes = 1000,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    isMultimodal = true,
+                )
+            val config =
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-1"),
+                    localModelId = LocalModelId(""),
+                    displayName = "Vision Config",
+                    maxTokens = 100,
+                    contextWindow = 100,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "sys",
+                    defaultAssignments = listOf(ModelType.FAST),
+                )
+            val asset = LocalModelAsset(metadata = metadata, configurations = listOf(config))
 
-        val assetId = repository.upsertLocalAsset(asset)
-        val configId = repository.upsertLocalConfiguration(config.copy(localModelId = assetId))
+            val assetId = repository.upsertLocalAsset(asset)
+            val configId = repository.upsertLocalConfiguration(config.copy(localModelId = assetId))
 
-        val retrieved = repository.getAssetById(assetId)
-        assertEquals(true, retrieved?.metadata?.isMultimodal)
-        assertEquals("Vision Config", retrieved?.configurations?.firstOrNull()?.displayName)
-    }
+            val retrieved = repository.getAssetById(assetId)
+            assertEquals(true, retrieved?.metadata?.isMultimodal)
+            assertEquals("Vision Config", retrieved?.configurations?.firstOrNull()?.displayName)
+        }
 
     @Test
-    fun `upsertLocalAsset updates isMultimodal on re-upsert with same SHA`() = runTest {
-        val sharedSha = "shared-sha256"
+    fun `upsertLocalAsset updates isMultimodal on re-upsert with same SHA`() =
+        runTest {
+            val sharedSha = "shared-sha256"
 
-        // 1. Upsert a multimodal asset
-        val metadata1 = LocalModelMetadata(
-            id = LocalModelId(""),
-            huggingFaceModelName = "vision-model",
-            remoteFileName = "model.gguf",
-            localFileName = "model.gguf",
-            sha256 = sharedSha,
-            sizeInBytes = 1000,
-            modelFileFormat = ModelFileFormat.GGUF,
-            isMultimodal = true
-        )
-        val config1 = LocalModelConfiguration(
-            id = LocalModelConfigurationId("config-1"),
-            localModelId = LocalModelId(""),
-            displayName = "Vision Config",
-            maxTokens = 100,
-            contextWindow = 100,
-            temperature = 0.7,
-            topP = 0.9,
-            topK = 40,
-            repetitionPenalty = 1.1,
-            systemPrompt = "sys"
-        )
-        val assetId = repository.upsertLocalAsset(LocalModelAsset(metadata1, listOf(config1)))
-        repository.upsertLocalConfiguration(config1.copy(localModelId = assetId))
+            // 1. Upsert a multimodal asset
+            val metadata1 =
+                LocalModelMetadata(
+                    id = LocalModelId(""),
+                    huggingFaceModelName = "vision-model",
+                    remoteFileName = "model.gguf",
+                    localFileName = "model.gguf",
+                    sha256 = sharedSha,
+                    sizeInBytes = 1000,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    isMultimodal = true,
+                )
+            val config1 =
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-1"),
+                    localModelId = LocalModelId(""),
+                    displayName = "Vision Config",
+                    maxTokens = 100,
+                    contextWindow = 100,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "sys",
+                )
+            val assetId = repository.upsertLocalAsset(LocalModelAsset(metadata1, listOf(config1)))
+            repository.upsertLocalConfiguration(config1.copy(localModelId = assetId))
 
-        assertEquals(true, repository.getAssetById(assetId)?.metadata?.isMultimodal)
+            assertEquals(true, repository.getAssetById(assetId)?.metadata?.isMultimodal)
 
-        // 2. Re-upsert with same SHA but isMultimodal = false — latest value wins
-        val metadata2 = LocalModelMetadata(
-            id = LocalModelId(""),
-            huggingFaceModelName = "non-vision-model",
-            remoteFileName = "model.gguf",
-            localFileName = "model.gguf",
-            sha256 = sharedSha,
-            sizeInBytes = 1000,
-            modelFileFormat = ModelFileFormat.GGUF,
-            isMultimodal = false
-        )
-        val config2 = LocalModelConfiguration(
-            id = LocalModelConfigurationId("config-2"),
-            localModelId = LocalModelId(""),
-            displayName = "Non-Vision Config",
-            maxTokens = 100,
-            contextWindow = 100,
-            temperature = 0.7,
-            topP = 0.9,
-            topK = 40,
-            repetitionPenalty = 1.1,
-            systemPrompt = "sys"
-        )
-        repository.upsertLocalAsset(LocalModelAsset(metadata2, listOf(config2)))
+            // 2. Re-upsert with same SHA but isMultimodal = false — latest value wins
+            val metadata2 =
+                LocalModelMetadata(
+                    id = LocalModelId(""),
+                    huggingFaceModelName = "non-vision-model",
+                    remoteFileName = "model.gguf",
+                    localFileName = "model.gguf",
+                    sha256 = sharedSha,
+                    sizeInBytes = 1000,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    isMultimodal = false,
+                )
+            val config2 =
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-2"),
+                    localModelId = LocalModelId(""),
+                    displayName = "Non-Vision Config",
+                    maxTokens = 100,
+                    contextWindow = 100,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "sys",
+                )
+            repository.upsertLocalAsset(LocalModelAsset(metadata2, listOf(config2)))
 
-        // 3. Latest upsert wins — isMultimodal is now false
-        assertEquals(false, repository.getAssetById(assetId)?.metadata?.isMultimodal)
-    }
+            // 3. Latest upsert wins — isMultimodal is now false
+            assertEquals(false, repository.getAssetById(assetId)?.metadata?.isMultimodal)
+        }
 }

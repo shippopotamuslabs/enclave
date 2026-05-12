@@ -13,6 +13,10 @@ class DefaultModelEntityTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `both FKs non-null throws IllegalArgumentException`() {
-        DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = LocalModelConfigurationId("5"), apiConfigId = ApiModelConfigurationId("3"))
+        DefaultModelEntity(
+            modelType = ModelType.MAIN,
+            localConfigId = LocalModelConfigurationId("5"),
+            apiConfigId = ApiModelConfigurationId("3"),
+        )
     }
 }

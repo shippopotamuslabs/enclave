@@ -15,13 +15,20 @@ interface StudioAlbumDao {
     suspend fun insertAlbum(album: StudioAlbumEntity)
 
     @Query("UPDATE studio_albums SET name = :name, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun updateAlbumName(id: String, name: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun updateAlbumName(
+        id: String,
+        name: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("SELECT * FROM studio_albums WHERE id = :id AND deleted = 0")
     suspend fun getAlbumById(id: String): StudioAlbumEntity?
 
     @Query("UPDATE studio_albums SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM studio_albums WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)

@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DynamicModelUrlProviderTest {
-
     private lateinit var urlProvider: DynamicModelUrlProvider
 
     @BeforeEach
@@ -31,11 +30,12 @@ class DynamicModelUrlProviderTest {
     @Test
     fun getModelDownloadUrl_returnsHFUrl_whenSourceIsHF() {
         // Given
-        val spec = createFileSpec(
-            source = "HUGGING_FACE",
-            huggingFaceModelName = "user/repo",
-            fileName = "model.gguf"
-        )
+        val spec =
+            createFileSpec(
+                source = "HUGGING_FACE",
+                huggingFaceModelName = "user/repo",
+                fileName = "model.gguf",
+            )
 
         // When
         val url = urlProvider.getModelDownloadUrl(spec)
@@ -46,10 +46,11 @@ class DynamicModelUrlProviderTest {
 
     @Test
     fun getModelDownloadUrl_rejectsTraversalInRemoteFileName() {
-        val spec = createFileSpec(
-            source = "CLOUDFLARE_R2",
-            fileName = "../secrets.db"
-        )
+        val spec =
+            createFileSpec(
+                source = "CLOUDFLARE_R2",
+                fileName = "../secrets.db",
+            )
 
         assertThrows(SecurityException::class.java) {
             urlProvider.getModelDownloadUrl(spec)
@@ -58,11 +59,12 @@ class DynamicModelUrlProviderTest {
 
     @Test
     fun getModelDownloadUrl_rejectsInvalidHuggingFaceRepoId() {
-        val spec = createFileSpec(
-            source = "HUGGING_FACE",
-            huggingFaceModelName = "user/repo/extra",
-            fileName = "model.gguf"
-        )
+        val spec =
+            createFileSpec(
+                source = "HUGGING_FACE",
+                huggingFaceModelName = "user/repo/extra",
+                fileName = "model.gguf",
+            )
 
         assertThrows(IllegalArgumentException::class.java) {
             urlProvider.getModelDownloadUrl(spec)
@@ -72,16 +74,15 @@ class DynamicModelUrlProviderTest {
     private fun createFileSpec(
         source: String,
         fileName: String = "model.gguf",
-        huggingFaceModelName: String = ""
-    ): DownloadFileSpec {
-        return DownloadFileSpec(
+        huggingFaceModelName: String = "",
+    ): DownloadFileSpec =
+        DownloadFileSpec(
             remoteFileName = fileName,
             localFileName = fileName,
             sha256 = "abc123",
             sizeInBytes = 1000L,
             huggingFaceModelName = huggingFaceModelName,
             source = source,
-            modelFileFormat = "GGUF"
+            modelFileFormat = "GGUF",
         )
-    }
 }

@@ -20,7 +20,6 @@ import org.junit.jupiter.params.provider.CsvSource
 import java.util.UUID
 
 class DownloadWorkRepositoryTest {
-
     private lateinit var mockWorkManager: WorkManager
     private lateinit var repository: DownloadWorkRepository
 
@@ -38,94 +37,99 @@ class DownloadWorkRepositoryTest {
         every { Log.w(any<String>(), any<String>()) } returns 0
     }
 
-    private fun createMockWorkInfo(state: WorkInfo.State): WorkInfo {
-        return mockk {
+    private fun createMockWorkInfo(state: WorkInfo.State): WorkInfo =
+        mockk {
             every { id } returns workId
             every { this@mockk.state } returns state
             every { tags } returns emptySet()
             every { outputData } returns androidx.work.Data.EMPTY
             every { progress } returns androidx.work.Data.EMPTY
         }
-    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_emitsWorkInfo_whenWorkRunning() = runTest {
-        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
+    fun observeDownloadProgress_emitsWorkInfo_whenWorkRunning() =
+        runTest {
+            val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
 
-        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
-            flowOf(listOf(workInfoRunning))
+            every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
+                flowOf(listOf(workInfoRunning))
 
-        val result = repository.observeDownloadProgress().first()
+            val result = repository.observeDownloadProgress().first()
 
-        assertEquals(WorkInfo.State.RUNNING, result?.state)
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
-    fun observeDownloadProgress_emitsTerminalState_whenWorkSucceeds() = runTest {
-        val workInfoSucceeded = createMockWorkInfo(WorkInfo.State.SUCCEEDED)
-
-        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
-            flowOf(listOf(workInfoSucceeded))
-
-        val result = repository.observeDownloadProgress().first()
-
-        assertEquals(WorkInfo.State.SUCCEEDED, result?.state)
-    }
+            assertEquals(WorkInfo.State.RUNNING, result?.state)
+        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_emitsTerminalState_whenWorkFails() = runTest {
-        val workInfoFailed = createMockWorkInfo(WorkInfo.State.FAILED)
+    fun observeDownloadProgress_emitsTerminalState_whenWorkSucceeds() =
+        runTest {
+            val workInfoSucceeded = createMockWorkInfo(WorkInfo.State.SUCCEEDED)
 
-        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
-            flowOf(listOf(workInfoFailed))
+            every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
+                flowOf(listOf(workInfoSucceeded))
 
-        val result = repository.observeDownloadProgress().first()
+            val result = repository.observeDownloadProgress().first()
 
-        assertEquals(WorkInfo.State.FAILED, result?.state)
-    }
+            assertEquals(WorkInfo.State.SUCCEEDED, result?.state)
+        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_returnsNull_whenWorkListEmpty() = runTest {
-        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
-            flowOf(emptyList())
+    fun observeDownloadProgress_emitsTerminalState_whenWorkFails() =
+        runTest {
+            val workInfoFailed = createMockWorkInfo(WorkInfo.State.FAILED)
 
-        val result = repository.observeDownloadProgress().first()
+            every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
+                flowOf(listOf(workInfoFailed))
 
-        assertEquals(null, result)
-    }
+            val result = repository.observeDownloadProgress().first()
+
+            assertEquals(WorkInfo.State.FAILED, result?.state)
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun observeDownloadProgress_returnsNull_whenWorkListEmpty() =
+        runTest {
+            every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns
+                flowOf(emptyList())
+
+            val result = repository.observeDownloadProgress().first()
+
+            assertEquals(null, result)
+        }
 
     @Test
-    fun getWorkId_returnsWorkId_whenWorkRunning() = runTest {
-        // Arrange
-        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoRunning)
+    fun getWorkId_returnsWorkId_whenWorkRunning() =
+        runTest {
+            // Arrange
+            val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
+            every {
+                mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+            } returns listOf(workInfoRunning)
 
-        // Act
-        val result = repository.getWorkId()
+            // Act
+            val result = repository.getWorkId()
 
-        // Assert
-        assertEquals(workId, result)
-    }
+            // Assert
+            assertEquals(workId, result)
+        }
 
     @Test
-    fun getWorkId_returnsNull_whenNoWorkRunning() = runTest {
-        // Arrange
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns emptyList()
+    fun getWorkId_returnsNull_whenNoWorkRunning() =
+        runTest {
+            // Arrange
+            every {
+                mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+            } returns emptyList()
 
-        // Act
-        val result = repository.getWorkId()
+            // Act
+            val result = repository.getWorkId()
 
-        // Assert
-        assertEquals(null, result)
-    }
+            // Assert
+            assertEquals(null, result)
+        }
 
     @Test
     fun cancelDownload_callsWorkManager() {
@@ -143,9 +147,12 @@ class DownloadWorkRepositoryTest {
         "BLOCKED, true",
         "SUCCEEDED, false",
         "FAILED, false",
-        "CANCELLED, false"
+        "CANCELLED, false",
     )
-    fun isWorkRunning_returnsExpectedResult_basedOnState(state: WorkInfo.State, expected: Boolean) = runTest {
+    fun isWorkRunning_returnsExpectedResult_basedOnState(
+        state: WorkInfo.State,
+        expected: Boolean,
+    ) = runTest {
         // Arrange
         val workInfo = createMockWorkInfo(state)
         every {
@@ -160,30 +167,32 @@ class DownloadWorkRepositoryTest {
     }
 
     @Test
-    fun isWorkRunning_returnsFalse_whenNoWorkInfo() = runTest {
-        // Arrange
-        every {
-            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
-        } returns flowOf(emptyList())
+    fun isWorkRunning_returnsFalse_whenNoWorkInfo() =
+        runTest {
+            // Arrange
+            every {
+                mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+            } returns flowOf(emptyList())
 
-        // Act
-        val result = repository.isWorkRunning()
+            // Act
+            val result = repository.isWorkRunning()
 
-        // Assert
-        assertEquals(false, result)
-    }
+            // Assert
+            assertEquals(false, result)
+        }
 
     @Test
-    fun isWorkRunning_returnsFalse_whenExceptionThrown() = runTest {
-        // Arrange
-        every {
-            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
-        } throws RuntimeException("WorkManager error")
+    fun isWorkRunning_returnsFalse_whenExceptionThrown() =
+        runTest {
+            // Arrange
+            every {
+                mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+            } throws RuntimeException("WorkManager error")
 
-        // Act
-        val result = repository.isWorkRunning()
+            // Act
+            val result = repository.isWorkRunning()
 
-        // Assert
-        assertEquals(false, result)
-    }
+            // Assert
+            assertEquals(false, result)
+        }
 }

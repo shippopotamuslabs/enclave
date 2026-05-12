@@ -14,10 +14,9 @@ import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
 import java.util.Locale
 
-
 class DownloadNotificationManager(
     private val context: Context,
-    private val notificationManager: NotificationManager
+    private val notificationManager: NotificationManager,
 ) {
     companion object {
         const val NOTIFICATION_ID = 1001
@@ -25,29 +24,31 @@ class DownloadNotificationManager(
     }
 
     fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Model Downloads",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Shows progress when downloading AI models"
-            setShowBadge(false)
-        }
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                "Model Downloads",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Shows progress when downloading AI models"
+                setShowBadge(false)
+            }
         notificationManager.createNotificationChannel(channel)
     }
 
     fun createForegroundInfo(cancelPendingIntent: PendingIntent): ForegroundInfo {
-        val notification = createNotification(
-            progress = 0,
-            currentFile = "Preparing...",
-            subText = "Calculating...",
-            cancelPendingIntent = cancelPendingIntent
-        )
+        val notification =
+            createNotification(
+                progress = 0,
+                currentFile = "Preparing...",
+                subText = "Calculating...",
+                cancelPendingIntent = cancelPendingIntent,
+            )
 
         return ForegroundInfo(
             NOTIFICATION_ID,
             notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
         )
     }
 
@@ -60,21 +61,22 @@ class DownloadNotificationManager(
         progress: Float,
         currentFile: String,
         subText: String,
-        cancelPendingIntent: PendingIntent
+        cancelPendingIntent: PendingIntent,
     ): ForegroundInfo {
         val progressInt = (progress * 100).toInt()
 
-        val notification = createNotification(
-            progress = progressInt,
-            currentFile = currentFile,
-            subText = subText,
-            cancelPendingIntent = cancelPendingIntent
-        )
+        val notification =
+            createNotification(
+                progress = progressInt,
+                currentFile = currentFile,
+                subText = subText,
+                cancelPendingIntent = cancelPendingIntent,
+            )
 
         return ForegroundInfo(
             NOTIFICATION_ID,
             notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
         )
     }
 
@@ -87,33 +89,37 @@ class DownloadNotificationManager(
         snapshot: ProgressSnapshot,
         formatBytes: (Long) -> String,
         formatEta: (Long) -> String,
-        cancelPendingIntent: PendingIntent
+        cancelPendingIntent: PendingIntent,
     ): ForegroundInfo {
-        val speedString = if (snapshot.currentSpeedMBps > 0) {
-            String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
-        } else ""
+        val speedString =
+            if (snapshot.currentSpeedMBps > 0) {
+                String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
+            } else {
+                ""
+            }
 
         val etaString = formatEta(snapshot.etaSeconds)
 
-        val subText = buildString {
-            append(formatBytes(snapshot.totalBytesDownloaded))
-            append(" / ")
-            append(formatBytes(snapshot.totalSize))
-            if (speedString.isNotEmpty()) {
-                append(" • ")
-                append(speedString)
+        val subText =
+            buildString {
+                append(formatBytes(snapshot.totalBytesDownloaded))
+                append(" / ")
+                append(formatBytes(snapshot.totalSize))
+                if (speedString.isNotEmpty()) {
+                    append(" • ")
+                    append(speedString)
+                }
+                if (snapshot.etaSeconds >= 0) {
+                    append(" • ETA: ")
+                    append(etaString)
+                }
             }
-            if (snapshot.etaSeconds >= 0) {
-                append(" • ETA: ")
-                append(etaString)
-            }
-        }
 
         return createForegroundInfoForProgress(
             progress = snapshot.overallProgress,
             currentFile = snapshot.currentFile,
             subText = subText,
-            cancelPendingIntent = cancelPendingIntent
+            cancelPendingIntent = cancelPendingIntent,
         )
     }
 
@@ -123,11 +129,11 @@ class DownloadNotificationManager(
         progress: Float,
         currentFile: String,
         subText: String,
-        cancelPendingIntent: PendingIntent?
+        cancelPendingIntent: PendingIntent?,
     ) {
         if (ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.POST_NOTIFICATIONS
+                Manifest.permission.POST_NOTIFICATIONS,
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             return
@@ -135,12 +141,13 @@ class DownloadNotificationManager(
 
         val progressInt = (progress * 100).toInt()
 
-        val notification = createNotification(
-            progress = progressInt,
-            currentFile = currentFile,
-            subText = subText,
-            cancelPendingIntent = cancelPendingIntent
-        )
+        val notification =
+            createNotification(
+                progress = progressInt,
+                currentFile = currentFile,
+                subText = subText,
+                cancelPendingIntent = cancelPendingIntent,
+            )
 
         notificationManager.notify(notificationId, notification)
     }
@@ -149,30 +156,32 @@ class DownloadNotificationManager(
         progress: Int,
         currentFile: String,
         subText: String,
-        cancelPendingIntent: PendingIntent?
-    ): Notification {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            Notification.Builder(context, CHANNEL_ID)
+        cancelPendingIntent: PendingIntent?,
+    ): Notification =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            Notification
+                .Builder(context, CHANNEL_ID)
                 .setContentTitle("Downloading Crew")
                 .setContentText(currentFile)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setOngoing(true)
                 .setSubText(subText)
                 .setStyle(
-                    Notification.ProgressStyle()
+                    Notification
+                        .ProgressStyle()
                         .setProgress(progress.toFloat().toInt())
-                        .setStyledByProgress(true)
-                )
-                .addAction(
-                    Notification.Action.Builder(
-                        Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
-                        "Cancel",
-                        cancelPendingIntent
-                    ).build()
-                )
-                .build()
+                        .setStyledByProgress(true),
+                ).addAction(
+                    Notification.Action
+                        .Builder(
+                            Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
+                            "Cancel",
+                            cancelPendingIntent,
+                        ).build(),
+                ).build()
         } else {
-            NotificationCompat.Builder(context, CHANNEL_ID)
+            NotificationCompat
+                .Builder(context, CHANNEL_ID)
                 .setContentTitle("Downloading Crew")
                 .setContentText(currentFile)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -182,9 +191,7 @@ class DownloadNotificationManager(
                 .addAction(
                     android.R.drawable.ic_menu_close_clear_cancel,
                     "Cancel",
-                    cancelPendingIntent
-                )
-                .build()
+                    cancelPendingIntent,
+                ).build()
         }
-    }
 }

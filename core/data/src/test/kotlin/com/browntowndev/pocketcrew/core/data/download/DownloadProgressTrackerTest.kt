@@ -12,9 +12,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-
 class DownloadProgressTrackerTest {
-
     private lateinit var mockSpeedTracker: DownloadSpeedTrackerPort
     private lateinit var tracker: DownloadProgressTracker
 
@@ -28,10 +26,11 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun initialize_setsInitialFileStates() {
-        val specs = listOf(
-            createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main"),
-            createFileSpec("vocab.bin", 500L, sha256 = "sha256_vocab")
-        )
+        val specs =
+            listOf(
+                createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main"),
+                createFileSpec("vocab.bin", 500L, sha256 = "sha256_vocab"),
+            )
 
         tracker.initialize(specs)
 
@@ -41,10 +40,11 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun initialize_mapsFilesBySha256() {
-        val specs = listOf(
-            createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main"),
-            createFileSpec("vocab.bin", 500L, sha256 = "sha256_vocab")
-        )
+        val specs =
+            listOf(
+                createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main"),
+                createFileSpec("vocab.bin", 500L, sha256 = "sha256_vocab"),
+            )
 
         tracker.initialize(specs)
 
@@ -56,10 +56,11 @@ class DownloadProgressTrackerTest {
     @Test
     fun initialize_deduplicatesBySha256() {
         // Duplicate SHA256 entries should be deduplicated
-        val specs = listOf(
-            createFileSpec("shared.gguf", 1000L, sha256 = "shared_sha256"),
-            createFileSpec("shared.gguf", 1000L, sha256 = "shared_sha256")
-        )
+        val specs =
+            listOf(
+                createFileSpec("shared.gguf", 1000L, sha256 = "shared_sha256"),
+                createFileSpec("shared.gguf", 1000L, sha256 = "shared_sha256"),
+            )
 
         tracker.initialize(specs)
 
@@ -92,20 +93,23 @@ class DownloadProgressTrackerTest {
     fun updateFileState_throwsForUnknownFile() {
         tracker.initialize(listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")))
 
-        val exception = Assertions.assertThrows(IllegalStateException::class.java) {
-            tracker.updateFileState("unknown_sha256") { state ->
-                state.copy(status = FileStatus.DOWNLOADING)
+        val exception =
+            Assertions.assertThrows(IllegalStateException::class.java) {
+                tracker.updateFileState("unknown_sha256") { state ->
+                    state.copy(status = FileStatus.DOWNLOADING)
+                }
             }
-        }
         assertTrue(requireNotNull(exception.message).contains("Cannot update file state"))
     }
 
     @Test
     fun computeOverallProgress_aggregatesMultipleFiles() {
-        tracker.initialize(listOf(
-            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2")
-        ))
+        tracker.initialize(
+            listOf(
+                createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+                createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+            ),
+        )
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE, bytesDownloaded = 1000L) }
         tracker.updateFileState("sha256_file2") { it.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L) }
@@ -131,10 +135,12 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun computeOverallProgress_sumsSpeedsOfConcurrentDownloads() {
-        tracker.initialize(listOf(
-            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2")
-        ))
+        tracker.initialize(
+            listOf(
+                createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+                createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+            ),
+        )
 
         // Mock different speeds for each file
         every { mockSpeedTracker.calculateSpeedAndEta("file1.litertlm", any(), any()) } returns Pair(4.0, 100L)
@@ -161,11 +167,13 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun getCompletedCount_returnsCorrectCount() {
-        tracker.initialize(listOf(
-            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
-            createFileSpec("file3.litertlm", 1000L, sha256 = "sha256_file3")
-        ))
+        tracker.initialize(
+            listOf(
+                createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+                createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+                createFileSpec("file3.litertlm", 1000L, sha256 = "sha256_file3"),
+            ),
+        )
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
         tracker.updateFileState("sha256_file2") { it.copy(status = FileStatus.COMPLETE) }
@@ -184,10 +192,12 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun isAllComplete_returnsFalse_whenNotAllComplete() {
-        tracker.initialize(listOf(
-            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2")
-        ))
+        tracker.initialize(
+            listOf(
+                createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+                createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+            ),
+        )
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
 
@@ -196,10 +206,12 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun getCurrentDownloadingFile_returnsDownloadingFile() {
-        tracker.initialize(listOf(
-            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2")
-        ))
+        tracker.initialize(
+            listOf(
+                createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+                createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+            ),
+        )
 
         tracker.updateFileState("sha256_file2") { it.copy(status = FileStatus.DOWNLOADING) }
 
@@ -236,16 +248,15 @@ class DownloadProgressTrackerTest {
     private fun createFileSpec(
         filename: String,
         sizeBytes: Long,
-        sha256: String = "abc123"
-    ): DownloadFileSpec {
-        return DownloadFileSpec(
+        sha256: String = "abc123",
+    ): DownloadFileSpec =
+        DownloadFileSpec(
             remoteFileName = filename,
             localFileName = filename,
             sha256 = sha256,
             sizeInBytes = sizeBytes,
             huggingFaceModelName = "model/name",
             source = "HUGGING_FACE",
-            modelFileFormat = "LITERTLM"
+            modelFileFormat = "LITERTLM",
         )
-    }
 }

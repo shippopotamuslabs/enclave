@@ -14,72 +14,74 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class TtsProviderRepositoryImpl @Inject constructor(
-    private val syncTrigger: CloudSyncTrigger,
-    private val ttsProviderDao: TtsProviderDao,
-    private val apiKeyManager: ApiKeyManager,
-) : TtsProviderRepositoryPort {
+class TtsProviderRepositoryImpl
+    @Inject
+    constructor(
+        private val syncTrigger: CloudSyncTrigger,
+        private val ttsProviderDao: TtsProviderDao,
+        private val apiKeyManager: ApiKeyManager,
+    ) : TtsProviderRepositoryPort {
+        private fun triggerSync() = syncTrigger.trigger()
 
-    private fun triggerSync() = syncTrigger.trigger()
+        override fun getTtsProviders(): Flow<List<TtsProviderAsset>> =
+            ttsProviderDao.getTtsProviders().map { entities ->
+                entities.map { it.toDomain() }
+            }
 
-    override fun getTtsProviders(): Flow<List<TtsProviderAsset>> =
-        ttsProviderDao.getTtsProviders().map { entities ->
-            entities.map { it.toDomain() }
-        }
+        override suspend fun getTtsProvidersSync(): List<TtsProviderAsset> = ttsProviderDao.getTtsProvidersSync().map { it.toDomain() }
 
-    override suspend fun getTtsProvidersSync(): List<TtsProviderAsset> =
-        ttsProviderDao.getTtsProvidersSync().map { it.toDomain() }
+        override suspend fun getTtsProvider(id: TtsProviderId): TtsProviderAsset? = ttsProviderDao.getTtsProvider(id.value)?.toDomain()
 
-    override suspend fun getTtsProvider(id: TtsProviderId): TtsProviderAsset? =
-        ttsProviderDao.getTtsProvider(id.value)?.toDomain()
+        override suspend fun saveTtsProvider(
+            asset: TtsProviderAsset,
+            apiKey: String?,
+        ): TtsProviderId {
+            val id =
+                if (asset.id.value.isEmpty()) {
+                    TtsProviderId(UUID.randomUUID().toString())
+                } else {
+                    asset.id
+                }
 
-    override suspend fun saveTtsProvider(
-        asset: TtsProviderAsset,
-        apiKey: String?,
-    ): TtsProviderId {
-        val id = if (asset.id.value.isEmpty()) {
-            TtsProviderId(UUID.randomUUID().toString())
-        } else {
-            asset.id
-        }
+            val entity =
+                TtsProviderEntity(
+                    id = id.value,
+                    displayName = asset.displayName,
+                    provider = asset.provider,
+                    voiceName = asset.voiceName,
+                    modelName = asset.modelName,
+                    baseUrl = asset.baseUrl,
+                    credentialAlias = asset.credentialAlias,
+                    pendingSync = 1,
+                )
 
-        val entity = TtsProviderEntity(
-            id = id.value,
-            displayName = asset.displayName,
-            provider = asset.provider,
-            voiceName = asset.voiceName,
-            modelName = asset.modelName,
-            baseUrl = asset.baseUrl,
-            credentialAlias = asset.credentialAlias,
-            pendingSync = 1,
-        )
+            ttsProviderDao.upsertTtsProvider(entity)
 
-        ttsProviderDao.upsertTtsProvider(entity)
+            if (!apiKey.isNullOrBlank()) {
+                apiKeyManager.save(asset.credentialAlias, apiKey)
+            }
 
-        if (!apiKey.isNullOrBlank()) {
-            apiKeyManager.save(asset.credentialAlias, apiKey)
-        }
-
-        triggerSync()
-        return id
-    }
-
-    override suspend fun deleteTtsProvider(id: TtsProviderId) {
-        val asset = ttsProviderDao.getTtsProvider(id.value)
-        if (asset != null) {
-            ttsProviderDao.softDeleteById(id.value)
-            apiKeyManager.delete(asset.credentialAlias)
             triggerSync()
+            return id
         }
-    }
 
-    private fun TtsProviderEntity.toDomain() = TtsProviderAsset(
-        id = TtsProviderId(id),
-        displayName = displayName,
-        provider = provider,
-        voiceName = voiceName,
-        modelName = modelName,
-        baseUrl = baseUrl,
-        credentialAlias = credentialAlias,
-    )
-}
+        override suspend fun deleteTtsProvider(id: TtsProviderId) {
+            val asset = ttsProviderDao.getTtsProvider(id.value)
+            if (asset != null) {
+                ttsProviderDao.softDeleteById(id.value)
+                apiKeyManager.delete(asset.credentialAlias)
+                triggerSync()
+            }
+        }
+
+        private fun TtsProviderEntity.toDomain() =
+            TtsProviderAsset(
+                id = TtsProviderId(id),
+                displayName = displayName,
+                provider = provider,
+                voiceName = voiceName,
+                modelName = modelName,
+                baseUrl = baseUrl,
+                credentialAlias = credentialAlias,
+            )
+    }

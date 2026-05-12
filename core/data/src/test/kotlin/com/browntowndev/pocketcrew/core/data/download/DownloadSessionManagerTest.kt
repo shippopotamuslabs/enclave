@@ -4,17 +4,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import io.mockk.every
 import io.mockk.mockk
-import org.junit.jupiter.api.Assertions.assertEquals
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
-import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DownloadSessionManagerTest {
-
     private lateinit var mockContext: Context
     private lateinit var mockSharedPreferences: SharedPreferences
     private lateinit var mockEditor: SharedPreferences.Editor
@@ -81,7 +79,6 @@ class DownloadSessionManagerTest {
     @Test
     fun clearSession_clearsCachedSessionAndRemovesFromPrefs() {
         val sessionId = sessionManager.createNewSession()
-
 
         sessionManager.clearSession()
 

@@ -31,52 +31,56 @@ class SyncWorkerTest {
     }
 
     @Test
-    fun `doWork delegates to syncPendingChanges`() = runTest {
-        coEvery { cloudSyncPort.syncPendingChanges() } returns Result.success(Unit)
+    fun `doWork delegates to syncPendingChanges`() =
+        runTest {
+            coEvery { cloudSyncPort.syncPendingChanges() } returns Result.success(Unit)
 
-        val worker = TestListenableWorkerBuilder<SyncWorker>(context)
-            .setWorkerFactory(SyncWorkerFactory())
-            .build()
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
 
-        val result = worker.doWork()
+            val result = worker.doWork()
 
-        assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 1) { cloudSyncPort.syncPendingChanges() }
-    }
-
-    @Test
-    fun `doWork returns retry when syncPendingChanges returns failure`() = runTest {
-        coEvery { cloudSyncPort.syncPendingChanges() } returns Result.failure(RuntimeException("Vault locked"))
-
-        val worker = TestListenableWorkerBuilder<SyncWorker>(context)
-            .setWorkerFactory(SyncWorkerFactory())
-            .build()
-
-        val result = worker.doWork()
-
-        assertEquals(ListenableWorker.Result.retry(), result)
-    }
+            assertEquals(ListenableWorker.Result.success(), result)
+            coVerify(exactly = 1) { cloudSyncPort.syncPendingChanges() }
+        }
 
     @Test
-    fun `doWork returns retry when syncPendingChanges throws`() = runTest {
-        coEvery { cloudSyncPort.syncPendingChanges() } throws RuntimeException("Unexpected")
+    fun `doWork returns retry when syncPendingChanges returns failure`() =
+        runTest {
+            coEvery { cloudSyncPort.syncPendingChanges() } returns Result.failure(RuntimeException("Vault locked"))
 
-        val worker = TestListenableWorkerBuilder<SyncWorker>(context)
-            .setWorkerFactory(SyncWorkerFactory())
-            .build()
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
 
-        val result = worker.doWork()
+            val result = worker.doWork()
 
-        assertEquals(ListenableWorker.Result.retry(), result)
-    }
+            assertEquals(ListenableWorker.Result.retry(), result)
+        }
+
+    @Test
+    fun `doWork returns retry when syncPendingChanges throws`() =
+        runTest {
+            coEvery { cloudSyncPort.syncPendingChanges() } throws RuntimeException("Unexpected")
+
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.retry(), result)
+        }
 
     private inner class SyncWorkerFactory : androidx.work.WorkerFactory() {
         override fun createWorker(
             appContext: Context,
             workerClassName: String,
-            workerParameters: WorkerParameters
-        ): ListenableWorker? {
-            return SyncWorker(appContext, workerParameters, cloudSyncPort, loggingPort)
-        }
+            workerParameters: WorkerParameters,
+        ): ListenableWorker? = SyncWorker(appContext, workerParameters, cloudSyncPort, loggingPort)
     }
 }

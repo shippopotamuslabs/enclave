@@ -1,12 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import java.io.File
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.File
 
 internal object DownloadSecurity {
-
     private const val R2_HOST = "config.pocketcrew.app"
     private const val HUGGING_FACE_HOST = "huggingface.co"
     private const val HF_SHORT_HOST = "hf.co"
@@ -15,11 +14,14 @@ internal object DownloadSecurity {
     data class DownloadPaths(
         val targetFile: File,
         val tempFile: File,
-        val metaFile: File
+        val metaFile: File,
     )
 
     @Suppress("ThrowsCount")
-    fun requireSafeFileName(fileName: String, fieldName: String = "filename"): String {
+    fun requireSafeFileName(
+        fileName: String,
+        fieldName: String = "filename",
+    ): String {
         if (fileName.isBlank()) {
             throw SecurityException("$fieldName must not be blank")
         }
@@ -55,32 +57,42 @@ internal object DownloadSecurity {
         return parsedUrl
     }
 
-    fun requireTrustedRedirect(originalUrl: HttpUrl, finalUrl: HttpUrl) {
+    fun requireTrustedRedirect(
+        originalUrl: HttpUrl,
+        finalUrl: HttpUrl,
+    ) {
         if (finalUrl.scheme != "https") {
             throw SecurityException("Redirected download must remain HTTPS: $finalUrl")
         }
 
-        val redirectAllowed = when {
-            originalUrl.host == R2_HOST -> finalUrl.host == R2_HOST
-            isHuggingFaceHost(originalUrl.host) -> isHuggingFaceHost(finalUrl.host)
-            else -> sameOrigin(originalUrl, finalUrl)
-        }
+        val redirectAllowed =
+            when {
+                originalUrl.host == R2_HOST -> finalUrl.host == R2_HOST
+                isHuggingFaceHost(originalUrl.host) -> isHuggingFaceHost(finalUrl.host)
+                else -> sameOrigin(originalUrl, finalUrl)
+            }
 
         if (!redirectAllowed) {
             throw SecurityException(
-                "Redirected download host is not allowed. Requested=${originalUrl.host}, actual=${finalUrl.host}"
+                "Redirected download host is not allowed. Requested=${originalUrl.host}, actual=${finalUrl.host}",
             )
         }
     }
 
-    fun resolveDownloadPaths(targetDir: File, fileName: String): DownloadPaths {
+    fun resolveDownloadPaths(
+        targetDir: File,
+        fileName: String,
+    ): DownloadPaths {
         require(targetDir.exists()) { "Target directory does not exist: ${targetDir.path}" }
         require(targetDir.isDirectory) { "Target directory is not a directory: ${targetDir.path}" }
 
         val safeFileName = requireSafeFileName(fileName)
         val canonicalTargetDir = targetDir.canonicalFile
 
-        fun isSafeChildOf(child: File, parent: File): Boolean {
+        fun isSafeChildOf(
+            child: File,
+            parent: File,
+        ): Boolean {
             val childCanonical = child.canonicalPath
             val parentCanonical = parent.canonicalPath + File.separator
             return childCanonical.startsWith(parentCanonical)
@@ -96,7 +108,7 @@ internal object DownloadSecurity {
         return DownloadPaths(
             targetFile = resolveChild(safeFileName),
             tempFile = resolveChild("$safeFileName${ModelConfig.TEMP_EXTENSION}"),
-            metaFile = resolveChild("$safeFileName${ModelConfig.TEMP_META_EXTENSION}")
+            metaFile = resolveChild("$safeFileName${ModelConfig.TEMP_META_EXTENSION}"),
         )
     }
 
@@ -108,9 +120,11 @@ internal object DownloadSecurity {
             normalizedHost.endsWith(".$HF_SHORT_HOST")
     }
 
-    private fun sameOrigin(originalUrl: HttpUrl, finalUrl: HttpUrl): Boolean {
-        return originalUrl.scheme == finalUrl.scheme &&
+    private fun sameOrigin(
+        originalUrl: HttpUrl,
+        finalUrl: HttpUrl,
+    ): Boolean =
+        originalUrl.scheme == finalUrl.scheme &&
             originalUrl.host == finalUrl.host &&
             originalUrl.port == finalUrl.port
-    }
 }

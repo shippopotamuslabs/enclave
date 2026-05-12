@@ -1,13 +1,14 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -16,11 +17,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import java.util.UUID
 
 class MessageRepositoryImplSaveMessageTest {
-
     private lateinit var messageDao: MessageDao
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
     private lateinit var chatSummaryDao: ChatSummaryDao
@@ -43,87 +42,96 @@ class MessageRepositoryImplSaveMessageTest {
             block()
         }
 
-        repository = MessageRepositoryImpl(
-            syncTrigger,
-            messageDao,
-            messageVisionAnalysisDao,
-            chatSummaryDao,
-            embeddingDao,
-            transactionProvider
-        )
+        repository =
+            MessageRepositoryImpl(
+                syncTrigger,
+                messageDao,
+                messageVisionAnalysisDao,
+                chatSummaryDao,
+                embeddingDao,
+                transactionProvider,
+            )
     }
 
     @Test
-    fun `saveMessage with null chatId throws IllegalArgumentException`() = runTest {
-        // Given - a message without a chatId (null)
-        val message = Message(
-            id = MessageId(UUID.randomUUID().toString()),
-            chatId = null,
-            content = Content(text = "Test message"),
-            role = Role.USER
-        )
+    fun `saveMessage with null chatId throws IllegalArgumentException`() =
+        runTest {
+            // Given - a message without a chatId (null)
+            val message =
+                Message(
+                    id = MessageId(UUID.randomUUID().toString()),
+                    chatId = null,
+                    content = Content(text = "Test message"),
+                    role = Role.USER,
+                )
 
-        // When & Then - expect IllegalArgumentException before DAO insertion
-        val exception = assertThrows<IllegalArgumentException> {
-            repository.saveMessage(message)
+            // When & Then - expect IllegalArgumentException before DAO insertion
+            val exception =
+                assertThrows<IllegalArgumentException> {
+                    repository.saveMessage(message)
+                }
+
+            // Verify the error message is informative
+            assert(exception.message?.contains("must have a chatId before persisting") == true)
+            assert(exception.message?.contains("CreateUserMessageUseCase") == true)
+
+            // Verify DAO was never called
+            coVerify(exactly = 0) { messageDao.upsert(any()) }
         }
 
-        // Verify the error message is informative
-        assert(exception.message?.contains("must have a chatId before persisting") == true)
-        assert(exception.message?.contains("CreateUserMessageUseCase") == true)
-
-        // Verify DAO was never called
-        coVerify(exactly = 0) { messageDao.upsert(any()) }
-    }
-
     @Test
-    fun `saveMessage with non-null chatId succeeds`() = runTest {
-        // Given - a valid message with a chatId
-        val messageId = MessageId(UUID.randomUUID().toString())
-        val chatId = ChatId(UUID.randomUUID().toString())
-        val message = Message(
-            id = messageId,
-            chatId = chatId,
-            content = Content(text = "Test message"),
-            role = Role.USER
-        )
+    fun `saveMessage with non-null chatId succeeds`() =
+        runTest {
+            // Given - a valid message with a chatId
+            val messageId = MessageId(UUID.randomUUID().toString())
+            val chatId = ChatId(UUID.randomUUID().toString())
+            val message =
+                Message(
+                    id = messageId,
+                    chatId = chatId,
+                    content = Content(text = "Test message"),
+                    role = Role.USER,
+                )
 
-        coEvery { messageDao.upsert(any()) } returns 1L
+            coEvery { messageDao.upsert(any()) } returns 1L
 
-        // When
-        val result = repository.saveMessage(message)
+            // When
+            val result = repository.saveMessage(message)
 
-        // Then
-        assert(result == messageId)
-        coVerify { messageDao.upsert(any()) }
-    }
-
-    @Test
-    fun `saveMessage with attachments uses transaction and fails if file insertion fails`() = runTest {
-        // Given
-        val messageId = MessageId(UUID.randomUUID().toString())
-        val chatId = ChatId(UUID.randomUUID().toString())
-        val attachment = com.browntowndev.pocketcrew.domain.model.chat.FileAttachment(
-            name = "test.txt",
-            content = "test content"
-        )
-        val message = Message(
-            id = messageId,
-            chatId = chatId,
-            content = Content(text = "Test message", fileAttachments = listOf(attachment)),
-            role = Role.USER
-        )
-
-        coEvery { messageDao.upsert(any()) } returns 1L
-        coEvery { messageDao.insertFiles(any()) } throws RuntimeException("Database error")
-
-        // When & Then
-        assertThrows<RuntimeException> {
-            repository.saveMessage(message)
+            // Then
+            assert(result == messageId)
+            coVerify { messageDao.upsert(any()) }
         }
 
-        coVerify { transactionProvider.runInTransaction<Any>(any()) }
-        coVerify { messageDao.upsert(any()) }
-        coVerify { messageDao.insertFiles(any()) }
-    }
+    @Test
+    fun `saveMessage with attachments uses transaction and fails if file insertion fails`() =
+        runTest {
+            // Given
+            val messageId = MessageId(UUID.randomUUID().toString())
+            val chatId = ChatId(UUID.randomUUID().toString())
+            val attachment =
+                com.browntowndev.pocketcrew.domain.model.chat.FileAttachment(
+                    name = "test.txt",
+                    content = "test content",
+                )
+            val message =
+                Message(
+                    id = messageId,
+                    chatId = chatId,
+                    content = Content(text = "Test message", fileAttachments = listOf(attachment)),
+                    role = Role.USER,
+                )
+
+            coEvery { messageDao.upsert(any()) } returns 1L
+            coEvery { messageDao.insertFiles(any()) } throws RuntimeException("Database error")
+
+            // When & Then
+            assertThrows<RuntimeException> {
+                repository.saveMessage(message)
+            }
+
+            coVerify { transactionProvider.runInTransaction<Any>(any()) }
+            coVerify { messageDao.upsert(any()) }
+            coVerify { messageDao.insertFiles(any()) }
+        }
 }
