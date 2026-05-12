@@ -1,4 +1,3 @@
-# INFERENCE_RULES.md
 **Pocket Crew – Inference Layer Contract v2.5**
 
 Non-negotiable rules for the `:inference` module and all model/runtime operations. 
