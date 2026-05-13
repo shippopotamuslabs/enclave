@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
@@ -27,7 +28,8 @@ class StudioRepositoryImpl
         private val studioAlbumDao: StudioAlbumDao,
         private val transactionProvider: TransactionProvider,
         private val syncTrigger: CloudSyncTrigger,
-        @ApplicationContext private val context: Context,
+        private val localEncryption: LocalDataEncryptionService,
+        @param:ApplicationContext private val context: Context,
     ) : StudioRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -95,7 +97,7 @@ class StudioRepositoryImpl
             studioMediaDao.insertMedia(
                 StudioMediaEntity(
                     id = newId,
-                    prompt = prompt,
+                    prompt = localEncryption.encryptString(prompt),
                     mediaUri = finalUri,
                     mediaType = mediaType,
                     createdAt = createdAt ?: System.currentTimeMillis(),
@@ -127,7 +129,7 @@ class StudioRepositoryImpl
             studioMediaDao.insertMedia(
                 StudioMediaEntity(
                     id = asset.id,
-                    prompt = asset.prompt,
+                    prompt = localEncryption.encryptString(asset.prompt),
                     mediaUri = asset.localUri,
                     mediaType = asset.mediaType,
                     createdAt = asset.createdAt,
@@ -201,7 +203,7 @@ class StudioRepositoryImpl
                 java.util.UUID
                     .randomUUID()
                     .toString()
-            studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = name, pendingSync = 1))
+            studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = localEncryption.encryptString(name), pendingSync = 1))
             triggerSync()
             return id
         }
@@ -212,7 +214,7 @@ class StudioRepositoryImpl
         ) {
             val trimmedName = name.trim()
             if (trimmedName.isEmpty()) return
-            studioAlbumDao.updateAlbumName(id, trimmedName)
+            studioAlbumDao.updateAlbumName(id, localEncryption.encryptString(trimmedName))
             triggerSync()
         }
 
@@ -251,19 +253,19 @@ class StudioRepositoryImpl
 
         private fun StudioMediaEntity.toDomain() =
             StudioMediaAsset(
-                id = id.toString(),
-                localUri = mediaUri,
-                remoteUrl = remoteUrl,
-                prompt = prompt,
+                id = id,
+                localUri = localEncryption.decryptString(mediaUri),
+                remoteUrl = remoteUrl?.let(localEncryption::decryptString),
+                prompt = localEncryption.decryptString(prompt),
                 mediaType = mediaType,
                 createdAt = createdAt,
-                albumId = albumId?.toString(),
+                albumId = albumId,
             )
 
         private fun StudioAlbumEntity.toDomain() =
             StudioAlbumAsset(
-                id = id.toString(),
-                name = name,
+                id = id,
+                name = localEncryption.decryptString(name),
             )
 
         private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this

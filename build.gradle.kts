@@ -157,6 +157,10 @@ subprojects {
             ignoreFailures = false
         }
 
+        tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+            exclude("**/docgen_core.kt")
+        }
+
         tasks.matching { it.name.startsWith("assemble") }.configureEach {
             dependsOn("detekt")
         }

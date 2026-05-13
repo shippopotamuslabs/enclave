@@ -12,17 +12,22 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.SamplerConfig
+import com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
 import com.browntowndev.pocketcrew.domain.model.inference.AttachedImageInspectParams
 import com.browntowndev.pocketcrew.domain.model.inference.ExtractDepth
 import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
 import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
+import com.browntowndev.pocketcrew.domain.model.inference.SearchArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
+import com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParam
+import kotlinx.serialization.json.Json as KJson
+import kotlinx.serialization.json.jsonArray
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -106,6 +111,7 @@ class ConversationManagerImpl @Inject constructor(
         val hasImageTool: Boolean,
         val hasMemoryTools: Boolean,
         val hasGetMessageContextTool: Boolean,
+        val hasArtifactTools: Boolean,
     )
 
     // Cached state: updated whenever reloadIfNeeded is called.
@@ -149,6 +155,9 @@ class ConversationManagerImpl @Inject constructor(
 
     @Volatile
     private var contextFullWarned: Boolean = false
+
+    @Volatile
+    private var latestAssistantMessageId: MessageId? = null
 
     @VisibleForTesting
     internal fun getModelPath(filename: String): String {
@@ -250,6 +259,7 @@ class ConversationManagerImpl @Inject constructor(
             val hasMemoryTools = options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT_HISTORY) == true ||
                 options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT) == true
             val hasGetMessageContextTool = options?.availableTools?.contains(ToolDefinition.GET_MESSAGE_CONTEXT) == true
+            val hasArtifactTools = options?.availableTools?.contains(ToolDefinition.START_ARTIFACT) == true
 
             val desiredSignature = ConversationSignature(
                 modelType = modelType,
@@ -264,6 +274,7 @@ class ConversationManagerImpl @Inject constructor(
                 hasImageTool = hasImageTool,
                 hasMemoryTools = hasMemoryTools,
                 hasGetMessageContextTool = hasGetMessageContextTool,
+                hasArtifactTools = hasArtifactTools,
             )
 
             val engineChanged = currentModelPath != modelPath || engine == null
@@ -398,6 +409,35 @@ class ConversationManagerImpl @Inject constructor(
                                 )
                             )
                         }
+                        if (hasArtifactTools) {
+                            add(
+                                tool(
+                                    LocalStartArtifactToolset(
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                            add(
+                                tool(
+                                    LocalAppendBlocksToolset(
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                            add(
+                                tool(
+                                    LocalSearchArtifactToolset(
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                        }
                     }
                 )
 
@@ -439,12 +479,13 @@ class ConversationManagerImpl @Inject constructor(
             currentContextWindow = activeConfig.contextWindow ?: 2048
             currentSamplerConfig = targetSamplerConfig
             currentModelPath = modelPath // Set only after full success
+            latestAssistantMessageId = options?.assistantMessageId
 
             Log.d(
                 TAG,
                 "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(LOG_TRUNCATE_LENGTH)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated, memory=${memorySnapshot()}"
             )
-            
+
             return@withContext conversationPort!!
         }
     }
@@ -756,6 +797,127 @@ class ConversationManagerImpl @Inject constructor(
                     rootCause
                 )
                 buildToolErrorJson(ToolDefinition.GET_MESSAGE_CONTEXT.name, rootCause)
+            }
+        }
+    }
+
+    private inner class LocalStartArtifactToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Initialize a new professional document. Returns artifact_id for use with append_blocks. Call once before any append_blocks calls.")
+        fun start_artifact(
+            @ToolParam(description = "The document title as a top-level string.") title: String,
+            @ToolParam(description = "The document author. Leave empty if not specified.") author: String = "",
+        ): String {
+            loggingPort.info(TAG, "Native tool call requested tool=${ToolDefinition.START_ARTIFACT.name} modelType=$modelType")
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    val params = StartArtifactParams(
+                        title = title,
+                        author = author.takeIf { it.isNotBlank() },
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.START_ARTIFACT.name,
+                        argumentsJson = ToolDefinition.START_ARTIFACT.encodeArguments<StartArtifactParams>(params),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = latestAssistantMessageId,
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (e: JavaCancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(TAG, "Native tool method failed tool=${ToolDefinition.START_ARTIFACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}", rootCause)
+                buildToolErrorJson(ToolDefinition.START_ARTIFACT.name, rootCause)
+            }
+        }
+    }
+
+    private inner class LocalAppendBlocksToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Append content blocks to an existing artifact. Emit 10-15 blocks per call. Set is_complete=true on the final call.")
+        fun append_blocks(
+            @ToolParam(description = "The artifact ID returned by start_artifact.") artifact_id: String,
+            @ToolParam(description = "JSON array of document blocks to append.") blocks: String,
+            @ToolParam(description = "Set to true when this is the final batch of blocks.") is_complete: Boolean = false,
+        ): String {
+            loggingPort.info(TAG, "Native tool call requested tool=${ToolDefinition.APPEND_BLOCKS.name} modelType=$modelType")
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    val blockList = try {
+                        KJson.parseToJsonElement(blocks).jsonArray.toList()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    val params = AppendBlocksParams(
+                        artifactId = artifact_id,
+                        blocks = blockList,
+                        isComplete = is_complete,
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.APPEND_BLOCKS.name,
+                        argumentsJson = ToolDefinition.APPEND_BLOCKS.encodeArguments<AppendBlocksParams>(params),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = latestAssistantMessageId,
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (e: JavaCancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(TAG, "Native tool method failed tool=${ToolDefinition.APPEND_BLOCKS.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}", rootCause)
+                buildToolErrorJson(ToolDefinition.APPEND_BLOCKS.name, rootCause)
+            }
+        }
+    }
+
+    private inner class LocalSearchArtifactToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Semantically search the artifact currently being generated to recall compressed context.")
+        fun search_current_artifact(
+            @ToolParam(description = "The artifact ID to search within.") artifact_id: String,
+            @ToolParam(description = "The semantic search query.") query: String,
+        ): String {
+            loggingPort.info(TAG, "Native tool call requested tool=${ToolDefinition.SEARCH_CURRENT_ARTIFACT.name} modelType=$modelType")
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    val params = SearchArtifactParams(
+                        artifactId = artifact_id,
+                        query = query,
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                        argumentsJson = ToolDefinition.SEARCH_CURRENT_ARTIFACT.encodeArguments<SearchArtifactParams>(params),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = latestAssistantMessageId,
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (e: JavaCancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(TAG, "Native tool method failed tool=${ToolDefinition.SEARCH_CURRENT_ARTIFACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}", rootCause)
+                buildToolErrorJson(ToolDefinition.SEARCH_CURRENT_ARTIFACT.name, rootCause)
             }
         }
     }

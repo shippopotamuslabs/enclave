@@ -13,10 +13,13 @@ import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
@@ -200,7 +203,29 @@ class SettingsViewModelTest {
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
-        val generalDelegate = SettingsGeneralDelegate(settingsUseCases.preferences, settingsUseCases.auth, errorHandler)
+        val detectVaultReconciliationStateUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
+        val adoptCloudVaultUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.AdoptCloudVaultUseCase>(relaxed = true)
+        val bootstrapCloudVaultFromLocalUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
+        val createVaultUseCase = mockk<CreateVaultUseCase>(relaxed = true)
+        val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+        val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
+        val cloudSyncPort =
+            mockk<com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort>(relaxed = true)
+        val generalDelegate = SettingsGeneralDelegate(
+            settingsUseCases.preferences,
+            settingsUseCases.auth,
+            errorHandler,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            createVaultUseCase,
+            cryptoManager,
+            vaultMetadataPort,
+            cloudSyncPort,
+        )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
@@ -233,11 +258,12 @@ class SettingsViewModelTest {
     @Test
     fun `onLoginWithGoogle calls loginWithGoogle`() = runTest {
         coEvery { loginWithGoogleUseCase() } returns Result.success(UserProfile("uid", "Name", "email", null))
-        
+
         viewModel.onLoginWithGoogle()
         advanceUntilIdle()
-        
+
         coVerify { loginWithGoogleUseCase() }
+        assertTrue(viewModel.uiState.value.vaultReauthSheet is VaultReauthSheetState.EnterPassword)
     }
 
     @Test

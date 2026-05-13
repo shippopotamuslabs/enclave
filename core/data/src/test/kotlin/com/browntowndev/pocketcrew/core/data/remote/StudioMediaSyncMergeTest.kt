@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
 import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
@@ -76,6 +77,7 @@ class StudioMediaSyncMergeTest {
                 externalScope = testScope,
                 userIdProvider = { "test-user" },
                 embeddingCoordinator = embeddingCoordinator,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
 
         dataSource.startListening()

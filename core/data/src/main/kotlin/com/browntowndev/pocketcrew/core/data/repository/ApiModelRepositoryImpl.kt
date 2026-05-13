@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -34,6 +35,7 @@ class ApiModelRepositoryImpl
         private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
         private val apiKeyManager: ApiKeyManager,
         private val cryptoManager: CryptoManagerPort,
+        private val localEncryption: LocalDataEncryptionService,
     ) : ApiModelRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -66,7 +68,7 @@ class ApiModelRepositoryImpl
 
             val storedBaseUrl =
                 credentials.baseUrl?.trim()?.takeIf { it.isNotBlank() }
-                    ?: credentials.provider.defaultBaseUrl()
+                    ?: credentials.provider.defaultBaseUrl().orEmpty()
             val sourceApiKey =
                 resolveApiKey(
                     apiKey = apiKey,
@@ -84,8 +86,9 @@ class ApiModelRepositoryImpl
                 } ?: existingEntity?.apiKeySignature
 
             val encryptedKeyPayload =
-                if (sourceApiKey != null && cryptoManager.hasCachedKey()) {
-                    cryptoManager.encrypt(sourceApiKey).getOrNull()
+                if (sourceApiKey != null) {
+                    check(cryptoManager.hasCachedKey()) { "Encryption session locked" }
+                    cryptoManager.encrypt(sourceApiKey).getOrThrow()
                 } else {
                     existingEntity?.encryptedApiKey
                 }
@@ -96,10 +99,10 @@ class ApiModelRepositoryImpl
                     val entity =
                         ApiCredentialsEntity(
                             id = ApiCredentialsId(UUID.randomUUID().toString()),
-                            displayName = credentials.displayName,
+                            displayName = localEncryption.encryptString(credentials.displayName),
                             provider = credentials.provider,
                             modelId = credentials.modelId,
-                            baseUrl = storedBaseUrl,
+                            baseUrl = localEncryption.encryptString(storedBaseUrl),
                             isMultimodal = credentials.isMultimodal,
                             credentialAlias = credentials.credentialAlias,
                             encryptedApiKey = encryptedKeyPayload,
@@ -114,10 +117,10 @@ class ApiModelRepositoryImpl
                     val entity =
                         ApiCredentialsEntity(
                             id = credentials.id,
-                            displayName = credentials.displayName,
+                            displayName = localEncryption.encryptString(credentials.displayName),
                             provider = credentials.provider,
                             modelId = credentials.modelId,
-                            baseUrl = storedBaseUrl,
+                            baseUrl = localEncryption.encryptString(storedBaseUrl),
                             isMultimodal = credentials.isMultimodal,
                             credentialAlias = credentials.credentialAlias,
                             encryptedApiKey = encryptedKeyPayload,
@@ -202,7 +205,7 @@ class ApiModelRepositoryImpl
                 ApiModelConfigurationEntity(
                     id = entityId,
                     apiCredentialsId = config.apiCredentialsId,
-                    displayName = config.displayName,
+                    displayName = localEncryption.encryptString(config.displayName),
                     maxTokens = config.maxTokens,
                     contextWindow = config.contextWindow,
                     temperature = config.temperature,
@@ -211,7 +214,7 @@ class ApiModelRepositoryImpl
                     minP = config.minP,
                     frequencyPenalty = config.frequencyPenalty,
                     presencePenalty = config.presencePenalty,
-                    systemPrompt = config.systemPrompt,
+                    systemPrompt = localEncryption.encryptString(config.systemPrompt),
                     maxTokensDisabled = config.maxTokensDisabled,
                     temperatureDisabled = config.temperatureDisabled,
                     topPDisabled = config.topPDisabled,
@@ -220,7 +223,7 @@ class ApiModelRepositoryImpl
                     frequencyPenaltyDisabled = config.frequencyPenaltyDisabled,
                     presencePenaltyDisabled = config.presencePenaltyDisabled,
                     reasoningEffort = config.reasoningEffort?.wireValue,
-                    customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders),
+                    customHeaders = localEncryption.encryptString(ApiModelMapper.serializeCustomHeaders(config.customHeaders)),
                     openRouterProviderSort = config.openRouterRouting.providerSort.wireValue,
                     openRouterAllowFallbacks = config.openRouterRouting.allowFallbacks,
                     openRouterRequireParameters = config.openRouterRouting.requireParameters,
@@ -246,10 +249,10 @@ class ApiModelRepositoryImpl
         private fun ApiCredentialsEntity.toDomain() =
             ApiCredentials(
                 id = id,
-                displayName = displayName,
+                displayName = localEncryption.decryptString(displayName),
                 provider = provider,
                 modelId = modelId,
-                baseUrl = baseUrl,
+                baseUrl = baseUrl?.let(localEncryption::decryptString),
                 isMultimodal = isMultimodal,
                 credentialAlias = credentialAlias,
                 encryptedApiKey = encryptedApiKey,
@@ -259,7 +262,7 @@ class ApiModelRepositoryImpl
             ApiModelConfiguration(
                 id = id,
                 apiCredentialsId = apiCredentialsId,
-                displayName = displayName,
+                displayName = localEncryption.decryptString(displayName),
                 maxTokens = maxTokens,
                 contextWindow = contextWindow,
                 temperature = temperature,
@@ -268,7 +271,7 @@ class ApiModelRepositoryImpl
                 minP = minP,
                 frequencyPenalty = frequencyPenalty,
                 presencePenalty = presencePenalty,
-                systemPrompt = systemPrompt,
+                systemPrompt = localEncryption.decryptString(systemPrompt),
                 reasoningEffort = ApiReasoningEffort.fromWireValue(reasoningEffort),
                 maxTokensDisabled = maxTokensDisabled,
                 temperatureDisabled = temperatureDisabled,
@@ -277,7 +280,7 @@ class ApiModelRepositoryImpl
                 minPDisabled = minPDisabled,
                 frequencyPenaltyDisabled = frequencyPenaltyDisabled,
                 presencePenaltyDisabled = presencePenaltyDisabled,
-                customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders),
+                customHeaders = ApiModelMapper.deserializeCustomHeaders(localEncryption.decryptString(customHeaders)),
                 openRouterRouting =
                     OpenRouterRoutingConfiguration(
                         providerSort = OpenRouterProviderSort.fromWireValue(openRouterProviderSort),

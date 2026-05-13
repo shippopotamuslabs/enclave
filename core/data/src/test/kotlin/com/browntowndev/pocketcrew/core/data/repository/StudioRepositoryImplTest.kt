@@ -52,6 +52,7 @@ class StudioRepositoryImplTest {
                 transactionProvider = transactionProvider,
                 syncTrigger = syncTrigger,
                 context = context,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 
@@ -116,7 +117,7 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match {
-                        it.prompt == "prompt" &&
+                        it.prompt == "ENC:v1:prompt" &&
                             it.mediaUri == "file://${destinationFile.absolutePath}" &&
                             it.albumId == "123"
                     },
@@ -151,7 +152,7 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match {
-                        it.prompt == "new prompt" &&
+                        it.prompt == "ENC:v1:new prompt" &&
                             it.albumId == null
                     },
                 )
@@ -160,12 +161,52 @@ class StudioRepositoryImplTest {
         }
 
     @Test
+    fun `saveMedia stores prompt encrypted and returns plaintext domain model`() =
+        runTest {
+            val encryptedRepository =
+                StudioRepositoryImpl(
+                    studioMediaDao = studioMediaDao,
+                    studioAlbumDao = studioAlbumDao,
+                    transactionProvider = transactionProvider,
+                    syncTrigger = syncTrigger,
+                    localEncryption = FakeLocalDataEncryptionService(),
+                    context = context,
+                )
+            val sourceFile = File(filesDir, "encrypted-test.jpg")
+            sourceFile.writeText("image data")
+            val localUri = "file://${sourceFile.absolutePath}"
+
+            coEvery { studioMediaDao.insertMedia(any()) } returns Unit
+            coEvery { studioMediaDao.getMediaById(any()) } returns
+                StudioMediaEntity(
+                    id = "uuid-3",
+                    prompt = "ENC:v1:private prompt",
+                    mediaUri = localUri,
+                    mediaType = "IMAGE",
+                    createdAt = 1L,
+                    albumId = null,
+                )
+
+            val resultAsset = encryptedRepository.saveMedia(localUri, "private prompt", "IMAGE", albumId = null)
+
+            coVerify {
+                studioMediaDao.insertMedia(
+                    match {
+                        it.prompt == "ENC:v1:private prompt" &&
+                            it.mediaUri == localUri
+                    },
+                )
+            }
+            assertEquals("private prompt", resultAsset.prompt)
+        }
+
+    @Test
     fun `renameAlbum trims name and updates album row`() =
         runTest {
             repository.renameAlbum("42", "  Sunrise  ")
 
             coVerify {
-                studioAlbumDao.updateAlbumName("42", "Sunrise", any())
+                studioAlbumDao.updateAlbumName("42", "ENC:v1:Sunrise", any())
             }
         }
 
@@ -281,7 +322,7 @@ class StudioRepositoryImplTest {
                     match { entity ->
                         entity.remoteUrl == "https://cdn.example.com/photo.jpg" &&
                             entity.syncStatus == "UPLOADED" &&
-                            entity.prompt == "updated prompt"
+                            entity.prompt == "ENC:v1:updated prompt"
                     },
                 )
             }

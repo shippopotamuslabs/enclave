@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.artifact
 
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -32,6 +33,7 @@ class ArtifactToolExecutorImplTest {
             embeddingDao = mockk(relaxed = true),
             embeddingEngine = mockk(relaxed = true),
             documentValidation = documentValidation,
+            localEncryption = LocalDataEncryptionService.NoOp,
             externalScope = TestScope(),
         )
 
@@ -70,6 +72,7 @@ class ArtifactToolExecutorImplTest {
                     embeddingDao = mockk(relaxed = true),
                     embeddingEngine = mockk(relaxed = true),
                     documentValidation = validation,
+                    localEncryption = LocalDataEncryptionService.NoOp,
                     externalScope = TestScope(),
                 )
             val request =
@@ -113,6 +116,7 @@ class ArtifactToolExecutorImplTest {
                     embeddingDao = mockk(relaxed = true),
                     embeddingEngine = mockk(relaxed = true),
                     documentValidation = validation,
+                    localEncryption = LocalDataEncryptionService.NoOp,
                     externalScope = TestScope(),
                 )
 
@@ -154,6 +158,7 @@ class ArtifactToolExecutorImplTest {
                     embeddingDao = mockk(relaxed = true),
                     embeddingEngine = mockk(relaxed = true),
                     documentValidation = documentValidation,
+                    localEncryption = LocalDataEncryptionService.NoOp,
                     externalScope = TestScope(),
                 )
 

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
@@ -12,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -35,6 +37,7 @@ class ApiModelRepositorySyncTest {
                 apiModelConfigurationsDao = apiModelConfigurationsDao,
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 
@@ -44,6 +47,17 @@ class ApiModelRepositorySyncTest {
             val credentials =
                 ApiCredentials(
                     id = ApiCredentialsId(""),
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4",
+                    credentialAlias = "alias",
+                )
+
+            every { cryptoManager.hasCachedKey() } returns true
+            every { cryptoManager.encrypt("key") } returns Result.success(byteArrayOf(1, 2, 3))
+            coEvery { apiCredentialsDao.getById(any()) } returns
+                ApiCredentialsEntity(
+                    id = ApiCredentialsId("saved"),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
                     modelId = "gpt-4",

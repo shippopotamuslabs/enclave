@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import com.browntowndev.pocketcrew.core.ui.component.XIcon
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultReauthBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,6 +53,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultAuthUiState
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultUserUiState
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -127,7 +130,10 @@ fun SettingsScreen(
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
-    onDismissDeletionSafety: () -> Unit
+    onDismissDeletionSafety: () -> Unit,
+    onSubmitVaultReauthPassword: (String) -> Unit = {},
+    onConfirmAdoptCloudFromSettings: () -> Unit = {},
+    onCancelVaultReauth: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -391,7 +397,51 @@ fun SettingsScreen(
                 onSaveXSearch = onSaveXSearchSettings
             )
         }
+
+        when (val sheet = uiState.vaultReauthSheet) {
+            VaultReauthSheetState.Hidden -> Unit
+            is VaultReauthSheetState.EnterPassword -> {
+                VaultReauthBottomSheet(
+                    authState = uiState.home.auth.toVaultAuthUiState(),
+                    errorMessage = sheet.errorMessage,
+                    isUnlocking = sheet.isUnlocking,
+                    showConfirmDialog = false,
+                    isReconciling = false,
+                    onSubmitVaultPassword = onSubmitVaultReauthPassword,
+                    onConfirmAdoptCloud = onConfirmAdoptCloudFromSettings,
+                    onCancelReconciliation = onCancelVaultReauth,
+                    onDismiss = onCancelVaultReauth,
+                )
+            }
+            is VaultReauthSheetState.ConfirmClobber -> {
+                VaultReauthBottomSheet(
+                    authState = uiState.home.auth.toVaultAuthUiState(),
+                    errorMessage = null,
+                    isUnlocking = false,
+                    showConfirmDialog = true,
+                    isReconciling = sheet.isReconciling,
+                    onSubmitVaultPassword = onSubmitVaultReauthPassword,
+                    onConfirmAdoptCloud = onConfirmAdoptCloudFromSettings,
+                    onCancelReconciliation = onCancelVaultReauth,
+                    onDismiss = onCancelVaultReauth,
+                )
+            }
+        }
     }
+}
+
+private fun AuthStateUi.toVaultAuthUiState(): VaultAuthUiState = when (this) {
+    is AuthStateUi.Authenticated -> VaultAuthUiState.Authenticated(
+        VaultUserUiState(
+            uid = user.uid,
+            displayName = user.displayName,
+            email = user.email,
+            photoUrl = user.photoUrl,
+        ),
+    )
+    AuthStateUi.Unauthenticated -> VaultAuthUiState.Unauthenticated
+    AuthStateUi.Loading -> VaultAuthUiState.Loading
+    is AuthStateUi.Error -> VaultAuthUiState.Error(message)
 }
 
 @Composable
@@ -735,4 +785,3 @@ fun PreviewSettingsScreen() {
         )
     }
 }
-

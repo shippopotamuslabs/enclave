@@ -76,7 +76,7 @@ class AndroidBiometricManager
                 ),
             )
 
-        override fun getEncryptCipher(key: String): Cipher? {
+        fun getEncryptCipher(key: String): Cipher? {
             loggingPort.debug(TAG, "getEncryptCipher: key=$key")
             return try {
                 deleteKey()
@@ -90,14 +90,20 @@ class AndroidBiometricManager
             }
         }
 
-        override suspend fun storeSecureValueWithCipher(
+        suspend fun storeSecureValueWithCipher(
             key: String,
             value: String,
             cipher: Cipher,
+        ): Result<Unit> = storeSecureBytesWithCipher(key, value.toByteArray(Charsets.UTF_8), cipher)
+
+        suspend fun storeSecureBytesWithCipher(
+            key: String,
+            value: ByteArray,
+            cipher: Cipher,
         ): Result<Unit> {
-            loggingPort.debug(TAG, "storeSecureValueWithCipher: key=$key")
+            loggingPort.debug(TAG, "storeSecureBytesWithCipher: key=$key bytes=${value.size}")
             return try {
-                val encryptedBytes = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+                val encryptedBytes = cipher.doFinal(value)
                 val iv = cipher.iv
 
                 sharedPrefs
@@ -106,10 +112,10 @@ class AndroidBiometricManager
                     .putString("${key}_iv", Base64.encodeToString(iv, Base64.NO_WRAP))
                     .apply()
 
-                loggingPort.info(TAG, "storeSecureValueWithCipher: Successfully stored $key")
+                loggingPort.info(TAG, "storeSecureBytesWithCipher: Successfully stored $key")
                 Result.success(Unit)
             } catch (e: Exception) {
-                loggingPort.error(TAG, "storeSecureValueWithCipher failed", e)
+                loggingPort.error(TAG, "storeSecureBytesWithCipher failed", e)
                 Result.failure(e)
             }
         }
@@ -163,7 +169,7 @@ class AndroidBiometricManager
         /**
          * [BiometricPort] implementation: cipher for decrypt flow after IV is loaded from prefs.
          */
-        override fun getDecryptCipher(key: String): Cipher? {
+        fun getDecryptCipher(key: String): Cipher? {
             loggingPort.debug(TAG, "getDecryptCipher: key=$key")
             val ivBase64 = sharedPrefs.getString("${key}_iv", null) ?: return null
             val iv = Base64.decode(ivBase64, Base64.NO_WRAP)
@@ -184,18 +190,22 @@ class AndroidBiometricManager
             }
         }
 
-        override fun decryptWithCipher(
+        fun decryptWithCipher(
             key: String,
             cipher: Cipher,
-        ): String? {
-            loggingPort.debug(TAG, "decryptWithCipher: key=$key")
+        ): String? = decryptBytesWithCipher(key, cipher)?.let { String(it, Charsets.UTF_8) }
+
+        fun decryptBytesWithCipher(
+            key: String,
+            cipher: Cipher,
+        ): ByteArray? {
+            loggingPort.debug(TAG, "decryptBytesWithCipher: key=$key")
             return try {
                 val dataBase64 = sharedPrefs.getString("${key}_data", null) ?: return null
                 val encryptedBytes = Base64.decode(dataBase64, Base64.NO_WRAP)
-                val decryptedBytes = cipher.doFinal(encryptedBytes)
-                return String(decryptedBytes, Charsets.UTF_8)
+                cipher.doFinal(encryptedBytes)
             } catch (e: Exception) {
-                loggingPort.error(TAG, "decryptWithCipher: Failed to decrypt", e)
+                loggingPort.error(TAG, "decryptBytesWithCipher: Failed to decrypt", e)
                 null
             }
         }

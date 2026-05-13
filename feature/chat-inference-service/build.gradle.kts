@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.feature.chat.service"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34

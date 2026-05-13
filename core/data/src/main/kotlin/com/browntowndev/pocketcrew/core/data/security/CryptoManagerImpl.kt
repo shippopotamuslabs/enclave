@@ -30,19 +30,67 @@ class CryptoManagerImpl
         private val cachedKey: SecretKeySpec?
             get() = inMemoryKey
 
-        override fun deriveAndCacheKey(
+        override fun deriveKek(
             password: String,
             salt: ByteArray,
-        ): Result<Unit> =
+        ): Result<ByteArray> =
             try {
                 val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
                 val spec = PBEKeySpec(password.toCharArray(), salt, ITERATION_COUNT, KEY_LENGTH)
                 val tmp = factory.generateSecret(spec)
-                inMemoryKey = SecretKeySpec(tmp.encoded, "AES")
+                Result.success(tmp.encoded)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+
+        override fun generateDek(size: Int): ByteArray = generateRandomKey(size)
+
+        override fun wrapDek(
+            dek: ByteArray,
+            kek: ByteArray,
+        ): Result<ByteArray> =
+            try {
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                val iv = ByteArray(IV_LENGTH)
+                SecureRandom().nextBytes(iv)
+                cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(kek, "AES"), GCMParameterSpec(TAG_LENGTH, iv))
+                val ciphertext = cipher.doFinal(dek)
+                val out = ByteArray(IV_LENGTH + ciphertext.size)
+                System.arraycopy(iv, 0, out, 0, IV_LENGTH)
+                System.arraycopy(ciphertext, 0, out, IV_LENGTH, ciphertext.size)
+                Result.success(out)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+
+        override fun unwrapDek(
+            wrapped: ByteArray,
+            kek: ByteArray,
+        ): Result<ByteArray> {
+            if (wrapped.size <= IV_LENGTH) {
+                return Result.failure(IllegalArgumentException("Wrapped DEK too short"))
+            }
+            return try {
+                val iv = ByteArray(IV_LENGTH)
+                System.arraycopy(wrapped, 0, iv, 0, IV_LENGTH)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(kek, "AES"), GCMParameterSpec(TAG_LENGTH, iv))
+                val dek = cipher.doFinal(wrapped, IV_LENGTH, wrapped.size - IV_LENGTH)
+                Result.success(dek)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        override fun cacheDek(dek: ByteArray): Result<Unit> =
+            try {
+                inMemoryKey = SecretKeySpec(dek, "AES")
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)
             }
+
+        override fun getCachedDek(): ByteArray? = inMemoryKey?.encoded
 
         override fun clearKey() {
             inMemoryKey = null
@@ -53,7 +101,7 @@ class CryptoManagerImpl
         override fun encrypt(plaintext: String): Result<ByteArray> = encryptBytes(plaintext.toByteArray(Charsets.UTF_8))
 
         override fun encryptBytes(data: ByteArray): Result<ByteArray> {
-            val key = cachedKey ?: return Result.failure(IllegalStateException("No key cached. Call deriveAndCacheKey first."))
+            val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             return try {
                 val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -79,7 +127,7 @@ class CryptoManagerImpl
         override fun decrypt(ciphertext: ByteArray): Result<String> = decryptBytes(ciphertext).map { String(it, Charsets.UTF_8) }
 
         override fun decryptBytes(ciphertext: ByteArray): Result<ByteArray> {
-            val key = cachedKey ?: return Result.failure(IllegalStateException("No key cached. Call deriveAndCacheKey first."))
+            val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             if (ciphertext.size < IV_LENGTH) {
                 return Result.failure(IllegalArgumentException("Ciphertext too short"))

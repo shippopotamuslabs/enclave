@@ -32,6 +32,7 @@ class LocalModelRepositorySyncTest {
                 configsDao = configsDao,
                 defaultModelsDao = defaultModelsDao,
                 transactionProvider = transactionProvider,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

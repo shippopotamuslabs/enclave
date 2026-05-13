@@ -51,6 +51,7 @@ class LocalModelRepositoryImplTest {
                 configsDao = database.localModelConfigurationsDao(),
                 defaultModelsDao = database.defaultModelsDao(),
                 transactionProvider = fakeTransactionProvider,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 
@@ -95,6 +96,53 @@ class LocalModelRepositoryImplTest {
             val retrieved = repository.getAssetById(assetId)
             assertEquals(true, retrieved?.metadata?.isMultimodal)
             assertEquals("Vision Config", retrieved?.configurations?.firstOrNull()?.displayName)
+        }
+
+    @Test
+    fun `upsertLocalConfiguration stores sensitive fields encrypted and reads them decrypted`() =
+        runTest {
+            val encryptedRepository =
+                LocalModelRepositoryImpl(
+                    syncTrigger = syncTrigger,
+                    modelsDao = database.localModelsDao(),
+                    configsDao = database.localModelConfigurationsDao(),
+                    defaultModelsDao = database.defaultModelsDao(),
+                    transactionProvider = fakeTransactionProvider,
+                    localEncryption = FakeLocalDataEncryptionService(),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId(""),
+                    huggingFaceModelName = "model",
+                    remoteFileName = "model.gguf",
+                    localFileName = "model.gguf",
+                    sha256 = "encrypted-config-sha",
+                    sizeInBytes = 1000,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                )
+            val assetId = encryptedRepository.upsertLocalAsset(LocalModelAsset(metadata = metadata, configurations = emptyList()))
+            val config =
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-encrypted"),
+                    localModelId = assetId,
+                    displayName = "Private Config",
+                    maxTokens = 100,
+                    contextWindow = 100,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "private system prompt",
+                )
+
+            encryptedRepository.upsertLocalConfiguration(config)
+            val stored = database.localModelConfigurationsDao().getById(LocalModelConfigurationId("config-encrypted"))
+            val loaded = encryptedRepository.getConfigurationById(LocalModelConfigurationId("config-encrypted"))
+
+            assertEquals("ENC:v1:Private Config", stored?.displayName)
+            assertEquals("ENC:v1:private system prompt", stored?.systemPrompt)
+            assertEquals("Private Config", loaded?.displayName)
+            assertEquals("private system prompt", loaded?.systemPrompt)
         }
 
     @Test

@@ -47,6 +47,7 @@ import com.google.firebase.storage.FirebaseStorage
 import io.mockk.*
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -106,6 +107,7 @@ class ArtifactSyncIntegrationTest {
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
 
         dataSource =
@@ -136,6 +138,7 @@ class ArtifactSyncIntegrationTest {
                 externalScope = testScope,
                 userIdProvider = userIdProvider,
                 embeddingCoordinator = embeddingCoordinator,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
 
         val context = mockk<Context>(relaxed = true)
@@ -150,6 +153,7 @@ class ArtifactSyncIntegrationTest {
                 cryptoManager,
                 userIdProvider,
                 syncTrigger,
+                FakeLocalDataEncryptionService(),
             )
 
         every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())

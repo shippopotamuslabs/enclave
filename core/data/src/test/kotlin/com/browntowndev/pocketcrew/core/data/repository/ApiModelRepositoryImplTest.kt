@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -33,6 +34,7 @@ class ApiModelRepositoryImplTest {
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val localEncryption = FakeLocalDataEncryptionService()
 
     @Before
     fun setup() {
@@ -43,6 +45,7 @@ class ApiModelRepositoryImplTest {
                 apiModelConfigurationsDao = configurationsDao,
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
+                localEncryption = localEncryption,
             )
     }
 
@@ -87,16 +90,45 @@ class ApiModelRepositoryImplTest {
                 credentialsDao.insert(
                     match {
                         it.credentialAlias == "my_key" &&
-                            it.displayName == "Test" &&
+                            it.displayName == "ENC:v1:Test" &&
                             it.provider == ApiProvider.OPENAI &&
                             it.modelId == "gpt-4o" &&
-                            it.baseUrl == "https://api.openai.com/v1" &&
+                            it.baseUrl == "ENC:v1:https://api.openai.com/v1" &&
                             it.isMultimodal == true &&
                             it.apiKeySignature == expectedSignature
                     },
                 )
             }
             verify { apiKeyManager.save("my_key", "sk-test") }
+        }
+
+    @Test
+    fun `save credentials with API key fails closed when encryption is locked`() =
+        runTest {
+            val lockedRepository =
+                ApiModelRepositoryImpl(
+                    syncTrigger = syncTrigger,
+                    apiCredentialsDao = credentialsDao,
+                    apiModelConfigurationsDao = configurationsDao,
+                    apiKeyManager = apiKeyManager,
+                    cryptoManager = cryptoManager,
+                    localEncryption = LockedLocalDataEncryptionService(),
+                )
+            val creds =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "my_key",
+                )
+
+            assertFailsWith<IllegalStateException> {
+                lockedRepository.saveCredentials(creds, "sk-test", null)
+            }
+
+            coVerify(exactly = 0) { credentialsDao.insert(any()) }
+            verify(exactly = 0) { apiKeyManager.save(any(), any()) }
         }
 
     @Test
@@ -436,4 +468,20 @@ class ApiModelRepositoryImplTest {
                 configurationsDao.upsert(match { it.pendingSync == 1 })
             }
         }
+
+    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
+
+        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
+
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
+    }
+
+    private class LockedLocalDataEncryptionService : LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = throw IllegalStateException("Encryption session locked")
+
+        override fun decryptString(stored: String): String = throw IllegalStateException("Encryption session locked")
+
+        override fun isEncrypted(stored: String): Boolean = false
+    }
 }

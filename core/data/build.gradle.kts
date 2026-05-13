@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.core.data"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34
@@ -94,18 +94,14 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.core.ktx)
-    testImplementation("androidx.test:core:1.5.0")
-    testImplementation("androidx.test.ext:junit:1.1.5")
-    testImplementation("androidx.room:room-testing:2.6.1")
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.room.testing)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.junit)
-    testRuntimeOnly(libs.junit.vintage.engine)
-    testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.work.testing)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))

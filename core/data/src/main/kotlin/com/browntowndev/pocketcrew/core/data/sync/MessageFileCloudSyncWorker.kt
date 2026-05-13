@@ -6,6 +6,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.firebase.storage.FirebaseStorage
@@ -25,6 +26,7 @@ class MessageFileCloudSyncWorker
         private val cryptoManager: CryptoManagerPort,
         private val userIdProvider: () -> String?,
         private val syncTrigger: CloudSyncTrigger,
+        private val localEncryption: LocalDataEncryptionService,
     ) : CoroutineWorker(context, params) {
         companion object {
             private const val TAG = "MessageFileSyncWorker"
@@ -44,7 +46,13 @@ class MessageFileCloudSyncWorker
 
             for (file in pendingUploads) {
                 try {
-                    if (file.content.isBlank() && file.remoteUrl == null && file.stagingRemoteUrl == null) {
+                    val content =
+                        file.content
+                            .takeUnless { it.isBlank() }
+                            ?.let(localEncryption::decryptString)
+                            .orEmpty()
+                    val stagingRemoteUrl = file.stagingRemoteUrl?.let(localEncryption::decryptString)
+                    if (content.isBlank() && file.remoteUrl == null && stagingRemoteUrl == null) {
                         loggingPort.error(TAG, "Empty content for file ${file.id}")
                         messageFileDao.updateStatus(file.id, "FAILED")
                         continue
@@ -53,11 +61,11 @@ class MessageFileCloudSyncWorker
                     val storageRef = storage.reference.child("users/$userId/files/${file.id}")
                     var downloadUrl: String? = null
 
-                    if (!file.stagingRemoteUrl.isNullOrBlank()) {
+                    if (!stagingRemoteUrl.isNullOrBlank()) {
                         try {
                             storageRef.metadata.await()
-                            downloadUrl = file.stagingRemoteUrl
-                            loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for file ${file.id}: $downloadUrl")
+                            downloadUrl = stagingRemoteUrl
+                            loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for file ${file.id}")
                         } catch (e: Exception) {
                             loggingPort.debug(
                                 TAG,
@@ -66,12 +74,12 @@ class MessageFileCloudSyncWorker
                         }
                     }
 
-                    if (downloadUrl == null && file.content.isNotBlank()) {
+                    if (downloadUrl == null && content.isNotBlank()) {
                         val fileBytes =
-                            if (file.content.startsWith("BASE64:")) {
-                                Base64.decode(file.content.substring(7), Base64.NO_WRAP)
+                            if (content.startsWith("BASE64:")) {
+                                Base64.decode(content.substring(7), Base64.NO_WRAP)
                             } else {
-                                file.content.toByteArray(Charsets.UTF_8)
+                                content.toByteArray(Charsets.UTF_8)
                             }
                         val encryptionResult = cryptoManager.encryptBytes(fileBytes)
 
@@ -86,13 +94,13 @@ class MessageFileCloudSyncWorker
                         storageRef.putBytes(encryptedBytes).await()
 
                         downloadUrl = storageRef.downloadUrl.await().toString()
-                        messageFileDao.updateStagingUrl(file.id, downloadUrl)
+                        messageFileDao.updateStagingUrl(file.id, localEncryption.encryptString(downloadUrl))
                     }
 
                     if (downloadUrl != null) {
-                        messageFileDao.markUploaded(file.id, downloadUrl)
-                        loggingPort.debug(TAG, "Uploaded file ${file.id} to $downloadUrl")
-                    } else if (file.content.isBlank() && file.remoteUrl == null) {
+                        messageFileDao.markUploaded(file.id, localEncryption.encryptString(downloadUrl))
+                        loggingPort.debug(TAG, "Uploaded file ${file.id}")
+                    } else if (content.isBlank() && file.remoteUrl == null) {
                         // This should have been caught by the first check, but just in case
                         loggingPort.error(TAG, "Nothing to upload and no staging URL for file ${file.id}")
                         hasFailure = true

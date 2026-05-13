@@ -33,7 +33,7 @@ class MemoriesRepositoryTest {
         memoriesDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         embeddingEngine = mockk(relaxed = true)
-        repository = MemoriesRepositoryImpl(syncTrigger, memoriesDao, embeddingDao, embeddingEngine)
+        repository = MemoriesRepositoryImpl(syncTrigger, memoriesDao, embeddingDao, embeddingEngine, FakeLocalDataEncryptionService())
     }
 
     @Test
@@ -97,6 +97,33 @@ class MemoriesRepositoryTest {
         }
 
     @Test
+    fun `insertMemory stores content encrypted and returns plaintext domain model`() =
+        runTest {
+            val encryptedRepository =
+                MemoriesRepositoryImpl(
+                    syncTrigger,
+                    memoriesDao,
+                    embeddingDao,
+                    embeddingEngine,
+                    FakeLocalDataEncryptionService(),
+                )
+            val category = MemoryCategory.FACTS
+            val content = "Private memory"
+            coEvery { embeddingEngine.getEmbedding(content) } returns floatArrayOf(0.1f)
+
+            val result = encryptedRepository.insertMemory(category, content)
+
+            assertEquals(content, result.content)
+            coVerify {
+                memoriesDao.insertMemory(
+                    match {
+                        it.category == category && it.content == "ENC:v1:Private memory"
+                    },
+                )
+            }
+        }
+
+    @Test
     fun `updateMemory updates dao and embedding`() =
         runTest {
             val id = "memory-1"
@@ -109,7 +136,7 @@ class MemoriesRepositoryTest {
 
             repository.updateMemory(id, newContent)
 
-            coVerify { memoriesDao.updateMemory(match { it.id == id && it.content == newContent }) }
+            coVerify { memoriesDao.updateMemory(match { it.id == id && it.content == "ENC:v1:$newContent" }) }
             coVerify { embeddingEngine.getEmbedding(newContent) }
 
             val querySlot = slot<SupportSQLiteQuery>()

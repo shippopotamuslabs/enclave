@@ -86,6 +86,9 @@ internal fun SettingsRoute(
         onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
         onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) },
         onConfirmDeletionWithReassignment = viewModel::onConfirmDeletionWithReassignment,
-        onDismissDeletionSafety = viewModel::onDismissDeletionSafety
+        onDismissDeletionSafety = viewModel::onDismissDeletionSafety,
+        onSubmitVaultReauthPassword = viewModel::onSubmitVaultReauthPassword,
+        onConfirmAdoptCloudFromSettings = viewModel::onConfirmAdoptCloudFromSettings,
+        onCancelVaultReauth = viewModel::onCancelVaultReauth,
     )
 }

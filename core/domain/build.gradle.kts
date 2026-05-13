@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.core.domain"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34
@@ -52,11 +52,11 @@ dependencies {
     implementation(libs.jtokkit)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
 
     // Dependency Injection
-    implementation("javax.inject:javax.inject:1")
+    implementation(libs.javax.inject)
 
     // Test dependencies
     testImplementation(libs.junit.jupiter)
@@ -68,5 +68,5 @@ dependencies {
     // TestFixtures dependencies
     testFixturesApi(libs.junit.jupiter)
     testFixturesImplementation("org.jetbrains.kotlin:kotlin-stdlib")
-    testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    testFixturesImplementation(libs.kotlinx.coroutines.core)
 }

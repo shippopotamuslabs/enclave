@@ -9,6 +9,9 @@ import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
+import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.*
 import com.browntowndev.pocketcrew.domain.usecase.media.*
@@ -106,7 +109,29 @@ class SettingsViewModelEventTest {
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
-        val generalDelegate = SettingsGeneralDelegate(settingsUseCases.preferences, settingsUseCases.auth, errorHandler)
+        val detectVaultReconciliationStateUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
+        val adoptCloudVaultUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.AdoptCloudVaultUseCase>(relaxed = true)
+        val bootstrapCloudVaultFromLocalUseCase =
+            mockk<com.browntowndev.pocketcrew.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
+        val createVaultUseCase = mockk<CreateVaultUseCase>(relaxed = true)
+        val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+        val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
+        val cloudSyncPort =
+            mockk<com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort>(relaxed = true)
+        val generalDelegate = SettingsGeneralDelegate(
+            settingsUseCases.preferences,
+            settingsUseCases.auth,
+            errorHandler,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            createVaultUseCase,
+            cryptoManager,
+            vaultMetadataPort,
+            cloudSyncPort,
+        )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
         val localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
         val apiProvidersDelegate = SettingsApiProvidersDelegate(settingsUseCases.apiProviders, settingsUseCases.tts, settingsUseCases.media, deletionHelper, apiModelAssetUiMapper, ttsProviderAssetUiMapper, errorHandler)
