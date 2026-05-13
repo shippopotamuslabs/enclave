@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase.Companion.VAULT_VERIFICATION_MAGIC_STRING
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +37,7 @@ sealed interface AppStartupState {
         val modelsResult: DownloadModelsResult?,
         val initializationError: String? = null,
         val vaultErrorMessage: String? = null,
+        val isUnlocking: Boolean = false,
         val isVaultLocked: Boolean = false,
         val isBiometricUnlockPossible: Boolean = false,
         val pendingBiometricEnrollmentPassword: String? = null,
@@ -163,79 +165,90 @@ class MainViewModel
         }
 
         fun unlockVault(password: String, enableBiometric: Boolean = false) {
-            viewModelScope.launch {
+            if ((startupState.value as? AppStartupState.Ready)?.isUnlocking == true) return
+
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to unlock vault", "Failed to unlock")) {
                 loggingPort.debug(TAG, "unlockVault: Attempting unlock")
-                
-                // 1. Get Salt
-                val saltResult = cloudSyncPort.getVaultSalt()
-                var saltBase64 = saltResult.getOrNull()
-                
-                if (saltBase64 == null) {
-                    loggingPort.info(TAG, "unlockVault: No salt found in cloud, initializing new vault")
-                    val newSalt = cryptoManager.generateSalt()
-                    saltBase64 = android.util.Base64.encodeToString(newSalt, android.util.Base64.NO_WRAP)
-                    val saveResult = cloudSyncPort.updateVaultSalt(saltBase64)
-                    if (saveResult.isFailure) {
-                        loggingPort.error(TAG, "unlockVault: Failed to save new salt to cloud", saveResult.exceptionOrNull())
+                _startupState.update { 
+                    if (it is AppStartupState.Ready) it.copy(isUnlocking = true) else it 
+                }
+
+                try {
+                    // 1. Get Salt
+                    val saltResult = cloudSyncPort.getVaultSalt()
+                    var saltBase64 = saltResult.getOrNull()
+                    
+                    if (saltBase64 == null) {
+                        loggingPort.info(TAG, "unlockVault: No salt found in cloud, initializing new vault")
+                        val newSalt = cryptoManager.generateSalt()
+                        saltBase64 = android.util.Base64.encodeToString(newSalt, android.util.Base64.NO_WRAP)
+                        val saveResult = cloudSyncPort.updateVaultSalt(saltBase64)
+                        if (saveResult.isFailure) {
+                            loggingPort.error(TAG, "unlockVault: Failed to save new salt to cloud", saveResult.exceptionOrNull())
+                            return@launch
+                        }
+                    }
+
+                    val salt = android.util.Base64.decode(saltBase64, android.util.Base64.NO_WRAP)
+                    
+                    // 2. Verification Check (Magic String)
+                    val verificationResult = cloudSyncPort.getVaultVerificationData()
+                    val verificationCiphertext = verificationResult.getOrNull()
+
+                    // First, derive the candidate key
+                    val deriveResult = unlockVaultUseCase(password, salt)
+                    if (deriveResult.isFailure) {
+                        loggingPort.error(TAG, "unlockVault: Failed to derive key", deriveResult.exceptionOrNull())
                         return@launch
                     }
-                }
 
-                val salt = android.util.Base64.decode(saltBase64, android.util.Base64.NO_WRAP)
-                
-                // 2. Verification Check (Magic String)
-                val verificationResult = cloudSyncPort.getVaultVerificationData()
-                val verificationCiphertext = verificationResult.getOrNull()
+                    if (verificationCiphertext != null) {
+                        // Try to decrypt the magic string to verify the password
+                        val ciphertextBytes = android.util.Base64.decode(verificationCiphertext, android.util.Base64.DEFAULT)
+                        val decryptResult = cryptoManager.decrypt(ciphertextBytes)
+                        
+                        if (decryptResult.isFailure || decryptResult.getOrNull() != VAULT_VERIFICATION_MAGIC_STRING) {
+                            loggingPort.error(TAG, "unlockVault: Wrong password (verification mismatch)")
+                            cryptoManager.clearKey() // Critical: clear the wrong key
+                            _startupState.update { 
+                                if (it is AppStartupState.Ready) it.copy(vaultErrorMessage = "Incorrect Vault Password") else it 
+                            }
+                            return@launch
+                        }
+                        loggingPort.debug(TAG, "unlockVault: Password verified successfully")
+                    } else {
+                        // Initializing vault verification
+                        loggingPort.info(TAG, "unlockVault: Initializing vault verification data")
+                        val magicString = VAULT_VERIFICATION_MAGIC_STRING
+                        val encryptResult = cryptoManager.encrypt(magicString)
+                        encryptResult.onSuccess { ciphertext ->
+                            val base64Ciphertext = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP)
+                            cloudSyncPort.updateVaultVerificationData(base64Ciphertext)
+                        }
+                    }
 
-                // First, derive the candidate key
-                val deriveResult = unlockVaultUseCase(password, salt)
-                if (deriveResult.isFailure) {
-                    loggingPort.error(TAG, "unlockVault: Failed to derive key", deriveResult.exceptionOrNull())
-                    return@launch
-                }
-
-                if (verificationCiphertext != null) {
-                    // Try to decrypt the magic string to verify the password
-                    val ciphertextBytes = android.util.Base64.decode(verificationCiphertext, android.util.Base64.DEFAULT)
-                    val decryptResult = cryptoManager.decrypt(ciphertextBytes)
+                    // 3. Finalize
+                    loggingPort.debug(TAG, "unlockVault: Vault unlocked successfully")
                     
-                    if (decryptResult.isFailure || decryptResult.getOrNull() != com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING) {
-                        loggingPort.error(TAG, "unlockVault: Wrong password (verification mismatch)")
-                        cryptoManager.clearKey() // Critical: clear the wrong key
+                    if (enableBiometric && biometricPort.isBiometricAvailable()) {
+                        loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
                         _startupState.update { 
-                            if (it is AppStartupState.Ready) it.copy(vaultErrorMessage = "Incorrect Vault Password") else it 
+                            if (it is AppStartupState.Ready) it.copy(
+                                isVaultLocked = false, 
+                                vaultErrorMessage = null,
+                                pendingBiometricEnrollmentPassword = password
+                            ) else it 
                         }
                         return@launch
                     }
-                    loggingPort.debug(TAG, "unlockVault: Password verified successfully")
-                } else {
-                    // Initializing vault verification
-                    loggingPort.info(TAG, "unlockVault: Initializing vault verification data")
-                    val magicString = com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING
-                    val encryptResult = cryptoManager.encrypt(magicString)
-                    encryptResult.onSuccess { ciphertext ->
-                        val base64Ciphertext = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP)
-                        cloudSyncPort.updateVaultVerificationData(base64Ciphertext)
-                    }
-                }
 
-                // 3. Finalize
-                loggingPort.debug(TAG, "unlockVault: Vault unlocked successfully")
-                
-                if (enableBiometric && biometricPort.isBiometricAvailable()) {
-                    loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
                     _startupState.update { 
-                        if (it is AppStartupState.Ready) it.copy(
-                            isVaultLocked = false, 
-                            vaultErrorMessage = null,
-                            pendingBiometricEnrollmentPassword = password
-                        ) else it 
+                        if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it 
                     }
-                    return@launch
-                }
-
-                _startupState.update { 
-                    if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it 
+                } finally {
+                    _startupState.update { 
+                        if (it is AppStartupState.Ready) it.copy(isUnlocking = false) else it 
+                    }
                 }
             }
         }
