@@ -1,9 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import app.cash.turbine.test
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelAssignmentView
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
@@ -11,6 +13,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
+import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
@@ -18,13 +21,17 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -41,6 +48,7 @@ class DefaultModelRepositoryImplTest {
     private val ttsProviderDao = mockk<TtsProviderDao>()
     private val mediaProviderDao = mockk<MediaProviderDao>()
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val localEncryption = FakeLocalDataEncryptionService()
 
     @BeforeEach
     fun setup() {
@@ -54,6 +62,7 @@ class DefaultModelRepositoryImplTest {
                 apiCredentialsDao = apiCredentialsDao,
                 ttsProviderDao = ttsProviderDao,
                 mediaProviderDao = mediaProviderDao,
+                localEncryption = localEncryption,
             )
     }
 
@@ -76,7 +85,7 @@ class DefaultModelRepositoryImplTest {
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = modelId,
-                    displayName = "Precise",
+                    displayName = localEncryption.encryptString("Precise"),
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
@@ -117,12 +126,12 @@ class DefaultModelRepositoryImplTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
-                    displayName = "Default",
+                    displayName = localEncryption.encryptString("Default"),
                 )
             coEvery { apiCredentialsDao.getById(credId) } returns
                 ApiCredentialsEntity(
                     id = credId,
-                    displayName = "OpenAI Primary",
+                    displayName = localEncryption.encryptString("OpenAI Primary"),
                     provider = ApiProvider.OPENAI,
                     modelId = "gpt-4o",
                     credentialAlias = "key1",
@@ -155,9 +164,9 @@ class DefaultModelRepositoryImplTest {
             coEvery { ttsProviderDao.getTtsProvider(ttsId.value) } returns
                 TtsProviderEntity(
                     id = ttsId.value,
-                    displayName = "My Grok TTS",
+                    displayName = localEncryption.encryptString("My Grok TTS"),
                     provider = ApiProvider.XAI,
-                    voiceName = "eve",
+                    voiceName = localEncryption.encryptString("eve"),
                     credentialAlias = "xai-key",
                 )
 
@@ -167,6 +176,147 @@ class DefaultModelRepositoryImplTest {
             assertEquals("My Grok TTS", result?.displayName)
             assertEquals("xAI", result?.providerName)
             assertEquals("eve", result?.presetName)
+        }
+
+    @Test
+    fun `get default with resolved display data for media model`() =
+        runTest {
+            val mediaId = MediaProviderId("media-1")
+            coEvery { defaultModelsDao.getDefault(ModelType.IMAGE_GENERATION) } returns
+                DefaultModelEntity(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = mediaId,
+                    updatedAt = 0L,
+                    pendingSync = 0,
+                )
+            coEvery { mediaProviderDao.getMediaProvider(mediaId.value) } returns
+                MediaProviderEntity(
+                    id = mediaId.value,
+                    displayName = localEncryption.encryptString("Imagen"),
+                    provider = ApiProvider.GOOGLE,
+                    capability = MediaCapability.IMAGE,
+                    modelName = localEncryption.encryptString("imagen-3"),
+                    baseUrl = localEncryption.encryptString("https://api.google.com"),
+                    credentialAlias = "google-key",
+                )
+
+            val result = repo.getDefault(ModelType.IMAGE_GENERATION)
+
+            assertEquals(mediaId, result?.mediaProviderId)
+            assertEquals("Imagen", result?.displayName)
+            assertEquals("Google", result?.providerName)
+            assertEquals("Image", result?.presetName)
+        }
+
+    @Test
+    fun `observeDefaults decrypts assignment view labels from Room`() =
+        runTest {
+            every { defaultModelsDao.observeAllWithDetails() } returns
+                flowOf(
+                    listOf(
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.MAIN,
+                            localConfigId = LocalModelConfigurationId("local-cfg"),
+                            apiConfigId = null,
+                            localPresetName = localEncryption.encryptString("Precise"),
+                            apiPresetName = null,
+                            localAssetName = "qwen",
+                            apiAssetName = null,
+                            apiProviderName = null,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.VISION,
+                            localConfigId = null,
+                            apiConfigId = ApiModelConfigurationId("api-cfg"),
+                            localPresetName = null,
+                            apiPresetName = localEncryption.encryptString("Default"),
+                            localAssetName = null,
+                            apiAssetName = localEncryption.encryptString("OpenAI Primary"),
+                            apiProviderName = ApiProvider.OPENAI,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.TTS,
+                            localConfigId = null,
+                            apiConfigId = null,
+                            localPresetName = null,
+                            apiPresetName = null,
+                            localAssetName = null,
+                            apiAssetName = null,
+                            apiProviderName = null,
+                            ttsProviderId = TtsProviderId("tts-1"),
+                            ttsAssetName = localEncryption.encryptString("My Grok TTS"),
+                            ttsProviderName = ApiProvider.XAI,
+                            ttsVoiceName = localEncryption.encryptString("eve"),
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.IMAGE_GENERATION,
+                            localConfigId = null,
+                            apiConfigId = null,
+                            localPresetName = null,
+                            apiPresetName = null,
+                            localAssetName = null,
+                            apiAssetName = null,
+                            apiProviderName = null,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = MediaProviderId("media-1"),
+                            mediaAssetName = localEncryption.encryptString("Imagen"),
+                            mediaProviderName = ApiProvider.GOOGLE,
+                            mediaCapability = MediaCapability.IMAGE,
+                        ),
+                    ),
+                )
+
+            repo.observeDefaults().test {
+                val assignments = awaitItem().associateBy { it.modelType }
+
+                val main = requireNotNull(assignments[ModelType.MAIN])
+                assertEquals("qwen", main.displayName)
+                assertEquals("Precise", main.presetName)
+                assertEquals("Local", main.providerName)
+
+                val vision = requireNotNull(assignments[ModelType.VISION])
+                assertEquals("OpenAI Primary", vision.displayName)
+                assertEquals("Default", vision.presetName)
+                assertEquals("OpenAI", vision.providerName)
+
+                val tts = requireNotNull(assignments[ModelType.TTS])
+                assertEquals("My Grok TTS", tts.displayName)
+                assertEquals("eve", tts.presetName)
+                assertEquals("xAI", tts.providerName)
+
+                val media = requireNotNull(assignments[ModelType.IMAGE_GENERATION])
+                assertEquals("Imagen", media.displayName)
+                assertEquals("Image", media.presetName)
+                assertEquals("Google", media.providerName)
+
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     @Test

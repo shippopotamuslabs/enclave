@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
@@ -21,6 +22,7 @@ class MediaProviderRepositoryImpl
         private val syncTrigger: CloudSyncTrigger,
         private val mediaProviderDao: MediaProviderDao,
         private val apiKeyManager: ApiKeyManager,
+        private val localEncryption: LocalDataEncryptionService,
     ) : MediaProviderRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -52,11 +54,11 @@ class MediaProviderRepositoryImpl
             mediaProviderDao.upsert(
                 MediaProviderEntity(
                     id = id.value,
-                    displayName = asset.displayName,
+                    displayName = localEncryption.encryptString(asset.displayName),
                     provider = asset.provider,
                     capability = asset.capability,
-                    modelName = asset.modelName,
-                    baseUrl = asset.baseUrl,
+                    modelName = asset.modelName?.let(localEncryption::encryptString),
+                    baseUrl = asset.baseUrl?.let(localEncryption::encryptString),
                     credentialAlias = asset.credentialAlias,
                     pendingSync = 1,
                 ),
@@ -78,11 +80,11 @@ class MediaProviderRepositoryImpl
         private fun MediaProviderEntity.toDomain() =
             MediaProviderAsset(
                 id = MediaProviderId(id),
-                displayName = displayName,
+                displayName = localEncryption.decryptString(displayName),
                 provider = provider,
                 capability = capability,
-                modelName = modelName,
-                baseUrl = baseUrl,
+                modelName = modelName?.let(localEncryption::decryptString),
+                baseUrl = baseUrl?.let(localEncryption::decryptString),
                 credentialAlias = credentialAlias,
             )
     }

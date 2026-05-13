@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -106,6 +107,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 chatSummaryDao = chatSummaryDao,
                 embeddingDao = embeddingDao,
+                localEncryption = FakeLocalDataEncryptionService(),
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
                 loggingPort = loggingPort,
@@ -168,6 +170,7 @@ class FirestoreDataSourceTest {
                     chatSummaryDao = chatSummaryDao,
                     embeddingCoordinator = embeddingCoordinator,
                     embeddingDao = embeddingDao,
+                    localEncryption = FakeLocalDataEncryptionService(),
                 )
 
             nullUserIdSource.startListening()
@@ -427,7 +430,7 @@ class FirestoreDataSourceTest {
                 coVerify {
                     chatDao.insertIfAbsent(
                         match {
-                            it.id.value == "chat-1" && it.created.time == 0L && it.name == "Syncing..."
+                            it.id.value == "chat-1" && it.created.time == 0L && it.name == "ENC:v1:Syncing..."
                         },
                     )
                     messageDao.upsert(
@@ -553,6 +556,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val result = nullUserIdSource.syncAllLocalDataToCloud()
@@ -575,12 +579,20 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val chatId = ChatId("chat-1")
                 val messageId = MessageId("msg-1")
-                val chatEntity = ChatEntity(chatId, "Test Chat", java.util.Date(1000L), java.util.Date(2000L), false, pendingSync = 1)
+                val chatEntity =
+                    ChatEntity(
+                        chatId,
+                        "ENC:v1:Test Chat",
+                        java.util.Date(1000L),
+                        java.util.Date(2000L),
+                        false,
+                        pendingSync = 1,
+                    )
                 val msgEntity =
                     MessageEntity(
                         messageId,
                         chatId,
-                        "Hello",
+                        "ENC:v1:Hello",
                         role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER,
                         pendingSync = 1,
                     )
@@ -650,6 +662,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val result = nullUserSource.syncPendingChanges()
@@ -689,12 +702,20 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val chatId = ChatId("chat-1")
                 val messageId = MessageId("msg-1")
-                val chatEntity = ChatEntity(chatId, "Test Chat", java.util.Date(1000L), java.util.Date(2000L), false, pendingSync = 1)
+                val chatEntity =
+                    ChatEntity(
+                        chatId,
+                        "ENC:v1:Test Chat",
+                        java.util.Date(1000L),
+                        java.util.Date(2000L),
+                        false,
+                        pendingSync = 1,
+                    )
                 val msgEntity =
                     MessageEntity(
                         messageId,
                         chatId,
-                        "Hello",
+                        "ENC:v1:Hello",
                         role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER,
                         pendingSync = 1,
                     )
@@ -717,6 +738,119 @@ class FirestoreDataSourceTest {
             }
 
         @Test
+        @DisplayName("uploads locally encrypted field envelopes without re-encrypting for Firestore")
+        fun uploadsLocallyEncryptedFieldEnvelopesWithoutReEncryptingForFirestore() =
+            testScope.runTest {
+                val source =
+                    FirestoreDataSource(
+                        documentDao = documentDao,
+                        firestore = firestore,
+                        chatDao = chatDao,
+                        messageDao = messageDao,
+                        messageTranscriptSegmentDao = mockk(relaxed = true),
+                        memoriesDao = mockk(relaxed = true),
+                        webSearchSourceDao = mockk(relaxed = true),
+                        ttsProviderDao = mockk(relaxed = true),
+                        mediaProviderDao = mockk(relaxed = true),
+                        apiModelConfigurationsDao = mockk(relaxed = true),
+                        localModelsDao = mockk(relaxed = true),
+                        apiCredentialsDao = apiCredentialsDao,
+                        localModelConfigurationsDao = mockk(relaxed = true),
+                        defaultModelsDao = mockk(relaxed = true),
+                        studioMediaDao = mockk(relaxed = true),
+                        studioAlbumDao = mockk(relaxed = true),
+                        messageFileDao = mockk(relaxed = true),
+                        messageVisionAnalysisDao = mockk(relaxed = true),
+                        chatSummaryDao = chatSummaryDao,
+                        embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
+                        apiKeyManager = apiKeyManager,
+                        cryptoManager = cryptoManager,
+                        loggingPort = loggingPort,
+                        externalScope = testScope,
+                        userIdProvider = { "test-user-id" },
+                        embeddingCoordinator = embeddingCoordinator,
+                    )
+                val chatId = ChatId("chat-local")
+                val chatEntity =
+                    ChatEntity(
+                        chatId,
+                        "ENC:v1:Plain Chat",
+                        java.util.Date(1000L),
+                        java.util.Date(2000L),
+                        false,
+                        pendingSync = 1,
+                    )
+
+                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
+                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
+                    com.google.android.gms.tasks.Tasks
+                        .forResult(null)
+
+                val result = source.syncPendingChanges()
+
+                assertTrue(result.isSuccess)
+                verify(exactly = 0) { cryptoManager.encrypt(any()) }
+                coVerify { chatDao.markSynced(listOf(chatId)) }
+            }
+
+        @Test
+        @DisplayName("fails closed when pending Room fields are plaintext")
+        fun failsClosedWhenPendingRoomFieldsArePlaintext() =
+            testScope.runTest {
+                val source =
+                    FirestoreDataSource(
+                        documentDao = documentDao,
+                        firestore = firestore,
+                        chatDao = chatDao,
+                        messageDao = messageDao,
+                        messageTranscriptSegmentDao = mockk(relaxed = true),
+                        memoriesDao = mockk(relaxed = true),
+                        webSearchSourceDao = mockk(relaxed = true),
+                        ttsProviderDao = mockk(relaxed = true),
+                        mediaProviderDao = mockk(relaxed = true),
+                        apiModelConfigurationsDao = mockk(relaxed = true),
+                        localModelsDao = mockk(relaxed = true),
+                        apiCredentialsDao = apiCredentialsDao,
+                        localModelConfigurationsDao = mockk(relaxed = true),
+                        defaultModelsDao = mockk(relaxed = true),
+                        studioMediaDao = mockk(relaxed = true),
+                        studioAlbumDao = mockk(relaxed = true),
+                        messageFileDao = mockk(relaxed = true),
+                        messageVisionAnalysisDao = mockk(relaxed = true),
+                        chatSummaryDao = chatSummaryDao,
+                        embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
+                        apiKeyManager = apiKeyManager,
+                        cryptoManager = cryptoManager,
+                        loggingPort = loggingPort,
+                        externalScope = testScope,
+                        userIdProvider = { "test-user-id" },
+                        embeddingCoordinator = embeddingCoordinator,
+                    )
+                val chatId = ChatId("chat-plain")
+                val chatEntity =
+                    ChatEntity(
+                        chatId,
+                        "Plain Chat",
+                        java.util.Date(1000L),
+                        java.util.Date(2000L),
+                        false,
+                        pendingSync = 1,
+                    )
+
+                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
+                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+
+                val result = source.syncPendingChanges()
+
+                assertTrue(result.isFailure)
+                verify(exactly = 0) { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
+                coVerify(exactly = 0) { chatDao.markSynced(any()) }
+            }
+
+        @Test
         @DisplayName("uses multiple 500-op batches for large pending sets")
         fun usesMultipleBatchesForLargePayloads() =
             testScope.runTest {
@@ -725,7 +859,7 @@ class FirestoreDataSourceTest {
                     (1..550).map { i ->
                         ChatEntity(
                             ChatId("chat-$i"),
-                            "Chat $i",
+                            "ENC:v1:Chat $i",
                             java.util.Date(i.toLong()),
                             java.util.Date(i.toLong()),
                             false,
@@ -748,7 +882,7 @@ class FirestoreDataSourceTest {
         @DisplayName("returns failure on Firestore batch error")
         fun returnsFailureOnBatchError() =
             testScope.runTest {
-                val chatEntity = ChatEntity(ChatId("c1"), "Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
+                val chatEntity = ChatEntity(ChatId("c1"), "ENC:v1:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
                 coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
                 coEvery { messageDao.getClaimedForSync() } returns emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
@@ -798,7 +932,7 @@ class FirestoreDataSourceTest {
                 val entity =
                     com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity(
                         id = id,
-                        displayName = "OpenAI",
+                        displayName = "ENC:v1:OpenAI",
                         provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.OPENAI,
                         modelId = "gpt-4",
                         credentialAlias = "openai_main",
@@ -930,6 +1064,176 @@ class FirestoreDataSourceTest {
                 assertTrue(result.isSuccess)
                 assertEquals(null, result.getOrNull())
             }
+
+        @Test
+        @DisplayName("updateWrappedDek writes the wrappedDek field to the user document")
+        fun updateWrappedDekWritesField() =
+            testScope.runTest {
+                every { userDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+
+                val result = dataSource.updateWrappedDek("wrapped-blob")
+
+                assertTrue(result.isSuccess)
+                verify { userDocRef.set(mapOf("wrappedDek" to "wrapped-blob"), SetOptions.merge()) }
+            }
+
+        @Test
+        @DisplayName("updateWrappedDek with null deletes the wrappedDek field")
+        fun updateWrappedDekWithNullDeletes() =
+            testScope.runTest {
+                every { userDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+                val payloadSlot = slot<Map<String, Any>>()
+
+                val result = dataSource.updateWrappedDek(null)
+
+                assertTrue(result.isSuccess)
+                verify { userDocRef.set(capture(payloadSlot), SetOptions.merge()) }
+                assertTrue(payloadSlot.captured["wrappedDek"] is com.google.firebase.firestore.FieldValue)
+            }
+
+        @Test
+        @DisplayName("getWrappedDek returns the wrappedDek string when present")
+        fun getWrappedDekSucceeds() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns true
+                every { snapshot.getString("wrappedDek") } returns "wrapped-blob"
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.getWrappedDek()
+
+                assertTrue(result.isSuccess)
+                assertEquals("wrapped-blob", result.getOrNull())
+            }
+
+        @Test
+        @DisplayName("getWrappedDek returns null when field absent")
+        fun getWrappedDekReturnsNullWhenAbsent() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns true
+                every { snapshot.getString("wrappedDek") } returns null
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.getWrappedDek()
+
+                assertTrue(result.isSuccess)
+                assertEquals(null, result.getOrNull())
+            }
+
+        @Test
+        @DisplayName("uploadVaultMetadata writes salt, verification, and wrappedDek atomically")
+        fun uploadVaultMetadataWritesAllFields() =
+            testScope.runTest {
+                every { userDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+                val payloadSlot = slot<Map<String, Any>>()
+
+                val result =
+                    dataSource.uploadVaultMetadata(
+                        com.browntowndev.pocketcrew.domain.model.security.VaultMetadata(
+                            salt = "the-salt",
+                            verification = "the-verification",
+                            wrappedDek = "the-wrapped-dek",
+                        ),
+                    )
+
+                assertTrue(result.isSuccess)
+                verify { userDocRef.set(capture(payloadSlot), SetOptions.merge()) }
+                assertEquals("the-salt", payloadSlot.captured["vaultSalt"])
+                assertEquals("the-verification", payloadSlot.captured["vaultVerification"])
+                assertEquals("the-wrapped-dek", payloadSlot.captured["wrappedDek"])
+            }
+
+        @Test
+        @DisplayName("uploadVaultMetadata writes FieldValue.delete() for null verification or wrappedDek")
+        fun uploadVaultMetadataDeletesNullFields() =
+            testScope.runTest {
+                every { userDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+                val payloadSlot = slot<Map<String, Any>>()
+
+                val result =
+                    dataSource.uploadVaultMetadata(
+                        com.browntowndev.pocketcrew.domain.model.security.VaultMetadata(
+                            salt = "the-salt",
+                            verification = null,
+                            wrappedDek = null,
+                        ),
+                    )
+
+                assertTrue(result.isSuccess)
+                verify { userDocRef.set(capture(payloadSlot), SetOptions.merge()) }
+                assertEquals("the-salt", payloadSlot.captured["vaultSalt"])
+                assertTrue(payloadSlot.captured["vaultVerification"] is com.google.firebase.firestore.FieldValue)
+                assertTrue(payloadSlot.captured["wrappedDek"] is com.google.firebase.firestore.FieldValue)
+            }
+
+        @Test
+        @DisplayName("fetchVaultMetadata returns null when user doc has no salt")
+        fun fetchVaultMetadataReturnsNullWhenNoSalt() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns true
+                every { snapshot.getString("vaultSalt") } returns null
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.fetchVaultMetadata()
+
+                assertTrue(result.isSuccess)
+                assertEquals(null, result.getOrNull())
+            }
+
+        @Test
+        @DisplayName("fetchVaultMetadata returns null when document doesn't exist")
+        fun fetchVaultMetadataReturnsNullWhenNoDoc() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns false
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.fetchVaultMetadata()
+
+                assertTrue(result.isSuccess)
+                assertEquals(null, result.getOrNull())
+            }
+
+        @Test
+        @DisplayName("fetchVaultMetadata returns full metadata when all fields present")
+        fun fetchVaultMetadataReturnsAllFields() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns true
+                every { snapshot.getString("vaultSalt") } returns "the-salt"
+                every { snapshot.getString("vaultVerification") } returns "the-ver"
+                every { snapshot.getString("wrappedDek") } returns "the-wrapped"
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.fetchVaultMetadata()
+
+                assertTrue(result.isSuccess)
+                val metadata = result.getOrNull()!!
+                assertEquals("the-salt", metadata.salt)
+                assertEquals("the-ver", metadata.verification)
+                assertEquals("the-wrapped", metadata.wrappedDek)
+            }
+
+        @Test
+        @DisplayName("fetchVaultMetadata returns metadata with null wrappedDek when field absent")
+        fun fetchVaultMetadataReturnsNullWrappedDekWhenAbsent() =
+            testScope.runTest {
+                val snapshot = mockk<DocumentSnapshot>()
+                every { snapshot.exists() } returns true
+                every { snapshot.getString("vaultSalt") } returns "the-salt"
+                every { snapshot.getString("vaultVerification") } returns "the-ver"
+                every { snapshot.getString("wrappedDek") } returns null
+                every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+                val result = dataSource.fetchVaultMetadata()
+
+                assertTrue(result.isSuccess)
+                val metadata = result.getOrNull()!!
+                assertEquals(null, metadata.wrappedDek)
+                assertEquals("the-ver", metadata.verification)
+            }
     }
 
     @Nested
@@ -969,6 +1273,7 @@ class FirestoreDataSourceTest {
                     chatSummaryDao = chatSummaryDao,
                     embeddingCoordinator = embeddingCoordinator,
                     embeddingDao = embeddingDao,
+                    localEncryption = FakeLocalDataEncryptionService(),
                 )
 
             val configCollection = mockk<CollectionReference>(relaxed = true)
@@ -1064,6 +1369,7 @@ class FirestoreDataSourceTest {
                     chatSummaryDao = chatSummaryDao,
                     embeddingCoordinator = embeddingCoordinator,
                     embeddingDao = embeddingDao,
+                    localEncryption = FakeLocalDataEncryptionService(),
                 )
 
             val visionCollection = mockk<CollectionReference>(relaxed = true)
@@ -1099,7 +1405,7 @@ class FirestoreDataSourceTest {
                 coVerify {
                     messageDao.insertIfAbsent(
                         match {
-                            it.id.value == "msg-1" && it.content == "Syncing..."
+                            it.id.value == "msg-1" && it.content == "ENC:v1:Syncing..."
                         },
                     )
                     messageVisionAnalysisDao.upsert(
@@ -1246,6 +1552,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1306,6 +1613,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1362,6 +1670,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1424,6 +1733,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1495,6 +1805,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
                 val collection = mockk<CollectionReference>(relaxed = true)
@@ -1564,6 +1875,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1639,6 +1951,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1714,6 +2027,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1793,6 +2107,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
 
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -1895,6 +2210,7 @@ class FirestoreDataSourceTest {
                         chatSummaryDao = chatSummaryDao,
                         embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
+                        localEncryption = FakeLocalDataEncryptionService(),
                     )
                 val listenerSlot = slot<EventListener<QuerySnapshot>>()
                 val galleryCollection = mockk<CollectionReference>(relaxed = true)
@@ -1975,5 +2291,13 @@ class FirestoreDataSourceTest {
         every { snapshot.documentChanges } returns changes
         every { snapshot.size() } returns docs.size
         return snapshot
+    }
+
+    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
+
+        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
+
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
     }
 }

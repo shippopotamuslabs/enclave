@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Task
@@ -35,6 +36,7 @@ class MessageFileCloudSyncWorkerTest {
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val userIdProvider: () -> String? = { "user123" }
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val localEncryption = FakeLocalDataEncryptionService()
 
     private lateinit var worker: MessageFileCloudSyncWorker
 
@@ -53,6 +55,7 @@ class MessageFileCloudSyncWorkerTest {
                 cryptoManager,
                 userIdProvider,
                 syncTrigger,
+                localEncryption,
             )
     }
 
@@ -74,7 +77,7 @@ class MessageFileCloudSyncWorkerTest {
                     name = "test.txt",
                     mimeType = MimeType.PLAIN_TEXT,
                     content = "test content",
-                    stagingRemoteUrl = stagingUrl,
+                    stagingRemoteUrl = "ENC:v1:$stagingUrl",
                 )
 
             coEvery { messageFileDao.getPendingUploads() } returns listOf(file)
@@ -93,6 +96,6 @@ class MessageFileCloudSyncWorkerTest {
 
             // Assert
             assertEquals(ListenableWorker.Result.success(), result)
-            coVerify { messageFileDao.markUploaded(fileId, stagingUrl, any()) }
+            coVerify { messageFileDao.markUploaded(fileId, "ENC:v1:$stagingUrl", any()) }
         }
 }

@@ -2,12 +2,14 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelAssignmentView
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
@@ -33,6 +35,7 @@ class DefaultModelRepositoryImpl
         private val apiCredentialsDao: ApiCredentialsDao,
         private val ttsProviderDao: TtsProviderDao,
         private val mediaProviderDao: MediaProviderDao,
+        private val localEncryption: LocalDataEncryptionService,
     ) : DefaultModelRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -43,43 +46,7 @@ class DefaultModelRepositoryImpl
 
         override fun observeDefaults(): Flow<List<DefaultModelAssignment>> =
             defaultModelsDao.observeAllWithDetails().map { views ->
-                views.map { view ->
-                    val displayName =
-                        when {
-                            view.localConfigId != null -> view.localAssetName
-                            view.apiConfigId != null -> view.apiAssetName
-                            view.ttsProviderId != null -> view.ttsAssetName
-                            view.mediaProviderId != null -> view.mediaAssetName
-                            else -> null
-                        }
-                    val presetName =
-                        when {
-                            view.localConfigId != null -> view.localPresetName
-                            view.apiConfigId != null -> view.apiPresetName
-                            view.ttsProviderId != null -> view.ttsVoiceName
-                            view.mediaProviderId != null -> view.mediaCapability?.name
-                            else -> null
-                        }
-                    val providerName =
-                        when {
-                            view.localConfigId != null -> "Local"
-                            view.apiConfigId != null -> view.apiProviderName?.displayName
-                            view.ttsProviderId != null -> view.ttsProviderName?.displayName
-                            view.mediaProviderId != null -> view.mediaProviderName?.displayName
-                            else -> null
-                        }
-
-                    DefaultModelAssignment(
-                        modelType = view.modelType,
-                        localConfigId = view.localConfigId,
-                        apiConfigId = view.apiConfigId,
-                        ttsProviderId = view.ttsProviderId,
-                        mediaProviderId = view.mediaProviderId,
-                        displayName = displayName,
-                        presetName = presetName,
-                        providerName = providerName,
-                    )
-                }
+                views.map { it.toDomain() }
             }
 
         override suspend fun setDefault(
@@ -118,29 +85,29 @@ class DefaultModelRepositoryImpl
                     val model = localModelsDao.getById(config.localModelId)
                     displayName = model?.huggingFaceModelName
                     providerName = "Local"
-                    presetName = config.displayName
+                    presetName = config.displayName.decryptStored()
                 }
             } else if (entity.apiConfigId != null) {
                 val config = apiModelConfigurationsDao.getById(entity.apiConfigId)
                 if (config != null) {
                     val creds = apiCredentialsDao.getById(config.apiCredentialsId)
                     if (creds != null) {
-                        displayName = creds.displayName
+                        displayName = creds.displayName.decryptStored()
                         providerName = creds.provider.displayName
-                        presetName = config.displayName
+                        presetName = config.displayName.decryptStored()
                     }
                 }
             } else if (entity.ttsProviderId != null) {
                 val ttsProvider = ttsProviderDao.getTtsProvider(entity.ttsProviderId.value)
                 if (ttsProvider != null) {
-                    displayName = ttsProvider.displayName
+                    displayName = ttsProvider.displayName.decryptStored()
                     providerName = ttsProvider.provider.displayName
-                    presetName = ttsProvider.voiceName
+                    presetName = ttsProvider.voiceName.decryptStored()
                 }
             } else if (entity.mediaProviderId != null) {
                 val mediaProvider = mediaProviderDao.getMediaProvider(entity.mediaProviderId.value)
                 if (mediaProvider != null) {
-                    displayName = mediaProvider.displayName
+                    displayName = mediaProvider.displayName.decryptStored()
                     providerName = mediaProvider.provider.displayName
                     presetName = mediaProvider.capability.displayName
                 }
@@ -157,4 +124,41 @@ class DefaultModelRepositoryImpl
                 presetName = presetName,
             )
         }
+
+        private fun DefaultModelAssignmentView.toDomain(): DefaultModelAssignment =
+            DefaultModelAssignment(
+                modelType = modelType,
+                localConfigId = localConfigId,
+                apiConfigId = apiConfigId,
+                ttsProviderId = ttsProviderId,
+                mediaProviderId = mediaProviderId,
+                displayName =
+                    when {
+                        localConfigId != null -> localAssetName
+                        apiConfigId != null -> apiAssetName.decryptStoredOrNull()
+                        ttsProviderId != null -> ttsAssetName.decryptStoredOrNull()
+                        mediaProviderId != null -> mediaAssetName.decryptStoredOrNull()
+                        else -> null
+                    },
+                presetName =
+                    when {
+                        localConfigId != null -> localPresetName.decryptStoredOrNull()
+                        apiConfigId != null -> apiPresetName.decryptStoredOrNull()
+                        ttsProviderId != null -> ttsVoiceName.decryptStoredOrNull()
+                        mediaProviderId != null -> mediaCapability?.displayName
+                        else -> null
+                    },
+                providerName =
+                    when {
+                        localConfigId != null -> "Local"
+                        apiConfigId != null -> apiProviderName?.displayName
+                        ttsProviderId != null -> ttsProviderName?.displayName
+                        mediaProviderId != null -> mediaProviderName?.displayName
+                        else -> null
+                    },
+            )
+
+        private fun String.decryptStored(): String = localEncryption.decryptString(this)
+
+        private fun String?.decryptStoredOrNull(): String? = this?.let(localEncryption::decryptString)
     }

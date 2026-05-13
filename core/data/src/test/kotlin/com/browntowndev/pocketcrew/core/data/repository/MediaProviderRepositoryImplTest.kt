@@ -27,7 +27,7 @@ class MediaProviderRepositoryImplTest {
 
     @BeforeEach
     fun setUp() {
-        repository = MediaProviderRepositoryImpl(syncTrigger, mediaProviderDao, apiKeyManager)
+        repository = MediaProviderRepositoryImpl(syncTrigger, mediaProviderDao, apiKeyManager, FakeLocalDataEncryptionService())
     }
 
     @Test
@@ -68,6 +68,55 @@ class MediaProviderRepositoryImplTest {
             assertEquals("1", resultId.value)
             coVerify { mediaProviderDao.upsert(any()) }
             verify { apiKeyManager.save("google-key", "api-key") }
+        }
+
+    @Test
+    fun `saveMediaProvider stores sensitive fields encrypted and reads them decrypted`() =
+        runTest {
+            val encryptedRepository =
+                MediaProviderRepositoryImpl(
+                    syncTrigger,
+                    mediaProviderDao,
+                    apiKeyManager,
+                    FakeLocalDataEncryptionService(),
+                )
+            val asset =
+                MediaProviderAsset(
+                    MediaProviderId("1"),
+                    "Imagen",
+                    ApiProvider.GOOGLE,
+                    MediaCapability.IMAGE,
+                    "imagen-3",
+                    "https://api.google.com",
+                    "google-key",
+                )
+            coEvery { mediaProviderDao.upsert(any()) } returns Unit
+            coEvery { mediaProviderDao.getMediaProvider("1") } returns
+                MediaProviderEntity(
+                    "1",
+                    "ENC:v1:Imagen",
+                    ApiProvider.GOOGLE,
+                    MediaCapability.IMAGE,
+                    "ENC:v1:imagen-3",
+                    "ENC:v1:https://api.google.com",
+                    "google-key",
+                )
+
+            encryptedRepository.saveMediaProvider(asset, null)
+            val loaded = encryptedRepository.getMediaProvider(MediaProviderId("1"))
+
+            coVerify {
+                mediaProviderDao.upsert(
+                    match {
+                        it.displayName == "ENC:v1:Imagen" &&
+                            it.modelName == "ENC:v1:imagen-3" &&
+                            it.baseUrl == "ENC:v1:https://api.google.com"
+                    },
+                )
+            }
+            assertEquals(asset.displayName, loaded?.displayName)
+            assertEquals(asset.modelName, loaded?.modelName)
+            assertEquals(asset.baseUrl, loaded?.baseUrl)
         }
 
     @Test

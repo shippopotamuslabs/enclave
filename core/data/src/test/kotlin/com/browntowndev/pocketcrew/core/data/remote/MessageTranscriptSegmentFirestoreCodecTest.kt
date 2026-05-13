@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.core.data.remote
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptKindEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.DocumentSnapshot
 import io.mockk.every
 import io.mockk.mockk
@@ -11,15 +10,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.nio.charset.StandardCharsets
 
 @DisplayName("MessageTranscriptSegmentFirestoreCodec")
 class MessageTranscriptSegmentFirestoreCodecTest {
-    private fun utf8Blob(text: String): Blob = Blob.fromBytes(text.toByteArray(StandardCharsets.UTF_8))
-
-    private fun decryptUtf8(blob: Blob): String =
-        String(blob.toBytes(), StandardCharsets.UTF_8)
-
     @Test
     @DisplayName("round trip preserves assistant text without thinking metadata")
     fun roundTripAssistantTextWithoutThinkingMetadata() {
@@ -37,11 +30,10 @@ class MessageTranscriptSegmentFirestoreCodecTest {
                 updatedAt = 777L,
                 deleted = false,
             )
-        val textBlob = utf8Blob(entity.text)
-        val map = messageTranscriptSegmentToFirestoreMap(entity, "chat-z", textBlob)
+        val map = messageTranscriptSegmentToFirestoreMap(entity, "chat-z", entity.text)
         val doc = transcriptSegmentDoc(entity.id, map)
 
-        val back = messageTranscriptSegmentFromFirestore(doc, ::decryptUtf8)
+        val back = messageTranscriptSegmentFromFirestore(doc) { doc.getString("text") }
 
         assertEquals(entity.copy(pendingSync = 0), back)
     }
@@ -63,11 +55,10 @@ class MessageTranscriptSegmentFirestoreCodecTest {
                 updatedAt = 888L,
                 deleted = false,
             )
-        val textBlob = utf8Blob(entity.text)
-        val map = messageTranscriptSegmentToFirestoreMap(entity, "chat-y", textBlob)
+        val map = messageTranscriptSegmentToFirestoreMap(entity, "chat-y", entity.text)
         val doc = transcriptSegmentDoc(entity.id, map)
 
-        val back = messageTranscriptSegmentFromFirestore(doc, ::decryptUtf8)
+        val back = messageTranscriptSegmentFromFirestore(doc) { doc.getString("text") }
 
         assertEquals(entity.copy(pendingSync = 0), back)
     }
@@ -88,7 +79,7 @@ class MessageTranscriptSegmentFirestoreCodecTest {
         every { doc.id } returns id
         every { doc.getString("chat_id") } returns data["chat_id"] as String?
         every { doc.getString("message_id") } returns data["message_id"] as String?
-        every { doc.getBlob("text") } returns data["text"] as Blob?
+        every { doc.getString("text") } returns data["text"] as String?
         every { doc.getString("kind") } returns data["kind"] as String?
         every { doc.getLong("ordinal") } returns (data["ordinal"] as Number).toLong()
         every { doc.getLong("updated_at") } returns data["updated_at"] as Long?

@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -58,6 +59,7 @@ class ApiKeyManagerSyncAdapterTest {
                 externalScope = testScope,
                 userIdProvider = { "test-user-id" },
                 embeddingCoordinator = mockk(relaxed = true),
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

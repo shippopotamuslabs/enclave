@@ -26,7 +26,7 @@ class TtsProviderRepositoryImplTest {
 
     @BeforeEach
     fun setUp() {
-        repository = TtsProviderRepositoryImpl(syncTrigger, ttsProviderDao, apiKeyManager)
+        repository = TtsProviderRepositoryImpl(syncTrigger, ttsProviderDao, apiKeyManager, FakeLocalDataEncryptionService())
     }
 
     @Test
@@ -62,14 +62,65 @@ class TtsProviderRepositoryImplTest {
                 ttsProviderDao.upsertTtsProvider(
                     match {
                         it.id == "1" &&
-                            it.displayName == "xAI TTS" &&
+                            it.displayName == "ENC:v1:xAI TTS" &&
                             it.provider == ApiProvider.XAI &&
-                            it.baseUrl == "https://api.x.ai" &&
+                            it.baseUrl == "ENC:v1:https://api.x.ai" &&
                             it.credentialAlias == "alias-x"
                     },
                 )
                 apiKeyManager.save("alias-x", apiKey)
             }
+        }
+
+    @Test
+    fun `saveTtsProvider stores sensitive fields encrypted and reads them decrypted`() =
+        runTest {
+            val encryptedRepository =
+                TtsProviderRepositoryImpl(
+                    syncTrigger,
+                    ttsProviderDao,
+                    apiKeyManager,
+                    FakeLocalDataEncryptionService(),
+                )
+            val asset =
+                TtsProviderAsset(
+                    TtsProviderId("1"),
+                    "xAI TTS",
+                    ApiProvider.XAI,
+                    "eve",
+                    "tts-1",
+                    "https://api.x.ai",
+                    "alias-x",
+                )
+            coEvery { ttsProviderDao.upsertTtsProvider(any()) } returns Unit
+            coEvery { ttsProviderDao.getTtsProvider("1") } returns
+                TtsProviderEntity(
+                    "1",
+                    "ENC:v1:xAI TTS",
+                    ApiProvider.XAI,
+                    "ENC:v1:eve",
+                    "ENC:v1:tts-1",
+                    "ENC:v1:https://api.x.ai",
+                    "alias-x",
+                )
+
+            encryptedRepository.saveTtsProvider(asset, null)
+            val loaded = encryptedRepository.getTtsProvider(TtsProviderId("1"))
+
+            coVerify {
+                ttsProviderDao.upsertTtsProvider(
+                    match {
+                        it.displayName == "ENC:v1:xAI TTS" &&
+                            it.voiceName == "ENC:v1:eve" &&
+                            it.modelName == "ENC:v1:tts-1" &&
+                            it.baseUrl == "ENC:v1:https://api.x.ai"
+                    },
+                )
+            }
+            assertEquals(asset.displayName, loaded?.displayName)
+            assertEquals(asset.voiceName, loaded?.voiceName)
+            assertEquals(asset.modelName, loaded?.modelName)
+            assertEquals(asset.baseUrl, loaded?.baseUrl)
         }
 
     @Test

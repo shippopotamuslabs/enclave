@@ -31,6 +31,7 @@ class MemoriesRepositorySyncTest {
                 memoriesDao = memoriesDao,
                 embeddingDao = embeddingDao,
                 embeddingEngine = embeddingEngine,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

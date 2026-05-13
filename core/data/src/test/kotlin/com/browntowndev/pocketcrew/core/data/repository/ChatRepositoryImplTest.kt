@@ -9,7 +9,9 @@ import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
@@ -36,6 +38,7 @@ class ChatRepositoryImplTest {
     private lateinit var messageTranscriptSegmentDao: MessageTranscriptSegmentDao
     private lateinit var documentDao: DocumentDao
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+    private lateinit var localEncryption: LocalDataEncryptionService
     private lateinit var repository: ChatRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -49,6 +52,7 @@ class ChatRepositoryImplTest {
         messageTranscriptSegmentDao = mockk<MessageTranscriptSegmentDao>(relaxed = true)
         documentDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
+        localEncryption = FakeLocalDataEncryptionService()
 
         // Mock transaction provider to run the block immediately
         coEvery { transactionProvider.runInTransaction<Any>(any()) } answers {
@@ -64,6 +68,7 @@ class ChatRepositoryImplTest {
                 tavilySourceDao,
                 documentDao,
                 transactionProvider,
+                localEncryption,
             )
     }
 
@@ -178,4 +183,54 @@ class ChatRepositoryImplTest {
                 "Extracted source should have extracted=true from tavily_source table",
             )
         }
+
+    @Test
+    fun `createChat stores encrypted title while getAllChats returns plaintext`() =
+        runTest {
+            val chat =
+                Chat(
+                    id = ChatId("chat-1"),
+                    name = "Private title",
+                    created = testDate,
+                    lastModified = testDate,
+                    pinned = false,
+                )
+            coEvery { chatDao.upsert(any()) } returns 1L
+
+            repository.createChat(chat)
+
+            coVerify {
+                chatDao.upsert(
+                    match {
+                        it.name == "ENC:v1:Private title" &&
+                            it.name != "Private title"
+                    },
+                )
+            }
+
+            every { chatDao.getAllChats() } returns
+                flowOf(
+                    listOf(
+                        ChatEntity(
+                            id = ChatId("chat-1"),
+                            name = "ENC:v1:Private title",
+                            created = testDate,
+                            lastModified = testDate,
+                            pinned = false,
+                        ),
+                    ),
+                )
+
+            val result = repository.getAllChats().first()
+
+            assertEquals("Private title", result.single().name)
+        }
+
+    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
+
+        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
+
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
+    }
 }

@@ -43,6 +43,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
                 chatSummaryDao,
                 embeddingDao,
                 transactionProvider,
+                FakeLocalDataEncryptionService(),
             )
     }
 

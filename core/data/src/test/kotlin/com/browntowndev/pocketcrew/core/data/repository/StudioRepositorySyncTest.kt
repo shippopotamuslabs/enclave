@@ -34,7 +34,8 @@ class StudioRepositorySyncTest {
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
                 context = context,
-                syncTrigger = syncTrigger, // This will fail compilation initially because we need to add it to the constructor
+                syncTrigger = syncTrigger,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

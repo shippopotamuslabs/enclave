@@ -19,6 +19,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultMismatchConfirmDialog
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.feature.settings.components.UnlockVaultScreen
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -70,8 +71,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             Box(modifier = Modifier.Companion.fillMaxSize())
                         }
                         is AppStartupState.Ready -> {
-                            if (currentState.pendingBiometricEnrollmentPassword != null) {
-                                LaunchedEffect(currentState.pendingBiometricEnrollmentPassword) {
+                            if (currentState.isBiometricEnrollmentPending) {
+                                LaunchedEffect(currentState.isBiometricEnrollmentPending) {
                                     val cipher = viewModel.getBiometricEncryptCipher()
                                     if (cipher != null) {
                                         val result = biometricHelper.showPrompt(
@@ -80,12 +81,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             cipher = cipher
                                         )
                                         result.onSuccess { crypto ->
-                                            crypto?.cipher?.let { 
-                                                viewModel.finalizeBiometricEnrollment(
-                                                    password = currentState.pendingBiometricEnrollmentPassword,
-                                                    cipher = it
-                                                ) 
-                                            }
+                                            crypto?.cipher?.let { viewModel.finalizeBiometricEnrollment(it) }
                                         }.onFailure {
                                             loggingPort.error(TAG, "Biometric enrollment failed", it)
                                             viewModel.cancelBiometricEnrollment()
@@ -118,15 +114,9 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     authState = currentState.authState,
                                     isUnlocking = currentState.isUnlocking,
                                     errorMessage = currentState.vaultErrorMessage,
-                                    isReindexing = currentState.isReindexing,
-                                    reindexProgress = currentState.reindexProgress,
                                     onLoginClick = {
                                         loggingPort.debug(TAG, "UnlockVaultScreen: Sign in clicked")
                                         viewModel.loginWithGoogle()
-                                    },
-                                    onSkipClick = {
-                                        loggingPort.debug(TAG, "UnlockVaultScreen: Skip clicked")
-                                        viewModel.skipLogin()
                                     },
                                     onSubmitVaultPassword = { password, enableBiometric ->
                                         loggingPort.debug(TAG, "Vault dialog submitted bio=$enableBiometric")
@@ -141,6 +131,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     errorMessage = currentState.initializationError,
                                     navigationIntent = latestIntent,
                                 )
+
+                                currentState.pendingVaultReconciliation?.let { pending ->
+                                    VaultMismatchConfirmDialog(
+                                        isReconciling = pending.isReconciling,
+                                        onConfirm = { viewModel.confirmAdoptCloud() },
+                                        onCancel = { viewModel.cancelReconciliation() },
+                                    )
+                                }
                             }
                         }
                     }

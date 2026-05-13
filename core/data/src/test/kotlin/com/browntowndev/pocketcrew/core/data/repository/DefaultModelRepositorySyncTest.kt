@@ -40,6 +40,7 @@ class DefaultModelRepositorySyncTest {
                 apiCredentialsDao = apiCredentialsDao,
                 ttsProviderDao = ttsProviderDao,
                 mediaProviderDao = mediaProviderDao,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
@@ -20,6 +21,7 @@ class TtsProviderRepositoryImpl
         private val syncTrigger: CloudSyncTrigger,
         private val ttsProviderDao: TtsProviderDao,
         private val apiKeyManager: ApiKeyManager,
+        private val localEncryption: LocalDataEncryptionService,
     ) : TtsProviderRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -46,11 +48,11 @@ class TtsProviderRepositoryImpl
             val entity =
                 TtsProviderEntity(
                     id = id.value,
-                    displayName = asset.displayName,
+                    displayName = localEncryption.encryptString(asset.displayName),
                     provider = asset.provider,
-                    voiceName = asset.voiceName,
-                    modelName = asset.modelName,
-                    baseUrl = asset.baseUrl,
+                    voiceName = localEncryption.encryptString(asset.voiceName),
+                    modelName = asset.modelName?.let(localEncryption::encryptString),
+                    baseUrl = asset.baseUrl?.let(localEncryption::encryptString),
                     credentialAlias = asset.credentialAlias,
                     pendingSync = 1,
                 )
@@ -77,11 +79,11 @@ class TtsProviderRepositoryImpl
         private fun TtsProviderEntity.toDomain() =
             TtsProviderAsset(
                 id = TtsProviderId(id),
-                displayName = displayName,
+                displayName = localEncryption.decryptString(displayName),
                 provider = provider,
-                voiceName = voiceName,
-                modelName = modelName,
-                baseUrl = baseUrl,
+                voiceName = localEncryption.decryptString(voiceName),
+                modelName = modelName?.let(localEncryption::decryptString),
+                baseUrl = baseUrl?.let(localEncryption::decryptString),
                 credentialAlias = credentialAlias,
             )
     }

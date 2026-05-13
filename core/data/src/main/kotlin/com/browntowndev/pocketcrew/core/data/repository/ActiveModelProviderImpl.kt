@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -20,6 +21,7 @@ class ActiveModelProviderImpl
         private val localConfigsDao: LocalModelConfigurationsDao,
         private val apiCredentialsDao: ApiCredentialsDao,
         private val apiConfigsDao: ApiModelConfigurationsDao,
+        private val localEncryption: LocalDataEncryptionService,
     ) : ActiveModelProviderPort {
         @Suppress("ReturnCount")
         override suspend fun getActiveConfiguration(modelType: ModelType): ActiveModelConfiguration? {
@@ -32,9 +34,9 @@ class ActiveModelProviderImpl
                 return ActiveModelConfiguration(
                     id = config.id,
                     isLocal = true,
-                    name = config.displayName,
+                    name = localEncryption.decryptString(config.displayName),
                     modelId = model.localFilename,
-                    systemPrompt = config.systemPrompt,
+                    systemPrompt = config.systemPrompt?.let(localEncryption::decryptString),
                     isMultimodal = model.isMultimodal,
                     reasoningEffort = null,
                     temperature = config.temperature,
@@ -64,9 +66,9 @@ class ActiveModelProviderImpl
                 return ActiveModelConfiguration(
                     id = config.id,
                     isLocal = false,
-                    name = config.displayName,
+                    name = localEncryption.decryptString(config.displayName),
                     modelId = credentials.modelId,
-                    systemPrompt = config.systemPrompt,
+                    systemPrompt = localEncryption.decryptString(config.systemPrompt),
                     isMultimodal = credentials.isMultimodal,
                     reasoningEffort =
                         config.reasoningEffort?.let {

@@ -71,6 +71,9 @@ import com.browntowndev.pocketcrew.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
+import com.browntowndev.pocketcrew.core.data.security.CryptoAtRestEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.LocalVaultMetadataStore
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -89,7 +92,6 @@ import com.browntowndev.pocketcrew.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
@@ -109,6 +111,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
 import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
@@ -484,6 +487,14 @@ abstract class DataRepositoryModule {
     abstract fun bindCryptoManager(
         impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl,
     ): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalDataEncryptionService(impl: CryptoAtRestEncryptionService): LocalDataEncryptionService
+
+    @Binds
+    @Singleton
+    abstract fun bindVaultMetadataPort(impl: LocalVaultMetadataStore): VaultMetadataPort
 
     @Binds
     @Singleton

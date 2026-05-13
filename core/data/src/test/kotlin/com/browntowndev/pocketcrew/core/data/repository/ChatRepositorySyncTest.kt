@@ -45,6 +45,7 @@ class ChatRepositorySyncTest {
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
+                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 

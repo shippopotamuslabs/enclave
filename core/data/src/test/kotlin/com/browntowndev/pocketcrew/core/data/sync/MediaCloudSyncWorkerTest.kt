@@ -5,6 +5,7 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Tasks
@@ -34,6 +35,7 @@ class MediaCloudSyncWorkerTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val localEncryption = FakeLocalDataEncryptionService()
     private val userIdProvider = { "user123" }
 
     private lateinit var worker: MediaCloudSyncWorker
@@ -51,6 +53,7 @@ class MediaCloudSyncWorkerTest {
                 cryptoManager,
                 userIdProvider,
                 syncTrigger,
+                localEncryption,
             )
     }
 
@@ -71,7 +74,7 @@ class MediaCloudSyncWorkerTest {
                     prompt = "test",
                     mediaUri = "file:///tmp/media1.jpg",
                     mediaType = "IMAGE",
-                    stagingRemoteUrl = stagingUrl,
+                    stagingRemoteUrl = "ENC:v1:$stagingUrl",
                 )
 
             coEvery { studioMediaDao.getPendingUploads() } returns listOf(media)
@@ -96,6 +99,6 @@ class MediaCloudSyncWorkerTest {
             // Verify we DID NOT try to upload
             coVerify(exactly = 0) { storageRef.putBytes(any()) }
             // Verify we marked it uploaded with the recovered URL
-            coVerify { studioMediaDao.markUploaded(mediaId, stagingUrl, any()) }
+            coVerify { studioMediaDao.markUploaded(mediaId, "ENC:v1:$stagingUrl", any()) }
         }
 }

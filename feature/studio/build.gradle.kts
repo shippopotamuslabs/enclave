@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.feature.studio"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34

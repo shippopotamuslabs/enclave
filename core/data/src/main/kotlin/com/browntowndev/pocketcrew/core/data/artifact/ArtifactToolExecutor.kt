@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingEntity
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
 import com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
@@ -57,6 +58,7 @@ class ArtifactToolExecutor
         private val embeddingDao: EmbeddingDao,
         private val embeddingEngine: EmbeddingEnginePort,
         private val documentValidation: DocumentValidationPort,
+        private val localEncryption: LocalDataEncryptionService,
         @ApplicationScope private val externalScope: CoroutineScope,
     ) : ToolExecutorPort {
         private val json =
@@ -118,24 +120,25 @@ class ArtifactToolExecutor
                     put("blocks", JsonArray(emptyList()))
                 }
 
-            val entity =
-                DocumentEntity(
-                    id = artifactId,
-                    messageId = messageId,
-                    title = params.title,
-                    author = params.author,
-                    targetFormat = null,
-                    json = initialDocJson.toString(),
-                    pendingSync = 1,
-                )
-
-            documentValidation.validate(entity.json).onFailure { cause ->
+            val rawJson = initialDocJson.toString()
+            documentValidation.validate(rawJson).onFailure { cause ->
                 return documentSchemaViolationResult(
                     toolName = ToolDefinition.START_ARTIFACT.name,
                     phase = "initial_empty_document",
                     cause = cause,
                 )
             }
+
+            val entity =
+                DocumentEntity(
+                    id = artifactId,
+                    messageId = messageId,
+                    title = localEncryption.encryptString(params.title),
+                    author = localEncryption.encryptNullable(params.author),
+                    targetFormat = null,
+                    json = localEncryption.encryptString(rawJson),
+                    pendingSync = 1,
+                )
 
             documentDao.insertDocument(entity)
 
@@ -169,7 +172,7 @@ class ArtifactToolExecutor
                         resultJson = """{"status":"error","message":"Artifact not found: ${params.artifactId}"}""",
                     )
 
-            val currentDoc: JsonObject = json.parseToJsonElement(entity.json) as JsonObject
+            val currentDoc: JsonObject = json.parseToJsonElement(localEncryption.decryptString(entity.json)) as JsonObject
             val previousBlocks = (currentDoc["blocks"] as JsonArray)
             val currentBlocks = previousBlocks.toMutableList()
             val startIndex = currentBlocks.size
@@ -198,7 +201,7 @@ class ArtifactToolExecutor
             val updatedEntity =
                 entity.copy(
                     messageId = assistantMessageId ?: entity.messageId,
-                    json = mergedJson,
+                    json = localEncryption.encryptString(mergedJson),
                     updatedAt = System.currentTimeMillis(),
                     pendingSync = 1,
                 )
@@ -258,7 +261,7 @@ class ArtifactToolExecutor
                         put("message", JsonPrimitive(message))
                         if (params.isComplete) {
                             put("fullDocument", updatedDoc)
-                            put("title", JsonPrimitive(entity.title))
+                            put("title", JsonPrimitive(localEncryption.decryptString(entity.title)))
                         }
                     }.toString(),
             )

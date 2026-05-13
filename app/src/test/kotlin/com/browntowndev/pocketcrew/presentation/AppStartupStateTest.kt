@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.presentation
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.port.auth.AuthState
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import io.mockk.every
 import io.mockk.mockk
@@ -16,7 +16,7 @@ class AppStartupStateTest {
     @Test
     fun `Ready state should have isUnlocking property defaulting to false`() {
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = null
         )
 
@@ -26,7 +26,7 @@ class AppStartupStateTest {
     @Test
     fun `Ready state isUnlocking property can be set to true`() {
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = null,
             isUnlocking = true
         )
@@ -37,7 +37,7 @@ class AppStartupStateTest {
     @Test
     fun `Ready state isUnlocking property survives copy operation`() {
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = null,
             isUnlocking = true
         )
@@ -50,7 +50,7 @@ class AppStartupStateTest {
     @Test
     fun `initialRoute should be MODEL_DOWNLOAD when initializationError is not null`() {
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = null,
             initializationError = "Error"
         )
@@ -65,7 +65,7 @@ class AppStartupStateTest {
         every { mockModelsResult.modelsToDownload } returns listOf(mockAsset)
 
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = mockModelsResult
         )
 
@@ -75,7 +75,7 @@ class AppStartupStateTest {
     @Test
     fun `initialRoute should be CHAT when no initializationError and modelsResult is null`() {
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = null
         )
 
@@ -88,7 +88,7 @@ class AppStartupStateTest {
         every { mockModelsResult.modelsToDownload } returns emptyList()
 
         val readyState = AppStartupState.Ready(
-            authState = AuthState.Unauthenticated,
+            authState = VaultAuthUiState.Unauthenticated,
             modelsResult = mockModelsResult
         )
 

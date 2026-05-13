@@ -27,8 +27,11 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
@@ -69,6 +72,7 @@ class MessageRepositoryImpl
         private val chatSummaryDao: ChatSummaryDao,
         private val embeddingDao: EmbeddingDao,
         private val transactionProvider: TransactionProvider,
+        private val localEncryption: LocalDataEncryptionService,
     ) : MessageRepository {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -91,13 +95,13 @@ class MessageRepositoryImpl
 
             val messageId =
                 transactionProvider.runInTransaction {
-                    val entity = message.toEntity()
+                    val entity = message.toEntity().encryptSensitiveFields()
                     messageDao.upsert(entity)
 
                     if (message.content.fileAttachments.isNotEmpty()) {
                         val fileEntities =
                             message.content.fileAttachments.map {
-                                it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+                                it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value).encryptSensitiveFields()
                             }
                         messageDao.insertFiles(fileEntities)
                     }
@@ -151,7 +155,8 @@ class MessageRepositoryImpl
          * @param id The message ID
          * @return The message if found, null otherwise
          */
-        override suspend fun getMessageById(id: MessageId): Message? = messageDao.getMessageById(id)?.toDomain()
+        override suspend fun getMessageById(id: MessageId): Message? =
+            messageDao.getMessageById(id)?.decryptSensitiveFields()?.toDomain()
 
         /**
          * Retrieves all messages for a specific chat, ordered by ID ascending.
@@ -160,7 +165,7 @@ class MessageRepositoryImpl
          * @return List of messages in chronological order
          */
         override suspend fun getMessagesForChat(chatId: ChatId): List<Message> =
-            messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
+            messageDao.getMessagesByChatId(chatId).map { it.decryptSensitiveFields().toDomain() }
 
         override suspend fun saveVisionAnalysis(
             userMessageId: MessageId,
@@ -174,9 +179,9 @@ class MessageRepositoryImpl
                 MessageVisionAnalysisEntity(
                     id = UUID.randomUUID().toString(),
                     userMessageId = userMessageId,
-                    imageUri = imageUri,
-                    promptText = promptText,
-                    analysisText = analysisText,
+                    imageUri = localEncryption.encryptString(imageUri),
+                    promptText = localEncryption.encryptString(promptText),
+                    analysisText = localEncryption.encryptString(analysisText),
                     modelType = modelType,
                     createdAt = now,
                     updatedAt = now,
@@ -190,7 +195,7 @@ class MessageRepositoryImpl
             if (userMessageIds.isEmpty()) return emptyMap()
             return messageVisionAnalysisDao
                 .getByUserMessageIds(userMessageIds)
-                .map { it.toDomain() }
+                .map { it.decryptSensitiveFields().toDomain() }
                 .groupBy { it.userMessageId }
         }
 
@@ -198,14 +203,14 @@ class MessageRepositoryImpl
             chatId: ChatId,
             currentUserMessageId: MessageId,
         ): ResolvedImageTarget? {
-            val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.toDomain()
+            val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.decryptSensitiveFields()?.toDomain()
             if (currentUserMessage != null && currentUserMessage.content.imageUris.isNotEmpty()) {
                 return ResolvedImageTarget(
                     userMessageId = currentUserMessage.id,
                     imageUris = currentUserMessage.content.imageUris,
                 )
             }
-            val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
+            val messages = messageDao.getMessagesByChatId(chatId).map { it.decryptSensitiveFields().toDomain() }
             val latestImageMessage =
                 messages
                     .filter { it.role == Role.USER && it.content.imageUris.isNotEmpty() && it.id != currentUserMessageId }
@@ -224,7 +229,7 @@ class MessageRepositoryImpl
             limit: Int,
         ): List<Message> {
             val messageIds = searchSimilarMessages(queryVector, 100)
-            return messageDao.getMessagesForChat(chatId, messageIds).map { it.toDomain() }
+            return messageDao.getMessagesForChat(chatId, messageIds).map { it.decryptSensitiveFields().toDomain() }
         }
 
         override suspend fun searchMessagesAcrossChats(
@@ -232,7 +237,7 @@ class MessageRepositoryImpl
             limit: Int,
         ): List<Message> {
             val messageIds = searchSimilarMessages(queryVector, limit)
-            return messageDao.getMessages(messageIds).first().map { it.toDomain() }
+            return messageDao.getMessages(messageIds).first().map { it.decryptSensitiveFields().toDomain() }
         }
 
         override suspend fun getMessagesAround(
@@ -241,20 +246,84 @@ class MessageRepositoryImpl
             before: Int,
             after: Int,
         ): List<Message> {
-            val beforeMessages = messageDao.getMessagesBefore(chatId, timestamp, before).reversed().map { it.toDomain() }
-            val afterMessages = messageDao.getMessagesAfter(chatId, timestamp, after).map { it.toDomain() }
+            val beforeMessages =
+                messageDao.getMessagesBefore(chatId, timestamp, before).reversed().map {
+                    it.decryptSensitiveFields().toDomain()
+                }
+            val afterMessages =
+                messageDao.getMessagesAfter(chatId, timestamp, after).map {
+                    it.decryptSensitiveFields().toDomain()
+                }
             return beforeMessages + afterMessages
         }
 
-        override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = chatSummaryDao.getSummaryForChatSync(chatId)?.toDomain()
+        override suspend fun getChatSummary(chatId: ChatId): ChatSummary? =
+            chatSummaryDao.getSummaryForChatSync(chatId)?.decryptSensitiveFields()?.toDomain()
 
         override suspend fun saveChatSummary(summary: ChatSummary) {
-            chatSummaryDao.insertOrUpdateSummary(summary.toEntity())
+            chatSummaryDao.insertOrUpdateSummary(summary.toEntity().encryptSensitiveFields())
         }
 
         override suspend fun deleteChatSummary(chatId: ChatId) {
             chatSummaryDao.deleteSummaryForChat(chatId)
         }
+
+        private fun com.browntowndev.pocketcrew.core.data.local.MessageEntity.encryptSensitiveFields() =
+            copy(
+                content = localEncryption.encryptString(content),
+                imageUrisJson = imageUrisJson?.let(localEncryption::encryptString),
+                thinkingRaw = thinkingRaw?.let(localEncryption::encryptString),
+                artifactsJson = artifactsJson?.let(localEncryption::encryptString),
+                generatedMediaUrisJson = generatedMediaUrisJson?.let(localEncryption::encryptString),
+                generatedMediaAssetIdsJson = generatedMediaAssetIdsJson?.let(localEncryption::encryptString),
+                generatedMediaPromptsJson = generatedMediaPromptsJson?.let(localEncryption::encryptString),
+            )
+
+        private fun com.browntowndev.pocketcrew.core.data.local.MessageEntity.decryptSensitiveFields() =
+            copy(
+                content = localEncryption.decryptString(content),
+                imageUrisJson = imageUrisJson?.let(localEncryption::decryptString),
+                thinkingRaw = thinkingRaw?.let(localEncryption::decryptString),
+                artifactsJson = artifactsJson?.let(localEncryption::decryptString),
+                generatedMediaUrisJson = generatedMediaUrisJson?.let(localEncryption::decryptString),
+                generatedMediaAssetIdsJson = generatedMediaAssetIdsJson?.let(localEncryption::decryptString),
+                generatedMediaPromptsJson = generatedMediaPromptsJson?.let(localEncryption::decryptString),
+            )
+
+        private fun MessageWithFiles.decryptSensitiveFields() =
+            copy(
+                message = message.decryptSensitiveFields(),
+                files = files.map { it.decryptSensitiveFields() },
+            )
+
+        private fun MessageFileEntity.encryptSensitiveFields() =
+            copy(
+                name = localEncryption.encryptString(name),
+                content = localEncryption.encryptString(content),
+                remoteUrl = remoteUrl?.let(localEncryption::encryptString),
+                stagingRemoteUrl = stagingRemoteUrl?.let(localEncryption::encryptString),
+            )
+
+        private fun MessageFileEntity.decryptSensitiveFields() =
+            copy(
+                name = localEncryption.decryptString(name),
+                content = localEncryption.decryptString(content),
+                remoteUrl = remoteUrl?.let(localEncryption::decryptString),
+                stagingRemoteUrl = stagingRemoteUrl?.let(localEncryption::decryptString),
+            )
+
+        private fun MessageVisionAnalysisEntity.decryptSensitiveFields() =
+            copy(
+                imageUri = localEncryption.decryptString(imageUri),
+                promptText = localEncryption.decryptString(promptText),
+                analysisText = localEncryption.decryptString(analysisText),
+            )
+
+        private fun ChatSummaryEntity.encryptSensitiveFields() =
+            copy(content = localEncryption.encryptString(content))
+
+        private fun ChatSummaryEntity.decryptSensitiveFields() =
+            copy(content = localEncryption.decryptString(content))
     }
 
 private fun ChatSummaryEntity.toDomain(): ChatSummary =

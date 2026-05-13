@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
@@ -73,6 +74,7 @@ class SyncReconciliationTest {
                 chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = mockk(relaxed = true),
                 embeddingDao = mockk(relaxed = true),
+                localEncryption = FakeLocalDataEncryptionService(),
             )
 
         val chatCollection = mockk<CollectionReference>(relaxed = true)

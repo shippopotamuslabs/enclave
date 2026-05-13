@@ -163,7 +163,7 @@ fun MessageList(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
+                contentPadding = PaddingValues(top = 0.dp, bottom = 16.dp),
             ) {
                 // 1. History: all messages before the latest user prompt
                 val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size

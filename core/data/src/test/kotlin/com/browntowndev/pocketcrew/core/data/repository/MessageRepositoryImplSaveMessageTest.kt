@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -25,6 +26,7 @@ class MessageRepositoryImplSaveMessageTest {
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+    private lateinit var localEncryption: LocalDataEncryptionService
     private lateinit var repository: MessageRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -35,6 +37,7 @@ class MessageRepositoryImplSaveMessageTest {
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
+        localEncryption = FakeLocalDataEncryptionService()
 
         // Default behavior for transactionProvider to just execute the block
         coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
@@ -50,6 +53,7 @@ class MessageRepositoryImplSaveMessageTest {
                 chatSummaryDao,
                 embeddingDao,
                 transactionProvider,
+                localEncryption,
             )
     }
 
@@ -100,7 +104,39 @@ class MessageRepositoryImplSaveMessageTest {
 
             // Then
             assert(result == messageId)
-            coVerify { messageDao.upsert(any()) }
+            coVerify { messageDao.upsert(match { it.content == "ENC:v1:Test message" }) }
+        }
+
+    @Test
+    fun `saveMessage stores encrypted attachment content`() =
+        runTest {
+            val messageId = MessageId(UUID.randomUUID().toString())
+            val chatId = ChatId(UUID.randomUUID().toString())
+            val attachment =
+                com.browntowndev.pocketcrew.domain.model.chat.FileAttachment(
+                    name = "secret.txt",
+                    content = "private attachment",
+                )
+            val message =
+                Message(
+                    id = messageId,
+                    chatId = chatId,
+                    content = Content(text = "body", fileAttachments = listOf(attachment)),
+                    role = Role.USER,
+                )
+
+            coEvery { messageDao.upsert(any()) } returns 1L
+
+            repository.saveMessage(message)
+
+            coVerify {
+                messageDao.insertFiles(
+                    match { files ->
+                        files.single().name == "ENC:v1:secret.txt" &&
+                            files.single().content == "ENC:v1:private attachment"
+                    },
+                )
+            }
         }
 
     @Test
@@ -134,4 +170,12 @@ class MessageRepositoryImplSaveMessageTest {
             coVerify { messageDao.upsert(any()) }
             coVerify { messageDao.insertFiles(any()) }
         }
+
+    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
+
+        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
+
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
+    }
 }

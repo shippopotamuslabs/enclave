@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
@@ -29,6 +30,7 @@ class LocalModelRepositoryImpl
         private val configsDao: LocalModelConfigurationsDao,
         private val defaultModelsDao: DefaultModelsDao,
         private val transactionProvider: TransactionProvider,
+        private val localEncryption: LocalDataEncryptionService,
     ) : LocalModelRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -76,18 +78,13 @@ class LocalModelRepositoryImpl
         }
 
         override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
-            val existingConfig = configsDao.getByModelIdAndName(config.localModelId, config.displayName)
             val configId =
-                when {
-                    config.id.value.isNotEmpty() -> config.id
-                    existingConfig != null -> existingConfig.id
-                    else -> generateConfigGuid()
-                }
+                if (config.id.value.isNotEmpty()) config.id else generateConfigGuid()
             val entity =
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = config.localModelId,
-                    displayName = config.displayName,
+                    displayName = localEncryption.encryptString(config.displayName),
                     temperature = config.temperature,
                     topK = config.topK ?: 40,
                     topP = config.topP,
@@ -96,7 +93,7 @@ class LocalModelRepositoryImpl
                     maxTokens = config.maxTokens,
                     contextWindow = config.contextWindow,
                     thinkingEnabled = config.thinkingEnabled,
-                    systemPrompt = config.systemPrompt,
+                    systemPrompt = localEncryption.encryptString(config.systemPrompt),
                     isSystemPreset = config.isSystemPreset,
                     pendingSync = 1,
                 )
@@ -209,7 +206,7 @@ class LocalModelRepositoryImpl
             LocalModelConfiguration(
                 id = entity.id,
                 localModelId = entity.localModelId,
-                displayName = entity.displayName,
+                displayName = localEncryption.decryptString(entity.displayName),
                 temperature = entity.temperature,
                 topK = entity.topK,
                 topP = entity.topP,
@@ -218,7 +215,7 @@ class LocalModelRepositoryImpl
                 maxTokens = entity.maxTokens,
                 contextWindow = entity.contextWindow,
                 thinkingEnabled = entity.thinkingEnabled,
-                systemPrompt = entity.systemPrompt ?: "",
+                systemPrompt = entity.systemPrompt?.let(localEncryption::decryptString) ?: "",
                 isSystemPreset = entity.isSystemPreset,
             )
     }

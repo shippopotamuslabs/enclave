@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.firebase.storage.FirebaseStorage
@@ -25,6 +26,7 @@ class MediaCloudSyncWorker
         private val cryptoManager: CryptoManagerPort,
         private val userIdProvider: () -> String?,
         private val syncTrigger: CloudSyncTrigger,
+        private val localEncryption: LocalDataEncryptionService,
     ) : CoroutineWorker(context, params) {
         companion object {
             private const val TAG = "MediaCloudSyncWorker"
@@ -45,11 +47,12 @@ class MediaCloudSyncWorker
                     val storageRef = storage.reference.child("users/$userId/media/${media.id}")
                     var downloadUrl: String? = null
 
-                    if (!media.stagingRemoteUrl.isNullOrBlank()) {
+                    val stagingRemoteUrl = media.stagingRemoteUrl?.let(localEncryption::decryptString)
+                    if (!stagingRemoteUrl.isNullOrBlank()) {
                         try {
                             storageRef.metadata.await()
-                            downloadUrl = media.stagingRemoteUrl
-                            loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for media ${media.id}: $downloadUrl")
+                            downloadUrl = stagingRemoteUrl
+                            loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for media ${media.id}")
                         } catch (e: Exception) {
                             loggingPort.debug(
                                 TAG,
@@ -87,11 +90,11 @@ class MediaCloudSyncWorker
                         storageRef.putBytes(encryptedBytes).await()
 
                         downloadUrl = storageRef.downloadUrl.await().toString()
-                        studioMediaDao.updateStagingUrl(media.id, downloadUrl)
+                        studioMediaDao.updateStagingUrl(media.id, localEncryption.encryptString(downloadUrl))
                     }
 
-                    studioMediaDao.markUploaded(media.id, downloadUrl)
-                    loggingPort.debug(TAG, "Uploaded media ${media.id} to $downloadUrl")
+                    studioMediaDao.markUploaded(media.id, localEncryption.encryptString(downloadUrl))
+                    loggingPort.debug(TAG, "Uploaded media ${media.id}")
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to upload media ${media.id}", e)
                     hasFailure = true

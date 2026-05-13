@@ -71,6 +71,7 @@ internal class SettingsViewModel @Inject constructor(
         private const val ARG_X_SEARCH_STATE = 21
         private const val ARG_IS_REINDEXING = 22
         private const val ARG_REINDEX_PROGRESS = 23
+        private const val ARG_VAULT_REAUTH_SHEET = 24
     }
 
     private val _sheetVisibility = MutableStateFlow(SheetVisibilityState())
@@ -84,6 +85,7 @@ internal class SettingsViewModel @Inject constructor(
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
     private val _xSearchState = MutableStateFlow(XSearchTransientState())
+    private val _vaultReauthSheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val _currentApiKey = MutableStateFlow("")
@@ -138,6 +140,7 @@ internal class SettingsViewModel @Inject constructor(
         _xSearchState,
         embeddingProgressPort.isReindexing,
         embeddingProgressPort.progress,
+        _vaultReauthSheet,
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         settingsUiStateFactory.create(
@@ -165,6 +168,7 @@ internal class SettingsViewModel @Inject constructor(
             xSearchState = args[ARG_X_SEARCH_STATE] as XSearchTransientState,
             isReindexing = args[ARG_IS_REINDEXING] as Boolean,
             reindexProgress = args[ARG_REINDEX_PROGRESS] as Float,
+            vaultReauthSheet = args[ARG_VAULT_REAUTH_SHEET] as VaultReauthSheetState,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -181,8 +185,20 @@ internal class SettingsViewModel @Inject constructor(
     fun onHapticPressChange(enabled: Boolean) = generalDelegate.onHapticPressChange(viewModelScope, TAG, enabled)
     fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, enabled)
     fun onBackgroundInferenceChange(enabled: Boolean) = generalDelegate.onBackgroundInferenceChange(viewModelScope, TAG, enabled)
-    fun onLoginWithGoogle() = generalDelegate.onLoginWithGoogle(viewModelScope, TAG)
+    fun onLoginWithGoogle() = generalDelegate.onLoginWithGoogle(viewModelScope, TAG, _vaultReauthSheet)
     fun onLogout() = generalDelegate.onLogout(viewModelScope, TAG)
+
+    /**
+     * Settings re-auth sheet handlers — the post-Settings-sign-in flow that mirrors the
+     * cold-start vault unlock + reconciliation in `MainViewModel`.
+     */
+    fun onSubmitVaultReauthPassword(password: String) =
+        generalDelegate.onSubmitVaultReauthPassword(viewModelScope, TAG, _vaultReauthSheet, password)
+
+    fun onConfirmAdoptCloudFromSettings() =
+        generalDelegate.onConfirmAdoptCloud(viewModelScope, TAG, _vaultReauthSheet)
+
+    fun onCancelVaultReauth() = generalDelegate.onCancelVaultReauth(_vaultReauthSheet)
     fun onShowCustomizationSheet(show: Boolean) = generalDelegate.onShowCustomizationSheet(_sheetVisibility, show)
     fun onCustomizationEnabledChange(enabled: Boolean) = generalDelegate.onCustomizationEnabledChange(viewModelScope, TAG, enabled)
     fun onPromptOptionChange(option: SystemPromptOption) = generalDelegate.onPromptOptionChange(viewModelScope, TAG, option)

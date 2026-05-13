@@ -34,6 +34,7 @@ import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
@@ -102,9 +103,10 @@ class FirestoreDataSource
         private val apiKeyManager: com.browntowndev.pocketcrew.core.data.security.ApiKeyManager,
         private val cryptoManager: CryptoManagerPort,
         private val loggingPort: LoggingPort,
-        @ApplicationScope private val externalScope: CoroutineScope,
+        @param:ApplicationScope private val externalScope: CoroutineScope,
         private val userIdProvider: () -> String?,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
+        private val localEncryption: LocalDataEncryptionService,
     ) : CloudSyncPort {
         companion object {
             private const val TAG = "FirestoreDataSource"
@@ -164,15 +166,17 @@ class FirestoreDataSource
             )
         }
 
-        private fun String.encrypt(): Blob = Blob.fromBytes(cryptoManager.encrypt(this).getOrThrow())
-
-        private fun Blob.decrypt(): String? {
-            val bytes = this.toBytes()
-            return if (bytes != null && bytes.isNotEmpty()) {
-                cryptoManager.decrypt(bytes).getOrNull()
-            } else {
-                null
+        private fun String.encryptedForFirestore(): String {
+            check(localEncryption.isEncrypted(this)) {
+                "Firestore sync requires locally encrypted field payloads"
             }
+            return this
+        }
+
+        private fun DocumentSnapshot.getEncryptedField(field: String): String? {
+            val stringValue = getString(field)
+            if (!stringValue.isNullOrEmpty()) return stringValue
+            return getBlob(field)?.toBytes()?.takeIf { it.isNotEmpty() }?.decodeToString()
         }
 
         private suspend fun ensurePlaceholderMessage(
@@ -186,7 +190,7 @@ class FirestoreDataSource
                 chatDao.insertIfAbsent(
                     ChatEntity(
                         id = chatId,
-                        name = "Syncing...",
+                        name = localEncryption.encryptString("Syncing..."),
                         created = java.util.Date(0),
                         lastModified = java.util.Date(0),
                         pinned = false,
@@ -201,7 +205,7 @@ class FirestoreDataSource
                 MessageEntity(
                     id = messageId,
                     chatId = chatId,
-                    content = "Syncing...",
+                    content = localEncryption.encryptString("Syncing..."),
                     role = Role.USER,
                     messageState = MessageState.COMPLETE,
                     createdAt = 0L,
@@ -222,17 +226,15 @@ class FirestoreDataSource
 
                 override fun getEntityId(entity: ChatEntity): String = entity.id.value
 
-                override suspend fun toFirestore(local: ChatEntity): Map<String, Any?> {
-                    val encryptedName = cryptoManager.encrypt(local.name).getOrThrow()
-                    return mapOf(
-                        "name" to Blob.fromBytes(encryptedName),
+                override suspend fun toFirestore(local: ChatEntity): Map<String, Any?> =
+                    mapOf(
+                        "name" to local.name.encryptedForFirestore(),
                         "created_at" to local.created.time,
                         "last_modified" to local.lastModified.time,
                         "pinned" to local.pinned,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
-                }
 
                 override fun fromFirestore(doc: DocumentSnapshot): ChatEntity? = chatEntityFromDoc(doc)
 
@@ -272,7 +274,7 @@ class FirestoreDataSource
                     val msgData =
                         mutableMapOf<String, Any?>(
                             "chat_id" to local.chatId.value,
-                            "content" to local.content.encrypt(),
+                            "content" to local.content.encryptedForFirestore(),
                             "role" to local.role.apiValue,
                             "message_state" to local.messageState.apiValue,
                             "updated_at" to local.updatedAt,
@@ -281,17 +283,17 @@ class FirestoreDataSource
                     local.createdAt?.let { msgData["created_at"] = it }
                     local.modelType?.let { msgData["model_type"] = it.name }
                     local.userMessageId?.let { msgData["user_message_id"] = it.value }
-                    local.imageUrisJson?.let { msgData["image_uris_json"] = it.encrypt() }
+                    local.imageUrisJson?.let { msgData["image_uris_json"] = it.encryptedForFirestore() }
                     local.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
-                    local.thinkingRaw?.let { msgData["thinking_raw"] = it.encrypt() }
+                    local.thinkingRaw?.let { msgData["thinking_raw"] = it.encryptedForFirestore() }
                     local.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
                     local.thinkingEndTime?.let { msgData["thinking_end_time"] = it }
                     local.pipelineStep?.let { msgData["pipeline_step"] = it.name }
-                    local.artifactsJson?.let { msgData["artifacts_json"] = it.encrypt() }
-                    local.generatedMediaUrisJson?.let { msgData["generated_media_uris_json"] = it.encrypt() }
-                    local.generatedMediaAssetIdsJson?.let { msgData["generated_media_asset_ids_json"] = it.encrypt() }
+                    local.artifactsJson?.let { msgData["artifacts_json"] = it.encryptedForFirestore() }
+                    local.generatedMediaUrisJson?.let { msgData["generated_media_uris_json"] = it.encryptedForFirestore() }
+                    local.generatedMediaAssetIdsJson?.let { msgData["generated_media_asset_ids_json"] = it.encryptedForFirestore() }
                     local.generatedMediaTypesJson?.let { msgData["generated_media_types_json"] = it }
-                    local.generatedMediaPromptsJson?.let { msgData["generated_media_prompts_json"] = it.encrypt() }
+                    local.generatedMediaPromptsJson?.let { msgData["generated_media_prompts_json"] = it.encryptedForFirestore() }
 
                     return msgData
                 }
@@ -348,7 +350,7 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: ChatSummaryEntity): Map<String, Any?> =
                     mapOf(
                         "chat_id" to local.chatId.value,
-                        "content" to local.content.encrypt(),
+                        "content" to local.content.encryptedForFirestore(),
                         "last_summarized_message_id" to local.lastSummarizedMessageId?.value,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -357,7 +359,7 @@ class FirestoreDataSource
 
                 override fun fromFirestore(doc: DocumentSnapshot): ChatSummaryEntity? {
                     val chatIdStr = doc.getString("chat_id") ?: return null
-                    val content = doc.getBlob("content")?.decrypt() ?: return null
+                    val content = doc.getEncryptedField("content") ?: return null
                     return ChatSummaryEntity(
                         chatId = ChatId(chatIdStr),
                         content = content,
@@ -408,14 +410,14 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: MemoriesEntity) =
                     mapOf(
                         "category" to local.category.name,
-                        "content" to local.content.encrypt(),
+                        "content" to local.content.encryptedForFirestore(),
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
 
                 override fun fromFirestore(doc: DocumentSnapshot): MemoriesEntity? {
-                    val content = doc.getBlob("content")?.decrypt() ?: return null
+                    val content = doc.getEncryptedField("content") ?: return null
                     return MemoriesEntity(
                         id = doc.id,
                         category =
@@ -472,9 +474,9 @@ class FirestoreDataSource
                     return mapOf(
                         "user_message_id" to local.userMessageId.value,
                         "chat_id" to chatId,
-                        "image_uri" to local.imageUri.encrypt(),
-                        "prompt_text" to local.promptText.encrypt(),
-                        "analysis_text" to local.analysisText.encrypt(),
+                        "image_uri" to local.imageUri.encryptedForFirestore(),
+                        "prompt_text" to local.promptText.encryptedForFirestore(),
+                        "analysis_text" to local.analysisText.encryptedForFirestore(),
                         "model_type" to local.modelType.name,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -487,12 +489,12 @@ class FirestoreDataSource
                     if (chatIdStr.isNullOrBlank()) return null
                     val userMessageIdStr = doc.getString("user_message_id")
                     if (userMessageIdStr.isNullOrBlank()) return null
-                    val promptText = doc.getBlob("prompt_text")?.decrypt() ?: return null
-                    val analysisText = doc.getBlob("analysis_text")?.decrypt() ?: return null
+                    val promptText = doc.getEncryptedField("prompt_text") ?: return null
+                    val analysisText = doc.getEncryptedField("analysis_text") ?: return null
                     return MessageVisionAnalysisEntity(
                         id = doc.id,
                         userMessageId = MessageId(userMessageIdStr),
-                        imageUri = doc.getBlob("image_uri")?.decrypt() ?: "",
+                        imageUri = doc.getEncryptedField("image_uri") ?: "",
                         promptText = promptText,
                         analysisText = analysisText,
                         modelType = ModelType.valueOf(doc.getString("model_type") ?: "LLM"),
@@ -541,9 +543,9 @@ class FirestoreDataSource
                     val chatId = message.chatId.value
                     return mapOf(
                         "message_id" to local.messageId,
-                        "name" to local.name.encrypt(),
+                        "name" to local.name.encryptedForFirestore(),
                         "mime_type" to local.mimeType.name,
-                        "remote_url" to local.remoteUrl?.encrypt(),
+                        "remote_url" to local.remoteUrl?.encryptedForFirestore(),
                         "sync_status" to local.syncStatus,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -555,8 +557,8 @@ class FirestoreDataSource
                     if (chatIdStr.isNullOrBlank()) return null
                     val messageIdStr = doc.getString("message_id")
                     if (messageIdStr.isNullOrBlank()) return null
-                    val name = doc.getBlob("name")?.decrypt() ?: return null
-                    val remoteUrl = doc.getBlob("remote_url")?.decrypt()
+                    val name = doc.getEncryptedField("name") ?: return null
+                    val remoteUrl = doc.getEncryptedField("remote_url")
 
                     val mimeTypeStr = doc.getString("mime_type") ?: MimeType.PLAIN_TEXT.name
                     val mimeType =
@@ -631,9 +633,9 @@ class FirestoreDataSource
                     return mapOf(
                         "message_id" to local.messageId.value,
                         "chat_id" to chatId,
-                        "title" to local.title.encrypt(),
-                        "url" to local.url.encrypt(),
-                        "content" to local.content.encrypt(),
+                        "title" to local.title.encryptedForFirestore(),
+                        "url" to local.url.encryptedForFirestore(),
+                        "content" to local.content.encryptedForFirestore(),
                         "score" to local.score,
                         "extracted" to local.extracted,
                         "updated_at" to local.updatedAt,
@@ -646,9 +648,9 @@ class FirestoreDataSource
                     if (chatIdStr.isNullOrBlank()) return null
                     val messageIdStr = doc.getString("message_id")
                     if (messageIdStr.isNullOrBlank()) return null
-                    val title = doc.getBlob("title")?.decrypt() ?: return null
-                    val url = doc.getBlob("url")?.decrypt() ?: return null
-                    val content = doc.getBlob("content")?.decrypt() ?: return null
+                    val title = doc.getEncryptedField("title") ?: return null
+                    val url = doc.getEncryptedField("url") ?: return null
+                    val content = doc.getEncryptedField("content") ?: return null
                     return WebSearchSourceEntity(
                         id = doc.id,
                         messageId = MessageId(messageIdStr),
@@ -700,11 +702,11 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: MessageTranscriptSegmentEntity): Map<String, Any?> {
                     val message = messageDao.getMessageById(local.messageId)?.message ?: return emptyMap()
                     val chatId = message.chatId.value
-                    return messageTranscriptSegmentToFirestoreMap(local, chatId, local.text.encrypt())
+                    return messageTranscriptSegmentToFirestoreMap(local, chatId, local.text.encryptedForFirestore())
                 }
 
                 override fun fromFirestore(doc: DocumentSnapshot): MessageTranscriptSegmentEntity? =
-                    messageTranscriptSegmentFromFirestore(doc) { blob -> blob.decrypt() }
+                    messageTranscriptSegmentFromFirestore(doc) { doc.getEncryptedField("text") }
 
                 override suspend fun upsertLocal(
                     entity: MessageTranscriptSegmentEntity,
@@ -747,8 +749,8 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: ApiModelConfigurationEntity) =
                     mapOf(
                         "api_credentials_id" to local.apiCredentialsId.value,
-                        "display_name" to local.displayName.encrypt(),
-                        "custom_headers" to local.customHeaders.encrypt(),
+                        "display_name" to local.displayName.encryptedForFirestore(),
+                        "custom_headers" to local.customHeaders.encryptedForFirestore(),
                         "max_tokens" to local.maxTokens,
                         "context_window" to local.contextWindow,
                         "temperature" to local.temperature,
@@ -757,7 +759,7 @@ class FirestoreDataSource
                         "min_p" to local.minP,
                         "frequency_penalty" to local.frequencyPenalty,
                         "presence_penalty" to local.presencePenalty,
-                        "system_prompt" to local.systemPrompt.encrypt(),
+                        "system_prompt" to local.systemPrompt.encryptedForFirestore(),
                         "max_tokens_disabled" to local.maxTokensDisabled,
                         "temperature_disabled" to local.temperatureDisabled,
                         "top_p_disabled" to local.topPDisabled,
@@ -779,8 +781,8 @@ class FirestoreDataSource
                     ApiModelConfigurationEntity(
                         id = ApiModelConfigurationId(doc.id),
                         apiCredentialsId = ApiCredentialsId(doc.getString("api_credentials_id") ?: ""),
-                        displayName = doc.getBlob("display_name")?.decrypt() ?: "",
-                        customHeaders = doc.getBlob("custom_headers")?.decrypt() ?: "{}",
+                        displayName = doc.getEncryptedField("display_name") ?: "",
+                        customHeaders = doc.getEncryptedField("custom_headers") ?: "{}",
                         maxTokens = doc.getLong("max_tokens")?.toInt() ?: 4096,
                         contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,
                         temperature = doc.getDouble("temperature") ?: 0.7,
@@ -789,7 +791,7 @@ class FirestoreDataSource
                         minP = doc.getDouble("min_p") ?: 0.05,
                         frequencyPenalty = doc.getDouble("frequency_penalty") ?: 0.0,
                         presencePenalty = doc.getDouble("presence_penalty") ?: 0.0,
-                        systemPrompt = doc.getBlob("system_prompt")?.decrypt() ?: "",
+                        systemPrompt = doc.getEncryptedField("system_prompt") ?: "",
                         maxTokensDisabled = doc.getBoolean("max_tokens_disabled") ?: false,
                         temperatureDisabled = doc.getBoolean("temperature_disabled") ?: false,
                         topPDisabled = doc.getBoolean("top_p_disabled") ?: false,
@@ -845,7 +847,7 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: LocalModelConfigurationEntity) =
                     mapOf(
                         "local_model_id" to local.localModelId.value,
-                        "display_name" to local.displayName.encrypt(),
+                        "display_name" to local.displayName.encryptedForFirestore(),
                         "temperature" to local.temperature,
                         "top_k" to local.topK,
                         "top_p" to local.topP,
@@ -855,7 +857,7 @@ class FirestoreDataSource
                         "context_window" to local.contextWindow,
                         "thinking_enabled" to local.thinkingEnabled,
                         "is_system_preset" to local.isSystemPreset,
-                        "system_prompt" to local.systemPrompt?.encrypt(),
+                        "system_prompt" to local.systemPrompt?.encryptedForFirestore(),
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
@@ -864,7 +866,7 @@ class FirestoreDataSource
                     LocalModelConfigurationEntity(
                         id = LocalModelConfigurationId(doc.id),
                         localModelId = LocalModelId(doc.getString("local_model_id") ?: ""),
-                        displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+                        displayName = doc.getEncryptedField("display_name") ?: "",
                         temperature = doc.getDouble("temperature") ?: 0.7,
                         topK = doc.getLong("top_k")?.toInt() ?: 40,
                         topP = doc.getDouble("top_p") ?: 0.95,
@@ -874,7 +876,7 @@ class FirestoreDataSource
                         contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,
                         thinkingEnabled = doc.getBoolean("thinking_enabled") ?: false,
                         isSystemPreset = doc.getBoolean("is_system_preset") ?: false,
-                        systemPrompt = doc.getBlob("system_prompt")?.decrypt(),
+                        systemPrompt = doc.getEncryptedField("system_prompt"),
                         updatedAt = doc.getLong("updated_at") ?: 0L,
                         deleted = doc.getBoolean("deleted") ?: false,
                     )
@@ -1036,11 +1038,11 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: TtsProviderEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encrypt(),
+                        "display_name" to local.displayName.encryptedForFirestore(),
                         "provider" to local.provider.name,
-                        "voice_name" to local.voiceName.encrypt(),
-                        "model_name" to local.modelName?.encrypt(),
-                        "base_url" to local.baseUrl?.encrypt(),
+                        "voice_name" to local.voiceName.encryptedForFirestore(),
+                        "model_name" to local.modelName?.encryptedForFirestore(),
+                        "base_url" to local.baseUrl?.encryptedForFirestore(),
                         "credential_alias" to local.credentialAlias,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -1049,13 +1051,13 @@ class FirestoreDataSource
                 override fun fromFirestore(doc: DocumentSnapshot) =
                     TtsProviderEntity(
                         id = doc.id,
-                        displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+                        displayName = doc.getEncryptedField("display_name") ?: "",
                         provider =
                             com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
                                 .valueOf(doc.getString("provider") ?: "OPENAI"),
-                        voiceName = doc.getBlob("voice_name")?.decrypt() ?: "",
-                        modelName = doc.getBlob("model_name")?.decrypt(),
-                        baseUrl = doc.getBlob("base_url")?.decrypt(),
+                        voiceName = doc.getEncryptedField("voice_name") ?: "",
+                        modelName = doc.getEncryptedField("model_name"),
+                        baseUrl = doc.getEncryptedField("base_url"),
                         credentialAlias = doc.getString("credential_alias") ?: "",
                         updatedAt = doc.getLong("updated_at") ?: 0L,
                         deleted = doc.getBoolean("deleted") ?: false,
@@ -1093,11 +1095,11 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: MediaProviderEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encrypt(),
+                        "display_name" to local.displayName.encryptedForFirestore(),
                         "provider" to local.provider.name,
                         "capability" to local.capability.name,
-                        "model_name" to local.modelName?.encrypt(),
-                        "base_url" to local.baseUrl?.encrypt(),
+                        "model_name" to local.modelName?.encryptedForFirestore(),
+                        "base_url" to local.baseUrl?.encryptedForFirestore(),
                         "credential_alias" to local.credentialAlias,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -1106,15 +1108,15 @@ class FirestoreDataSource
                 override fun fromFirestore(doc: DocumentSnapshot) =
                     MediaProviderEntity(
                         id = doc.id,
-                        displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+                        displayName = doc.getEncryptedField("display_name") ?: "",
                         provider =
                             com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
                                 .valueOf(doc.getString("provider") ?: "OPENAI"),
                         capability =
                             com.browntowndev.pocketcrew.domain.model.config.MediaCapability
                                 .valueOf(doc.getString("capability") ?: "IMAGE"),
-                        modelName = doc.getBlob("model_name")?.decrypt(),
-                        baseUrl = doc.getBlob("base_url")?.decrypt(),
+                        modelName = doc.getEncryptedField("model_name"),
+                        baseUrl = doc.getEncryptedField("base_url"),
                         credentialAlias = doc.getString("credential_alias") ?: "",
                         updatedAt = doc.getLong("updated_at") ?: 0L,
                         deleted = doc.getBoolean("deleted") ?: false,
@@ -1152,9 +1154,9 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: ApiCredentialsEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encrypt(),
+                        "display_name" to local.displayName.encryptedForFirestore(),
                         "provider" to local.provider.name,
-                        "base_url" to local.baseUrl?.encrypt(),
+                        "base_url" to local.baseUrl?.encryptedForFirestore(),
                         "model_id" to local.modelId,
                         "is_multimodal" to local.isMultimodal,
                         "credential_alias" to local.credentialAlias,
@@ -1168,11 +1170,11 @@ class FirestoreDataSource
                 override fun fromFirestore(doc: DocumentSnapshot) =
                     ApiCredentialsEntity(
                         id = ApiCredentialsId(doc.id),
-                        displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+                        displayName = doc.getEncryptedField("display_name") ?: "",
                         provider =
                             com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
                                 .valueOf(doc.getString("provider") ?: "OPENAI"),
-                        baseUrl = doc.getBlob("base_url")?.decrypt(),
+                        baseUrl = doc.getEncryptedField("base_url"),
                         modelId = doc.getString("model_id") ?: "",
                         isMultimodal = doc.getBoolean("is_multimodal") ?: false,
                         credentialAlias = doc.getString("credential_alias") ?: "",
@@ -1215,7 +1217,7 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: StudioAlbumEntity) =
                     mapOf(
-                        "name" to local.name.encrypt(),
+                        "name" to local.name.encryptedForFirestore(),
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
@@ -1223,7 +1225,7 @@ class FirestoreDataSource
                 override fun fromFirestore(doc: DocumentSnapshot) =
                     StudioAlbumEntity(
                         id = doc.id,
-                        name = doc.getBlob("name")?.decrypt() ?: "",
+                        name = doc.getEncryptedField("name") ?: "",
                         updatedAt = doc.getLong("updated_at") ?: 0L,
                         deleted = doc.getBoolean("deleted") ?: false,
                         pendingSync = 0,
@@ -1263,20 +1265,20 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: StudioMediaEntity) =
                     mapOf(
-                        "prompt" to local.prompt.encrypt(),
+                        "prompt" to local.prompt.encryptedForFirestore(),
                         "media_type" to local.mediaType,
                         "created_at" to local.createdAt,
                         "album_id" to local.albumId,
-                        "remote_url" to local.remoteUrl?.encrypt(),
-                        "remote_thumbnail_url" to local.remoteThumbnailUrl?.encrypt(),
+                        "remote_url" to local.remoteUrl?.encryptedForFirestore(),
+                        "remote_thumbnail_url" to local.remoteThumbnailUrl?.encryptedForFirestore(),
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
 
                 override fun fromFirestore(doc: DocumentSnapshot): StudioMediaEntity {
-                    val remoteUrl = doc.getBlob("remote_url")?.decrypt()
-                    val remoteThumbnailUrl = doc.getBlob("remote_thumbnail_url")?.decrypt()
-                    val prompt = doc.getBlob("prompt")?.decrypt() ?: ""
+                    val remoteUrl = doc.getEncryptedField("remote_url")
+                    val remoteThumbnailUrl = doc.getEncryptedField("remote_thumbnail_url")
+                    val prompt = doc.getEncryptedField("prompt") ?: ""
 
                     return StudioMediaEntity(
                         id = doc.id,
@@ -1497,7 +1499,7 @@ class FirestoreDataSource
                         }
                         val data =
                             mapOf(
-                                "name" to chat.name.encrypt(),
+                                "name" to localEncryption.encryptString(chat.name),
                                 "created_at" to chat.created.time,
                                 "last_modified" to chat.lastModified.time,
                                 "pinned" to chat.pinned,
@@ -1518,7 +1520,7 @@ class FirestoreDataSource
                         val data =
                             mutableMapOf<String, Any?>(
                                 "chat_id" to msgChatId.value,
-                                "content" to msg.content.text.encrypt(),
+                                "content" to localEncryption.encryptString(msg.content.text),
                                 "role" to msg.role.name,
                                 "message_state" to msg.messageState.name,
                                 "created_at" to msg.createdAt,
@@ -1667,6 +1669,73 @@ class FirestoreDataSource
             }
         }
 
+        override suspend fun updateWrappedDek(wrappedDek: String?): Result<Unit> {
+            val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
+            return try {
+                val value: Any = wrappedDek ?: com.google.firebase.firestore.FieldValue.delete()
+                firestore
+                    .document("users/$userId")
+                    .set(mapOf("wrappedDek" to value), SetOptions.merge())
+                    .await()
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        override suspend fun getWrappedDek(): Result<String?> {
+            val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
+            return try {
+                val snapshot = firestore.document("users/$userId").get().await()
+                if (snapshot.exists()) {
+                    Result.success(snapshot.getString("wrappedDek"))
+                } else {
+                    Result.success(null)
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        override suspend fun uploadVaultMetadata(
+            metadata: com.browntowndev.pocketcrew.domain.model.security.VaultMetadata,
+        ): Result<Unit> {
+            val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
+            return try {
+                val payload =
+                    mapOf(
+                        "vaultSalt" to metadata.salt,
+                        "vaultVerification" to (metadata.verification ?: com.google.firebase.firestore.FieldValue.delete()),
+                        "wrappedDek" to (metadata.wrappedDek ?: com.google.firebase.firestore.FieldValue.delete()),
+                    )
+                firestore
+                    .document("users/$userId")
+                    .set(payload, SetOptions.merge())
+                    .await()
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+        override suspend fun fetchVaultMetadata(): Result<com.browntowndev.pocketcrew.domain.model.security.VaultMetadata?> {
+            val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
+            return try {
+                val snapshot = firestore.document("users/$userId").get().await()
+                if (!snapshot.exists()) return Result.success(null)
+                val salt = snapshot.getString("vaultSalt") ?: return Result.success(null)
+                Result.success(
+                    com.browntowndev.pocketcrew.domain.model.security.VaultMetadata(
+                        salt = salt,
+                        verification = snapshot.getString("vaultVerification"),
+                        wrappedDek = snapshot.getString("wrappedDek"),
+                    ),
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
         override fun enqueueEmbeddingRegeneration() {
             embeddingCoordinator.enqueueFullRegeneration()
         }
@@ -1703,9 +1772,9 @@ class FirestoreDataSource
                                 ?.message
                                 ?.chatId
                                 ?.value,
-                        "json" to local.json.encrypt(),
-                        "title" to local.title.encrypt(),
-                        "author" to local.author?.encrypt(),
+                        "json" to local.json.encryptedForFirestore(),
+                        "title" to local.title.encryptedForFirestore(),
+                        "author" to local.author?.encryptedForFirestore(),
                         "target_format" to local.targetFormat?.name,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -1743,8 +1812,8 @@ class FirestoreDataSource
             }
 
         private fun documentEntityFromDoc(doc: DocumentSnapshot): com.browntowndev.pocketcrew.core.data.local.DocumentEntity? {
-            val json = doc.getBlob("json")?.decrypt() ?: return null
-            val title = doc.getBlob("title")?.decrypt() ?: ""
+            val json = doc.getEncryptedField("json") ?: return null
+            val title = doc.getEncryptedField("title") ?: ""
             val messageIdStr = doc.getString("message_id") ?: return null
             val messageId = MessageId(messageIdStr)
             val targetFormatStr = doc.getString("target_format")
@@ -1757,7 +1826,7 @@ class FirestoreDataSource
                 messageId = messageId,
                 json = json,
                 title = title,
-                author = doc.getBlob("author")?.decrypt(),
+                author = doc.getEncryptedField("author"),
                 targetFormat = targetFormat,
                 createdAt = doc.getLong("created_at") ?: 0L,
                 updatedAt = doc.getLong("updated_at") ?: 0L,
@@ -1767,8 +1836,7 @@ class FirestoreDataSource
         }
 
         private fun chatEntityFromDoc(doc: DocumentSnapshot): ChatEntity? {
-            val nameBlob = doc.getBlob("name")
-            val name = nameBlob?.decrypt() ?: ""
+            val name = doc.getEncryptedField("name") ?: ""
             return ChatEntity(
                 id = ChatId(doc.id),
                 name = name,
@@ -1784,7 +1852,7 @@ class FirestoreDataSource
         private fun messageEntityFromDoc(doc: DocumentSnapshot): MessageEntity? {
             val chatIdStr = doc.getString("chat_id")
             if (chatIdStr.isNullOrBlank()) return null
-            val content = doc.getBlob("content")?.decrypt() ?: ""
+            val content = doc.getEncryptedField("content") ?: ""
 
             return MessageEntity(
                 id = MessageId(doc.id),
@@ -1792,12 +1860,12 @@ class FirestoreDataSource
                 content = content,
                 role = Role.fromApiValue(doc.getString("role") ?: "user"),
                 userMessageId = doc.getString("user_message_id")?.takeIf { it.isNotBlank() }?.let { MessageId(it) },
-                imageUrisJson = doc.getBlob("image_uris_json")?.decrypt(),
+                imageUrisJson = doc.getEncryptedField("image_uris_json"),
                 messageState = doc.getString("message_state")?.let { MessageState.fromApiValue(it) } ?: MessageState.COMPLETE,
                 createdAt = doc.getLong("created_at") ?: 0L,
                 modelType = doc.getString("model_type")?.let { ModelType.fromApiValue(it) },
                 thinkingDurationSeconds = doc.getLong("thinking_duration_seconds"),
-                thinkingRaw = doc.getBlob("thinking_raw")?.decrypt(),
+                thinkingRaw = doc.getEncryptedField("thinking_raw"),
                 thinkingStartTime = doc.getLong("thinking_start_time"),
                 thinkingEndTime = doc.getLong("thinking_end_time"),
                 pipelineStep =
@@ -1805,11 +1873,11 @@ class FirestoreDataSource
                         com.browntowndev.pocketcrew.domain.model.inference.PipelineStep.entries
                             .find { it.name == stepStr }
                     },
-                artifactsJson = doc.getBlob("artifacts_json")?.decrypt(),
-                generatedMediaUrisJson = doc.getBlob("generated_media_uris_json")?.decrypt(),
-                generatedMediaAssetIdsJson = doc.getBlob("generated_media_asset_ids_json")?.decrypt(),
+                artifactsJson = doc.getEncryptedField("artifacts_json"),
+                generatedMediaUrisJson = doc.getEncryptedField("generated_media_uris_json"),
+                generatedMediaAssetIdsJson = doc.getEncryptedField("generated_media_asset_ids_json"),
                 generatedMediaTypesJson = doc.getString("generated_media_types_json"),
-                generatedMediaPromptsJson = doc.getBlob("generated_media_prompts_json")?.decrypt(),
+                generatedMediaPromptsJson = doc.getEncryptedField("generated_media_prompts_json"),
                 updatedAt = doc.getLong("updated_at") ?: 0L,
                 deleted = doc.getBoolean("deleted") ?: false,
                 pendingSync = 0,

@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.DocumentSnapshot
 
 /**
@@ -13,7 +12,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 internal fun messageTranscriptSegmentToFirestoreMap(
     local: MessageTranscriptSegmentEntity,
     chatId: String,
-    textBlob: Blob,
+    encryptedText: String,
 ): Map<String, Any?> {
     val data =
         mutableMapOf<String, Any?>(
@@ -21,7 +20,7 @@ internal fun messageTranscriptSegmentToFirestoreMap(
             "chat_id" to chatId,
             "ordinal" to local.ordinal,
             "kind" to local.kind,
-            "text" to textBlob,
+            "text" to encryptedText,
             "updated_at" to local.updatedAt,
             "deleted" to local.deleted,
         )
@@ -34,11 +33,11 @@ internal fun messageTranscriptSegmentToFirestoreMap(
 @Suppress("ReturnCount", "ComplexCondition")
 internal fun messageTranscriptSegmentFromFirestore(
     doc: DocumentSnapshot,
-    decryptTextBlob: (Blob) -> String?,
+    encryptedText: () -> String?,
 ): MessageTranscriptSegmentEntity? {
     val chatIdStr = doc.getString("chat_id")
     val messageIdStr = doc.getString("message_id")
-    val text = doc.getBlob("text")?.let(decryptTextBlob)
+    val text = encryptedText()
     val kind = doc.getString("kind")
     val ordinalLong = doc.getLong("ordinal")
 
