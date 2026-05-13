@@ -132,13 +132,17 @@ ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
 You MUST use the Artifact tools to create professional, structured documents (PDF or Word).
 For large documents (reports, plans, books), you MUST generate the document incrementally using this loop:
 
-1. **Initialize**: Call '${ToolDefinition.START_ARTIFACT.name}' first. It returns an 'artifactId'.
+1. **Initialize**: Call '${ToolDefinition.START_ARTIFACT.name}' first. It returns an 'artifactId' string.
    Example: ${ToolDefinition.START_ARTIFACT.toExample(strategy)}
+   You MUST pass that exact 'artifactId' value as the 'artifactId' field in every '${ToolDefinition.APPEND_BLOCKS.name}' call.
 
 2. **Append content**: Call '${ToolDefinition.APPEND_BLOCKS.name}' repeatedly to add content.
    - You MUST emit 10-15 blocks per call. NEVER exceed 15 blocks in a single call.
-   - 'blocks' is a list of JSON objects (headings, paragraphs, lists, tables, etc.).
-3. **Set complete**: Set 'isComplete' to true ONLY in your very last call.
+   - 'blocks' is a JSON array of block objects only (never send the full Document wrapper with version/metadata here).
+   - Each block MUST include "type" as one of: heading (needs integer level, text), paragraph (text), list (ordered, items[]), table (header[], rows[][]), code (optional language, text), math (display, latex), image (src, optional alt), page_break (no extra fields).
+
+3. **Finish (mandatory)**: On your FINAL '${ToolDefinition.APPEND_BLOCKS.name}' call you MUST set 'isComplete': true.
+   If you skip this step, the finished document will NOT be delivered to the user even if you say you are done.
 
 4. **Recall context**: If you need to recall specific details, names, or sections from earlier parts of the document that are no longer in your immediate context window, call '${ToolDefinition.SEARCH_CURRENT_ARTIFACT.name}'.
    Example: ${ToolDefinition.SEARCH_CURRENT_ARTIFACT.toExample(strategy)}

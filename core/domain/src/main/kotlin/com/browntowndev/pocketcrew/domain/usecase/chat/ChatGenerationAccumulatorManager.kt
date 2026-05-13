@@ -361,8 +361,10 @@ internal class MessageAccumulator(
         }
     }
 
-    fun toTranscriptSegments(): List<MessageTranscriptSegment> {
-        finalizeOpenThinkingSegmentIfAny()
+    fun toTranscriptSegments(finalizeOpenThinking: Boolean = true): List<MessageTranscriptSegment> {
+        if (finalizeOpenThinking) {
+            finalizeOpenThinkingSegmentIfAny()
+        }
         return transcriptSegmentsMutable.mapIndexed { index, seg ->
             when (seg.kind) {
                 TranscriptSegmentKind.THINKING -> {
@@ -395,7 +397,10 @@ internal class MessageAccumulator(
     }
 
     fun toSnapshot(): MessageSnapshot {
-        finalizeOpenThinkingSegmentIfAny()
+        val shouldFinalizeOpenThinking = currentState != MessageState.THINKING
+        if (shouldFinalizeOpenThinking) {
+            finalizeOpenThinkingSegmentIfAny()
+        }
         return MessageSnapshot(
             messageId = messageId,
             modelType = modelType,
@@ -413,7 +418,7 @@ internal class MessageAccumulator(
             generatedMediaAssetIds = generatedMediaAssetIds.toList(),
             generatedMediaTypes = generatedMediaTypes.toList(),
             generatedMediaPrompts = generatedMediaPrompts.toList(),
-            transcriptSegments = toTranscriptSegments(),
+            transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
         )
     }
 }

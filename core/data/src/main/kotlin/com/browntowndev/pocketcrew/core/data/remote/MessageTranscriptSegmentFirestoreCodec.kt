@@ -31,6 +31,7 @@ internal fun messageTranscriptSegmentToFirestoreMap(
     return data
 }
 
+@Suppress("ReturnCount")
 internal fun messageTranscriptSegmentFromFirestore(
     doc: DocumentSnapshot,
     decryptTextBlob: (Blob) -> String?,

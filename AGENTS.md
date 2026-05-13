@@ -59,9 +59,9 @@ Whenever production code is added or modified (new classes, public functions, lo
 
 **Never** invent new database tables or columns for transient UI state (e.g., `is_typing`, `is_loading`). Database schema changes require explicit developer authorization.
 
-### 2.5 Inference — On-Device Only
+### 2.5 Inference — On-Device First (BYOK Optional)
 
-**Never** introduce network calls, cloud APIs, or ML Kit fallbacks in the `:inference` module. All inference runs on-device via LiteRT 2.x.
+Prioritize on-device inference via LiteRT 2.x. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted in the `:inference` module as advanced user escape hatches, provided they remain isolated from core on-device logic.
 
 ---
 

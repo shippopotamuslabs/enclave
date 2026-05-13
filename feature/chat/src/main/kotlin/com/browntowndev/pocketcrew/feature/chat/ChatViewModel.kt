@@ -528,8 +528,7 @@ class ChatViewModel @Inject constructor(
                             val params = jsonParser.decodeFromString<
                                 com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
                                 >(
-                                com.browntowndev.pocketcrew.domain.model.inference
-                                    .StartArtifactParamsArgumentNormalizer.normalize(event.argumentsJson),
+                                event.argumentsJson,
                             )
                             pendingStartArtifacts[event.eventId] = PendingStartArtifact(title = params.title)
                         } catch (e: Exception) {

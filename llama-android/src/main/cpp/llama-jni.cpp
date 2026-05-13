@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <unistd.h>
 #include <android/log.h>
 #include <fstream>
 

@@ -22,6 +22,8 @@ class ArtifactToolExecutorImplTest {
     private val documentValidation =
         mockk<DocumentValidationPort> {
             every { validate(any()) } returns Result.success(Unit)
+            every { validateStartArtifactArgs(any()) } returns Result.success(Unit)
+            every { validateAppendBlocksArgs(any()) } returns Result.success(Unit)
         }
 
     private val executor =
@@ -49,12 +51,27 @@ class ArtifactToolExecutorImplTest {
             val result = executor.execute(request)
             assertTrue(result.resultJson.contains("\"status\":\"success\""))
             assertTrue(result.resultJson.contains("\"artifactId\""))
-            assertTrue(result.resultJson.contains("append blocks"))
+            assertTrue(result.resultJson.contains("isComplete"))
         }
 
     @Test
-    fun `execute accepts legacy targetFormat key in JSON via ignoreUnknownKeys`() =
+    fun `execute rejects start_artifact with unknown keys such as targetFormat`() =
         runTest {
+            val validation =
+                mockk<DocumentValidationPort> {
+                    every { validate(any()) } returns Result.success(Unit)
+                    every { validateAppendBlocksArgs(any()) } returns Result.success(Unit)
+                    every { validateStartArtifactArgs(any()) } returns
+                        Result.failure(IllegalArgumentException("unknown field targetFormat"))
+                }
+            val cut =
+                ArtifactToolExecutor(
+                    documentDao = mockk(relaxed = true),
+                    embeddingDao = mockk(relaxed = true),
+                    embeddingEngine = mockk(relaxed = true),
+                    documentValidation = validation,
+                    externalScope = TestScope(),
+                )
             val request =
                 ToolCallRequest(
                     chatId = ChatId("chat-123"),
@@ -65,8 +82,8 @@ class ArtifactToolExecutorImplTest {
                     provider = "test",
                     modelType = ModelType.FAST,
                 )
-            val result = executor.execute(request)
-            assertTrue(result.resultJson.contains("\"status\":\"success\""))
+            val result = cut.execute(request)
+            assertTrue(result.resultJson.contains("TOOL_ARGUMENTS_VIOLATION"))
         }
 
     @Test
@@ -74,6 +91,8 @@ class ArtifactToolExecutorImplTest {
         runTest {
             val docDao = mockk<DocumentDao>()
             val validation = mockk<DocumentValidationPort>()
+            every { validation.validateAppendBlocksArgs(any()) } returns Result.success(Unit)
+            every { validation.validateStartArtifactArgs(any()) } returns Result.success(Unit)
             coEvery { docDao.getDocumentById("aid") } returns
                 DocumentEntity(
                     id = "aid",
@@ -112,5 +131,45 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("validationDetails"))
             assertTrue(result.resultJson.contains("heading block missing"))
             coVerify(exactly = 0) { docDao.updateDocument(any()) }
+        }
+
+    @Test
+    fun `appendBlocks incomplete includes isComplete reminder in message`() =
+        runTest {
+            val docDao = mockk<DocumentDao>()
+            coEvery { docDao.getDocumentById("aid") } returns
+                DocumentEntity(
+                    id = "aid",
+                    messageId = MessageId("assistant-123"),
+                    title = "T",
+                    author = null,
+                    targetFormat = MimeType.PDF,
+                    json = """{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                )
+            coEvery { docDao.updateDocument(any()) } returns Unit
+
+            val cut =
+                ArtifactToolExecutor(
+                    documentDao = docDao,
+                    embeddingDao = mockk(relaxed = true),
+                    embeddingEngine = mockk(relaxed = true),
+                    documentValidation = documentValidation,
+                    externalScope = TestScope(),
+                )
+
+            val request =
+                ToolCallRequest(
+                    chatId = ChatId("chat-123"),
+                    userMessageId = MessageId("msg-123"),
+                    assistantMessageId = MessageId("assistant-123"),
+                    toolName = ToolDefinition.APPEND_BLOCKS.name,
+                    argumentsJson =
+                        """{"artifactId":"aid","blocks":[{"type":"paragraph","text":"hi"}],"isComplete":false}""",
+                    provider = "test",
+                    modelType = ModelType.FAST,
+                )
+            val result = cut.execute(request)
+            assertTrue(result.resultJson.contains("REMINDER"))
+            assertTrue(result.resultJson.contains("isComplete"))
         }
 }
