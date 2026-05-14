@@ -161,6 +161,22 @@ fun ArtifactExportWizardContent(
             )
         }
 
+        state.errorMessage?.let { message ->
+            Spacer(modifier = Modifier.height(20.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         when (state.step) {
@@ -331,7 +347,8 @@ private fun ArtifactExportWizardContentPreviewFormat() {
                 step = ArtifactExportWizardStep.CHOOSE_FORMAT,
                 selectedFormat = WizardExportFormat.PDF,
                 selectedDestination = null,
-                isExporting = false
+                isExporting = false,
+                documentJson = """{"blocks":[]}""",
             ),
             onDismiss = {},
             onSelectFormat = {},
@@ -355,7 +372,8 @@ private fun ArtifactExportWizardContentPreviewDestination() {
                 step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
                 selectedFormat = WizardExportFormat.BOTH,
                 selectedDestination = WizardExportDestination.SHARE,
-                isExporting = false
+                isExporting = false,
+                documentJson = """{"blocks":[]}""",
             ),
             onDismiss = {},
             onSelectFormat = {},

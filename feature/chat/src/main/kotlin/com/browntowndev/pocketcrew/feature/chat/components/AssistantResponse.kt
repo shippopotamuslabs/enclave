@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 
 // ── Main composable ──
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun AssistantResponse(
     modifier: Modifier = Modifier,

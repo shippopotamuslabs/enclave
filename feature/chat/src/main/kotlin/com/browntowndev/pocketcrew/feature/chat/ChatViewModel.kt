@@ -54,9 +54,11 @@ import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,6 +75,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
@@ -135,6 +138,7 @@ class ChatViewModel @Inject constructor(
                 selectedFormat = null,
                 selectedDestination = null,
                 isExporting = false,
+                documentJson = card.documentJson,
             )
     }
 
@@ -144,12 +148,12 @@ class ChatViewModel @Inject constructor(
 
     fun onArtifactExportSelectFormat(format: WizardExportFormat) {
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
-        _artifactExportSheet.value = visible.copy(selectedFormat = format)
+        _artifactExportSheet.value = visible.copy(selectedFormat = format, errorMessage = null)
     }
 
     fun onArtifactExportSelectDestination(destination: WizardExportDestination) {
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
-        _artifactExportSheet.value = visible.copy(selectedDestination = destination)
+        _artifactExportSheet.value = visible.copy(selectedDestination = destination, errorMessage = null)
     }
 
     fun onArtifactExportWizardBack() {
@@ -161,6 +165,7 @@ class ChatViewModel @Inject constructor(
                             sheet.copy(
                                 step = ArtifactExportWizardStep.CHOOSE_FORMAT,
                                 selectedDestination = null,
+                                errorMessage = null,
                             )
                     }
                     ArtifactExportWizardStep.CHOOSE_FORMAT -> {
@@ -176,7 +181,7 @@ class ChatViewModel @Inject constructor(
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
         if (visible.selectedFormat == null) return
         _artifactExportSheet.value =
-            visible.copy(step = ArtifactExportWizardStep.CHOOSE_DESTINATION)
+            visible.copy(step = ArtifactExportWizardStep.CHOOSE_DESTINATION, errorMessage = null)
     }
 
     fun onConfirmArtifactExport() {
@@ -184,81 +189,78 @@ class ChatViewModel @Inject constructor(
         if (visible.selectedFormat == null || visible.selectedDestination == null) return
         viewModelScope.launch {
             _artifactExportSheet.update { prev: ArtifactExportSheetState ->
-                (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = true) ?: prev
+                (prev as? ArtifactExportSheetState.Visible)?.copy(
+                    isExporting = true,
+                    errorMessage = null,
+                ) ?: prev
             }
-            val artifact =
-                resolveArtifactGenerationRequest(
-                    messageId = visible.messageId,
-                    artifactId = visible.artifactId,
-                )
-            if (artifact == null) {
-                _artifactExportMessages.emit("Could not find this document.")
-                dismissArtifactExportSheet()
-                return@launch
-            }
-            if (artifact.content.isBlank()) {
-                _artifactExportMessages.emit("Document is still generating. Try again in a moment.")
-                dismissArtifactExportSheet()
-                return@launch
-            }
-            val format =
-                when (visible.selectedFormat) {
-                    WizardExportFormat.PDF -> ArtifactExportFormat.PDF
-                    WizardExportFormat.WORD -> ArtifactExportFormat.WORD
-                    WizardExportFormat.BOTH -> ArtifactExportFormat.BOTH
+            try {
+                if (visible.documentJson.isBlank()) {
+                    showArtifactExportError("Document is still generating. Try again in a moment.")
+                    return@launch
                 }
-            val destination =
-                when (visible.selectedDestination) {
-                    WizardExportDestination.SHARE -> ArtifactExportDestination.SHARE
-                    WizardExportDestination.DOWNLOAD -> ArtifactExportDestination.DOWNLOAD
-                }
-            val result =
-                exportArtifactDocumentsUseCase(
-                    ExportArtifactDocumentsCommand(
-                        documentJson = artifact.content,
-                        baseTitle = artifact.title.ifBlank { "artifact" },
-                        format = format,
-                        destination = destination,
-                    ),
-                )
-            if (result.isSuccess) {
-                val outcome = result.getOrNull()!!
-                when (outcome) {
-                    is ArtifactExportOutcome.Shared ->
-                        _artifactExportMessages.emit(
-                            "Share sheet opened for ${outcome.fileCount} file(s).",
-                        )
-                    is ArtifactExportOutcome.Downloaded ->
-                        _artifactExportMessages.emit(
-                            "Saved to Downloads: ${outcome.savedDisplayNames.joinToString()}",
-                        )
-                }
-                when (format) {
-                    ArtifactExportFormat.PDF ->
-                        persistArtifactExportPreference(artifact.artifactId, MimeType.PDF)
-                    ArtifactExportFormat.WORD ->
-                        persistArtifactExportPreference(artifact.artifactId, MimeType.WORD)
-                    ArtifactExportFormat.BOTH -> Unit
-                }
-                dismissArtifactExportSheet()
-            } else {
-                val error = result.exceptionOrNull() ?: Exception("Export failed")
-                _artifactExportMessages.emit(error.message ?: "Export failed")
-                _artifactExportSheet.update { prev: ArtifactExportSheetState ->
-                    (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = false) ?: prev
-                }
+                val format =
+                    when (visible.selectedFormat) {
+                        WizardExportFormat.PDF -> ArtifactExportFormat.PDF
+                        WizardExportFormat.WORD -> ArtifactExportFormat.WORD
+                        WizardExportFormat.BOTH -> ArtifactExportFormat.BOTH
+                    }
+                val destination =
+                    when (visible.selectedDestination) {
+                        WizardExportDestination.SHARE -> ArtifactExportDestination.SHARE
+                        WizardExportDestination.DOWNLOAD -> ArtifactExportDestination.DOWNLOAD
+                    }
+                val result =
+                    exportArtifactDocumentsUseCase(
+                        ExportArtifactDocumentsCommand(
+                            documentJson = visible.documentJson,
+                            baseTitle = visible.title.ifBlank { "artifact" },
+                            format = format,
+                            destination = destination,
+                        ),
+                    )
+                result
+                    .onSuccess { outcome ->
+                        when (outcome) {
+                            is ArtifactExportOutcome.Shared ->
+                                _artifactExportMessages.send(
+                                    "Share sheet opened for ${outcome.fileCount} file(s).",
+                                )
+                            is ArtifactExportOutcome.Downloaded ->
+                                _artifactExportMessages.send(
+                                    "Saved to Downloads: ${outcome.savedDisplayNames.joinToString()}",
+                                )
+                        }
+                        when (format) {
+                            ArtifactExportFormat.PDF ->
+                                persistArtifactExportPreference(visible.artifactId, MimeType.PDF)
+                            ArtifactExportFormat.WORD ->
+                                persistArtifactExportPreference(visible.artifactId, MimeType.WORD)
+                            ArtifactExportFormat.BOTH -> Unit
+                        }
+                        dismissArtifactExportSheet()
+                    }
+                    .onFailure { error ->
+                        loggingPort.error(TAG, "Artifact export failed", error)
+                        showArtifactExportError(error.message ?: "Export failed")
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                loggingPort.error(TAG, "Artifact export failed", e)
+                showArtifactExportError(e.message ?: "Export failed")
             }
         }
     }
 
-    private suspend fun resolveArtifactGenerationRequest(
-        messageId: MessageId,
-        artifactId: String,
-    ): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest? {
-        val chatId = _currentChatId.value ?: initialChatId ?: return null
-        val messages = chatRepository.getMessagesForChat(chatId).first()
-        val message = messages.find { it.id == messageId } ?: return null
-        return message.content.artifacts.find { it.artifactId == artifactId }
+    private suspend fun showArtifactExportError(message: String) {
+        _artifactExportMessages.send(message)
+        _artifactExportSheet.update { prev: ArtifactExportSheetState ->
+            (prev as? ArtifactExportSheetState.Visible)?.copy(
+                isExporting = false,
+                errorMessage = message,
+            ) ?: prev
+        }
     }
 
     /**
@@ -295,8 +297,8 @@ class ChatViewModel @Inject constructor(
     private val _sharedMessages = MutableStateFlow<List<Message>>(emptyList())
 
     private val _artifactExportSheet = MutableStateFlow<ArtifactExportSheetState>(ArtifactExportSheetState.Hidden)
-    private val _artifactExportMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val artifactExportMessages = _artifactExportMessages.asSharedFlow()
+    private val _artifactExportMessages = Channel<String>(Channel.BUFFERED)
+    val artifactExportMessages = _artifactExportMessages.receiveAsFlow()
     
     // Caches share URLs by ShareOption key to avoid redundant uploads
     private val shareUrlCache = mutableMapOf<com.browntowndev.pocketcrew.domain.model.share.ShareOption, String>()
