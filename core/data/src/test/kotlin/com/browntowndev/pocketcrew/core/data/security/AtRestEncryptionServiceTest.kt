@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.security
 
+import com.browntowndev.pocketcrew.core.data.security.EnvelopeParse
+import com.browntowndev.pocketcrew.core.data.security.MalformedEnvelopeReason
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -55,6 +57,78 @@ class AtRestEncryptionServiceTest {
         assertThrows(IllegalStateException::class.java) {
             service.decryptString("legacy plaintext")
         }
+    }
+
+    // S1: parseEnvelope treats non-envelope plaintext as NotEnveloped
+    @Test
+    fun parseEnvelope_plaintext_returnsNotEnveloped() {
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope("hello-plain")
+        assertEquals(EnvelopeParse.NotEnveloped, result)
+    }
+
+    // S2: parseEnvelope accepts minimal valid Base64 payload (28 bytes: 12 IV + 16 ciphertext)
+    @Test
+    fun parseEnvelope_minimalValidPayload_returnsOk() {
+        val raw28 = ByteArray(28).also { arr ->
+            for (i in 0..11) arr[i] = 0x00
+            for (i in 12..27) arr[i] = 0x01
+        }
+        val encoded = java.util.Base64.getEncoder().encodeToString(raw28)
+        val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$encoded"
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
+        assertTrue(result is EnvelopeParse.Ok)
+        val ok = result as EnvelopeParse.Ok
+        assertEquals(12, ok.iv.size)
+        assertEquals(16, ok.ciphertext.size)
+    }
+
+    // S3: isEncrypted returns false for prefix-looking but invalid Base64
+    @Test
+    fun isEncrypted_prefixWithInvalidBase64_returnsFalse() {
+        assertFalse(service.isEncrypted("${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}@@@@"))
+    }
+
+    // E1: Wrong prefix → Malformed(BAD_PREFIX)
+    @Test
+    fun parseEnvelope_wrongPrefix_returnsMalformedBadPrefix() {
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope("PCENC:v1:aes-gcmX")
+        assertTrue(result is EnvelopeParse.Malformed)
+        assertEquals(MalformedEnvelopeReason.BAD_PREFIX, (result as EnvelopeParse.Malformed).reason)
+    }
+
+    // E2: Invalid Base64 after prefix → Malformed(INVALID_BASE64)
+    @Test
+    fun parseEnvelope_invalidBase64AfterPrefix_returnsMalformedInvalidBase64() {
+        val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}@@@@"
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
+        assertTrue(result is EnvelopeParse.Malformed)
+        assertEquals(MalformedEnvelopeReason.INVALID_BASE64, (result as EnvelopeParse.Malformed).reason)
+    }
+
+    // E3: Too-short decoded payload (27 bytes < 28 min) → Malformed(PAYLOAD_TOO_SHORT)
+    @Test
+    fun parseEnvelope_tooShortPayload_returnsMalformedPayloadTooShort() {
+        val short27 = ByteArray(27) { 0x05.toByte() }
+        val encoded = java.util.Base64.getEncoder().encodeToString(short27)
+        val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$encoded"
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
+        assertTrue(result is EnvelopeParse.Malformed)
+        assertEquals(MalformedEnvelopeReason.PAYLOAD_TOO_SHORT, (result as EnvelopeParse.Malformed).reason)
+    }
+
+    // E4: Too-large decoded payload (16777217 bytes > 16 MiB cap) → Malformed(PAYLOAD_TOO_LARGE)
+    // Note: We test via Base64 string length check — the implementation should cap at base64 string length
+    // before decoding to avoid allocating 16 MB. A base64 string for 16777217 bytes is ~22 MB chars.
+    // We simulate this by crafting a prefix-valid string whose base64 portion length exceeds the cap.
+    @Test
+    fun parseEnvelope_tooLargePayload_returnsMalformedPayloadTooLarge() {
+        // 16777217 bytes base64-encodes to ceil(16777217/3)*4 = 22369624 chars
+        // Build a string of that many 'A' chars (valid base64 alphabet) after the prefix
+        val oversizedB64 = "A".repeat(22369624)
+        val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$oversizedB64"
+        val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
+        assertTrue(result is EnvelopeParse.Malformed)
+        assertEquals(MalformedEnvelopeReason.PAYLOAD_TOO_LARGE, (result as EnvelopeParse.Malformed).reason)
     }
 
     private class FakeCryptoManager : CryptoManagerPort {
