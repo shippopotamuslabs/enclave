@@ -77,7 +77,7 @@ class MessageFileCloudSyncWorkerTest {
                     name = "test.txt",
                     mimeType = MimeType.PLAIN_TEXT,
                     content = "test content",
-                    stagingRemoteUrl = "ENC:v1:$stagingUrl",
+                    stagingRemoteUrl = "PCENC:v1:aes-gcm:$stagingUrl",
                 )
 
             coEvery { messageFileDao.getPendingUploads() } returns listOf(file)
@@ -96,6 +96,6 @@ class MessageFileCloudSyncWorkerTest {
 
             // Assert
             assertEquals(ListenableWorker.Result.success(), result)
-            coVerify { messageFileDao.markUploaded(fileId, "ENC:v1:$stagingUrl", any()) }
+            coVerify { messageFileDao.markUploaded(fileId, "PCENC:v1:aes-gcm:$stagingUrl", any()) }
         }
 }

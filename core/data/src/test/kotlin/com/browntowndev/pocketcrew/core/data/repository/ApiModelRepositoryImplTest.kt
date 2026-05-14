@@ -6,6 +6,8 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -35,6 +37,8 @@ class ApiModelRepositoryImplTest {
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
     private val localEncryption = FakeLocalDataEncryptionService()
+    private val healer: SensitivePersistenceSelfHealer = testSensitiveSelfHealer(localEncryption)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     @Before
     fun setup() {
@@ -45,7 +49,8 @@ class ApiModelRepositoryImplTest {
                 apiModelConfigurationsDao = configurationsDao,
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
-                localEncryption = localEncryption,
+                healer = healer,
+                readRepairApplier = readRepairApplier,
             )
     }
 
@@ -90,10 +95,10 @@ class ApiModelRepositoryImplTest {
                 credentialsDao.insert(
                     match {
                         it.credentialAlias == "my_key" &&
-                            it.displayName == "ENC:v1:Test" &&
+                            it.displayName == "PCENC:v1:aes-gcm:Test" &&
                             it.provider == ApiProvider.OPENAI &&
                             it.modelId == "gpt-4o" &&
-                            it.baseUrl == "ENC:v1:https://api.openai.com/v1" &&
+                            it.baseUrl == "PCENC:v1:aes-gcm:https://api.openai.com/v1" &&
                             it.isMultimodal == true &&
                             it.apiKeySignature == expectedSignature
                     },
@@ -112,7 +117,8 @@ class ApiModelRepositoryImplTest {
                     apiModelConfigurationsDao = configurationsDao,
                     apiKeyManager = apiKeyManager,
                     cryptoManager = cryptoManager,
-                    localEncryption = LockedLocalDataEncryptionService(),
+                    healer = testSensitiveSelfHealer(LockedLocalDataEncryptionService()),
+                    readRepairApplier = readRepairApplier,
                 )
             val creds =
                 ApiCredentials(
@@ -468,14 +474,6 @@ class ApiModelRepositoryImplTest {
                 configurationsDao.upsert(match { it.pendingSync == 1 })
             }
         }
-
-    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
-
-        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
-
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
-    }
 
     private class LockedLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = throw IllegalStateException("Encryption session locked")

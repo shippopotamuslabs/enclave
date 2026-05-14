@@ -2,8 +2,10 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import android.content.Context
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
+import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
@@ -33,6 +35,8 @@ class StudioRepositoryImplTest {
 
     private lateinit var cacheDir: File
     private lateinit var filesDir: File
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
@@ -51,8 +55,9 @@ class StudioRepositoryImplTest {
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
                 syncTrigger = syncTrigger,
+                healer = healer,
+                readRepairApplier = readRepairApplier,
                 context = context,
-                localEncryption = FakeLocalDataEncryptionService(),
             )
     }
 
@@ -96,8 +101,8 @@ class StudioRepositoryImplTest {
             coEvery { studioMediaDao.getMediaById(any()) } returns
                 StudioMediaEntity(
                     id = "uuid-1",
-                    prompt = "prompt",
-                    mediaUri = "file://${File(filesDir, "test.jpg").absolutePath}",
+                    prompt = "PCENC:v1:aes-gcm:prompt",
+                    mediaUri = "PCENC:v1:aes-gcm:file://${File(filesDir, "test.jpg").absolutePath}",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "123",
@@ -117,8 +122,8 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match {
-                        it.prompt == "ENC:v1:prompt" &&
-                            it.mediaUri == "file://${destinationFile.absolutePath}" &&
+                        it.prompt == "PCENC:v1:aes-gcm:prompt" &&
+                            it.mediaUri == "PCENC:v1:aes-gcm:file://${destinationFile.absolutePath}" &&
                             it.albumId == "123"
                     },
                 )
@@ -136,8 +141,8 @@ class StudioRepositoryImplTest {
             coEvery { studioMediaDao.getMediaById(any()) } returns
                 StudioMediaEntity(
                     id = "uuid-2",
-                    prompt = "new prompt",
-                    mediaUri = "file://${File(filesDir, "test.jpg").absolutePath}",
+                    prompt = "PCENC:v1:aes-gcm:new prompt",
+                    mediaUri = "PCENC:v1:aes-gcm:file://${File(filesDir, "test.jpg").absolutePath}",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = null,
@@ -152,7 +157,7 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match {
-                        it.prompt == "ENC:v1:new prompt" &&
+                        it.prompt == "PCENC:v1:aes-gcm:new prompt" &&
                             it.albumId == null
                     },
                 )
@@ -169,7 +174,8 @@ class StudioRepositoryImplTest {
                     studioAlbumDao = studioAlbumDao,
                     transactionProvider = transactionProvider,
                     syncTrigger = syncTrigger,
-                    localEncryption = FakeLocalDataEncryptionService(),
+                    healer = healer,
+                    readRepairApplier = readRepairApplier,
                     context = context,
                 )
             val sourceFile = File(filesDir, "encrypted-test.jpg")
@@ -180,7 +186,7 @@ class StudioRepositoryImplTest {
             coEvery { studioMediaDao.getMediaById(any()) } returns
                 StudioMediaEntity(
                     id = "uuid-3",
-                    prompt = "ENC:v1:private prompt",
+                    prompt = "PCENC:v1:aes-gcm:private prompt",
                     mediaUri = localUri,
                     mediaType = "IMAGE",
                     createdAt = 1L,
@@ -192,8 +198,8 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match {
-                        it.prompt == "ENC:v1:private prompt" &&
-                            it.mediaUri == localUri
+                        it.prompt == "PCENC:v1:aes-gcm:private prompt" &&
+                            it.mediaUri == "PCENC:v1:aes-gcm:$localUri"
                     },
                 )
             }
@@ -203,10 +209,16 @@ class StudioRepositoryImplTest {
     @Test
     fun `renameAlbum trims name and updates album row`() =
         runTest {
+            coEvery { studioAlbumDao.getAlbumById("42") } returns
+                StudioAlbumEntity(id = "42", name = "PCENC:v1:aes-gcm:Old", pendingSync = 0)
             repository.renameAlbum("42", "  Sunrise  ")
 
             coVerify {
-                studioAlbumDao.updateAlbumName("42", "ENC:v1:Sunrise", any())
+                studioAlbumDao.insertAlbum(
+                    match {
+                        it.id == "42" && it.name == "PCENC:v1:aes-gcm:Sunrise"
+                    },
+                )
             }
         }
 
@@ -216,7 +228,7 @@ class StudioRepositoryImplTest {
             repository.renameAlbum("42", "   ")
 
             coVerify(exactly = 0) {
-                studioAlbumDao.updateAlbumName(any(), any(), any())
+                studioAlbumDao.insertAlbum(any())
             }
         }
 
@@ -245,7 +257,7 @@ class StudioRepositoryImplTest {
         runTest {
             coEvery { studioMediaDao.insertMedia(any()) } returns Unit
             coEvery { studioMediaDao.getMediaById(any()) } returns
-                StudioMediaEntity(id = "uuid-1", prompt = "prompt", mediaUri = "uri", mediaType = "IMAGE", createdAt = 1L, albumId = null)
+                StudioMediaEntity(id = "uuid-1", prompt = "PCENC:v1:aes-gcm:prompt", mediaUri = "PCENC:v1:aes-gcm:uri", mediaType = "IMAGE", createdAt = 1L, albumId = null)
 
             repository.saveMedia("uri", "prompt", "IMAGE", albumId = DEFAULT_GALLERY_ALBUM_ID)
 
@@ -320,9 +332,10 @@ class StudioRepositoryImplTest {
             coVerify {
                 studioMediaDao.insertMedia(
                     match { entity ->
-                        entity.remoteUrl == "https://cdn.example.com/photo.jpg" &&
+                        entity.remoteUrl == "PCENC:v1:aes-gcm:https://cdn.example.com/photo.jpg" &&
                             entity.syncStatus == "UPLOADED" &&
-                            entity.prompt == "ENC:v1:updated prompt"
+                            entity.prompt == "PCENC:v1:aes-gcm:updated prompt" &&
+                            entity.mediaUri == "PCENC:v1:aes-gcm:file:///data/files/photo.jpg"
                     },
                 )
             }
