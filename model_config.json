@@ -1,16 +1,16 @@
 {
   "assets": [
     {
-      "huggingFaceModelName": "unsloth/LFM2.5-1.2B-Thinking-GGUF",
-      "fileName": "LFM2.5-1.2B-Thinking-Q8_0.gguf",
-      "sha256": "e842afad2eebd724e714a867aaa9b48b3b71df26cd0eebf634b1b41dbb129516",
-      "sizeInBytes": 1246254304,
+      "huggingFaceModelName": "openbmb/MiniCPM-V-4.6-Thinking-gguf",
+      "fileName": "MiniCPM-V-4_6-Thinking-Q8_0.gguf",
+      "sha256": "1cfadbb76a841c6a448870dda3f2f46209ae6d552a848ee4ab3205de76b5adfb",
+      "sizeInBytes": 811591648,
       "source": "HF",
-      "isMultimodal": false,
+      "isMultimodal": true,
       "configurations": [
         {
           "configId": "550e8400-e29b-41d4-a716-446655440002",
-          "displayName": "LFM 2.5 1.2B (Analytic Draft)",
+          "displayName": "MiniCPM-V-4.6 1.3B (Analytic Draft)",
           "systemPrompt": "You are the primary analytical drafter in a multi-model pipeline. You are logical, precise, and thorough. Handle messages containing TASK: COMPLEX_DRAFT_ANALYTICAL by drafting a response to the USER_PROMPT.",
           "temperature": 0.05,
           "topK": 50,
@@ -75,8 +75,8 @@
     {
       "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
       "fileName": "gemma-4-E4B-it.litertlm",
-      "sha256": "f335f2bfd1b758dc6476db16c0f41854bd6237e2658d604cbe566bcefd00a7bc",
-      "sizeInBytes": 3654467584,
+      "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
+      "sizeInBytes": 3659530240,
       "source": "R2",
       "isMultimodal": true,
       "configurations": [
