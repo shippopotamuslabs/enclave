@@ -22,6 +22,7 @@ fun UnlockVaultScreen(
     authState: VaultAuthUiState,
     errorMessage: String?,
     isUnlocking: Boolean = false,
+    isBiometricUnlockConfigured: Boolean = false,
     onLoginClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
 ) {
@@ -35,6 +36,7 @@ fun UnlockVaultScreen(
             isUnlocking = isUnlocking,
             showGoogleSignInOnUnauth = true,
             showBiometricToggle = true,
+            initialBiometricEnabled = isBiometricUnlockConfigured,
             onLoginClick = onLoginClick,
             onSubmitVaultPassword = onSubmitVaultPassword,
             modifier = Modifier

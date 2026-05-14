@@ -69,6 +69,7 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
  *   is guaranteed signed in (e.g. settings re-auth).
  * @param showBiometricToggle when true, render the biometric opt-in switch. Bottom-sheet
  *   re-auth flows hide this since biometric enrollment happens at first unlock only.
+ * @param initialBiometricEnabled initial checked state for the biometric opt-in switch.
  */
 @Composable
 fun VaultUnlockContent(
@@ -77,13 +78,14 @@ fun VaultUnlockContent(
     isUnlocking: Boolean = false,
     showGoogleSignInOnUnauth: Boolean = true,
     showBiometricToggle: Boolean = true,
+    initialBiometricEnabled: Boolean = false,
     onLoginClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var enableBiometric by remember { mutableStateOf(false) }
+    var enableBiometric by remember { mutableStateOf(initialBiometricEnabled) }
     var unlockUiLatched by remember { mutableStateOf(false) }
 
     // Synchronous latch: inline assignment runs in the same composition frame so there is no

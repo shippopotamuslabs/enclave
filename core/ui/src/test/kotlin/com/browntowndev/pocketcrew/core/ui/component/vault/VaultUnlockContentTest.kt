@@ -4,7 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -62,5 +63,25 @@ class VaultUnlockContentTest {
         composeTestRule.onNodeWithText("Signing In...").assertExists()
         composeTestRule.onAllNodesWithText("Enclave Password").assertCountEquals(0)
         composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
+    }
+
+    @Test
+    fun biometricToggleStartsOnWhenInitialBiometricEnabledIsTrue() {
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                VaultUnlockContent(
+                    authState = authenticatedUser,
+                    errorMessage = null,
+                    showGoogleSignInOnUnauth = false,
+                    showBiometricToggle = true,
+                    initialBiometricEnabled = true,
+                    onLoginClick = {},
+                    onSubmitVaultPassword = { _, _ -> },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
+        composeTestRule.onNode(isToggleable()).assertIsOn()
     }
 }

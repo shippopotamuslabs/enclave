@@ -113,6 +113,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
                                     isUnlocking = currentState.isUnlocking,
+                                    isBiometricUnlockConfigured = currentState.isBiometricUnlockPossible,
                                     errorMessage = currentState.vaultErrorMessage,
                                     onLoginClick = {
                                         loggingPort.debug(TAG, "UnlockVaultScreen: Sign in clicked")

@@ -230,6 +230,45 @@ class MainViewModelTest {
     }
 
     @Test
+    fun `unlockVault with existing biometric secure value does not request enrollment`() = runTest(testDispatcher) {
+        every { cryptoManager.hasCachedKey() } returns false
+        every { biometricManager.isBiometricAvailable() } returns true
+        every { biometricManager.hasSecureValue(any()) } returns true
+        coEvery { vaultMetadataPort.getVaultSalt() } returns "c2FsdA=="
+        coEvery { vaultMetadataPort.getWrappedDek() } returns "d3JhcA=="
+        coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(null)
+        coEvery { cloudSyncPort.updateVaultVerificationData(any()) } returns Result.success(Unit)
+        coEvery { unlockVaultUseCase(any(), any(), any()) } returns Result.success(Unit)
+        every { cryptoManager.encrypt(any()) } returns Result.success(byteArrayOf())
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+        viewModel.unlockVault("password", enableBiometric = true)
+        advanceUntilIdle()
+
+        val state = viewModel.startupState.value as AppStartupState.Ready
+        assertFalse(state.isBiometricEnrollmentPending)
+        assertFalse(state.isVaultLocked)
+        assertNull(state.vaultErrorMessage)
+    }
+
+    @Test
     fun `unlockVault treats blank vault metadata as missing and creates a new vault`() = runTest(testDispatcher) {
         val generatedSalt = ByteArray(16) { 0x11.toByte() }
         coEvery { vaultMetadataPort.getVaultSalt() } returns ""
