@@ -4,6 +4,7 @@ import androidx.sqlite.db.SupportSQLiteQuery
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -28,12 +29,27 @@ class MemoriesRepositoryTest {
     private lateinit var repository: MemoriesRepository
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
+    private val fakeEncryption = object : com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService {
+        override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
+    }
+    private val noOpLogger = object : com.browntowndev.pocketcrew.domain.port.inference.LoggingPort {
+        override fun debug(tag: String, message: String) = Unit
+        override fun info(tag: String, message: String) = Unit
+        override fun warning(tag: String, message: String) = Unit
+        override fun error(tag: String, message: String, throwable: Throwable?) = Unit
+        override fun recordException(tag: String, message: String, throwable: Throwable) = Unit
+    }
+    private val healer = com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer(fakeEncryption, noOpLogger)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+
     @BeforeEach
     fun setup() {
         memoriesDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         embeddingEngine = mockk(relaxed = true)
-        repository = MemoriesRepositoryImpl(syncTrigger, memoriesDao, embeddingDao, embeddingEngine, FakeLocalDataEncryptionService())
+        repository = MemoriesRepositoryImpl(syncTrigger, memoriesDao, embeddingDao, embeddingEngine, healer, readRepairApplier)
     }
 
     @Test
@@ -105,7 +121,8 @@ class MemoriesRepositoryTest {
                     memoriesDao,
                     embeddingDao,
                     embeddingEngine,
-                    FakeLocalDataEncryptionService(),
+                    healer,
+                    readRepairApplier,
                 )
             val category = MemoryCategory.FACTS
             val content = "Private memory"
@@ -117,7 +134,7 @@ class MemoriesRepositoryTest {
             coVerify {
                 memoriesDao.insertMemory(
                     match {
-                        it.category == category && it.content == "ENC:v1:Private memory"
+                        it.category == category && it.content == "PCENC:v1:aes-gcm:Private memory"
                     },
                 )
             }
@@ -136,7 +153,7 @@ class MemoriesRepositoryTest {
 
             repository.updateMemory(id, newContent)
 
-            coVerify { memoriesDao.updateMemory(match { it.id == id && it.content == "ENC:v1:$newContent" }) }
+            coVerify { memoriesDao.updateMemory(match { it.id == id && it.content == "PCENC:v1:aes-gcm:$newContent" }) }
             coVerify { embeddingEngine.getEmbedding(newContent) }
 
             val querySlot = slot<SupportSQLiteQuery>()
@@ -257,5 +274,32 @@ class MemoriesRepositoryTest {
             coVerify {
                 memoriesDao.updateMemory(match { it.pendingSync == 1 })
             }
+        }
+
+    // S15: Memories persist encrypted content and return plaintext domain content
+    @Test
+    fun `S15 insertMemory persists encrypted content and getMemoryById returns plaintext domain content`() =
+        runTest {
+            val content = "likes quiet mornings"
+            val category = MemoryCategory.PREFERENCES
+            coEvery { embeddingEngine.getEmbedding(content) } returns floatArrayOf(0.1f)
+
+            val result = repository.insertMemory(category, content)
+
+            // Stored entity must have encrypted content
+            coVerify {
+                memoriesDao.insertMemory(
+                    match { it.content.startsWith("PCENC:v1:aes-gcm:") },
+                )
+            }
+
+            // getMemoryById should return plaintext domain content
+            val encryptedContent = "PCENC:v1:aes-gcm:$content"
+            coEvery { memoriesDao.getMemoryById(result.id) } returns
+                MemoriesEntity(id = result.id, category = category, content = encryptedContent)
+
+            val domainMemory = repository.getMemoryById(result.id)
+
+            assertEquals(content, domainMemory?.content)
         }
 }
