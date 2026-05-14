@@ -30,6 +30,7 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
@@ -44,10 +45,12 @@ import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -199,8 +202,8 @@ class ArtifactSyncIntegrationTest {
             assertEquals(1, capturedDocuments.size)
             val savedDocument = capturedDocuments[0]
             assertEquals("artifact-sync-1", savedDocument.id)
-            assertEquals("Report", savedDocument.title)
-            assertEquals("# Markdown", savedDocument.json)
+            assertEquals("ENC:v1:Report", savedDocument.title)
+            assertEquals("ENC:v1:# Markdown", savedDocument.json)
             assertEquals(null, savedDocument.targetFormat)
             assertEquals(messageId, savedDocument.messageId)
             assertEquals(1, savedDocument.pendingSync)
