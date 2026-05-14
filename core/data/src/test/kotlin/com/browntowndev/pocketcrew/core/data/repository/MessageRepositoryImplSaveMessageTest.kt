@@ -4,7 +4,8 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -26,7 +27,8 @@ class MessageRepositoryImplSaveMessageTest {
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
-    private lateinit var localEncryption: LocalDataEncryptionService
+    private lateinit var healer: SensitivePersistenceSelfHealer
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
     private lateinit var repository: MessageRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -37,7 +39,7 @@ class MessageRepositoryImplSaveMessageTest {
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
-        localEncryption = FakeLocalDataEncryptionService()
+        healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
 
         // Default behavior for transactionProvider to just execute the block
         coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
@@ -53,7 +55,8 @@ class MessageRepositoryImplSaveMessageTest {
                 chatSummaryDao,
                 embeddingDao,
                 transactionProvider,
-                localEncryption,
+                healer,
+                readRepairApplier,
             )
     }
 
@@ -104,7 +107,7 @@ class MessageRepositoryImplSaveMessageTest {
 
             // Then
             assert(result == messageId)
-            coVerify { messageDao.upsert(match { it.content == "ENC:v1:Test message" }) }
+            coVerify { messageDao.upsert(match { it.content == "PCENC:v1:aes-gcm:Test message" }) }
         }
 
     @Test
@@ -132,8 +135,8 @@ class MessageRepositoryImplSaveMessageTest {
             coVerify {
                 messageDao.insertFiles(
                     match { files ->
-                        files.single().name == "ENC:v1:secret.txt" &&
-                            files.single().content == "ENC:v1:private attachment"
+                        files.single().name == "PCENC:v1:aes-gcm:secret.txt" &&
+                            files.single().content == "PCENC:v1:aes-gcm:private attachment"
                     },
                 )
             }
@@ -170,12 +173,4 @@ class MessageRepositoryImplSaveMessageTest {
             coVerify { messageDao.upsert(any()) }
             coVerify { messageDao.insertFiles(any()) }
         }
-
-    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
-
-        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
-
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
-    }
 }
