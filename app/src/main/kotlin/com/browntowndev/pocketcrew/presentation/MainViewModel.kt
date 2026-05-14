@@ -241,7 +241,7 @@ class MainViewModel
 
                     initializeModelsIfNeeded()
 
-                    if (enableBiometric && biometricManager.isBiometricAvailable()) {
+                    if (shouldRequestBiometricEnrollment(enableBiometric)) {
                         loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
                         _startupState.update {
                             if (it is AppStartupState.Ready) it.copy(
@@ -267,6 +267,11 @@ class MainViewModel
                 }
             }
         }
+
+        private fun shouldRequestBiometricEnrollment(enableBiometric: Boolean): Boolean =
+            enableBiometric &&
+                biometricManager.isBiometricAvailable() &&
+                !biometricManager.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
         private suspend fun resolveOrCreateSalt(): Pair<String, ByteArray> {
             var saltBase64 = vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
