@@ -36,14 +36,17 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Capabilities
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.google.ai.edge.litertlm.ExperimentalApi
+import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Message as LiteRtMessage
 import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 import com.google.ai.edge.litertlm.Tool
@@ -1038,6 +1041,7 @@ class ConversationManagerImpl @Inject constructor(
         initializeEngine(modelPath, contextWindow, cacheDir, isMultimodal)
     }
 
+    @OptIn(ExperimentalApi::class)
     private fun initializeEngine(
         modelPath: String,
         contextWindow: Int,
@@ -1049,10 +1053,13 @@ class ConversationManagerImpl @Inject constructor(
         var candidate: Engine? = null
 
         try {
+            val speculativeDecodingEnabled = supportsSpeculativeDecoding(modelPath)
+            ExperimentalFlags.enableSpeculativeDecoding = speculativeDecodingEnabled
             Log.d(
                 TAG,
                 "Initializing LiteRT text engine with GPU backend, " +
-                    "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
+                    "contextWindow=$contextWindow speculativeDecodingEnabled=$speculativeDecodingEnabled " +
+                    "memoryBeforeInit=${memorySnapshot()}"
             )
 
             candidate = createEngine(
@@ -1071,7 +1078,8 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(
                 TAG,
                 "LiteRT text engine initialized successfully with GPU backend " +
-                    "(isNpu=$activeBackendIsNpu) memoryAfterInit=${memorySnapshot()}"
+                    "(isNpu=$activeBackendIsNpu, speculativeDecodingEnabled=$speculativeDecodingEnabled) " +
+                    "memoryAfterInit=${memorySnapshot()}"
             )
         } catch (e: CancellationException) {
             Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
@@ -1100,6 +1108,25 @@ class ConversationManagerImpl @Inject constructor(
                 "Failed to initialize LiteRT text engine with GPU backend",
                 t
             )
+        } finally {
+            ExperimentalFlags.enableSpeculativeDecoding = false
+        }
+    }
+
+    private fun supportsSpeculativeDecoding(modelPath: String): Boolean {
+        var capabilities: Capabilities? = null
+        return try {
+            capabilities = Capabilities(modelPath)
+            capabilities.hasSpeculativeDecodingSupport()
+        } catch (t: Throwable) {
+            Log.d(TAG, "Unable to read LiteRT speculative decoding capabilities for $modelPath")
+            false
+        } finally {
+            try {
+                capabilities?.close()
+            } catch (t: Throwable) {
+                Log.d(TAG, "Failed to close LiteRT capabilities for $modelPath")
+            }
         }
     }
 
