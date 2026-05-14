@@ -31,7 +31,9 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.repository.testSensitiveSelfHealer
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -94,6 +96,7 @@ class ArtifactSyncIntegrationTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val userIdProvider: () -> String? = { "user123" }
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private lateinit var repository: ChatRepositoryImpl
     private lateinit var worker: MessageFileCloudSyncWorker
@@ -110,7 +113,8 @@ class ArtifactSyncIntegrationTest {
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
 
         dataSource =
@@ -202,8 +206,8 @@ class ArtifactSyncIntegrationTest {
             assertEquals(1, capturedDocuments.size)
             val savedDocument = capturedDocuments[0]
             assertEquals("artifact-sync-1", savedDocument.id)
-            assertEquals("ENC:v1:Report", savedDocument.title)
-            assertEquals("ENC:v1:# Markdown", savedDocument.json)
+            assertEquals("PCENC:v1:aes-gcm:Report", savedDocument.title)
+            assertEquals("PCENC:v1:aes-gcm:# Markdown", savedDocument.json)
             assertEquals(null, savedDocument.targetFormat)
             assertEquals(messageId, savedDocument.messageId)
             assertEquals(1, savedDocument.pendingSync)

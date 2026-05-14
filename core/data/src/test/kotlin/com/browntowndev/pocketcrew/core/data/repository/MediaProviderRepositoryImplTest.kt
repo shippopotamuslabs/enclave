@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
@@ -23,11 +24,13 @@ class MediaProviderRepositoryImplTest {
     private val mediaProviderDao: MediaProviderDao = mockk()
     private val apiKeyManager: ApiKeyManager = mockk(relaxed = true)
     private val syncTrigger: CloudSyncTrigger = mockk(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
     private lateinit var repository: MediaProviderRepositoryImpl
 
     @BeforeEach
     fun setUp() {
-        repository = MediaProviderRepositoryImpl(syncTrigger, mediaProviderDao, apiKeyManager, FakeLocalDataEncryptionService())
+        repository = MediaProviderRepositoryImpl(syncTrigger, mediaProviderDao, apiKeyManager, healer, readRepairApplier)
     }
 
     @Test
@@ -78,7 +81,8 @@ class MediaProviderRepositoryImplTest {
                     syncTrigger,
                     mediaProviderDao,
                     apiKeyManager,
-                    FakeLocalDataEncryptionService(),
+                    healer,
+                    readRepairApplier,
                 )
             val asset =
                 MediaProviderAsset(
@@ -94,11 +98,11 @@ class MediaProviderRepositoryImplTest {
             coEvery { mediaProviderDao.getMediaProvider("1") } returns
                 MediaProviderEntity(
                     "1",
-                    "ENC:v1:Imagen",
+                    "PCENC:v1:aes-gcm:Imagen",
                     ApiProvider.GOOGLE,
                     MediaCapability.IMAGE,
-                    "ENC:v1:imagen-3",
-                    "ENC:v1:https://api.google.com",
+                    "PCENC:v1:aes-gcm:imagen-3",
+                    "PCENC:v1:aes-gcm:https://api.google.com",
                     "google-key",
                 )
 
@@ -108,9 +112,9 @@ class MediaProviderRepositoryImplTest {
             coVerify {
                 mediaProviderDao.upsert(
                     match {
-                        it.displayName == "ENC:v1:Imagen" &&
-                            it.modelName == "ENC:v1:imagen-3" &&
-                            it.baseUrl == "ENC:v1:https://api.google.com"
+                        it.displayName == "PCENC:v1:aes-gcm:Imagen" &&
+                            it.modelName == "PCENC:v1:aes-gcm:imagen-3" &&
+                            it.baseUrl == "PCENC:v1:aes-gcm:https://api.google.com"
                     },
                 )
             }

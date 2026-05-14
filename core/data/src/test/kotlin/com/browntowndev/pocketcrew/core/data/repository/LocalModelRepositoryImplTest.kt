@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
@@ -28,6 +29,7 @@ class LocalModelRepositoryImplTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var repository: LocalModelRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private val fakeTransactionProvider =
         object : TransactionProvider {
@@ -51,7 +53,8 @@ class LocalModelRepositoryImplTest {
                 configsDao = database.localModelConfigurationsDao(),
                 defaultModelsDao = database.defaultModelsDao(),
                 transactionProvider = fakeTransactionProvider,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 
@@ -108,7 +111,8 @@ class LocalModelRepositoryImplTest {
                     configsDao = database.localModelConfigurationsDao(),
                     defaultModelsDao = database.defaultModelsDao(),
                     transactionProvider = fakeTransactionProvider,
-                    localEncryption = FakeLocalDataEncryptionService(),
+                    healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                    readRepairApplier = readRepairApplier,
                 )
             val metadata =
                 LocalModelMetadata(
@@ -139,8 +143,8 @@ class LocalModelRepositoryImplTest {
             val stored = database.localModelConfigurationsDao().getById(LocalModelConfigurationId("config-encrypted"))
             val loaded = encryptedRepository.getConfigurationById(LocalModelConfigurationId("config-encrypted"))
 
-            assertEquals("ENC:v1:Private Config", stored?.displayName)
-            assertEquals("ENC:v1:private system prompt", stored?.systemPrompt)
+            assertEquals("PCENC:v1:aes-gcm:Private Config", stored?.displayName)
+            assertEquals("PCENC:v1:aes-gcm:private system prompt", stored?.systemPrompt)
             assertEquals("Private Config", loaded?.displayName)
             assertEquals("private system prompt", loaded?.systemPrompt)
         }

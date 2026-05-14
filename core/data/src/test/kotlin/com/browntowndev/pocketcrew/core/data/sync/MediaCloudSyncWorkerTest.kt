@@ -74,7 +74,7 @@ class MediaCloudSyncWorkerTest {
                     prompt = "test",
                     mediaUri = "file:///tmp/media1.jpg",
                     mediaType = "IMAGE",
-                    stagingRemoteUrl = "ENC:v1:$stagingUrl",
+                    stagingRemoteUrl = "PCENC:v1:aes-gcm:$stagingUrl",
                 )
 
             coEvery { studioMediaDao.getPendingUploads() } returns listOf(media)
@@ -99,6 +99,6 @@ class MediaCloudSyncWorkerTest {
             // Verify we DID NOT try to upload
             coVerify(exactly = 0) { storageRef.putBytes(any()) }
             // Verify we marked it uploaded with the recovered URL
-            coVerify { studioMediaDao.markUploaded(mediaId, "ENC:v1:$stagingUrl", any()) }
+            coVerify { studioMediaDao.markUploaded(mediaId, "PCENC:v1:aes-gcm:$stagingUrl", any()) }
         }
 }
