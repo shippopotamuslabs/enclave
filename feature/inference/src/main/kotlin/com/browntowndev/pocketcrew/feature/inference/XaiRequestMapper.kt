@@ -235,6 +235,12 @@ object XaiRequestMapper {
             "type" to "object",
             "properties" to schema.properties.toMap()
         )
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["\$defs"] = defs.toMap()
+        }
         if (schema.required.isNotEmpty()) {
             parametersMap["required"] = schema.required
         }
@@ -255,6 +261,12 @@ object XaiRequestMapper {
             "type" to "object",
             "properties" to schema.properties.toMap()
         )
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["\$defs"] = defs.toMap()
+        }
         if (schema.required.isNotEmpty()) {
             parametersMap["required"] = schema.required
         }
