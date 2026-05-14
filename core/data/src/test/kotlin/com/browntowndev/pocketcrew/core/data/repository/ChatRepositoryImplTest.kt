@@ -9,7 +9,8 @@ import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -38,7 +39,8 @@ class ChatRepositoryImplTest {
     private lateinit var messageTranscriptSegmentDao: MessageTranscriptSegmentDao
     private lateinit var documentDao: DocumentDao
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
-    private lateinit var localEncryption: LocalDataEncryptionService
+    private lateinit var healer: SensitivePersistenceSelfHealer
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
     private lateinit var repository: ChatRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -52,7 +54,7 @@ class ChatRepositoryImplTest {
         messageTranscriptSegmentDao = mockk<MessageTranscriptSegmentDao>(relaxed = true)
         documentDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
-        localEncryption = FakeLocalDataEncryptionService()
+        healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
 
         // Mock transaction provider to run the block immediately
         coEvery { transactionProvider.runInTransaction<Any>(any()) } answers {
@@ -68,7 +70,8 @@ class ChatRepositoryImplTest {
                 tavilySourceDao,
                 documentDao,
                 transactionProvider,
-                localEncryption,
+                healer,
+                readRepairApplier,
             )
     }
 
@@ -202,7 +205,7 @@ class ChatRepositoryImplTest {
             coVerify {
                 chatDao.upsert(
                     match {
-                        it.name == "ENC:v1:Private title" &&
+                        it.name == "PCENC:v1:aes-gcm:Private title" &&
                             it.name != "Private title"
                     },
                 )
@@ -213,7 +216,7 @@ class ChatRepositoryImplTest {
                     listOf(
                         ChatEntity(
                             id = ChatId("chat-1"),
-                            name = "ENC:v1:Private title",
+                            name = "PCENC:v1:aes-gcm:Private title",
                             created = testDate,
                             lastModified = testDate,
                             pinned = false,
@@ -225,12 +228,4 @@ class ChatRepositoryImplTest {
 
             assertEquals("Private title", result.single().name)
         }
-
-    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
-
-        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
-
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
-    }
 }

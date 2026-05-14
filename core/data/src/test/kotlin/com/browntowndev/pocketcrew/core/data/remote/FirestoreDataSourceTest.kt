@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
@@ -430,7 +431,7 @@ class FirestoreDataSourceTest {
                 coVerify {
                     chatDao.insertIfAbsent(
                         match {
-                            it.id.value == "chat-1" && it.created.time == 0L && it.name == "ENC:v1:Syncing..."
+                            it.id.value == "chat-1" && it.created.time == 0L && it.name == "PCENC:v1:aes-gcm:Syncing..."
                         },
                     )
                     messageDao.upsert(
@@ -582,7 +583,7 @@ class FirestoreDataSourceTest {
                 val chatEntity =
                     ChatEntity(
                         chatId,
-                        "ENC:v1:Test Chat",
+                        "PCENC:v1:aes-gcm:Test Chat",
                         java.util.Date(1000L),
                         java.util.Date(2000L),
                         false,
@@ -592,7 +593,7 @@ class FirestoreDataSourceTest {
                     MessageEntity(
                         messageId,
                         chatId,
-                        "ENC:v1:Hello",
+                        "PCENC:v1:aes-gcm:Hello",
                         role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER,
                         pendingSync = 1,
                     )
@@ -705,7 +706,7 @@ class FirestoreDataSourceTest {
                 val chatEntity =
                     ChatEntity(
                         chatId,
-                        "ENC:v1:Test Chat",
+                        "PCENC:v1:aes-gcm:Test Chat",
                         java.util.Date(1000L),
                         java.util.Date(2000L),
                         false,
@@ -715,7 +716,7 @@ class FirestoreDataSourceTest {
                     MessageEntity(
                         messageId,
                         chatId,
-                        "ENC:v1:Hello",
+                        "PCENC:v1:aes-gcm:Hello",
                         role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER,
                         pendingSync = 1,
                     )
@@ -775,7 +776,7 @@ class FirestoreDataSourceTest {
                 val chatEntity =
                     ChatEntity(
                         chatId,
-                        "ENC:v1:Plain Chat",
+                        "PCENC:v1:aes-gcm:Plain Chat",
                         java.util.Date(1000L),
                         java.util.Date(2000L),
                         false,
@@ -796,8 +797,8 @@ class FirestoreDataSourceTest {
             }
 
         @Test
-        @DisplayName("fails closed when pending Room fields are plaintext")
-        fun failsClosedWhenPendingRoomFieldsArePlaintext() =
+        @DisplayName("self-heals pending plaintext Room fields before Firestore upload")
+        fun selfHealsPendingPlaintextRoomFieldsBeforeFirestoreUpload() =
             testScope.runTest {
                 val source =
                     FirestoreDataSource(
@@ -842,12 +843,16 @@ class FirestoreDataSourceTest {
 
                 coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
                 coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
+                    com.google.android.gms.tasks.Tasks
+                        .forResult(null)
 
                 val result = source.syncPendingChanges()
 
-                assertTrue(result.isFailure)
-                verify(exactly = 0) { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
-                coVerify(exactly = 0) { chatDao.markSynced(any()) }
+                assertTrue(result.isSuccess)
+                coVerify { chatDao.upsert(match { it.id == chatId && it.name == "PCENC:v1:aes-gcm:Plain Chat" }) }
+                verify { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
+                coVerify { chatDao.markSynced(listOf(chatId)) }
             }
 
         @Test
@@ -859,7 +864,7 @@ class FirestoreDataSourceTest {
                     (1..550).map { i ->
                         ChatEntity(
                             ChatId("chat-$i"),
-                            "ENC:v1:Chat $i",
+                            "PCENC:v1:aes-gcm:Chat $i",
                             java.util.Date(i.toLong()),
                             java.util.Date(i.toLong()),
                             false,
@@ -882,7 +887,7 @@ class FirestoreDataSourceTest {
         @DisplayName("returns failure on Firestore batch error")
         fun returnsFailureOnBatchError() =
             testScope.runTest {
-                val chatEntity = ChatEntity(ChatId("c1"), "ENC:v1:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
+                val chatEntity = ChatEntity(ChatId("c1"), "PCENC:v1:aes-gcm:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
                 coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
                 coEvery { messageDao.getClaimedForSync() } returns emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
@@ -932,7 +937,7 @@ class FirestoreDataSourceTest {
                 val entity =
                     com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity(
                         id = id,
-                        displayName = "ENC:v1:OpenAI",
+                        displayName = "PCENC:v1:aes-gcm:OpenAI",
                         provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.OPENAI,
                         modelId = "gpt-4",
                         credentialAlias = "openai_main",
@@ -1405,7 +1410,7 @@ class FirestoreDataSourceTest {
                 coVerify {
                     messageDao.insertIfAbsent(
                         match {
-                            it.id.value == "msg-1" && it.content == "ENC:v1:Syncing..."
+                            it.id.value == "msg-1" && it.content == "PCENC:v1:aes-gcm:Syncing..."
                         },
                     )
                     messageVisionAnalysisDao.upsert(
@@ -2147,6 +2152,81 @@ class FirestoreDataSourceTest {
     @DisplayName("per-document error isolation")
     inner class PerDocumentErrorIsolationTests {
         @Test
+        @DisplayName("documents snapshot self-heals plaintext payloads before Room insert")
+        fun documentsSnapshot_selfHealsPlaintextPayloadsBeforeRoomInsert() =
+            testScope.runTest {
+                val listenerSlot = slot<EventListener<QuerySnapshot>>()
+                val documentsCollection = mockk<CollectionReference>(relaxed = true)
+                every { firestore.collection("users/test-user-id/documents") } returns documentsCollection
+                every { documentsCollection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+                dataSource.startListening()
+
+                val plaintextDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+                every { plaintextDoc.id } returns "artifact-plain"
+                every { plaintextDoc.getString("json") } returns """{"version":"1.0","metadata":{"title":"Plain"},"blocks":[]}"""
+                every { plaintextDoc.getString("title") } returns "Plain"
+                every { plaintextDoc.getString("author") } returns null
+                every { plaintextDoc.getString("message_id") } returns "assistant-1"
+                every { plaintextDoc.getString("target_format") } returns null
+                every { plaintextDoc.getString("chat_id") } returns null
+                every { plaintextDoc.getLong("created_at") } returns 1000L
+                every { plaintextDoc.getLong("updated_at") } returns 2000L
+                every { plaintextDoc.getBoolean("deleted") } returns false
+                every { plaintextDoc.data } returns
+                    mapOf(
+                        "json" to """{"version":"1.0","metadata":{"title":"Plain"},"blocks":[]}""",
+                        "title" to "Plain",
+                        "message_id" to "assistant-1",
+                    )
+                every { plaintextDoc.reference.set(any<Map<String, Any?>>(), any<SetOptions>()) } returns Tasks.forResult(null)
+                coEvery { documentDao.getDocumentById("artifact-plain") } returns null
+
+                val encryptedDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+                every { encryptedDoc.id } returns "artifact-encrypted"
+                every { encryptedDoc.getString("json") } returns
+                    """PCENC:v1:aes-gcm:{"version":"1.0","metadata":{"title":"Encrypted"},"blocks":[]}"""
+                every { encryptedDoc.getString("title") } returns "PCENC:v1:aes-gcm:Encrypted"
+                every { encryptedDoc.getString("author") } returns null
+                every { encryptedDoc.getString("message_id") } returns "assistant-2"
+                every { encryptedDoc.getString("target_format") } returns null
+                every { encryptedDoc.getString("chat_id") } returns null
+                every { encryptedDoc.getLong("created_at") } returns 1000L
+                every { encryptedDoc.getLong("updated_at") } returns 2000L
+                every { encryptedDoc.getBoolean("deleted") } returns false
+                every { encryptedDoc.data } returns
+                    mapOf(
+                        "json" to """PCENC:v1:aes-gcm:{"version":"1.0","metadata":{"title":"Encrypted"},"blocks":[]}""",
+                        "title" to "PCENC:v1:aes-gcm:Encrypted",
+                        "message_id" to "assistant-2",
+                    )
+                coEvery { documentDao.getDocumentById("artifact-encrypted") } returns null
+
+                val snapshot = mockSnapshot(listOf(plaintextDoc, encryptedDoc), DocumentChange.Type.ADDED)
+                listenerSlot.captured.onEvent(snapshot, null)
+                advanceUntilIdle()
+
+                coVerify {
+                    documentDao.insertDocument(
+                        match<DocumentEntity> {
+                            it.id == "artifact-plain" &&
+                                it.json.startsWith("PCENC:v1:aes-gcm:") &&
+                                it.title.startsWith("PCENC:v1:aes-gcm:")
+                        },
+                    )
+                }
+                verify { plaintextDoc.reference.set(any<Map<String, Any?>>(), any<SetOptions>()) }
+                coVerify {
+                    documentDao.insertDocument(
+                        match<DocumentEntity> {
+                            it.id == "artifact-encrypted" &&
+                                it.json.startsWith("PCENC:v1:aes-gcm:") &&
+                                it.title.startsWith("PCENC:v1:aes-gcm:")
+                        },
+                    )
+                }
+            }
+
+        @Test
         @DisplayName("chat snapshot: remaining documents are processed when one document throws")
         fun chatSnapshot_continuesAfterDocumentError() =
             testScope.runTest {
@@ -2294,10 +2374,10 @@ class FirestoreDataSourceTest {
     }
 
     private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "ENC:v1:$plaintext"
+        override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
 
-        override fun decryptString(stored: String): String = stored.removePrefix("ENC:v1:")
+        override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("ENC:v1:")
+        override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 }
