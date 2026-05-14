@@ -137,7 +137,7 @@ class ArtifactToolExecutor
                     author = localEncryption.encryptNullable(params.author),
                     targetFormat = null,
                     json = localEncryption.encryptString(rawJson),
-                    pendingSync = 1,
+                    pendingSync = 0,
                 )
 
             documentDao.insertDocument(entity)
@@ -203,7 +203,7 @@ class ArtifactToolExecutor
                     messageId = assistantMessageId ?: entity.messageId,
                     json = localEncryption.encryptString(mergedJson),
                     updatedAt = System.currentTimeMillis(),
-                    pendingSync = 1,
+                    pendingSync = if (params.isComplete) 1 else 0,
                 )
 
             documentDao.updateDocument(updatedEntity)
