@@ -81,7 +81,6 @@ fun ChatScreen(
             ChatTopBar(
                 onMenuClick = onNavigateToHistory,
                 onNewChatClick = onNewChat,
-                isThinking = uiState.isGenerating,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

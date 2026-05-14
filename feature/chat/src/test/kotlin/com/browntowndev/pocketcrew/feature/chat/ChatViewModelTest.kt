@@ -38,11 +38,16 @@ import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportDestination
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportFormat
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportOutcome
+import com.browntowndev.pocketcrew.domain.model.artifact.ExportArtifactDocumentsCommand
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
+import com.browntowndev.pocketcrew.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import io.mockk.*
@@ -92,6 +97,7 @@ class ChatViewModelTest {
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
     private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
     private val chatRepository: com.browntowndev.pocketcrew.domain.port.repository.ChatRepository = mockk(relaxed = true)
+    private val exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -165,7 +171,7 @@ class ChatViewModelTest {
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
             chatRepository = chatRepository,
-            exportArtifactDocumentsUseCase = mockk(relaxed = true),
+            exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
         )
     }
 
@@ -196,6 +202,91 @@ class ChatViewModelTest {
     fun `initial speech state is Idle`() = runTest {
         assertEquals(SpeechState.Idle, chatViewModel.uiState.value.speechState)
     }
+
+    @Test
+    fun `onConfirmArtifactExport uses selected card document json`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+            val documentJson = """{"id":"artifact-1","metadata":{"title":"Doc"},"blocks":[]}"""
+            coEvery { exportArtifactDocumentsUseCase(any()) } returns
+                Result.success(ArtifactExportOutcome.Downloaded(listOf("Doc.pdf")))
+
+            chatViewModel.onArtifactCardClick(
+                messageId = MessageId("message-1"),
+                card =
+                    ArtifactCardUiModel(
+                        artifactId = "artifact-1",
+                        title = "Doc",
+                        documentJson = documentJson,
+                        badgeLabel = "Doc",
+                        subtitle = "Document • Generated",
+                        ctaLabel = "Export",
+                    ),
+            )
+            chatViewModel.onArtifactExportSelectFormat(WizardExportFormat.PDF)
+            chatViewModel.onArtifactExportWizardNext()
+            chatViewModel.onArtifactExportSelectDestination(WizardExportDestination.DOWNLOAD)
+
+            chatViewModel.artifactExportMessages.test {
+                chatViewModel.onConfirmArtifactExport()
+                runCurrent()
+
+                assertEquals("Saved to Downloads: Doc.pdf", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            coVerify {
+                exportArtifactDocumentsUseCase(
+                    match<ExportArtifactDocumentsCommand> { command ->
+                        command.documentJson == documentJson &&
+                            command.baseTitle == "Doc" &&
+                            command.format == ArtifactExportFormat.PDF &&
+                            command.destination == ArtifactExportDestination.DOWNLOAD
+                    },
+                )
+            }
+            coVerify(exactly = 0) { chatRepository.getMessagesForChat(any()) }
+            assertEquals(ArtifactExportSheetState.Hidden, chatViewModel.uiState.value.artifactExportSheet)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onConfirmArtifactExport keeps sheet visible with error when document is blank`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+            chatViewModel.onArtifactCardClick(
+                messageId = MessageId("message-1"),
+                card =
+                    ArtifactCardUiModel(
+                        artifactId = "artifact-1",
+                        title = "Doc",
+                        documentJson = "",
+                        badgeLabel = "Doc",
+                        subtitle = "Document • Generated",
+                        ctaLabel = "Export",
+                    ),
+            )
+            chatViewModel.onArtifactExportSelectFormat(WizardExportFormat.WORD)
+            chatViewModel.onArtifactExportWizardNext()
+            chatViewModel.onArtifactExportSelectDestination(WizardExportDestination.SHARE)
+
+            chatViewModel.artifactExportMessages.test {
+                chatViewModel.onConfirmArtifactExport()
+                runCurrent()
+
+                assertEquals(
+                    "Document is still generating. Try again in a moment.",
+                    awaitItem(),
+                )
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            coVerify(exactly = 0) { exportArtifactDocumentsUseCase(any()) }
+            val sheet = chatViewModel.uiState.value.artifactExportSheet as ArtifactExportSheetState.Visible
+            assertFalse(sheet.isExporting)
+            assertEquals("Document is still generating. Try again in a moment.", sheet.errorMessage)
+            collectJob.cancel()
+        }
 
     @Test
     fun `onMicClick starts listening when Idle`() = runTest {

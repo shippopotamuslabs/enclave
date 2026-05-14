@@ -18,7 +18,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.R
-import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +25,6 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 fun ChatTopBar(
     onMenuClick: () -> Unit,
     onNewChatClick: () -> Unit,
-    isThinking: Boolean
 ) {
     CenterAlignedTopAppBar(
         navigationIcon = {
@@ -39,12 +37,10 @@ fun ChatTopBar(
         },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ShimmerText(
-                    text = "Pocket Crew",
-                    baseColor = MaterialTheme.colorScheme.onBackground,
-                    highlightColor = MaterialTheme.colorScheme.primary,
+                Text(
+                    text = "Enclave",
+                    color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.titleLarge,
-                    enabled = isThinking,
                 )
             }
         },
@@ -68,7 +64,7 @@ fun ChatTopBar(
 @Composable
 private fun PreviewChatTopBarLight() {
     PocketCrewTheme {
-        ChatTopBar({}, {}, false)
+        ChatTopBar({}, {})
     }
 }
 
@@ -77,15 +73,7 @@ private fun PreviewChatTopBarLight() {
 @Composable
 private fun PreviewChatTopBarDark() {
     PocketCrewTheme(darkTheme = true) {
-        ChatTopBar({}, {}, false)
+        ChatTopBar({}, {})
     }
 }
 
-@Suppress("UnusedPrivateMember")
-@Preview
-@Composable
-private fun PreviewChatTopBarThinking() {
-    PocketCrewTheme {
-        ChatTopBar({}, {}, true)
-    }
-}

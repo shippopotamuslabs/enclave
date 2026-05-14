@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.markdown.SimpleMarkdownText
@@ -123,6 +124,11 @@ fun MessageList(
     } else {
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
+            val bottomContentPadding = 16.dp
+            val activeInteractionMinHeight = activeInteractionMinHeight(
+                viewportHeight = viewportHeight,
+                bottomContentPadding = bottomContentPadding,
+            )
 
             // Total item count for scroll-to-bottom targeting
             val totalItems = if (latestUserMessageIndex != -1)
@@ -163,7 +169,7 @@ fun MessageList(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 0.dp, bottom = 16.dp),
+                contentPadding = PaddingValues(top = 0.dp, bottom = bottomContentPadding),
             ) {
                 // 1. History: all messages before the latest user prompt
                 val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
@@ -187,15 +193,14 @@ fun MessageList(
                 }
 
                 // 2. Active interaction: user prompt + streaming response in one item.
-                //    heightIn(min = viewportHeight) ensures this item is at least viewport-tall so that
-                //    scrolling here pins the user message at the top. The rest of the column
-                //    is just empty space if the content is shorter than the viewport.
+                //    heightIn(min = activeInteractionMinHeight) keeps the item plus trailing content
+                //    padding viewport-tall, so bottom padding does not become a small real scroll range.
                 if (latestUserMessageIndex != -1) {
                     item(key = "active_interaction_$latestUserMessageId") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = viewportHeight),
+                                .heightIn(min = activeInteractionMinHeight),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             for (i in latestUserMessageIndex until messages.size) {
@@ -386,6 +391,11 @@ internal fun transcriptLayoutShowsAggregateThoughtForHeader(
         }
     return !raw.isNullOrBlank()
 }
+
+internal fun activeInteractionMinHeight(
+    viewportHeight: Dp,
+    bottomContentPadding: Dp,
+): Dp = maxOf(0.dp, viewportHeight - bottomContentPadding)
 
 /**
  * Shows the appropriate indicator(s) based on the message's indicator state.
