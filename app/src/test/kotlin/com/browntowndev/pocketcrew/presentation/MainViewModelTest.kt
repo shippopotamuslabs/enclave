@@ -681,7 +681,57 @@ class MainViewModelTest {
         coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
         verify(exactly = 0) { cloudSyncPort.startListening() }
         val state = viewModel.startupState.value as AppStartupState.Ready
-        assertTrue(state.vaultErrorMessage?.contains("biometric", ignoreCase = true) == true)
+        assertTrue(state.isVaultLocked)
+        assertFalse(state.isBiometricUnlockPossible)
+        assertTrue(state.vaultErrorMessage?.contains("password", ignoreCase = true) == true)
+        verify { cryptoManager.clearKey() }
+        verify { biometricPort.clearSecureValue("vault_dek") }
+        io.mockk.verify(exactly = 0) { cryptoManager.cacheDek(any()) }
+    }
+
+    @Test
+    fun `unlockWithBiometricCipher surfaces error when cache DEK fails`() = runTest(testDispatcher) {
+        every { biometricPort.isBiometricAvailable() } returns true
+        every { biometricPort.hasSecureValue(any()) } returns true
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+
+        val dek = ByteArray(32) { 0x55.toByte() }
+        val cipher = mockk<Cipher>(relaxed = true)
+        every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
+        every { cryptoManager.cacheDek(dek) } returns Result.failure(IllegalStateException("cache failed"))
+
+        val before = viewModel.startupState.value as AppStartupState.Ready
+        assertTrue(before.isBiometricUnlockPossible)
+
+        viewModel.unlockWithBiometricCipher(cipher)
+        advanceUntilIdle()
+
+        io.mockk.verify { cryptoManager.cacheDek(dek) }
+        coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
+        verify(exactly = 0) { cloudSyncPort.startListening() }
+        val state = viewModel.startupState.value as AppStartupState.Ready
+        assertTrue(state.isVaultLocked)
+        assertFalse(state.isBiometricUnlockPossible)
+        assertTrue(state.vaultErrorMessage?.contains("password", ignoreCase = true) == true)
+        verify { cryptoManager.clearKey() }
+        verify { biometricPort.clearSecureValue("vault_dek") }
     }
 
     /**
