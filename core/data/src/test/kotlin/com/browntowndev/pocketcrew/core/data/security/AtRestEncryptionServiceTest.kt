@@ -169,18 +169,18 @@ class AtRestEncryptionServiceTest {
 
         override fun hasCachedKey(): Boolean = unlocked.value
 
-        override fun encrypt(plaintext: String): Result<ByteArray> = encryptBytes(plaintext.toByteArray())
+        override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> = encryptBytes(plaintext.toByteArray(), aad)
 
-        override fun encryptBytes(data: ByteArray): Result<ByteArray> =
+        override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> =
             if (hasCachedKey()) {
                 Result.success("ENC:v1:${String(data)}".toByteArray())
             } else {
                 Result.failure(IllegalStateException("locked"))
             }
 
-        override fun decrypt(ciphertext: ByteArray): Result<String> = decryptBytes(ciphertext).map { String(it) }
+        override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> = decryptBytes(ciphertext, aad).map { String(it) }
 
-        override fun decryptBytes(ciphertext: ByteArray): Result<ByteArray> {
+        override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
             if (!hasCachedKey()) return Result.failure(IllegalStateException("locked"))
             val text = String(ciphertext)
             return Result.success(text.removePrefix("ENC:v1:").toByteArray())

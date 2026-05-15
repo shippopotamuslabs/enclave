@@ -25,7 +25,8 @@ class SensitivePersistenceSelfHealer
             }
 
             return if (localEncryption.isUnlocked()) {
-                val encrypted = localEncryption.encryptString(value)
+                val aad = AadContext(ref.owner, ref.field, entityId).toBytes()
+                val encrypted = localEncryption.encryptString(value, aad)
                 val event = SensitiveRepairEvent(ref, SensitiveRepairAction.REPAIRED, entityId, sourceSide)
                 logRepair(event)
                 SensitiveRepairResult(value = encrypted, action = SensitiveRepairAction.REPAIRED, event = event)
@@ -62,7 +63,8 @@ class SensitivePersistenceSelfHealer
                 if (repaired.action == SensitiveRepairAction.REPAIRED && repaired.value != null && ref.boundary == PersistenceBoundary.ROOM) {
                     readRepairs?.add(SensitiveRoomReadRepair(ref = ref, entityId = entityId, encryptedValue = repaired.value))
                     return try {
-                        localEncryption.decryptString(repaired.value)
+                        val aad = AadContext(ref.owner, ref.field, entityId).toBytes()
+                        localEncryption.decryptString(repaired.value, aad)
                     } catch (e: IllegalStateException) {
                         throw SensitivePersistenceLockedException("Vault locked").also { it.initCause(e) }
                     } catch (e: MalformedEnvelopeException) {
@@ -81,7 +83,8 @@ class SensitivePersistenceSelfHealer
             }
 
             return try {
-                localEncryption.decryptString(value)
+                val aad = AadContext(ref.owner, ref.field, entityId).toBytes()
+                localEncryption.decryptString(value, aad)
             } catch (e: IllegalStateException) {
                 throw SensitivePersistenceLockedException("Vault locked").also { it.initCause(e) }
             } catch (e: MalformedEnvelopeException) {
