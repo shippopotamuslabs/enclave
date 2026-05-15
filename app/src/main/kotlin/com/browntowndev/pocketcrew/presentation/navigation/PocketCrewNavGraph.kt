@@ -555,6 +555,7 @@ fun PocketCrewNavGraph(
                 albumId = albumId,
                 assetId = assetId,
                 albums = galleryUiState.albums,
+                hasVideoModel = galleryUiState.hasVideoModel,
                 onNavigateBack = { navController.popBackStack() },
                 onShareMedia = galleryViewModel::shareSingleMedia,
                 onSendToStudio = { id, mode, prompt ->
@@ -679,6 +680,7 @@ fun PocketCrewNavGraph(
                 onShareMedia = studioViewModel::shareSingleMedia,
                 onDeleteMedia = studioViewModel::deleteMedia,
                 videoGenerationState = studioUiState.videoGenerationState,
+                hasVideoModel = studioUiState.hasVideoModel,
             )
         }
 
