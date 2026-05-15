@@ -80,12 +80,16 @@ internal class SettingsDataControlsDelegate
             scope: CoroutineScope,
             tag: String,
             dataControlsState: MutableStateFlow<DataControlsTransientState>,
+            onSuccess: (String) -> Unit = {},
         ) {
             dataControlsState.update { it.copy(isDeleting = true, deleteError = null) }
             scope.launch {
                 runCatching { dataControlsUseCases.deleteAllChats.invoke() }
                     .fold(
-                        onSuccess = { dataControlsState.update { DataControlsTransientState() } },
+                        onSuccess = {
+                            dataControlsState.update { DataControlsTransientState() }
+                            onSuccess("All chats deleted")
+                        },
                         onFailure = { e ->
                             reportDeleteFailure(
                                 tag,
@@ -103,12 +107,16 @@ internal class SettingsDataControlsDelegate
             scope: CoroutineScope,
             tag: String,
             dataControlsState: MutableStateFlow<DataControlsTransientState>,
+            onSuccess: (String) -> Unit = {},
         ) {
             dataControlsState.update { it.copy(isDeleting = true, deleteError = null) }
             scope.launch {
                 runCatching { dataControlsUseCases.deleteAllMedia.invoke() }
                     .fold(
-                        onSuccess = { dataControlsState.update { DataControlsTransientState() } },
+                        onSuccess = {
+                            dataControlsState.update { DataControlsTransientState() }
+                            onSuccess("All media deleted")
+                        },
                         onFailure = { e ->
                             reportDeleteFailure(
                                 tag,
@@ -126,12 +134,16 @@ internal class SettingsDataControlsDelegate
             scope: CoroutineScope,
             tag: String,
             dataControlsState: MutableStateFlow<DataControlsTransientState>,
+            onSuccess: (String) -> Unit = {},
         ) {
             dataControlsState.update { it.copy(isDeleting = true, deleteError = null) }
             scope.launch {
                 runCatching { dataControlsUseCases.deleteAllMemories.invoke() }
                     .fold(
-                        onSuccess = { dataControlsState.update { DataControlsTransientState() } },
+                        onSuccess = {
+                            dataControlsState.update { DataControlsTransientState() }
+                            onSuccess("All memories deleted")
+                        },
                         onFailure = { e ->
                             reportDeleteFailure(
                                 tag,
@@ -149,12 +161,16 @@ internal class SettingsDataControlsDelegate
             scope: CoroutineScope,
             tag: String,
             dataControlsState: MutableStateFlow<DataControlsTransientState>,
+            onSuccess: (String) -> Unit = {},
         ) {
             dataControlsState.update { it.copy(isDeleting = true, deleteError = null) }
             scope.launch {
                 runCatching { dataControlsUseCases.deleteAllArtifacts.invoke() }
                     .fold(
-                        onSuccess = { dataControlsState.update { DataControlsTransientState() } },
+                        onSuccess = {
+                            dataControlsState.update { DataControlsTransientState() }
+                            onSuccess("All artifacts deleted")
+                        },
                         onFailure = { e ->
                             reportDeleteFailure(
                                 tag,

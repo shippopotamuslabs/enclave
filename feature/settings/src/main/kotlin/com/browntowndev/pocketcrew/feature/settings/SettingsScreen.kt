@@ -39,7 +39,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.remember
 import com.browntowndev.pocketcrew.core.ui.component.XIcon
 import com.browntowndev.pocketcrew.core.ui.component.vault.VaultReauthBottomSheet
 import androidx.compose.material3.Text
@@ -145,8 +148,10 @@ fun SettingsScreen(
     onSubmitVaultReauthPassword: (String) -> Unit = {},
     onConfirmAdoptCloudFromSettings: () -> Unit = {},
     onCancelVaultReauth: () -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
