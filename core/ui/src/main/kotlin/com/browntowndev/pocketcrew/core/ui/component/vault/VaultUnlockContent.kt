@@ -85,7 +85,10 @@ fun VaultUnlockContent(
 ) {
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var enableBiometric by remember { mutableStateOf(initialBiometricEnabled) }
+    // Keyed remember: when the host reports biometric material exists (or not), reset local
+    // toggle state. Plain `remember { mutableStateOf(initial) }` only used the first value and
+    // stayed stale after AnimatedContent / unlocking transitions or prop corrections.
+    var enableBiometric by remember(initialBiometricEnabled) { mutableStateOf(initialBiometricEnabled) }
     var unlockUiLatched by remember { mutableStateOf(false) }
 
     // Synchronous latch: inline assignment runs in the same composition frame so there is no
