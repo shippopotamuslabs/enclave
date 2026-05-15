@@ -14,14 +14,14 @@ class CryptoAtRestEncryptionService
     constructor(
         private val cryptoManager: CryptoManagerPort,
     ) : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String {
+        override fun encryptString(plaintext: String, aad: ByteArray): String {
             requireUnlocked()
             if (isEncrypted(plaintext)) return plaintext
-            val ciphertext = cryptoManager.encrypt(plaintext).getOrThrow()
+            val ciphertext = cryptoManager.encrypt(plaintext, aad).getOrThrow()
             return "$ENVELOPE_PREFIX${cryptoManager.encodeBase64(ciphertext)}"
         }
 
-        override fun decryptString(stored: String): String {
+        override fun decryptString(stored: String, aad: ByteArray): String {
             requireUnlocked()
             if (!isEncrypted(stored)) return stored
             val envelope = parseEnvelope(stored)
@@ -35,7 +35,7 @@ class CryptoAtRestEncryptionService
                 is EnvelopeParse.Malformed -> throw MalformedEnvelopeException(envelope.reason)
                 EnvelopeParse.NotEnveloped -> return stored
             }
-            return cryptoManager.decrypt(payload).getOrThrow()
+            return cryptoManager.decrypt(payload, aad).getOrThrow()
         }
 
         fun parseEnvelope(stored: String): EnvelopeParse {
