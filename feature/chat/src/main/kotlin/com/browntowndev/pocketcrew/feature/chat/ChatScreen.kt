@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.feature.chat.components.InputBar
 import com.browntowndev.pocketcrew.feature.chat.components.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShareBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
+import com.browntowndev.pocketcrew.feature.chat.components.StreamingResponseHapticEffect
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
@@ -56,6 +57,11 @@ fun ChatScreen(
     onShareFullChat: () -> Unit = {},
     onDismissShareSheet: () -> Unit = {},
 ) {
+    StreamingResponseHapticEffect(
+        hapticsEnabled = uiState.hapticResponse,
+        phase = uiState.responseHapticPhase,
+    )
+
     val singleImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->

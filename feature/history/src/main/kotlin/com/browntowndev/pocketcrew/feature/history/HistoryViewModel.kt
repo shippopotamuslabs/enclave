@@ -74,7 +74,6 @@ class HistoryViewModel @Inject constructor(
             emit(
                 SettingsData(
                     theme = AppTheme.SYSTEM,
-                    hapticPress = true,
                     hapticResponse = true,
                     customizationEnabled = false,
                     selectedPromptOption = SystemPromptOption.CONCISE,
@@ -89,7 +88,6 @@ class HistoryViewModel @Inject constructor(
             pinnedChats = categorized.pinned,
             otherChats = categorized.other,
             isLoading = false,
-            hapticPress = settings.hapticPress,
         )
     }.stateIn(
         scope = viewModelScope,

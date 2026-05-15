@@ -28,7 +28,6 @@ class GetSettingsUseCaseTest {
 
         // Then - default settings should be returned
         assertEquals(AppTheme.SYSTEM, settings.theme)
-        assertTrue(settings.hapticPress)
         assertTrue(settings.hapticResponse)
         assertTrue(settings.customizationEnabled)
         assertEquals(SystemPromptOption.CONCISE, settings.selectedPromptOption)
@@ -40,7 +39,6 @@ class GetSettingsUseCaseTest {
     fun `invoke returns updated settings after repository changes`() = runTest {
         // Given - repository with updated settings
         fakeRepository.updateTheme(AppTheme.DARK)
-        fakeRepository.updateHapticPress(false)
         fakeRepository.updateCustomPromptText("Custom text")
 
         // When
@@ -48,7 +46,6 @@ class GetSettingsUseCaseTest {
 
         // Then - updated settings should be returned
         assertEquals(AppTheme.DARK, settings.theme)
-        assertFalse(settings.hapticPress)
         assertEquals("Custom text", settings.customPromptText)
     }
 

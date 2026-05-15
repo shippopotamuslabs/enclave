@@ -96,7 +96,6 @@ sealed interface VaultReauthSheetState {
 @Immutable
 data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
-    val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
     val auth: AuthStateUi = AuthStateUi.Loading,
