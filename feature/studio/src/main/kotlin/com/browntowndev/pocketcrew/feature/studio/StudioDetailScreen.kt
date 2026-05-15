@@ -46,6 +46,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -91,6 +92,7 @@ fun StudioDetailScreen(
     onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
+    hasVideoModel: Boolean = false,
     viewModel: StudioDetailViewModel = hiltViewModel()
 ) {
     val initialIndex = remember(assets, assetId) {
@@ -108,6 +110,7 @@ fun StudioDetailScreen(
                 assets = assets,
                 initialIndex = initialIndex,
                 videoGenerationState = videoGenerationState,
+                hasVideoModel = hasVideoModel,
                 hazeState = hazeState,
                 onEdit = { asset ->
                     onEditMedia(asset.id)
@@ -170,6 +173,7 @@ private fun DetailContent(
     assets: List<StudioMediaUi>,
     initialIndex: Int,
     videoGenerationState: VideoGenerationState,
+    hasVideoModel: Boolean,
     hazeState: HazeState,
     onEdit: (StudioMediaUi) -> Unit,
     onAnimate: (StudioMediaUi, Boolean, String?) -> Unit,
@@ -209,6 +213,7 @@ private fun DetailContent(
                 )
                 DetailActionsOverlay(
                     asset = asset,
+                    hasVideoModel = hasVideoModel,
                     onEdit = { onEdit(asset) },
                     onAnimate = { autoAnimate ->
                         if (autoAnimate) {
@@ -287,6 +292,7 @@ private fun DetailMedia(
 @Composable
 private fun DetailActionsOverlay(
     asset: StudioMediaUi,
+    hasVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
@@ -316,6 +322,7 @@ private fun DetailActionsOverlay(
 
         DetailActionRow(
             mediaType = asset.mediaType,
+            hasVideoModel = hasVideoModel,
             onEdit = onEdit,
             onAnimate = onAnimate,
             onSave = onSave,
@@ -336,6 +343,7 @@ private fun StudioDetailImagePreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Idle,
+        hasVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },
@@ -353,6 +361,7 @@ private fun StudioDetailLoadingPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Loading("asset-1"),
+        hasVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },
@@ -370,6 +379,7 @@ private fun StudioDetailVideoPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
+        hasVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },
@@ -388,9 +398,12 @@ private fun previewAsset(): StudioMediaUi =
         createdAt = 1L,
     )
 
+private const val ANIMATE_DISABLED_TOOLTIP = "Setup a video model in Settings to enable."
+
 @Composable
 private fun DetailActionRow(
     mediaType: MediaCapability,
+    hasVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
@@ -405,8 +418,20 @@ private fun DetailActionRow(
     ) {
         ActionItem(Icons.Default.Edit, "Edit", onEdit)
         if (mediaType == MediaCapability.IMAGE) {
-            ActionItem(Icons.Default.Movie, "Animate", onClick = { onAnimate(false) })
-            ActionItem(Icons.Default.FastForward, "Quick Animate", onClick = { onAnimate(true) })
+            ActionItem(
+                icon = Icons.Default.Movie,
+                label = "Animate",
+                onClick = { onAnimate(false) },
+                enabled = hasVideoModel,
+                disabledTooltip = if (!hasVideoModel) ANIMATE_DISABLED_TOOLTIP else null,
+            )
+            ActionItem(
+                icon = Icons.Default.FastForward,
+                label = "Quick Animate",
+                onClick = { onAnimate(true) },
+                enabled = hasVideoModel,
+                disabledTooltip = if (!hasVideoModel) ANIMATE_DISABLED_TOOLTIP else null,
+            )
         }
         ActionItem(Icons.Default.Download, "Save", onSave)
         ActionItem(Icons.Default.Share, "Share", onShare)
@@ -414,44 +439,66 @@ private fun DetailActionRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActionItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     isDestructive: Boolean = false,
+    enabled: Boolean = true,
+    disabledTooltip: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clickable(onClick = onClick)
+    val tooltipState = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = {
+            if (!enabled && disabledTooltip != null) {
+                PlainTooltip { Text(disabledTooltip) }
+            }
+        },
+        state = tooltipState,
+        enableUserInput = false,
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .background(
-                    if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
-                    CircleShape
-                )
-                .border(
-                    1.dp, 
-                    if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f), 
-                    CircleShape
-                ),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = modifier
+                .alpha(if (enabled) 1f else 0.38f)
+                .clickable {
+                    if (enabled) onClick()
+                    else if (disabledTooltip != null) scope.launch { tooltipState.show() }
+                }
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isDestructive) Color.Red else Color.White,
-                modifier = Modifier.size(24.dp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
+                        CircleShape
+                    )
+                    .border(
+                        1.dp,
+                        if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isDestructive) Color.Red else Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f)
-        )
     }
 }
