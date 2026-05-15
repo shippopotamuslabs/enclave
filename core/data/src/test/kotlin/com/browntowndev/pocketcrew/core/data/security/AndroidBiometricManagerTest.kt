@@ -7,24 +7,24 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import javax.crypto.Cipher
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class AndroidBiometricManagerTest {
     private lateinit var context: Context
     private lateinit var loggingPort: LoggingPort
     private lateinit var subject: AndroidBiometricManager
 
-    @Before
+    @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE).edit().clear().commit()
@@ -56,7 +56,7 @@ class AndroidBiometricManagerTest {
     }
 
     @Test
-    fun storeSecureBytesWithCipher_logsDoNotContainPlaintextSecret() =
+    fun storeSecureBytesWithCipher_logsDoNotContainPlaintextSecret(): Unit =
         runTest {
             val secret = "super-secret-payload-987654"
             val cipher = mockk<Cipher>(relaxed = true)

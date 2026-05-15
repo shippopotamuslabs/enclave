@@ -13,9 +13,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiKeyManagerSyncAdapterTest {
@@ -26,7 +26,7 @@ class ApiKeyManagerSyncAdapterTest {
     private val testScope = TestScope(UnconfinedTestDispatcher())
     private lateinit var dataSource: FirestoreDataSource
 
-    @Before
+    @BeforeEach
     fun setup() {
         every { cryptoManager.hasCachedKey() } returns true
         every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())

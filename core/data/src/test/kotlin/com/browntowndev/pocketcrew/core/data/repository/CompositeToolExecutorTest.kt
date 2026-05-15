@@ -13,9 +13,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.io.IOException
 
 class CompositeToolExecutorTest {
@@ -33,7 +33,7 @@ class CompositeToolExecutorTest {
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
-    @Before
+    @BeforeEach
     fun setup() {
         searchToolExecutor = mockk()
         imageInspectToolExecutor = mockk()
@@ -265,7 +265,7 @@ class CompositeToolExecutorTest {
                     compositeToolExecutor.execute(request)
                 } catch (e: IllegalArgumentException) {
                     if (e.message?.startsWith("Unsupported tool") == true) {
-                        org.junit.Assert.fail(
+                        org.junit.jupiter.api.Assertions.fail<Unit>(
                             "Tool ${tool.name} is defined in ToolDefinition.ALL_TOOLS but not supported by CompositeToolExecutor",
                         )
                     }

@@ -13,10 +13,10 @@ import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.Date
 
 class ChatMappersTest {
@@ -37,7 +37,7 @@ class ChatMappersTest {
 
         val domain = entity.toDomain()
 
-        assertTrue("Expected isSyncing=true for placeholder row", domain.isSyncing)
+        assertTrue(domain.isSyncing, "Expected isSyncing=true for placeholder row")
     }
 
     @Test
@@ -55,7 +55,7 @@ class ChatMappersTest {
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for real local row (pendingSync=1)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for real local row (pendingSync=1)")
     }
 
     @Test
@@ -73,7 +73,7 @@ class ChatMappersTest {
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for synced row (updatedAt > 0)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for synced row (updatedAt > 0)")
     }
 
     @Test
@@ -93,7 +93,7 @@ class ChatMappersTest {
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for old synced row with real created timestamp (created.time > 0)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for old synced row with real created timestamp (created.time > 0)")
     }
 
     // endregion

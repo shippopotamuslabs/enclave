@@ -33,6 +33,7 @@ googleid = "1.2.0"
 workVersion = "2.11.2"
 foundation = "1.11.1"
 robolectricVersion = "4.16.1"
+apterJunit5Robolectric = "0.9.0"
 androidxTestCoreVersion = "1.7.0"
 markdown = "1.2.7"
 turbineVersion = "1.2.1"
@@ -114,6 +115,7 @@ androidx-work-testing = { group = "androidx.work", name = "work-testing", versio
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectricVersion" }
+apter-junit5-robolectric-extension = { group = "tech.apter.junit5.jupiter", name = "robolectric-extension", version.ref = "apterJunit5Robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCoreVersion" }
 junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engine", version.ref = "junitJupiterVersion" }
 markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.ref = "markdown" }
@@ -158,3 +160,4 @@ google-services = { id = "com.google.gms.google-services", version.ref = "google
 jacoco = { id = "org.jacoco.jacoco", version.ref = "jacocoVersion" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPluginVersion" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+apter-robolectric-junit5 = { id = "tech.apter.junit5.jupiter.robolectric-extension-gradle-plugin", version.ref = "apterJunit5Robolectric" }

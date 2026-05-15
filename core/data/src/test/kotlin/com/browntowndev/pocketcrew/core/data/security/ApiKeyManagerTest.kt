@@ -7,25 +7,25 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.File
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class ApiKeyManagerTest {
     private lateinit var apiKeyManager: ApiKeyManager
     private lateinit var testScope: CoroutineScope
 
-    @Before
+    @BeforeEach
     fun setup() {
         testScope = CoroutineScope(UnconfinedTestDispatcher())
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -38,7 +38,7 @@ class ApiKeyManagerTest {
         apiKeyManager = ApiKeyManager({ prefs }, dataStore, testScope)
     }
 
-    @After
+    @AfterEach
     fun tearDown() {
         testScope.cancel()
     }

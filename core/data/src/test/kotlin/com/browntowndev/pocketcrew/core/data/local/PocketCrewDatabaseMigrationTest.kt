@@ -6,15 +6,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class PocketCrewDatabaseMigrationTest {
     @Test
@@ -144,7 +144,7 @@ class PocketCrewDatabaseMigrationTest {
                             }
                         }
                     }
-                assertTrue("$table should have pending_sync column", columnNames.contains("pending_sync"))
+                assertTrue(columnNames.contains("pending_sync"), "$table should have pending_sync column")
             }
         } finally {
             db.close()
@@ -205,8 +205,8 @@ class PocketCrewDatabaseMigrationTest {
                     }
                 }
 
-            assertTrue("extracted column should exist", extractedColumn.containsKey("extracted"))
-            assertEquals("extracted should default to 0 (false)", "0", extractedColumn["extracted"])
+            assertTrue(extractedColumn.containsKey("extracted"), "extracted column should exist")
+            assertEquals("0", extractedColumn["extracted"], "extracted should default to 0 (false)")
         } finally {
             db.close()
         }
@@ -333,8 +333,8 @@ class PocketCrewDatabaseMigrationTest {
             val ordinalIdx = indexSql.find { it.contains("message_id") && it.contains("ordinal") }
             assertTrue(ordinalIdx != null)
             assertTrue(
-                "ordinal index should be non-unique (CREATE INDEX)",
                 ordinalIdx!!.contains("CREATE INDEX"),
+                "ordinal index should be non-unique (CREATE INDEX)",
             )
         } finally {
             db.close()

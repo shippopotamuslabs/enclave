@@ -11,21 +11,21 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class SyncWorkerTest {
     private lateinit var context: Context
     private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
 
-    @Before
+    @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
     }

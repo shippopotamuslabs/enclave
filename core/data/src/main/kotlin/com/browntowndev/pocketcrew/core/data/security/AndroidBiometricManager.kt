@@ -45,7 +45,9 @@ class AndroidBiometricManager
         @ApplicationContext private val context: Context,
         private val loggingPort: LoggingPort,
     ) : BiometricPort {
-        private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        private val keyStore: KeyStore by lazy {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        }
         private val sharedPrefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
 
         companion object {

@@ -19,14 +19,16 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MediaCloudSyncWorkerTest {
     private val context = mockk<Context>(relaxed = true)
     private val workerParams = mockk<WorkerParameters>(relaxed = true)
@@ -40,7 +42,7 @@ class MediaCloudSyncWorkerTest {
 
     private lateinit var worker: MediaCloudSyncWorker
 
-    @Before
+    @BeforeEach
     fun setup() {
         mockkStatic("kotlinx.coroutines.tasks.TasksKt")
         worker =
@@ -57,7 +59,7 @@ class MediaCloudSyncWorkerTest {
             )
     }
 
-    @After
+    @AfterEach
     fun tearDown() {
         unmockkStatic("kotlinx.coroutines.tasks.TasksKt")
     }

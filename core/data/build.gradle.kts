@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.apter.robolectric.junit5)
 }
 
 android {
@@ -91,13 +92,13 @@ dependencies {
     implementation(libs.googleid)
 
     // Test dependencies - JUnit 5 (Jupiter)
-    testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.core.ktx)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.room.testing)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.apter.junit5.robolectric.extension)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)

@@ -25,8 +25,8 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncReconciliationTest {
@@ -42,7 +42,7 @@ class SyncReconciliationTest {
     private lateinit var dataSource: FirestoreDataSource
     private val chatListenerSlot = slot<EventListener<QuerySnapshot>>()
 
-    @Before
+    @BeforeEach
     fun setup() {
         every { cryptoManager.hasCachedKey() } returns true
         every { cryptoManager.decrypt(any()) } answers { Result.success(String(it.invocation.args[0] as ByteArray)) }
