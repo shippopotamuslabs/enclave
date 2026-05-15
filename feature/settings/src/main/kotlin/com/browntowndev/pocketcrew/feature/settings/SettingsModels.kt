@@ -124,9 +124,21 @@ data class CustomizationUiState(
 )
 
 @Immutable
+sealed interface DataControlsPendingAction {
+    data object DeleteChats : DataControlsPendingAction
+    data object DeleteMedia : DataControlsPendingAction
+    data object DeleteMemories : DataControlsPendingAction
+    data object DeleteArtifacts : DataControlsPendingAction
+    data object DeleteAccount : DataControlsPendingAction
+}
+
+@Immutable
 data class DataControlsUiState(
     val isSheetOpen: Boolean = false,
     val allowMemories: Boolean = true,
+    val pendingAction: DataControlsPendingAction? = null,
+    val isDeleting: Boolean = false,
+    val deleteError: String? = null,
 )
 
 @Immutable

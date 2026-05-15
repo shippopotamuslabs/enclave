@@ -138,6 +138,8 @@ class SettingsViewModelEventTest {
         val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
 
+        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler)
+
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
             settingsUiStateFactory = SettingsUiStateFactory(
@@ -150,6 +152,7 @@ class SettingsViewModelEventTest {
             ),
             generalDelegate = generalDelegate,
             memoriesDelegate = memoriesDelegate,
+            dataControlsDelegate = dataControlsDelegate,
             localModelsDelegate = localModelsDelegate,
             apiProvidersDelegate = apiProvidersDelegate,
             searchDelegate = searchDelegate,

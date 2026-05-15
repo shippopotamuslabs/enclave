@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.feature.settings
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -18,6 +21,13 @@ internal fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     SettingsScreen(
         uiState = uiState,
@@ -28,6 +38,17 @@ internal fun SettingsRoute(
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
+        onRequestDeleteAllChats = viewModel::onRequestDeleteAllChats,
+        onConfirmDeleteAllChats = viewModel::onConfirmDeleteAllChats,
+        onRequestDeleteAllMedia = viewModel::onRequestDeleteAllMedia,
+        onConfirmDeleteAllMedia = viewModel::onConfirmDeleteAllMedia,
+        onRequestDeleteAllMemories = viewModel::onRequestDeleteAllMemories,
+        onConfirmDeleteAllMemories = viewModel::onConfirmDeleteAllMemories,
+        onRequestDeleteAllArtifacts = viewModel::onRequestDeleteAllArtifacts,
+        onConfirmDeleteAllArtifacts = viewModel::onConfirmDeleteAllArtifacts,
+        onRequestDeleteAccount = viewModel::onRequestDeleteAccount,
+        onConfirmDeleteAccount = viewModel::onConfirmDeleteAccount,
+        onDismissDataControlsConfirmation = viewModel::onDismissDataControlsConfirmation,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
         onAddMemory = viewModel::onAddMemory,
         onEditMemory = viewModel::onEditMemory,
@@ -83,5 +104,6 @@ internal fun SettingsRoute(
         onSubmitVaultReauthPassword = viewModel::onSubmitVaultReauthPassword,
         onConfirmAdoptCloudFromSettings = viewModel::onConfirmAdoptCloudFromSettings,
         onCancelVaultReauth = viewModel::onCancelVaultReauth,
+        snackbarHostState = snackbarHostState,
     )
 }

@@ -85,4 +85,10 @@ interface CloudSyncPort {
      * Typically called after a full cloud sync.
      */
     fun enqueueEmbeddingRegeneration()
+
+    /**
+     * Deletes this user's cloud-side data (Firestore user subtree). Does not sign the user out —
+     * callers typically invoke [com.browntowndev.pocketcrew.domain.port.auth.AuthManager.signOut] after success.
+     */
+    suspend fun deleteUserAccount(): Result<Unit>
 }

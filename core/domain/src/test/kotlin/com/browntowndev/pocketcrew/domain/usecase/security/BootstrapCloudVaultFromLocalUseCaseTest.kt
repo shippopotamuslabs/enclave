@@ -97,6 +97,7 @@ class BootstrapCloudVaultFromLocalUseCaseTest {
             return Result.success(Unit)
         }
         override suspend fun fetchVaultMetadata(): Result<VaultMetadata?> = Result.success(null)
+        override suspend fun deleteUserAccount(): Result<Unit> = Result.success(Unit)
         override fun enqueueEmbeddingRegeneration() = Unit
     }
 }

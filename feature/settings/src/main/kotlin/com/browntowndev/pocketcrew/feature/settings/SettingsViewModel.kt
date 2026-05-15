@@ -33,6 +33,7 @@ import javax.inject.Inject
 internal class SettingsViewModel @Inject constructor(
     private val generalDelegate: SettingsGeneralDelegate,
     private val memoriesDelegate: SettingsMemoriesDelegate,
+    private val dataControlsDelegate: SettingsDataControlsDelegate,
     private val localModelsDelegate: SettingsLocalModelsDelegate,
     private val apiProvidersDelegate: SettingsApiProvidersDelegate,
     private val searchDelegate: SettingsSearchDelegate,
@@ -71,7 +72,8 @@ internal class SettingsViewModel @Inject constructor(
         private const val ARG_X_SEARCH_STATE = 21
         private const val ARG_IS_REINDEXING = 22
         private const val ARG_REINDEX_PROGRESS = 23
-        private const val ARG_VAULT_REAUTH_SHEET = 24
+        private const val ARG_DATA_CONTROLS_STATE = 24
+        private const val ARG_VAULT_REAUTH_SHEET = 25
     }
 
     private val _sheetVisibility = MutableStateFlow(SheetVisibilityState())
@@ -84,6 +86,7 @@ internal class SettingsViewModel @Inject constructor(
     private val _mediaState = MutableStateFlow(MediaProvidersTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
+    private val _dataControlsState = MutableStateFlow(DataControlsTransientState())
     private val _xSearchState = MutableStateFlow(XSearchTransientState())
     private val _vaultReauthSheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -140,6 +143,7 @@ internal class SettingsViewModel @Inject constructor(
         _xSearchState,
         embeddingProgressPort.isReindexing,
         embeddingProgressPort.progress,
+        _dataControlsState,
         _vaultReauthSheet,
     ) { args ->
         @Suppress("UNCHECKED_CAST")
@@ -162,6 +166,7 @@ internal class SettingsViewModel @Inject constructor(
             assignmentsState = args[ARG_ASSIGNMENTS_STATE] as AssignmentDialogTransientState,
             deletionState = args[ARG_DELETION_STATE] as DeletionTransientState,
             memoriesState = args[ARG_MEMORIES_STATE] as MemoriesTransientState,
+            dataControlsState = args[ARG_DATA_CONTROLS_STATE] as DataControlsTransientState,
             currentTavilyApiKey = args[ARG_CURRENT_TAVILY_API_KEY] as String,
             currentExaApiKey = args[ARG_CURRENT_EXA_API_KEY] as String,
             currentXApiKey = args[ARG_CURRENT_X_API_KEY] as String,
@@ -211,7 +216,37 @@ internal class SettingsViewModel @Inject constructor(
     fun onSubmitFeedback() = generalDelegate.onSubmitFeedback(_feedbackText, _sheetVisibility)
 
     // --- Memories ---
-    fun onShowDataControlsSheet(show: Boolean) = memoriesDelegate.onShowDataControlsSheet(_sheetVisibility, show)
+    fun onShowDataControlsSheet(show: Boolean) =
+        dataControlsDelegate.onShowDataControlsSheet(_sheetVisibility, _dataControlsState, show)
+
+    fun onRequestDeleteAllChats() = dataControlsDelegate.onRequestDeleteAllChats(_dataControlsState)
+
+    fun onRequestDeleteAllMedia() = dataControlsDelegate.onRequestDeleteAllMedia(_dataControlsState)
+
+    fun onRequestDeleteAllMemories() = dataControlsDelegate.onRequestDeleteAllMemories(_dataControlsState)
+
+    fun onRequestDeleteAllArtifacts() = dataControlsDelegate.onRequestDeleteAllArtifacts(_dataControlsState)
+
+    fun onRequestDeleteAccount() = dataControlsDelegate.onRequestDeleteAccount(_dataControlsState)
+
+    fun onDismissDataControlsConfirmation() =
+        dataControlsDelegate.onDismissDataControlsConfirmation(_dataControlsState)
+
+    fun onConfirmDeleteAllChats() =
+        dataControlsDelegate.onConfirmDeleteAllChats(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
+
+    fun onConfirmDeleteAllMedia() =
+        dataControlsDelegate.onConfirmDeleteAllMedia(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
+
+    fun onConfirmDeleteAllMemories() =
+        dataControlsDelegate.onConfirmDeleteAllMemories(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
+
+    fun onConfirmDeleteAllArtifacts() =
+        dataControlsDelegate.onConfirmDeleteAllArtifacts(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
+
+    fun onConfirmDeleteAccount() =
+        dataControlsDelegate.onConfirmDeleteAccount(viewModelScope, TAG, _dataControlsState)
+
     fun onShowMemoriesSheet(show: Boolean) = memoriesDelegate.onShowMemoriesSheet(_sheetVisibility, _memoriesState, show)
     fun onAddMemory() = memoriesDelegate.onAddMemory(_memoriesState)
     fun onEditMemory(memory: StoredMemory) = memoriesDelegate.onEditMemory(_memoriesState, memory)

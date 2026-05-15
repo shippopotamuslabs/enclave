@@ -124,6 +124,7 @@ class AdoptCloudVaultUseCaseTest {
     private class FakeCleanup : CleanupRepository {
         var clearCallCount = 0
         override suspend fun clearAllData() { clearCallCount++ }
+        override suspend fun deleteAllArtifacts() = Unit
     }
 
     private class FakeBiometric : BiometricPort {
