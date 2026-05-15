@@ -1,29 +1,28 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.Manifest
-import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(manifest = Config.NONE, sdk = [34])
 class DownloadNotificationManagerTest {
     private lateinit var context: Context
     private lateinit var notificationManager: DownloadNotificationManager
     private lateinit var systemNotificationManager: NotificationManager
 
-    @Before
+    @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         systemNotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

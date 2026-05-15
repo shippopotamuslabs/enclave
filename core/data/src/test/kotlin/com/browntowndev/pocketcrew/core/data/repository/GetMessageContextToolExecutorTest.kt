@@ -19,18 +19,18 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 class GetMessageContextToolExecutorTest {
     private lateinit var loggingPort: LoggingPort
     private lateinit var messageRepository: MessageRepository
     private lateinit var executor: GetMessageContextToolExecutor
 
-    @Before
+    @BeforeEach
     fun setup() {
         loggingPort = mockk(relaxed = true)
         messageRepository = mockk()

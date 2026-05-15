@@ -12,23 +12,24 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.UUID
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class DefaultModelsDaoTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var dao: DefaultModelsDao
 
-    @Before
+    @BeforeEach
     fun setup() {
         database =
             Room
@@ -40,7 +41,7 @@ class DefaultModelsDaoTest {
         dao = database.defaultModelsDao()
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         database.close()
     }
@@ -209,27 +210,31 @@ class DefaultModelsDaoTest {
             assertEquals(2, list.size)
         }
 
-    @Test(expected = SQLiteConstraintException::class)
+    @Test
     fun `DefaultModelEntity FK references a non-existent local config`() =
         runTest {
-            dao.upsert(
-                DefaultModelEntity(
-                    modelType = ModelType.MAIN,
-                    localConfigId = LocalModelConfigurationId("non-existent-id"),
-                    apiConfigId = null,
-                ),
-            )
+            assertThrows<SQLiteConstraintException> {
+                dao.upsert(
+                    DefaultModelEntity(
+                        modelType = ModelType.MAIN,
+                        localConfigId = LocalModelConfigurationId("non-existent-id"),
+                        apiConfigId = null,
+                    ),
+                )
+            }
         }
 
-    @Test(expected = SQLiteConstraintException::class)
+    @Test
     fun `DefaultModelEntity FK references a non-existent API config`() =
         runTest {
-            dao.upsert(
-                DefaultModelEntity(
-                    modelType = ModelType.MAIN,
-                    localConfigId = null,
-                    apiConfigId = ApiModelConfigurationId("non-existent-id"),
-                ),
-            )
+            assertThrows<SQLiteConstraintException> {
+                dao.upsert(
+                    DefaultModelEntity(
+                        modelType = ModelType.MAIN,
+                        localConfigId = null,
+                        apiConfigId = ApiModelConfigurationId("non-existent-id"),
+                    ),
+                )
+            }
         }
 }

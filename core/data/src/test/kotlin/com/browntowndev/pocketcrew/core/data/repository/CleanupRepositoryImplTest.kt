@@ -6,8 +6,8 @@ import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CleanupRepositoryImplTest {
@@ -16,7 +16,7 @@ class CleanupRepositoryImplTest {
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
     private lateinit var cleanupRepository: CleanupRepositoryImpl
 
-    @Before
+    @BeforeEach
     fun setup() {
         every { database.cleanupDao() } returns cleanupDao
         cleanupRepository = CleanupRepositoryImpl(database, apiKeyManager)

@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -20,15 +21,18 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import kotlin.test.assertFailsWith
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
 
+@ExtendWith(MainDispatcherRule::class)
 class ApiModelRepositoryImplTest {
     private lateinit var repo: ApiModelRepositoryImpl
     private val credentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
@@ -40,8 +44,11 @@ class ApiModelRepositoryImplTest {
     private val healer: SensitivePersistenceSelfHealer = testSensitiveSelfHealer(localEncryption)
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
-    @Before
+    @BeforeEach
     fun setup() {
+        every { cryptoManager.hasCachedKey() } returns true
+        every { cryptoManager.encrypt(any<String>()) } returns Result.success(ByteArray(0))
+
         repo =
             ApiModelRepositoryImpl(
                 syncTrigger = syncTrigger,
@@ -129,7 +136,7 @@ class ApiModelRepositoryImplTest {
                     credentialAlias = "my_key",
                 )
 
-            assertFailsWith<IllegalStateException> {
+            assertThrows<IllegalStateException> {
                 lockedRepository.saveCredentials(creds, "sk-test", null)
             }
 
@@ -343,7 +350,7 @@ class ApiModelRepositoryImplTest {
 
             coEvery { credentialsDao.getById(credId) } returns null
 
-            assertFailsWith<IllegalArgumentException> {
+            assertThrows<IllegalArgumentException> {
                 repo.saveCredentials(creds, "", null)
             }
 

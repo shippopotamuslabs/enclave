@@ -7,23 +7,23 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 
-@RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE)
+@ExtendWith(RobolectricExtension::class)
+@Config(manifest = Config.NONE, sdk = [34])
 class AndroidFileAttachmentPortTest {
     private val context: Context = mockk()
     private val contentResolver: ContentResolver = mockk()
     private lateinit var port: AndroidFileAttachmentPort
 
-    @Before
+    @BeforeEach
     fun setUp() {
         every { context.contentResolver } returns contentResolver
         port = AndroidFileAttachmentPort(context)

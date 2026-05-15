@@ -21,14 +21,16 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MessageFileCloudSyncWorkerTest {
     private val messageFileDao = mockk<MessageFileDao>(relaxed = true)
     private val storage = mockk<FirebaseStorage>(relaxed = true)
@@ -40,7 +42,7 @@ class MessageFileCloudSyncWorkerTest {
 
     private lateinit var worker: MessageFileCloudSyncWorker
 
-    @Before
+    @BeforeEach
     fun setup() {
         mockkStatic("kotlinx.coroutines.tasks.TasksKt")
         val context = mockk<Context>(relaxed = true)
@@ -59,7 +61,7 @@ class MessageFileCloudSyncWorkerTest {
             )
     }
 
-    @After
+    @AfterEach
     fun tearDown() {
         unmockkStatic("kotlinx.coroutines.tasks.TasksKt")
     }

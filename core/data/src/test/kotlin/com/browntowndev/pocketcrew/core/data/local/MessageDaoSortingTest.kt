@@ -14,24 +14,24 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.Date
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessageDaoSortingTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var dao: MessageDao
 
-    @Before
+    @BeforeEach
     fun setup() {
         database =
             Room
@@ -43,7 +43,7 @@ class MessageDaoSortingTest {
         dao = database.messageDao()
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         database.close()
     }

@@ -15,15 +15,15 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class LocalModelRepositoryImplTest {
     private lateinit var database: PocketCrewDatabase
@@ -36,7 +36,7 @@ class LocalModelRepositoryImplTest {
             override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
         }
 
-    @Before
+    @BeforeEach
     fun setup() {
         database =
             Room
@@ -58,7 +58,7 @@ class LocalModelRepositoryImplTest {
             )
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         database.close()
     }

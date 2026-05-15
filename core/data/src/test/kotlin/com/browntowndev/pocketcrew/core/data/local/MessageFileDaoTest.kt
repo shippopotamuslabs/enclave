@@ -6,18 +6,18 @@ import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.Date
 import java.util.UUID
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class MessageFileDaoTest {
     private lateinit var database: PocketCrewDatabase
@@ -25,7 +25,7 @@ class MessageFileDaoTest {
     private lateinit var messageDao: MessageDao
     private lateinit var fileDao: MessageFileDao
 
-    @Before
+    @BeforeEach
     fun setup() {
         database =
             Room
@@ -39,7 +39,7 @@ class MessageFileDaoTest {
         fileDao = database.messageFileDao()
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         database.close()
     }

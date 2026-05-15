@@ -4,12 +4,11 @@ import android.content.Context
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Tests for [AndroidAudioPlayer] with focus on lifecycle safety:
@@ -18,14 +17,14 @@ import org.robolectric.annotation.Config
  * - Repeated stop/release calls are safe
  * - playAudio cleans up previous MediaPlayer before creating new one
  */
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class AndroidAudioPlayerTest {
     private lateinit var player: AndroidAudioPlayer
     private val mockLogger: LoggingPort = mockk(relaxed = true)
     private val mockContext: Context = mockk(relaxed = true)
 
-    @Before
+    @BeforeEach
     fun setUp() {
         player = AndroidAudioPlayer(mockContext, mockLogger)
     }
@@ -46,7 +45,7 @@ class AndroidAudioPlayerTest {
     }
 
     @Test
-    fun `playAudio handles empty audio data gracefully`() =
+    fun `playAudio handles empty audio data gracefully`(): Unit =
         runTest {
             // Empty byte array should be handled without crashing
             try {
@@ -59,7 +58,7 @@ class AndroidAudioPlayerTest {
         }
 
     @Test
-    fun `stop after playAudio completion release does not crash`() =
+    fun `stop after playAudio completion release does not crash`(): Unit =
         runTest {
             // Simulate: playAudio completes, then stop() is called externally.
             // The key crash scenario: playAudio's setOnCompletionListener releases
@@ -82,7 +81,7 @@ class AndroidAudioPlayerTest {
         }
 
     @Test
-    fun `stop called during playAudio cancels playback safely`() =
+    fun `stop called during playAudio cancels playback safely`(): Unit =
         runTest {
             // Verify that calling stop() during playback doesn't crash
             val audioBytes = createMinimalWavBytes()
