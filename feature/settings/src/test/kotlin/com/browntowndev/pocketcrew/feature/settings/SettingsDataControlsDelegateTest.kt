@@ -142,4 +142,23 @@ class SettingsDataControlsDelegateTest {
             )
         }
     }
+
+    @Test
+    fun `confirm delete account clears deleting state when invoke throws`() = runTest {
+        coEvery { deleteAccount.invoke() } throws RuntimeException("sign-out failed")
+        val dc = MutableStateFlow(DataControlsTransientState())
+        delegate.onConfirmDeleteAccount(this, "tag", dc)
+        advanceUntilIdle()
+        assertEquals("sign-out failed", dc.value.deleteError)
+        assertNull(dc.value.pendingAction)
+        assertFalse(dc.value.isDeleting)
+        verify(exactly = 1) {
+            errorHandler.handleError(
+                "tag",
+                "Failed to delete account",
+                match { it is RuntimeException && it.message == "sign-out failed" },
+                "Couldn't delete account",
+            )
+        }
+    }
 }

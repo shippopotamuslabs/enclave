@@ -191,19 +191,32 @@ internal class SettingsDataControlsDelegate
         ) {
             dataControlsState.update { it.copy(isDeleting = true, deleteError = null) }
             scope.launch {
-                val result = dataControlsUseCases.deleteAccount.invoke()
-                val failure = result.exceptionOrNull()
-                if (failure == null) {
-                    dataControlsState.update { DataControlsTransientState() }
-                } else {
-                    reportDeleteFailure(
-                        tag,
-                        "Failed to delete account",
-                        "Couldn't delete account",
-                        failure,
-                        dataControlsState,
+                runCatching { dataControlsUseCases.deleteAccount.invoke() }
+                    .fold(
+                        onFailure = { e ->
+                            reportDeleteFailure(
+                                tag,
+                                "Failed to delete account",
+                                "Couldn't delete account",
+                                e,
+                                dataControlsState,
+                            )
+                        },
+                        onSuccess = { result ->
+                            result.fold(
+                                onSuccess = { dataControlsState.update { DataControlsTransientState() } },
+                                onFailure = { e ->
+                                    reportDeleteFailure(
+                                        tag,
+                                        "Failed to delete account",
+                                        "Couldn't delete account",
+                                        e,
+                                        dataControlsState,
+                                    )
+                                },
+                            )
+                        },
                     )
-                }
             }
         }
     }
