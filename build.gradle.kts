@@ -166,6 +166,16 @@ subprojects {
         }
     }
 
+    plugins.withId("com.android.application") {
+        tasks.matching { it.name.startsWith("assemble") }.configureEach {
+            dependsOn(
+                rootProject.subprojects
+                    .filter { sub -> sub.path !in excludedModules && sub.tasks.findByName("detekt") != null }
+                    .map { "${it.path}:detekt" },
+            )
+        }
+    }
+
     plugins.withId("org.jetbrains.kotlin.jvm") {
         tasks.register<JacocoReport>("jacocoTestReport") {
             dependsOn("test")

@@ -13,7 +13,7 @@ class SearchSkillBottomSheetTest {
             selectedProvider = SearchProvider.TAVILY,
             tavilyKeyPresent = true,
         )
-        assertTrue(shouldShowProviderSwitchAlert(state, SearchProvider.EXA))
+        assertTrue(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
@@ -22,7 +22,7 @@ class SearchSkillBottomSheetTest {
             selectedProvider = SearchProvider.TAVILY,
             tavilyKeyPresent = false,
         )
-        assertFalse(shouldShowProviderSwitchAlert(state, SearchProvider.EXA))
+        assertFalse(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
@@ -31,7 +31,7 @@ class SearchSkillBottomSheetTest {
             selectedProvider = SearchProvider.EXA,
             exaKeyPresent = true,
         )
-        assertTrue(shouldShowProviderSwitchAlert(state, SearchProvider.TAVILY))
+        assertTrue(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
@@ -40,6 +40,6 @@ class SearchSkillBottomSheetTest {
             selectedProvider = SearchProvider.EXA,
             exaKeyPresent = false,
         )
-        assertFalse(shouldShowProviderSwitchAlert(state, SearchProvider.TAVILY))
+        assertFalse(shouldShowProviderSwitchAlert(state))
     }
 }

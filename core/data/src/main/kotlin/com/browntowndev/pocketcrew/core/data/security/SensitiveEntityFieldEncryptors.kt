@@ -63,7 +63,13 @@ object SensitiveEntityFieldEncryptors {
             thinkingRaw = healer.decryptNullable("MessageEntity", "thinkingRaw", entity.id.value, entity.thinkingRaw, readRepairs),
             artifactsJson = healer.decryptNullable("MessageEntity", "artifactsJson", entity.id.value, entity.artifactsJson, readRepairs),
             generatedMediaUrisJson =
-                healer.decryptNullable("MessageEntity", "generatedMediaUrisJson", entity.id.value, entity.generatedMediaUrisJson, readRepairs),
+                healer.decryptNullable(
+                    "MessageEntity",
+                    "generatedMediaUrisJson",
+                    entity.id.value,
+                    entity.generatedMediaUrisJson,
+                    readRepairs,
+                ),
             generatedMediaAssetIdsJson =
                 healer.decryptNullable(
                     "MessageEntity",
@@ -73,7 +79,13 @@ object SensitiveEntityFieldEncryptors {
                     readRepairs,
                 ),
             generatedMediaPromptsJson =
-                healer.decryptNullable("MessageEntity", "generatedMediaPromptsJson", entity.id.value, entity.generatedMediaPromptsJson, readRepairs),
+                healer.decryptNullable(
+                    "MessageEntity",
+                    "generatedMediaPromptsJson",
+                    entity.id.value,
+                    entity.generatedMediaPromptsJson,
+                    readRepairs,
+                ),
         )
 
     fun encrypt(
@@ -140,7 +152,14 @@ object SensitiveEntityFieldEncryptors {
             name = healer.decrypt("MessageFileEntity", "name", entity.id, entity.name, readRepairs),
             content = healer.decrypt("MessageFileEntity", "content", entity.id, entity.content, readRepairs),
             remoteUrl = healer.decryptNullable("MessageFileEntity", "remoteUrl", entity.id, entity.remoteUrl, readRepairs),
-            stagingRemoteUrl = healer.decryptNullable("MessageFileEntity", "stagingRemoteUrl", entity.id, entity.stagingRemoteUrl, readRepairs),
+            stagingRemoteUrl =
+                healer.decryptNullable(
+                    "MessageFileEntity",
+                    "stagingRemoteUrl",
+                    entity.id,
+                    entity.stagingRemoteUrl,
+                    readRepairs,
+                ),
         )
 
     fun encrypt(
@@ -264,9 +283,30 @@ object SensitiveEntityFieldEncryptors {
         readRepairs: MutableList<SensitiveRoomReadRepair>? = null,
     ): ApiModelConfigurationEntity =
         entity.copy(
-            displayName = healer.decrypt("ApiModelConfigurationEntity", "displayName", entity.id.value, entity.displayName, readRepairs),
-            customHeaders = healer.decrypt("ApiModelConfigurationEntity", "customHeaders", entity.id.value, entity.customHeaders, readRepairs),
-            systemPrompt = healer.decrypt("ApiModelConfigurationEntity", "systemPrompt", entity.id.value, entity.systemPrompt, readRepairs),
+            displayName =
+                healer.decrypt(
+                    "ApiModelConfigurationEntity",
+                    "displayName",
+                    entity.id.value,
+                    entity.displayName,
+                    readRepairs,
+                ),
+            customHeaders =
+                healer.decrypt(
+                    "ApiModelConfigurationEntity",
+                    "customHeaders",
+                    entity.id.value,
+                    entity.customHeaders,
+                    readRepairs,
+                ),
+            systemPrompt =
+                healer.decrypt(
+                    "ApiModelConfigurationEntity",
+                    "systemPrompt",
+                    entity.id.value,
+                    entity.systemPrompt,
+                    readRepairs,
+                ),
         )
 
     fun decrypt(
@@ -276,7 +316,14 @@ object SensitiveEntityFieldEncryptors {
     ): LocalModelConfigurationEntity =
         entity.copy(
             displayName = healer.decrypt("LocalModelConfigurationEntity", "displayName", entity.id.value, entity.displayName, readRepairs),
-            systemPrompt = healer.decryptNullable("LocalModelConfigurationEntity", "systemPrompt", entity.id.value, entity.systemPrompt, readRepairs),
+            systemPrompt =
+                healer.decryptNullable(
+                    "LocalModelConfigurationEntity",
+                    "systemPrompt",
+                    entity.id.value,
+                    entity.systemPrompt,
+                    readRepairs,
+                ),
         )
 
     fun encrypt(
@@ -311,8 +358,22 @@ object SensitiveEntityFieldEncryptors {
             prompt = healer.decrypt("StudioMediaEntity", "prompt", entity.id, entity.prompt, readRepairs),
             mediaUri = healer.decrypt("StudioMediaEntity", "mediaUri", entity.id, entity.mediaUri, readRepairs),
             remoteUrl = healer.decryptNullable("StudioMediaEntity", "remoteUrl", entity.id, entity.remoteUrl, readRepairs),
-            remoteThumbnailUrl = healer.decryptNullable("StudioMediaEntity", "remoteThumbnailUrl", entity.id, entity.remoteThumbnailUrl, readRepairs),
-            stagingRemoteUrl = healer.decryptNullable("StudioMediaEntity", "stagingRemoteUrl", entity.id, entity.stagingRemoteUrl, readRepairs),
+            remoteThumbnailUrl =
+                healer.decryptNullable(
+                    "StudioMediaEntity",
+                    "remoteThumbnailUrl",
+                    entity.id,
+                    entity.remoteThumbnailUrl,
+                    readRepairs,
+                ),
+            stagingRemoteUrl =
+                healer.decryptNullable(
+                    "StudioMediaEntity",
+                    "stagingRemoteUrl",
+                    entity.id,
+                    entity.stagingRemoteUrl,
+                    readRepairs,
+                ),
         )
 
     fun encrypt(
