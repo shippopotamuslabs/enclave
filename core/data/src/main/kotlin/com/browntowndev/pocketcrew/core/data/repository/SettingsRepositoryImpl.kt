@@ -47,6 +47,13 @@ class SettingsRepositoryImpl
             private val SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY = booleanPreferencesKey("settings_show_search_provider_switch_alert")
             private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
             private const val TAG = "SettingsRepository"
+
+            private fun customPromptTextAad(): ByteArray =
+                AadContext(
+                    owner = "SettingsRepositoryImpl",
+                    field = "settings_custom_prompt_text",
+                    entityId = "singleton",
+                ).toBytes()
         }
 
         override val settingsFlow: Flow<SettingsData> =
@@ -75,7 +82,7 @@ class SettingsRepositoryImpl
                                 }
                             } ?: SystemPromptOption.CONCISE,
                         customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY]?.let { stored ->
-                            localEncryption.decryptString(stored, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
+                            localEncryption.decryptString(stored, customPromptTextAad())
                         } ?: "",
                         allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
                         searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
@@ -134,7 +141,7 @@ class SettingsRepositoryImpl
 
         override suspend fun updateCustomPromptText(text: String) {
             dataStore.edit { preferences ->
-                preferences[CUSTOM_PROMPT_TEXT_KEY] = localEncryption.encryptString(text, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
+                preferences[CUSTOM_PROMPT_TEXT_KEY] = localEncryption.encryptString(text, customPromptTextAad())
             }
         }
 
@@ -147,7 +154,7 @@ class SettingsRepositoryImpl
                 )
                 return
             }
-            val encrypted = localEncryption.encryptString(stored, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
+            val encrypted = localEncryption.encryptString(stored, customPromptTextAad())
             if (encrypted == stored) return
             dataStore.edit { preferences ->
                 preferences[CUSTOM_PROMPT_TEXT_KEY] = encrypted

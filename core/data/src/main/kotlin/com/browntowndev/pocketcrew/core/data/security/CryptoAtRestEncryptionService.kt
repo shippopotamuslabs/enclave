@@ -40,37 +40,38 @@ class CryptoAtRestEncryptionService
 
         fun parseEnvelope(stored: String): EnvelopeParse {
             if (!stored.startsWith(ENVELOPE_PREFIX)) {
-                return if (stored.startsWith("PCENC:")) {
-                    EnvelopeParse.Malformed(MalformedEnvelopeReason.BAD_PREFIX)
-                } else {
-                    EnvelopeParse.NotEnveloped
+                return when {
+                    stored.startsWith("PCENC:") -> EnvelopeParse.Malformed(MalformedEnvelopeReason.BAD_PREFIX)
+                    else -> EnvelopeParse.NotEnveloped
                 }
             }
+            return parseEnvelopePayload(stored.substring(ENVELOPE_PREFIX.length))
+        }
 
-            val payload = stored.substring(ENVELOPE_PREFIX.length)
-
+        private fun parseEnvelopePayload(payload: String): EnvelopeParse {
             // Size cap check on base64 string length to avoid allocating huge arrays
             if (payload.length.toLong() * 3L / 4L > ENVELOPE_MAX_DECODED_BYTES) {
                 return EnvelopeParse.Malformed(MalformedEnvelopeReason.PAYLOAD_TOO_LARGE)
             }
 
-            val decoded = try {
-                java.util.Base64.getDecoder().decode(payload)
-            } catch (e: IllegalArgumentException) {
-                return EnvelopeParse.Malformed(MalformedEnvelopeReason.INVALID_BASE64)
-            }
+            val decoded =
+                try {
+                    java.util.Base64.getDecoder().decode(payload)
+                } catch (_: IllegalArgumentException) {
+                    return EnvelopeParse.Malformed(MalformedEnvelopeReason.INVALID_BASE64)
+                }
 
-            if (decoded.size > ENVELOPE_MAX_DECODED_BYTES) {
-                return EnvelopeParse.Malformed(MalformedEnvelopeReason.PAYLOAD_TOO_LARGE)
+            return when {
+                decoded.size > ENVELOPE_MAX_DECODED_BYTES ->
+                    EnvelopeParse.Malformed(MalformedEnvelopeReason.PAYLOAD_TOO_LARGE)
+                decoded.size < MIN_PAYLOAD_BYTES ->
+                    EnvelopeParse.Malformed(MalformedEnvelopeReason.PAYLOAD_TOO_SHORT)
+                else -> {
+                    val iv = decoded.copyOfRange(0, IV_LENGTH)
+                    val ciphertext = decoded.copyOfRange(IV_LENGTH, decoded.size)
+                    EnvelopeParse.Ok(iv, ciphertext)
+                }
             }
-
-            if (decoded.size < MIN_PAYLOAD_BYTES) {
-                return EnvelopeParse.Malformed(MalformedEnvelopeReason.PAYLOAD_TOO_SHORT)
-            }
-
-            val iv = decoded.copyOfRange(0, IV_LENGTH)
-            val ciphertext = decoded.copyOfRange(IV_LENGTH, decoded.size)
-            return EnvelopeParse.Ok(iv, ciphertext)
         }
 
         override fun isEncrypted(stored: String): Boolean = parseEnvelope(stored) is EnvelopeParse.Ok
