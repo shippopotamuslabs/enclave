@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
@@ -145,6 +146,7 @@ class EmbeddingRegenerationWorkerTest {
                 embeddingEngine,
                 progressManager,
                 loggingPort,
+                FakeLocalDataEncryptionService(),
             )
     }
 }

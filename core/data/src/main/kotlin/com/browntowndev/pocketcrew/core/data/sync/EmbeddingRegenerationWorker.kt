@@ -6,6 +6,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingEntity
+import com.browntowndev.pocketcrew.core.data.security.AadContext
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -32,6 +34,7 @@ class EmbeddingRegenerationWorker
         private val embeddingEngine: EmbeddingEnginePort,
         private val progressManager: EmbeddingProgressManager,
         private val loggingPort: LoggingPort,
+        private val localEncryption: LocalDataEncryptionService,
     ) : CoroutineWorker(context, params) {
         companion object {
             private const val TAG = "EmbeddingRegenerationWorker"
@@ -154,9 +157,13 @@ class EmbeddingRegenerationWorker
             val entity = documentDao.getDocumentById(id) ?: return
 
             val json = Json { ignoreUnknownKeys = true }
+            // Must match ArtifactToolExecutor / SensitiveEntityFieldEncryptors binding for DocumentEntity.json
+            val jsonAad = AadContext("DocumentEntity", "json", id).toBytes()
             val doc: kotlinx.serialization.json.JsonObject =
                 try {
-                    json.parseToJsonElement(entity.json) as kotlinx.serialization.json.JsonObject
+                    json.parseToJsonElement(
+                        localEncryption.decryptString(entity.json, jsonAad),
+                    ) as kotlinx.serialization.json.JsonObject
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to parse document JSON for re-embedding $id", e)
                     return
