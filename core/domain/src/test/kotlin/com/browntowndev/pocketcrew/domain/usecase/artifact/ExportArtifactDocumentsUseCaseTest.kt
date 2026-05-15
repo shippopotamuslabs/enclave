@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -139,6 +140,31 @@ class ExportArtifactDocumentsUseCaseTest {
     }
 
     @Test
+    fun `document generation runs off caller thread`() = runTest {
+        val callerThreadName = Thread.currentThread().name
+        val docGen = FakeDocumentGenerator(wordBytes = byteArrayOf(4, 2))
+        val useCase =
+            ExportArtifactDocumentsUseCase(
+                documentGeneratorPort = docGen,
+                shareMediaPort = FakeShareMedia(),
+                saveBinaryToDownloadsPort = FakeSaveDownloads(),
+            )
+
+        val result =
+            useCase(
+                ExportArtifactDocumentsCommand(
+                    documentJson = "{}",
+                    baseTitle = "T",
+                    format = ArtifactExportFormat.WORD,
+                    destination = ArtifactExportDestination.DOWNLOAD,
+                ),
+            )
+
+        assertTrue(result.isSuccess)
+        assertNotEquals(callerThreadName, docGen.wordThreadName)
+    }
+
+    @Test
     fun `download failure propagates`() = runTest {
         val save =
             FakeSaveDownloads(
@@ -168,9 +194,17 @@ class ExportArtifactDocumentsUseCaseTest {
         private val wordResult: Result<ByteArray> = Result.success(wordBytes),
         private val pdfResult: Result<ByteArray> = Result.success(pdfBytes),
     ) : DocumentGeneratorPort {
-        override suspend fun generateWordDocument(json: String): Result<ByteArray> = wordResult
+        var wordThreadName: String? = null
+            private set
 
-        override suspend fun generatePdfDocument(json: String): Result<ByteArray> = pdfResult
+        override suspend fun generateWordDocument(json: String): Result<ByteArray> {
+            wordThreadName = Thread.currentThread().name
+            return wordResult
+        }
+
+        override suspend fun generatePdfDocument(json: String): Result<ByteArray> {
+            return pdfResult
+        }
     }
 
     private class FakeShareMedia : ShareMediaPort {
