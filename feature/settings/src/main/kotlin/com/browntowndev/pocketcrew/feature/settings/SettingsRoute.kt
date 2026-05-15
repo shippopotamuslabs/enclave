@@ -38,6 +38,7 @@ internal fun SettingsRoute(
         onDeleteMemory = viewModel::onDeleteMemory,
         onShowTosSheet = viewModel::onShowTosSheet,
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onShowOssLicensesSheet = viewModel::onShowOssLicensesSheet,
         onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
         onSetDefaultModel = viewModel::onSetDefaultModel,

@@ -28,6 +28,7 @@ internal data class SheetVisibilityState(
     val searchSkill: Boolean = false,
     val tos: Boolean = false,
     val searchSkillTabIndex: Int = 0,
+    val ossLicenses: Boolean = false,
 )
 
 internal data class LocalModelsTransientState(
@@ -303,6 +304,7 @@ class SettingsUiStateFactory @Inject constructor(
                 isTtsProvidersSheetOpen = ttsState.isSheetOpen,
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
                 isSearchSkillSheetOpen = sheetVisibility.searchSkill,
+                isOssLicensesSheetOpen = sheetVisibility.ossLicenses,
                 isTosSheetOpen = sheetVisibility.tos,
                 searchSkillTabIndex = sheetVisibility.searchSkillTabIndex,
                 isReindexing = isReindexing,

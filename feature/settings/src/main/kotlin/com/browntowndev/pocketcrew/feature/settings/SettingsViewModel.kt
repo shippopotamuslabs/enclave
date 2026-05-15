@@ -206,6 +206,7 @@ internal class SettingsViewModel @Inject constructor(
     fun onSaveCustomization() = generalDelegate.onSaveCustomization(_sheetVisibility)
     fun onShowTosSheet(show: Boolean) = generalDelegate.onShowTosSheet(_sheetVisibility, show)
     fun onShowFeedbackSheet(show: Boolean) = generalDelegate.onShowFeedbackSheet(_sheetVisibility, show)
+    fun onShowOssLicensesSheet(show: Boolean) = generalDelegate.onShowOssLicensesSheet(_sheetVisibility, show)
     fun onShowVisionSettingsSheet(show: Boolean) = generalDelegate.onShowVisionSettingsSheet(_sheetVisibility, show)
     fun onFeedbackTextChange(text: String) = generalDelegate.onFeedbackTextChange(_feedbackText, text)
     fun onSubmitFeedback() = generalDelegate.onSubmitFeedback(_feedbackText, _sheetVisibility)
