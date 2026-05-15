@@ -319,6 +319,10 @@ internal class SettingsGeneralDelegate @Inject constructor(
         sheetVisibility.update { it.copy(feedback = show) }
     }
 
+    fun onShowOssLicensesSheet(sheetVisibility: MutableStateFlow<SheetVisibilityState>, show: Boolean) {
+        sheetVisibility.update { it.copy(ossLicenses = show) }
+    }
+
     fun onFeedbackTextChange(feedbackText: MutableStateFlow<String>, text: String) {
         feedbackText.value = text
     }

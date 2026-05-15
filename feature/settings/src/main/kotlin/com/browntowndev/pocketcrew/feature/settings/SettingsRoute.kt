@@ -45,6 +45,7 @@ internal fun SettingsRoute(
             context.startActivity(intent)
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onShowOssLicensesSheet = viewModel::onShowOssLicensesSheet,
         onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
         onSetDefaultModel = viewModel::onSetDefaultModel,

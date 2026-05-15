@@ -89,6 +89,7 @@ fun SettingsScreen(
     onDeleteMemory: (String) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
@@ -297,8 +298,14 @@ fun SettingsScreen(
                     icon = Icons.Default.Feedback,
                     onClick = { onShowFeedbackSheet(true) }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Open Source Licenses",
+                    icon = Icons.Default.Info,
+                    onClick = { onShowOssLicensesSheet(true) }
+                )
             }
-            
+
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
@@ -395,6 +402,12 @@ fun SettingsScreen(
                 onXApiKeyChange = onXApiKeyChange,
                 onClearXApiKey = onClearXApiKey,
                 onSaveXSearch = onSaveXSearchSettings
+            )
+        }
+
+        if (uiState.home.isOssLicensesSheetOpen) {
+            OssLicensesBottomSheet(
+                onDismiss = { onShowOssLicensesSheet(false) }
             )
         }
 
@@ -740,6 +753,7 @@ fun PreviewSettingsScreen() {
             onDeleteMemory = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
+            onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
             onSetDefaultModel = { _, _, _, _, _ -> },
