@@ -15,10 +15,6 @@ internal class SettingsMemoriesDelegate @Inject constructor(
     private val memoriesUseCases: SettingsMemoriesUseCases,
     private val errorHandler: ViewModelErrorHandler,
 ) {
-    fun onShowDataControlsSheet(sheetVisibility: MutableStateFlow<SheetVisibilityState>, show: Boolean) {
-        sheetVisibility.update { it.copy(dataControls = show) }
-    }
-
     fun onShowMemoriesSheet(
         sheetVisibility: MutableStateFlow<SheetVisibilityState>,
         memoriesState: MutableStateFlow<MemoriesTransientState>,

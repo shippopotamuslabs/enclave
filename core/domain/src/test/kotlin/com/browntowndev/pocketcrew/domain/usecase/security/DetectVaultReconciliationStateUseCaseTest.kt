@@ -242,6 +242,7 @@ class DetectVaultReconciliationStateUseCaseTest {
         override suspend fun getWrappedDek(): Result<String?> = Result.success(metadata?.wrappedDek)
         override suspend fun uploadVaultMetadata(metadata: VaultMetadata): Result<Unit> = Result.success(Unit)
         override suspend fun fetchVaultMetadata(): Result<VaultMetadata?> = Result.success(metadata)
+        override suspend fun deleteUserAccount(): Result<Unit> = Result.success(Unit)
         override fun enqueueEmbeddingRegeneration() = Unit
     }
 }

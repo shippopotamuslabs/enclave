@@ -176,6 +176,7 @@ class SettingsUiStateFactoryTest {
         assignmentsState = AssignmentDialogTransientState(),
         deletionState = DeletionTransientState(),
         memoriesState = MemoriesTransientState(),
+        dataControlsState = DataControlsTransientState(),
         currentTavilyApiKey = "",
         currentExaApiKey = "",
         currentXApiKey = "",

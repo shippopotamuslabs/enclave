@@ -141,6 +141,8 @@ class FakeChatRepository : ChatRepository {
         shouldThrowOnCreateChat = false
         savedAssistantMessages.clear()
         persistedMessageData.clear()
+        deletedChatIdStorage.clear()
+        deleteChatFailure = null
     }
     
     /**
@@ -157,10 +159,18 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
-    private val deletedChatIds = mutableListOf<ChatId>()
+    private val deletedChatIdStorage = mutableListOf<ChatId>()
+
+    /** String IDs passed to [deleteChat], for use-case tests (see test_spec.md). */
+    val deletedChatIds: Set<String>
+        get() = deletedChatIdStorage.mapTo(mutableSetOf()) { it.value }
+
+    /** When non-null, [deleteChat] throws this exception before mutating state. */
+    var deleteChatFailure: RuntimeException? = null
 
     override suspend fun deleteChat(chatId: ChatId) {
-        deletedChatIds.add(chatId)
+        deleteChatFailure?.let { throw it }
+        deletedChatIdStorage.add(chatId)
         _chatsFlow.value = _chatsFlow.value.filter { it.id != chatId }
     }
 

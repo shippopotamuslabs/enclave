@@ -57,6 +57,12 @@ internal data class MemoriesTransientState(
     val isEditing: Boolean = false,
 )
 
+internal data class DataControlsTransientState(
+    val pendingAction: DataControlsPendingAction? = null,
+    val isDeleting: Boolean = false,
+    val deleteError: String? = null,
+)
+
 internal data class SearchSkillTransientState(
     val isEditing: Boolean = false,
     val enabled: Boolean? = null,
@@ -130,6 +136,7 @@ class SettingsUiStateFactory @Inject constructor(
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
         memoriesState: MemoriesTransientState,
+        dataControlsState: DataControlsTransientState,
         currentTavilyApiKey: String,
         currentExaApiKey: String,
         currentXApiKey: String,
@@ -315,6 +322,9 @@ class SettingsUiStateFactory @Inject constructor(
             dataControls = DataControlsUiState(
                 isSheetOpen = sheetVisibility.dataControls,
                 allowMemories = persistedSettings.allowMemories,
+                pendingAction = dataControlsState.pendingAction,
+                isDeleting = dataControlsState.isDeleting,
+                deleteError = dataControlsState.deleteError,
             ),
             memories = MemoriesUiState(
                 isSheetOpen = sheetVisibility.memories,
