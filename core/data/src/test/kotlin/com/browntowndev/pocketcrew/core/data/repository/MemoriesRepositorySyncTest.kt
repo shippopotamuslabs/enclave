@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -18,6 +19,7 @@ class MemoriesRepositorySyncTest {
     private val memoriesDao = mockk<MemoriesDao>(relaxed = true)
     private val embeddingDao = mockk<EmbeddingDao>(relaxed = true)
     private val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private lateinit var repository: MemoriesRepositoryImpl
 
@@ -31,7 +33,8 @@ class MemoriesRepositorySyncTest {
                 memoriesDao = memoriesDao,
                 embeddingDao = embeddingDao,
                 embeddingEngine = embeddingEngine,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 

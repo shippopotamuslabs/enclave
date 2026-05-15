@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.artifact
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -17,27 +18,20 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
 
 class ArtifactToolExecutorImplTest {
+    private val enc = CryptoAtRestEncryptionService.ENVELOPE_PREFIX
+
     private val documentValidation =
         mockk<DocumentValidationPort> {
             every { validate(any()) } returns Result.success(Unit)
             every { validateStartArtifactArgs(any()) } returns Result.success(Unit)
             every { validateAppendBlocksArgs(any()) } returns Result.success(Unit)
         }
-
-    private val executor =
-        ArtifactToolExecutor(
-            documentDao = mockk(relaxed = true),
-            embeddingDao = mockk(relaxed = true),
-            embeddingEngine = mockk(relaxed = true),
-            documentValidation = documentValidation,
-            localEncryption = FakeLocalDataEncryptionService(),
-            externalScope = TestScope(),
-        )
 
     @Test
     fun `execute returns success for start_artifact with title only`() =
@@ -68,8 +62,8 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("\"status\":\"success\""))
             assertTrue(result.resultJson.contains("\"artifactId\""))
             assertTrue(result.resultJson.contains("isComplete"))
-            assertEquals("ENC:v1:Report", capturedDocument.captured.title)
-            assertTrue(capturedDocument.captured.json.startsWith("ENC:v1:"))
+            assertEquals("${enc}Report", capturedDocument.captured.title)
+            assertTrue(capturedDocument.captured.json.startsWith(enc))
             assertEquals(0, capturedDocument.captured.pendingSync)
         }
 
@@ -117,10 +111,10 @@ class ArtifactToolExecutorImplTest {
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
-                    title = "ENC:v1:T",
+                    title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """ENC:v1:{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             every { validation.validate(any()) } returns
                 Result.failure(
@@ -163,10 +157,10 @@ class ArtifactToolExecutorImplTest {
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
-                    title = "ENC:v1:T",
+                    title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """ENC:v1:{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
 
@@ -195,7 +189,7 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("REMINDER"))
             assertTrue(result.resultJson.contains("isComplete"))
             assertEquals(0, updatedDocument.captured.pendingSync)
-            assertTrue(updatedDocument.captured.json.startsWith("ENC:v1:"))
+            assertTrue(updatedDocument.captured.json.startsWith(enc))
         }
 
     @Test
@@ -207,10 +201,10 @@ class ArtifactToolExecutorImplTest {
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
-                    title = "ENC:v1:T",
+                    title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """ENC:v1:{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
 
@@ -238,6 +232,39 @@ class ArtifactToolExecutorImplTest {
             val result = cut.execute(request)
             assertTrue(result.resultJson.contains("\"isComplete\":true"))
             assertEquals(1, updatedDocument.captured.pendingSync)
-            assertTrue(updatedDocument.captured.json.startsWith("ENC:v1:"))
+            assertTrue(updatedDocument.captured.json.startsWith(enc))
+        }
+
+    @Test
+    fun `document json encryption uses DocumentEntity json AAD binding`() =
+        runTest {
+            val docDao = mockk<DocumentDao>()
+            coEvery { docDao.insertDocument(any()) } returns Unit
+            val encSvc = FakeLocalDataEncryptionService()
+            val cut =
+                ArtifactToolExecutor(
+                    documentDao = docDao,
+                    embeddingDao = mockk(relaxed = true),
+                    embeddingEngine = mockk(relaxed = true),
+                    documentValidation = documentValidation,
+                    localEncryption = encSvc,
+                    externalScope = TestScope(),
+                    newArtifactDocumentId = { "doc-7" },
+                )
+            val request =
+                ToolCallRequest(
+                    chatId = ChatId("chat-123"),
+                    userMessageId = MessageId("msg-123"),
+                    assistantMessageId = MessageId("assistant-123"),
+                    toolName = ToolDefinition.START_ARTIFACT.name,
+                    argumentsJson = """{"title":"Report"}""",
+                    provider = "test",
+                    modelType = ModelType.FAST,
+                )
+            cut.execute(request)
+            assertEquals(
+                "DocumentEntity|json|doc-7",
+                encSvc.lastEncryptAad!!.toString(StandardCharsets.UTF_8),
+            )
         }
 }

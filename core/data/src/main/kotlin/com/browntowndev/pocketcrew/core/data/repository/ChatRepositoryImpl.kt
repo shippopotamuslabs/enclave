@@ -12,7 +12,12 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.PersistenceBoundary
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitiveFieldRef
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
@@ -29,7 +34,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import javax.inject.Inject
@@ -47,13 +52,17 @@ class ChatRepositoryImpl
         private val webSearchSourceDao: WebSearchSourceDao,
         private val documentDao: DocumentDao,
         private val transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider,
-        private val localEncryption: LocalDataEncryptionService,
+        private val healer: SensitivePersistenceSelfHealer,
+        private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ChatRepository {
         private fun triggerSync() = syncTrigger.trigger()
 
         override fun getAllChats(): Flow<List<Chat>> =
-            chatDao.getAllChats().map { entities ->
-                entities.map { it.decryptSensitiveFields().toDomain() }
+            chatDao.getAllChats().mapLatest { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { SensitiveEntityFieldEncryptors.decrypt(it, healer, repairs).toDomain() }
+                readRepairApplier.apply(repairs)
+                out
             }
 
         override suspend fun togglePinStatus(chatId: ChatId) {
@@ -72,27 +81,40 @@ class ChatRepositoryImpl
                 documentDao.getDocumentsByChatIdFlow(chatId),
                 messageTranscriptSegmentDao.observeSegmentsForChat(chatId),
             ) { messages, webSearchSources, documents, segmentRows ->
-                val sourcesByMessageId = webSearchSources.groupBy { it.messageId }
-                val documentsByMessageId = documents.groupBy { it.messageId }
+                ChatStreamFrame(messages, webSearchSources, documents, segmentRows)
+            }.mapLatest { frame ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val sourcesByMessageId = frame.webSearchSources.groupBy { it.messageId }
+                val documentsByMessageId = frame.documents.groupBy { it.messageId }
                 val segmentsByMessageId =
-                    segmentRows
+                    frame.segmentRows
                         .groupBy { it.messageId }
                         .mapValues { (_, rows) ->
-                            rows.sortedBy { it.ordinal }.map { it.decryptSensitiveFields().toDomain() }
+                            rows.sortedBy { it.ordinal }.map { seg ->
+                                SensitiveEntityFieldEncryptors.decrypt(seg, healer, repairs).toDomain()
+                            }
                         }
-                messages.map {
-                    it.decryptSensitiveFields().toDomain(
-                        webSearchSources =
-                            sourcesByMessageId[it.message.id]
-                                ?.map { source -> source.decryptSensitiveFields() }
-                                ?: emptyList(),
-                        documents =
-                            documentsByMessageId[it.message.id]
-                                ?.map { document -> document.decryptSensitiveFields() }
-                                ?: emptyList(),
-                        transcriptSegments = segmentsByMessageId[it.message.id] ?: emptyList(),
-                    )
-                }
+                val out =
+                    frame.messages.map { msgWithFiles ->
+                        val decryptedMsg = SensitiveEntityFieldEncryptors.decrypt(msgWithFiles.message, healer, repairs)
+                        val decryptedFiles =
+                            msgWithFiles.files.map { SensitiveEntityFieldEncryptors.decrypt(it, healer, repairs) }
+                        msgWithFiles.copy(message = decryptedMsg, files = decryptedFiles).toDomain(
+                            webSearchSources =
+                                sourcesByMessageId[msgWithFiles.message.id]
+                                    ?.map { source ->
+                                        SensitiveEntityFieldEncryptors.decrypt(source, healer, repairs)
+                                    }
+                                    ?: emptyList(),
+                            documents =
+                                documentsByMessageId[msgWithFiles.message.id]
+                                    ?.map { document -> SensitiveEntityFieldEncryptors.decrypt(document, healer, repairs) }
+                                    ?: emptyList(),
+                            transcriptSegments = segmentsByMessageId[msgWithFiles.message.id] ?: emptyList(),
+                        )
+                    }
+                readRepairApplier.apply(repairs)
+                out
             }
         }
 
@@ -111,7 +133,12 @@ class ChatRepositoryImpl
             messageId: MessageId,
             content: String,
         ) {
-            messageDao.updateMessageContentText(messageId, localEncryption.encryptString(content))
+            val encrypted = healer.requireEncrypted(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                messageId.value,
+                content,
+            ) ?: content
+            messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
 
@@ -121,8 +148,18 @@ class ChatRepositoryImpl
         ) {
             val existing = messageDao.getMessageById(messageId)?.message
                 ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val merged = localEncryption.decryptString(existing.content) + content
-            messageDao.updateMessageContentText(messageId, localEncryption.encryptString(merged))
+            val decryptedExisting = healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                messageId.value,
+                existing.content,
+            ) ?: ""
+            val merged = decryptedExisting + content
+            val encrypted = healer.requireEncrypted(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                messageId.value,
+                merged,
+            ) ?: merged
+            messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
 
@@ -143,8 +180,18 @@ class ChatRepositoryImpl
         ) {
             val existing = messageDao.getMessageById(messageId)?.message
                 ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val merged = existing.thinkingRaw?.let(localEncryption::decryptString).orEmpty() + thinkingText
-            messageDao.updateThinkingRaw(messageId, localEncryption.encryptString(merged))
+            val decryptedExisting = healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                messageId.value,
+                existing.thinkingRaw,
+            ).orEmpty()
+            val merged = decryptedExisting + thinkingText
+            val encrypted = healer.requireEncrypted(
+                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                messageId.value,
+                merged,
+            ) ?: merged
+            messageDao.updateThinkingRaw(messageId, encrypted)
             triggerSync()
         }
 
@@ -183,13 +230,13 @@ class ChatRepositoryImpl
                     pipelineStep = pipelineStep,
                     pendingSync = 1,
                 )
-            messageDao.upsert(entity.encryptSensitiveFields())
+            messageDao.upsert(SensitiveEntityFieldEncryptors.encrypt(entity, healer))
             triggerSync()
             return entity.id
         }
 
         override suspend fun createChat(chat: Chat): ChatId {
-            val entity = chat.toEntity().encryptSensitiveFields()
+            val entity = SensitiveEntityFieldEncryptors.encrypt(chat.toEntity(), healer)
             chatDao.upsert(entity)
             triggerSync()
             return entity.id
@@ -204,9 +251,19 @@ class ChatRepositoryImpl
 
             messageDao.updateMessageContent(
                 id = messageId,
-                content = localEncryption.encryptString(content),
+                content = healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    content,
+                ) ?: content,
                 thinkingDuration = duration,
-                thinkingRaw = thinkingData?.rawFullThought?.let(localEncryption::encryptString),
+                thinkingRaw = thinkingData?.rawFullThought?.let { raw ->
+                    healer.requireEncrypted(
+                        SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                        messageId.value,
+                        raw,
+                    )
+                },
             )
             triggerSync()
         }
@@ -235,14 +292,17 @@ class ChatRepositoryImpl
         ) {
             val documentEntities =
                 artifacts.map { artifact ->
-                    DocumentEntity(
-                        id = artifact.artifactId,
-                        messageId = messageId,
-                        json = localEncryption.encryptString(artifact.content),
-                        title = localEncryption.encryptString(artifact.title),
-                        author = null,
-                        targetFormat = artifact.targetFormat,
-                        pendingSync = 1,
+                    SensitiveEntityFieldEncryptors.encrypt(
+                        DocumentEntity(
+                            id = artifact.artifactId,
+                            messageId = messageId,
+                            json = artifact.content,
+                            title = artifact.title,
+                            author = null,
+                            targetFormat = artifact.targetFormat,
+                            pendingSync = 1,
+                        ),
+                        healer,
                     )
                 }
 
@@ -281,15 +341,43 @@ class ChatRepositoryImpl
                     thinkingStartTime = thinkingStartTime,
                     thinkingEndTime = thinkingEndTime,
                     thinkingDuration = thinkingDuration,
-                    thinkingRaw = thinkingRaw?.let(localEncryption::encryptString),
-                    content = localEncryption.encryptString(content),
+                    thinkingRaw = thinkingRaw?.let { raw ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            raw,
+                        )
+                    },
+                    content = healer.requireEncrypted(
+                        SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                        messageId.value,
+                        content,
+                    ) ?: content,
                     messageState = messageState,
                     pipelineStep = pipelineStep,
-                    webSearchSources = webSearchSources.map { it.toEntity().encryptSensitiveFields() },
-                    mediaUrisJson = mediaUrisJson?.let(localEncryption::encryptString),
-                    mediaAssetIdsJson = mediaAssetIdsJson?.let(localEncryption::encryptString),
+                    webSearchSources = webSearchSources.map { SensitiveEntityFieldEncryptors.encrypt(it.toEntity(), healer) },
+                    mediaUrisJson = mediaUrisJson?.let { json ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "generatedMediaUrisJson", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            json,
+                        )
+                    },
+                    mediaAssetIdsJson = mediaAssetIdsJson?.let { json ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "generatedMediaAssetIdsJson", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            json,
+                        )
+                    },
                     mediaTypesJson = mediaTypesJson,
-                    mediaPromptsJson = mediaPromptsJson?.let(localEncryption::encryptString),
+                    mediaPromptsJson = mediaPromptsJson?.let { json ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "generatedMediaPromptsJson", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            json,
+                        )
+                    },
                 )
 
                 // Soft-delete all previous artifacts attached to this assistant message,
@@ -299,7 +387,10 @@ class ChatRepositoryImpl
 
                 val segmentEntities =
                     transcriptSegments.map { segment ->
-                        segment.toEntity(messageId, UUID.randomUUID().toString()).encryptSensitiveFields()
+                        SensitiveEntityFieldEncryptors.encrypt(
+                            segment.toEntity(messageId, UUID.randomUUID().toString()),
+                            healer,
+                        )
                     }
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
             }
@@ -326,7 +417,16 @@ class ChatRepositoryImpl
                     MessageState.GENERATING,
                 )
             val entities = messageDao.getMessagesByStates(chatId, incompleteStates)
-            return entities.map { it.decryptSensitiveFields().toDomain() }
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out =
+                entities.map { msgWithFiles ->
+                    val decryptedMsg = SensitiveEntityFieldEncryptors.decrypt(msgWithFiles.message, healer, repairs)
+                    val decryptedFiles =
+                        msgWithFiles.files.map { SensitiveEntityFieldEncryptors.decrypt(it, healer, repairs) }
+                    msgWithFiles.copy(message = decryptedMsg, files = decryptedFiles).toDomain()
+                }
+            readRepairApplier.apply(repairs)
+            return out
         }
 
         override suspend fun deleteChat(chatId: ChatId) {
@@ -341,7 +441,13 @@ class ChatRepositoryImpl
             chatId: ChatId,
             newName: String,
         ) {
-            val rowsAffected = chatDao.updateName(chatId, localEncryption.encryptString(newName))
+            val encryptedName =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("ChatEntity", "name", PersistenceBoundary.ROOM),
+                    chatId.value,
+                    newName,
+                ) ?: newName
+            val rowsAffected = chatDao.updateName(chatId, encryptedName)
             require(rowsAffected > 0) { "Chat not found with id: $chatId" }
             triggerSync()
         }
@@ -350,13 +456,22 @@ class ChatRepositoryImpl
             query: String,
             messageIds: List<MessageId>,
         ): Flow<List<Chat>> =
-            chatDao.searchChats(query, messageIds).map { entities ->
-                entities.map { it.decryptSensitiveFields().toDomain() }
+            chatDao.searchChats(query, messageIds).mapLatest { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { SensitiveEntityFieldEncryptors.decrypt(it, healer, repairs).toDomain() }
+                readRepairApplier.apply(repairs)
+                out
             }
 
         override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
             if (ids.isEmpty()) return emptyMap()
-            return chatDao.getChatsByIds(ids).associate { it.id to it.decryptSensitiveFields().toDomain() }
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out =
+                chatDao.getChatsByIds(ids).associate {
+                    it.id to SensitiveEntityFieldEncryptors.decrypt(it, healer, repairs).toDomain()
+                }
+            readRepairApplier.apply(repairs)
+            return out
         }
 
         override suspend fun markWebSearchSourceExtracted(url: String) {
@@ -369,72 +484,10 @@ class ChatRepositoryImpl
             triggerSync()
         }
 
-        private fun com.browntowndev.pocketcrew.core.data.local.ChatEntity.encryptSensitiveFields() =
-            copy(name = localEncryption.encryptString(name))
-
-        private fun com.browntowndev.pocketcrew.core.data.local.ChatEntity.decryptSensitiveFields() =
-            copy(name = localEncryption.decryptString(name))
-
-        private fun MessageEntity.encryptSensitiveFields() =
-            copy(
-                content = localEncryption.encryptString(content),
-                imageUrisJson = imageUrisJson?.let(localEncryption::encryptString),
-                thinkingRaw = thinkingRaw?.let(localEncryption::encryptString),
-                artifactsJson = artifactsJson?.let(localEncryption::encryptString),
-                generatedMediaUrisJson = generatedMediaUrisJson?.let(localEncryption::encryptString),
-                generatedMediaAssetIdsJson = generatedMediaAssetIdsJson?.let(localEncryption::encryptString),
-                generatedMediaPromptsJson = generatedMediaPromptsJson?.let(localEncryption::encryptString),
-            )
-
-        private fun MessageEntity.decryptSensitiveFields() =
-            copy(
-                content = localEncryption.decryptString(content),
-                imageUrisJson = imageUrisJson?.let(localEncryption::decryptString),
-                thinkingRaw = thinkingRaw?.let(localEncryption::decryptString),
-                artifactsJson = artifactsJson?.let(localEncryption::decryptString),
-                generatedMediaUrisJson = generatedMediaUrisJson?.let(localEncryption::decryptString),
-                generatedMediaAssetIdsJson = generatedMediaAssetIdsJson?.let(localEncryption::decryptString),
-                generatedMediaPromptsJson = generatedMediaPromptsJson?.let(localEncryption::decryptString),
-            )
-
-        private fun MessageWithFiles.decryptSensitiveFields() =
-            copy(
-                message = message.decryptSensitiveFields(),
-                files = files.map { it.decryptSensitiveFields() },
-            )
-
-        private fun MessageFileEntity.decryptSensitiveFields() =
-            copy(
-                name = localEncryption.decryptString(name),
-                content = localEncryption.decryptString(content),
-                remoteUrl = remoteUrl?.let(localEncryption::decryptString),
-                stagingRemoteUrl = stagingRemoteUrl?.let(localEncryption::decryptString),
-            )
-
-        private fun WebSearchSourceEntity.encryptSensitiveFields() =
-            copy(
-                title = localEncryption.encryptString(title),
-                url = localEncryption.encryptString(url),
-                content = localEncryption.encryptString(content),
-            )
-
-        private fun WebSearchSourceEntity.decryptSensitiveFields() =
-            copy(
-                title = localEncryption.decryptString(title),
-                url = localEncryption.decryptString(url),
-                content = localEncryption.decryptString(content),
-            )
-
-        private fun DocumentEntity.decryptSensitiveFields() =
-            copy(
-                json = localEncryption.decryptString(json),
-                title = localEncryption.decryptString(title),
-                author = author?.let(localEncryption::decryptString),
-            )
-
-        private fun MessageTranscriptSegmentEntity.encryptSensitiveFields() =
-            copy(text = localEncryption.encryptString(text))
-
-        private fun MessageTranscriptSegmentEntity.decryptSensitiveFields() =
-            copy(text = localEncryption.decryptString(text))
+        private data class ChatStreamFrame(
+            val messages: List<MessageWithFiles>,
+            val webSearchSources: List<WebSearchSourceEntity>,
+            val documents: List<DocumentEntity>,
+            val segmentRows: List<MessageTranscriptSegmentEntity>,
+        )
     }

@@ -6,6 +6,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -49,9 +50,20 @@ class MessageFileCloudSyncWorker
                     val content =
                         file.content
                             .takeUnless { it.isBlank() }
-                            ?.let(localEncryption::decryptString)
+                            ?.let {
+                                localEncryption.decryptString(
+                                    it,
+                                    AadContext("MessageFileEntity", "content", file.id).toBytes(),
+                                )
+                            }
                             .orEmpty()
-                    val stagingRemoteUrl = file.stagingRemoteUrl?.let(localEncryption::decryptString)
+                    val stagingRemoteUrl =
+                        file.stagingRemoteUrl?.let {
+                            localEncryption.decryptString(
+                                it,
+                                AadContext("MessageFileEntity", "stagingRemoteUrl", file.id).toBytes(),
+                            )
+                        }
                     if (content.isBlank() && file.remoteUrl == null && stagingRemoteUrl == null) {
                         loggingPort.error(TAG, "Empty content for file ${file.id}")
                         messageFileDao.updateStatus(file.id, "FAILED")
@@ -94,11 +106,23 @@ class MessageFileCloudSyncWorker
                         storageRef.putBytes(encryptedBytes).await()
 
                         downloadUrl = storageRef.downloadUrl.await().toString()
-                        messageFileDao.updateStagingUrl(file.id, localEncryption.encryptString(downloadUrl))
+                        messageFileDao.updateStagingUrl(
+                            file.id,
+                            localEncryption.encryptString(
+                                downloadUrl,
+                                AadContext("MessageFileEntity", "stagingRemoteUrl", file.id).toBytes(),
+                            ),
+                        )
                     }
 
                     if (downloadUrl != null) {
-                        messageFileDao.markUploaded(file.id, localEncryption.encryptString(downloadUrl))
+                        messageFileDao.markUploaded(
+                            file.id,
+                            localEncryption.encryptString(
+                                downloadUrl,
+                                AadContext("MessageFileEntity", "remoteUrl", file.id).toBytes(),
+                            ),
+                        )
                         loggingPort.debug(TAG, "Uploaded file ${file.id}")
                     } else if (content.isBlank() && file.remoteUrl == null) {
                         // This should have been caught by the first check, but just in case

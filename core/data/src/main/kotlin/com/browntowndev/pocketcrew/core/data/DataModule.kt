@@ -74,6 +74,8 @@ import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.pocketcrew.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.LocalVaultMetadataStore
+import com.browntowndev.pocketcrew.core.data.security.SensitiveFieldCatalog
+import com.browntowndev.pocketcrew.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -326,6 +328,10 @@ object DataModule {
     @Provides
     @Singleton
     fun provideEmbeddingEngine(engine: MiniLMEmbeddingEngine): EmbeddingEnginePort = engine
+
+    @Provides
+    @Singleton
+    fun provideSensitiveFieldCatalog(): SensitiveFieldCatalog = StaticSensitiveFieldCatalog()
 }
 
 @Module

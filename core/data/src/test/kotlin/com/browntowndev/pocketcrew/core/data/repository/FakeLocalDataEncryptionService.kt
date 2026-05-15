@@ -10,24 +10,18 @@ internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
     var lastEncryptAad: ByteArray? = null
     var lastDecryptAad: ByteArray? = null
 
-    override fun encryptString(plaintext: String): String =
-        "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$plaintext"
-
-    override fun decryptString(stored: String): String =
-        stored.removePrefix(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
-
-    override fun isEncrypted(stored: String): Boolean =
-        stored.startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
-
     override fun encryptString(plaintext: String, aad: ByteArray): String {
         lastEncryptAad = aad
-        return encryptString(plaintext)
+        return "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$plaintext"
     }
 
     override fun decryptString(stored: String, aad: ByteArray): String {
         lastDecryptAad = aad
-        return decryptString(stored)
+        return stored.removePrefix(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
     }
+
+    override fun isEncrypted(stored: String): Boolean =
+        stored.startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
 }
 
 internal fun testSensitiveSelfHealer(

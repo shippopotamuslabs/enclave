@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -20,6 +21,7 @@ class LocalModelRepositorySyncTest {
     private val configsDao = mockk<LocalModelConfigurationsDao>(relaxed = true)
     private val defaultModelsDao = mockk<DefaultModelsDao>(relaxed = true)
     private val transactionProvider = FakeTransactionProvider()
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private lateinit var repository: LocalModelRepositoryImpl
 
@@ -32,7 +34,8 @@ class LocalModelRepositorySyncTest {
                 configsDao = configsDao,
                 defaultModelsDao = defaultModelsDao,
                 transactionProvider = transactionProvider,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 

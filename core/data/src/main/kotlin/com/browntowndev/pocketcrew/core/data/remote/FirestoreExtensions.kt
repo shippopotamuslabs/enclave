@@ -4,13 +4,18 @@ import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.Blob
 import java.security.MessageDigest
 
-internal fun String.encrypt(cryptoManager: CryptoManagerPort): Blob = 
-    Blob.fromBytes(cryptoManager.encrypt(this).getOrThrow())
+internal fun String.encrypt(
+    cryptoManager: CryptoManagerPort,
+    aad: ByteArray,
+): Blob = Blob.fromBytes(cryptoManager.encrypt(this, aad).getOrThrow())
 
-internal fun Blob.decrypt(cryptoManager: CryptoManagerPort): String? {
+internal fun Blob.decrypt(
+    cryptoManager: CryptoManagerPort,
+    aad: ByteArray,
+): String? {
     val bytes = this.toBytes()
     return if (bytes != null && bytes.isNotEmpty()) {
-        cryptoManager.decrypt(bytes).getOrNull()
+        cryptoManager.decrypt(bytes, aad).getOrNull()
     } else {
         null
     }

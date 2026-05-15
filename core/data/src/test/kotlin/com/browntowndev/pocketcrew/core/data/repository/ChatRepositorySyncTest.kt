@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -26,6 +27,7 @@ class ChatRepositorySyncTest {
     private val webSearchSourceDao = mockk<WebSearchSourceDao>(relaxed = true)
     private val documentDao = mockk<DocumentDao>(relaxed = true)
     private val transactionProvider = mockk<com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider>(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private lateinit var repository: ChatRepositoryImpl
 
@@ -45,7 +47,8 @@ class ChatRepositorySyncTest {
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 

@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingEntity
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
@@ -60,6 +61,7 @@ class ArtifactToolExecutor
         private val documentValidation: DocumentValidationPort,
         private val localEncryption: LocalDataEncryptionService,
         @ApplicationScope private val externalScope: CoroutineScope,
+        private val newArtifactDocumentId: () -> String = { UUID.randomUUID().toString() },
     ) : ToolExecutorPort {
         private val json =
             Json {
@@ -104,7 +106,7 @@ class ArtifactToolExecutor
                     resultJson = """{"status":"error","message":"Missing assistantMessageId for start_artifact"}""",
                 )
 
-            val artifactId = UUID.randomUUID().toString()
+            val artifactId = newArtifactDocumentId()
 
             // Initial empty document structure
             val initialDocJson =
@@ -133,10 +135,22 @@ class ArtifactToolExecutor
                 DocumentEntity(
                     id = artifactId,
                     messageId = messageId,
-                    title = localEncryption.encryptString(params.title),
-                    author = localEncryption.encryptNullable(params.author),
+                    title =
+                        localEncryption.encryptString(
+                            params.title,
+                            AadContext("DocumentEntity", "title", artifactId).toBytes(),
+                        ),
+                    author =
+                        localEncryption.encryptNullable(
+                            params.author,
+                            AadContext("DocumentEntity", "author", artifactId).toBytes(),
+                        ),
                     targetFormat = null,
-                    json = localEncryption.encryptString(rawJson),
+                    json =
+                        localEncryption.encryptString(
+                            rawJson,
+                            AadContext("DocumentEntity", "json", artifactId).toBytes(),
+                        ),
                     pendingSync = 0,
                 )
 
@@ -172,7 +186,10 @@ class ArtifactToolExecutor
                         resultJson = """{"status":"error","message":"Artifact not found: ${params.artifactId}"}""",
                     )
 
-            val currentDoc: JsonObject = json.parseToJsonElement(localEncryption.decryptString(entity.json)) as JsonObject
+            val docId = params.artifactId
+            val jsonAad = AadContext("DocumentEntity", "json", docId).toBytes()
+            val currentDoc: JsonObject =
+                json.parseToJsonElement(localEncryption.decryptString(entity.json, jsonAad)) as JsonObject
             val previousBlocks = (currentDoc["blocks"] as JsonArray)
             val currentBlocks = previousBlocks.toMutableList()
             val startIndex = currentBlocks.size
@@ -201,7 +218,7 @@ class ArtifactToolExecutor
             val updatedEntity =
                 entity.copy(
                     messageId = assistantMessageId ?: entity.messageId,
-                    json = localEncryption.encryptString(mergedJson),
+                    json = localEncryption.encryptString(mergedJson, jsonAad),
                     updatedAt = System.currentTimeMillis(),
                     pendingSync = if (params.isComplete) 1 else 0,
                 )
@@ -261,7 +278,15 @@ class ArtifactToolExecutor
                         put("message", JsonPrimitive(message))
                         if (params.isComplete) {
                             put("fullDocument", updatedDoc)
-                            put("title", JsonPrimitive(localEncryption.decryptString(entity.title)))
+                            put(
+                                "title",
+                                JsonPrimitive(
+                                    localEncryption.decryptString(
+                                        entity.title,
+                                        AadContext("DocumentEntity", "title", docId).toBytes(),
+                                    ),
+                                ),
+                            )
                         }
                     }.toString(),
             )

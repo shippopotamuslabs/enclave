@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.ColumnInfo
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
@@ -24,6 +25,8 @@ data class DefaultModelAssignmentView(
     val localAssetName: String?,
     @ColumnInfo(name = "apiAssetName")
     val apiAssetName: String?,
+    @ColumnInfo(name = "apiCredentialsId")
+    val apiCredentialsId: ApiCredentialsId?,
     @ColumnInfo(name = "apiProviderName")
     val apiProviderName: ApiProvider?,
     @ColumnInfo(name = "ttsProviderId")

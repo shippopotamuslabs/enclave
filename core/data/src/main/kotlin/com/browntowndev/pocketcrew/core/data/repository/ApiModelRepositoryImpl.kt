@@ -7,7 +7,10 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -21,7 +24,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transform
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,23 +38,40 @@ class ApiModelRepositoryImpl
         private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
         private val apiKeyManager: ApiKeyManager,
         private val cryptoManager: CryptoManagerPort,
-        private val localEncryption: LocalDataEncryptionService,
+        private val healer: SensitivePersistenceSelfHealer,
+        private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ApiModelRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
         override fun observeAllCredentials(): Flow<List<ApiCredentials>> =
-            apiCredentialsDao.observeAll().map { entities ->
-                entities.map { it.toDomain() }
+            apiCredentialsDao.observeAll().transform { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { it.toDomain(repairs) }
+                readRepairApplier.apply(repairs)
+                emit(out)
             }
 
         override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> =
-            apiModelConfigurationsDao.observeAll().map { entities ->
-                entities.map { it.toDomain() }
+            apiModelConfigurationsDao.observeAll().transform { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { it.toDomain(repairs) }
+                readRepairApplier.apply(repairs)
+                emit(out)
             }
 
-        override suspend fun getAllCredentials(): List<ApiCredentials> = apiCredentialsDao.getAll().map { it.toDomain() }
+        override suspend fun getAllCredentials(): List<ApiCredentials> {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = apiCredentialsDao.getAll().map { it.toDomain(repairs) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
-        override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? = apiCredentialsDao.getById(id)?.toDomain()
+        override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = apiCredentialsDao.getById(id)?.toDomain(repairs)
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         override suspend fun saveCredentials(
             credentials: ApiCredentials,
@@ -97,37 +117,43 @@ class ApiModelRepositoryImpl
             val persistedId =
                 if (credentials.id.value.isEmpty()) {
                     val entity =
-                        ApiCredentialsEntity(
-                            id = ApiCredentialsId(UUID.randomUUID().toString()),
-                            displayName = localEncryption.encryptString(credentials.displayName),
-                            provider = credentials.provider,
-                            modelId = credentials.modelId,
-                            baseUrl = localEncryption.encryptString(storedBaseUrl),
-                            isMultimodal = credentials.isMultimodal,
-                            credentialAlias = credentials.credentialAlias,
-                            encryptedApiKey = encryptedKeyPayload,
-                            apiKeySignature = apiKeySignature,
-                            createdAt = now,
-                            updatedAt = now,
-                            pendingSync = 1,
+                        SensitiveEntityFieldEncryptors.encrypt(
+                            ApiCredentialsEntity(
+                                id = ApiCredentialsId(UUID.randomUUID().toString()),
+                                displayName = credentials.displayName,
+                                provider = credentials.provider,
+                                modelId = credentials.modelId,
+                                baseUrl = storedBaseUrl,
+                                isMultimodal = credentials.isMultimodal,
+                                credentialAlias = credentials.credentialAlias,
+                                encryptedApiKey = encryptedKeyPayload,
+                                apiKeySignature = apiKeySignature,
+                                createdAt = now,
+                                updatedAt = now,
+                                pendingSync = 1,
+                            ),
+                            healer,
                         )
                     apiCredentialsDao.insert(entity)
                     entity.id
                 } else {
                     val entity =
-                        ApiCredentialsEntity(
-                            id = credentials.id,
-                            displayName = localEncryption.encryptString(credentials.displayName),
-                            provider = credentials.provider,
-                            modelId = credentials.modelId,
-                            baseUrl = localEncryption.encryptString(storedBaseUrl),
-                            isMultimodal = credentials.isMultimodal,
-                            credentialAlias = credentials.credentialAlias,
-                            encryptedApiKey = encryptedKeyPayload,
-                            apiKeySignature = apiKeySignature,
-                            createdAt = existingEntity?.createdAt ?: now,
-                            updatedAt = now,
-                            pendingSync = 1,
+                        SensitiveEntityFieldEncryptors.encrypt(
+                            ApiCredentialsEntity(
+                                id = credentials.id,
+                                displayName = credentials.displayName,
+                                provider = credentials.provider,
+                                modelId = credentials.modelId,
+                                baseUrl = storedBaseUrl,
+                                isMultimodal = credentials.isMultimodal,
+                                credentialAlias = credentials.credentialAlias,
+                                encryptedApiKey = encryptedKeyPayload,
+                                apiKeySignature = apiKeySignature,
+                                createdAt = existingEntity?.createdAt ?: now,
+                                updatedAt = now,
+                                pendingSync = 1,
+                            ),
+                            healer,
                         )
                     apiCredentialsDao.update(entity)
                     credentials.id
@@ -171,7 +197,7 @@ class ApiModelRepositoryImpl
                     baseUrl = normalizedBaseUrl,
                     apiKey = resolvedApiKey,
                 )
-            return apiCredentialsDao.getByApiKeySignature(signature)?.toDomain()
+            return apiCredentialsDao.getByApiKeySignature(signature)?.toDomain(null)
         }
 
         override suspend fun deleteCredentials(id: ApiCredentialsId) {
@@ -183,11 +209,19 @@ class ApiModelRepositoryImpl
             }
         }
 
-        override suspend fun getConfigurationsForCredentials(credentialsId: ApiCredentialsId): List<ApiModelConfiguration> =
-            apiModelConfigurationsDao.getAllForCredentials(credentialsId).map { it.toDomain() }
+        override suspend fun getConfigurationsForCredentials(credentialsId: ApiCredentialsId): List<ApiModelConfiguration> {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = apiModelConfigurationsDao.getAllForCredentials(credentialsId).map { it.toDomain(repairs) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
-        override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
-            apiModelConfigurationsDao.getById(id)?.toDomain()
+        override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = apiModelConfigurationsDao.getById(id)?.toDomain(repairs)
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
         override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
@@ -202,34 +236,37 @@ class ApiModelRepositoryImpl
                     )
                 }
             val entity =
-                ApiModelConfigurationEntity(
-                    id = entityId,
-                    apiCredentialsId = config.apiCredentialsId,
-                    displayName = localEncryption.encryptString(config.displayName),
-                    maxTokens = config.maxTokens,
-                    contextWindow = config.contextWindow,
-                    temperature = config.temperature,
-                    topP = config.topP,
-                    topK = config.topK,
-                    minP = config.minP,
-                    frequencyPenalty = config.frequencyPenalty,
-                    presencePenalty = config.presencePenalty,
-                    systemPrompt = localEncryption.encryptString(config.systemPrompt),
-                    maxTokensDisabled = config.maxTokensDisabled,
-                    temperatureDisabled = config.temperatureDisabled,
-                    topPDisabled = config.topPDisabled,
-                    topKDisabled = config.topKDisabled,
-                    minPDisabled = config.minPDisabled,
-                    frequencyPenaltyDisabled = config.frequencyPenaltyDisabled,
-                    presencePenaltyDisabled = config.presencePenaltyDisabled,
-                    reasoningEffort = config.reasoningEffort?.wireValue,
-                    customHeaders = localEncryption.encryptString(ApiModelMapper.serializeCustomHeaders(config.customHeaders)),
-                    openRouterProviderSort = config.openRouterRouting.providerSort.wireValue,
-                    openRouterAllowFallbacks = config.openRouterRouting.allowFallbacks,
-                    openRouterRequireParameters = config.openRouterRouting.requireParameters,
-                    openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
-                    openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
-                    pendingSync = 1,
+                SensitiveEntityFieldEncryptors.encrypt(
+                    ApiModelConfigurationEntity(
+                        id = entityId,
+                        apiCredentialsId = config.apiCredentialsId,
+                        displayName = config.displayName,
+                        maxTokens = config.maxTokens,
+                        contextWindow = config.contextWindow,
+                        temperature = config.temperature,
+                        topP = config.topP,
+                        topK = config.topK,
+                        minP = config.minP,
+                        frequencyPenalty = config.frequencyPenalty,
+                        presencePenalty = config.presencePenalty,
+                        systemPrompt = config.systemPrompt,
+                        maxTokensDisabled = config.maxTokensDisabled,
+                        temperatureDisabled = config.temperatureDisabled,
+                        topPDisabled = config.topPDisabled,
+                        topKDisabled = config.topKDisabled,
+                        minPDisabled = config.minPDisabled,
+                        frequencyPenaltyDisabled = config.frequencyPenaltyDisabled,
+                        presencePenaltyDisabled = config.presencePenaltyDisabled,
+                        reasoningEffort = config.reasoningEffort?.wireValue,
+                        customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders),
+                        openRouterProviderSort = config.openRouterRouting.providerSort.wireValue,
+                        openRouterAllowFallbacks = config.openRouterRouting.allowFallbacks,
+                        openRouterRequireParameters = config.openRouterRouting.requireParameters,
+                        openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
+                        openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
+                        pendingSync = 1,
+                    ),
+                    healer,
                 )
             apiModelConfigurationsDao.upsert(entity)
             triggerSync()
@@ -246,50 +283,54 @@ class ApiModelRepositoryImpl
             triggerSync()
         }
 
-        private fun ApiCredentialsEntity.toDomain() =
-            ApiCredentials(
-                id = id,
-                displayName = localEncryption.decryptString(displayName),
-                provider = provider,
-                modelId = modelId,
-                baseUrl = baseUrl?.let(localEncryption::decryptString),
-                isMultimodal = isMultimodal,
-                credentialAlias = credentialAlias,
-                encryptedApiKey = encryptedApiKey,
+        private fun ApiCredentialsEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): ApiCredentials {
+            val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)
+            return ApiCredentials(
+                id = e.id,
+                displayName = e.displayName,
+                provider = e.provider,
+                modelId = e.modelId,
+                baseUrl = e.baseUrl,
+                isMultimodal = e.isMultimodal,
+                credentialAlias = e.credentialAlias,
+                encryptedApiKey = e.encryptedApiKey,
             )
+        }
 
-        private fun ApiModelConfigurationEntity.toDomain() =
-            ApiModelConfiguration(
-                id = id,
-                apiCredentialsId = apiCredentialsId,
-                displayName = localEncryption.decryptString(displayName),
-                maxTokens = maxTokens,
-                contextWindow = contextWindow,
-                temperature = temperature,
-                topP = topP,
-                topK = topK,
-                minP = minP,
-                frequencyPenalty = frequencyPenalty,
-                presencePenalty = presencePenalty,
-                systemPrompt = localEncryption.decryptString(systemPrompt),
-                reasoningEffort = ApiReasoningEffort.fromWireValue(reasoningEffort),
-                maxTokensDisabled = maxTokensDisabled,
-                temperatureDisabled = temperatureDisabled,
-                topPDisabled = topPDisabled,
-                topKDisabled = topKDisabled,
-                minPDisabled = minPDisabled,
-                frequencyPenaltyDisabled = frequencyPenaltyDisabled,
-                presencePenaltyDisabled = presencePenaltyDisabled,
-                customHeaders = ApiModelMapper.deserializeCustomHeaders(localEncryption.decryptString(customHeaders)),
+        private fun ApiModelConfigurationEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): ApiModelConfiguration {
+            val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)
+            return ApiModelConfiguration(
+                id = e.id,
+                apiCredentialsId = e.apiCredentialsId,
+                displayName = e.displayName,
+                maxTokens = e.maxTokens,
+                contextWindow = e.contextWindow,
+                temperature = e.temperature,
+                topP = e.topP,
+                topK = e.topK,
+                minP = e.minP,
+                frequencyPenalty = e.frequencyPenalty,
+                presencePenalty = e.presencePenalty,
+                systemPrompt = e.systemPrompt,
+                reasoningEffort = ApiReasoningEffort.fromWireValue(e.reasoningEffort),
+                maxTokensDisabled = e.maxTokensDisabled,
+                temperatureDisabled = e.temperatureDisabled,
+                topPDisabled = e.topPDisabled,
+                topKDisabled = e.topKDisabled,
+                minPDisabled = e.minPDisabled,
+                frequencyPenaltyDisabled = e.frequencyPenaltyDisabled,
+                presencePenaltyDisabled = e.presencePenaltyDisabled,
+                customHeaders = ApiModelMapper.deserializeCustomHeaders(e.customHeaders),
                 openRouterRouting =
                     OpenRouterRoutingConfiguration(
-                        providerSort = OpenRouterProviderSort.fromWireValue(openRouterProviderSort),
-                        allowFallbacks = openRouterAllowFallbacks ?: true,
-                        requireParameters = openRouterRequireParameters ?: false,
-                        dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(openRouterDataCollectionPolicy),
-                        zeroDataRetention = openRouterZeroDataRetention ?: false,
+                        providerSort = OpenRouterProviderSort.fromWireValue(e.openRouterProviderSort),
+                        allowFallbacks = e.openRouterAllowFallbacks ?: true,
+                        requireParameters = e.openRouterRequireParameters ?: false,
+                        dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(e.openRouterDataCollectionPolicy),
+                        zeroDataRetention = e.openRouterZeroDataRetention ?: false,
                     ),
             )
+        }
 
         private fun resolveApiKey(
             apiKey: String,

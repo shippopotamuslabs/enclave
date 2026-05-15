@@ -5,7 +5,10 @@ import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
@@ -15,7 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,7 +31,8 @@ class StudioRepositoryImpl
         private val studioAlbumDao: StudioAlbumDao,
         private val transactionProvider: TransactionProvider,
         private val syncTrigger: CloudSyncTrigger,
-        private val localEncryption: LocalDataEncryptionService,
+        private val healer: SensitivePersistenceSelfHealer,
+        private val readRepairApplier: SensitiveRoomReadRepairApplier,
         @param:ApplicationContext private val context: Context,
     ) : StudioRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
@@ -37,13 +41,19 @@ class StudioRepositoryImpl
         private val generationError = MutableStateFlow<String?>(null)
 
         override fun observeAllMedia(): Flow<List<StudioMediaAsset>> =
-            studioMediaDao.getAllMedia().map { entities ->
-                entities.map { it.toDomain() }
+            studioMediaDao.getAllMedia().mapLatest { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { it.toDomain(repairs) }
+                readRepairApplier.apply(repairs)
+                out
             }
 
         override fun observeAllAlbums(): Flow<List<StudioAlbumAsset>> =
-            studioAlbumDao.observeAllAlbums().map { entities ->
-                entities.map { it.toDomain() }
+            studioAlbumDao.observeAllAlbums().mapLatest { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { it.toDomain(repairs) }
+                readRepairApplier.apply(repairs)
+                out
             }
 
         override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = ephemeralMedia
@@ -79,7 +89,6 @@ class StudioRepositoryImpl
             createdAt: Long?,
         ): StudioMediaAsset {
             var finalUri = localUri
-            // If the URI is in the cache directory, move it to files directory
             if (localUri.startsWith("file://")) {
                 val file = File(localUri.replace("file://", ""))
                 if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
@@ -90,21 +99,18 @@ class StudioRepositoryImpl
                 }
             }
 
-            val newId =
-                java.util.UUID
-                    .randomUUID()
-                    .toString()
-            studioMediaDao.insertMedia(
+            val newId = java.util.UUID.randomUUID().toString()
+            val plain =
                 StudioMediaEntity(
                     id = newId,
-                    prompt = localEncryption.encryptString(prompt),
+                    prompt = prompt,
                     mediaUri = finalUri,
                     mediaType = mediaType,
                     createdAt = createdAt ?: System.currentTimeMillis(),
                     albumId = albumId.toPersistentAlbumId(),
                     pendingSync = 1,
-                ),
-            )
+                )
+            studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
             triggerSync()
             return getMediaById(newId)!!
         }
@@ -126,10 +132,10 @@ class StudioRepositoryImpl
 
         override suspend fun updateMedia(asset: StudioMediaAsset) {
             val existing = studioMediaDao.getMediaById(asset.id)
-            studioMediaDao.insertMedia(
+            val plain =
                 StudioMediaEntity(
                     id = asset.id,
-                    prompt = localEncryption.encryptString(asset.prompt),
+                    prompt = asset.prompt,
                     mediaUri = asset.localUri,
                     mediaType = asset.mediaType,
                     createdAt = asset.createdAt,
@@ -137,9 +143,10 @@ class StudioRepositoryImpl
                     remoteUrl = existing?.remoteUrl,
                     remoteThumbnailUrl = existing?.remoteThumbnailUrl,
                     syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
+                    stagingRemoteUrl = existing?.stagingRemoteUrl,
                     pendingSync = 1,
-                ),
-            )
+                )
+            studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
             triggerSync()
         }
 
@@ -160,7 +167,6 @@ class StudioRepositoryImpl
                     createdAt = ephemeral.createdAt,
                 )
 
-            // Remove from ephemeral list
             removeEphemeralMedia(id)
 
             return savedAsset
@@ -178,8 +184,7 @@ class StudioRepositoryImpl
             val fileName = "ephemeral_${java.util.UUID.randomUUID()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
             val file = File(ephemeralDir, fileName)
             file.writeBytes(bytes)
-            val localUri = "file://${file.absolutePath}"
-            return localUri
+            return "file://${file.absolutePath}"
         }
 
         override suspend fun clearEphemeralCache() {
@@ -196,14 +201,17 @@ class StudioRepositoryImpl
             triggerSync()
         }
 
-        override suspend fun getMediaById(id: String): StudioMediaAsset? = studioMediaDao.getMediaById(id)?.toDomain()
+        override suspend fun getMediaById(id: String): StudioMediaAsset? {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = studioMediaDao.getMediaById(id)?.toDomain(repairs)
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         override suspend fun createAlbum(name: String): String {
-            val id =
-                java.util.UUID
-                    .randomUUID()
-                    .toString()
-            studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = localEncryption.encryptString(name), pendingSync = 1))
+            val id = java.util.UUID.randomUUID().toString()
+            val plain = StudioAlbumEntity(id = id, name = name.trim(), pendingSync = 1)
+            studioAlbumDao.insertAlbum(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
             triggerSync()
             return id
         }
@@ -214,7 +222,10 @@ class StudioRepositoryImpl
         ) {
             val trimmedName = name.trim()
             if (trimmedName.isEmpty()) return
-            studioAlbumDao.updateAlbumName(id, localEncryption.encryptString(trimmedName))
+            val existing = studioAlbumDao.getAlbumById(id) ?: return
+            studioAlbumDao.insertAlbum(
+                SensitiveEntityFieldEncryptors.encrypt(existing.copy(name = trimmedName, pendingSync = 1), healer),
+            )
             triggerSync()
         }
 
@@ -251,22 +262,26 @@ class StudioRepositoryImpl
             }
         }
 
-        private fun StudioMediaEntity.toDomain() =
-            StudioMediaAsset(
-                id = id,
-                localUri = localEncryption.decryptString(mediaUri),
-                remoteUrl = remoteUrl?.let(localEncryption::decryptString),
-                prompt = localEncryption.decryptString(prompt),
-                mediaType = mediaType,
-                createdAt = createdAt,
-                albumId = albumId,
+        private fun StudioMediaEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): StudioMediaAsset {
+            val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)
+            return StudioMediaAsset(
+                id = e.id,
+                localUri = e.mediaUri,
+                remoteUrl = e.remoteUrl,
+                prompt = e.prompt,
+                mediaType = e.mediaType,
+                createdAt = e.createdAt,
+                albumId = e.albumId,
             )
+        }
 
-        private fun StudioAlbumEntity.toDomain() =
-            StudioAlbumAsset(
-                id = id,
-                name = localEncryption.decryptString(name),
+        private fun StudioAlbumEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): StudioAlbumAsset {
+            val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)
+            return StudioAlbumAsset(
+                id = e.id,
+                name = e.name,
             )
+        }
 
         private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this
     }

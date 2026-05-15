@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -25,6 +26,7 @@ class ApiModelRepositorySyncTest {
     private val apiModelConfigurationsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     private lateinit var repository: ApiModelRepositoryImpl
 
@@ -37,7 +39,8 @@ class ApiModelRepositorySyncTest {
                 apiModelConfigurationsDao = apiModelConfigurationsDao,
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
-                localEncryption = FakeLocalDataEncryptionService(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 

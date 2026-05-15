@@ -3,13 +3,16 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transform
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,18 +24,32 @@ class TtsProviderRepositoryImpl
         private val syncTrigger: CloudSyncTrigger,
         private val ttsProviderDao: TtsProviderDao,
         private val apiKeyManager: ApiKeyManager,
-        private val localEncryption: LocalDataEncryptionService,
+        private val healer: SensitivePersistenceSelfHealer,
+        private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : TtsProviderRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
         override fun getTtsProviders(): Flow<List<TtsProviderAsset>> =
-            ttsProviderDao.getTtsProviders().map { entities ->
-                entities.map { it.toDomain() }
+            ttsProviderDao.getTtsProviders().transform { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { it.toDomain(repairs) }
+                readRepairApplier.apply(repairs)
+                emit(out)
             }
 
-        override suspend fun getTtsProvidersSync(): List<TtsProviderAsset> = ttsProviderDao.getTtsProvidersSync().map { it.toDomain() }
+        override suspend fun getTtsProvidersSync(): List<TtsProviderAsset> {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = ttsProviderDao.getTtsProvidersSync().map { it.toDomain(repairs) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
-        override suspend fun getTtsProvider(id: TtsProviderId): TtsProviderAsset? = ttsProviderDao.getTtsProvider(id.value)?.toDomain()
+        override suspend fun getTtsProvider(id: TtsProviderId): TtsProviderAsset? {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = ttsProviderDao.getTtsProvider(id.value)?.toDomain(repairs)
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         override suspend fun saveTtsProvider(
             asset: TtsProviderAsset,
@@ -46,15 +63,18 @@ class TtsProviderRepositoryImpl
                 }
 
             val entity =
-                TtsProviderEntity(
-                    id = id.value,
-                    displayName = localEncryption.encryptString(asset.displayName),
-                    provider = asset.provider,
-                    voiceName = localEncryption.encryptString(asset.voiceName),
-                    modelName = asset.modelName?.let(localEncryption::encryptString),
-                    baseUrl = asset.baseUrl?.let(localEncryption::encryptString),
-                    credentialAlias = asset.credentialAlias,
-                    pendingSync = 1,
+                SensitiveEntityFieldEncryptors.encrypt(
+                    TtsProviderEntity(
+                        id = id.value,
+                        displayName = asset.displayName,
+                        provider = asset.provider,
+                        voiceName = asset.voiceName,
+                        modelName = asset.modelName,
+                        baseUrl = asset.baseUrl,
+                        credentialAlias = asset.credentialAlias,
+                        pendingSync = 1,
+                    ),
+                    healer,
                 )
 
             ttsProviderDao.upsertTtsProvider(entity)
@@ -76,14 +96,16 @@ class TtsProviderRepositoryImpl
             }
         }
 
-        private fun TtsProviderEntity.toDomain() =
-            TtsProviderAsset(
-                id = TtsProviderId(id),
-                displayName = localEncryption.decryptString(displayName),
-                provider = provider,
-                voiceName = localEncryption.decryptString(voiceName),
-                modelName = modelName?.let(localEncryption::decryptString),
-                baseUrl = baseUrl?.let(localEncryption::decryptString),
-                credentialAlias = credentialAlias,
+        private fun TtsProviderEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): TtsProviderAsset {
+            val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)
+            return TtsProviderAsset(
+                id = TtsProviderId(e.id),
+                displayName = e.displayName,
+                provider = e.provider,
+                voiceName = e.voiceName,
+                modelName = e.modelName,
+                baseUrl = e.baseUrl,
+                credentialAlias = e.credentialAlias,
             )
+        }
     }
