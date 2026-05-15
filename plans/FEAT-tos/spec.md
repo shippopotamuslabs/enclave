@@ -222,10 +222,14 @@ You agree not to use the App in any manner that:
 
 **10. Privacy**
 
-Pocket Crew is designed with local-first privacy. Most data stays on your device. Optional
-Google account sign-in enables encrypted cloud sync of your settings. The developer does not
-sell or share your personal data with third parties for advertising. Your API keys are stored
-encrypted on your device and in your personal cloud sync vault; the developer cannot read them.
+Pocket Crew is built on a zero-knowledge architecture. All user data — including chat messages,
+conversation history, memories, documents, API keys, model configurations, and generated media
+metadata — is encrypted on your device using a vault key derived solely from your personal vault
+password before any data leaves the device. The developer has no access to your vault password
+and therefore cannot decrypt, read, or access any of this data. Even in the event of a
+server-side breach, your content remains protected because only ciphertext is ever stored
+remotely. The developer does not sell or share your personal data with third parties for
+advertising. Cloud sync is optional and requires explicit sign-in.
 
 ---
 
