@@ -143,7 +143,7 @@ fun SearchSkillBottomSheet(
                         searchState = searchState,
                         onSearchEnabledChange = onSearchEnabledChange,
                         onSearchProviderChange = { targetProvider ->
-                            if (shouldShowProviderSwitchAlert(searchState, targetProvider)) {
+                            if (shouldShowProviderSwitchAlert(searchState)) {
                                 showSwitchConfirm = targetProvider
                             } else {
                                 onSearchProviderChange(targetProvider)
@@ -221,10 +221,7 @@ fun SearchSkillBottomSheet(
     }
 }
 
-internal fun shouldShowProviderSwitchAlert(
-    state: SearchSkillEditorUiState,
-    targetProvider: SearchProvider,
-): Boolean {
+internal fun shouldShowProviderSwitchAlert(state: SearchSkillEditorUiState): Boolean {
     val currentHasKey = when (state.selectedProvider) {
         SearchProvider.TAVILY -> state.tavilyKeyPresent
         SearchProvider.EXA -> state.exaKeyPresent

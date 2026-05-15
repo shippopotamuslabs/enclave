@@ -60,7 +60,11 @@ class SensitivePersistenceSelfHealer
             if (value == null) return null
             if (!localEncryption.isEncrypted(value)) {
                 val repaired = repairString(ref = ref, entityId = entityId, value = value, sourceSide = sourceSide)
-                if (repaired.action == SensitiveRepairAction.REPAIRED && repaired.value != null && ref.boundary == PersistenceBoundary.ROOM) {
+                val repairedForRoom =
+                    repaired.action == SensitiveRepairAction.REPAIRED &&
+                        repaired.value != null &&
+                        ref.boundary == PersistenceBoundary.ROOM
+                if (repairedForRoom) {
                     readRepairs?.add(SensitiveRoomReadRepair(ref = ref, entityId = entityId, encryptedValue = repaired.value))
                     return try {
                         val aad = AadContext(ref.owner, ref.field, entityId).toBytes()

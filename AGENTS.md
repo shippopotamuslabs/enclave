@@ -91,8 +91,9 @@ Before declaring `TASK_STATUS: COMPLETE`, run the following validations to ensur
 - **Inference Layer:** `./gradlew :feature:inference:assemble`
 - **Tests:** `./gradlew test` (Runs the entire unit test suite across all modules)
 - **Style:** `./gradlew ktlintCheck`
+- **Static analysis:** `./gradlew detekt` (required — `maxIssues: 0`; must pass before completion)
 
-**Note on Detekt:** Detekt is configured to run automatically during the build process and is set to fail the build (`ignoreFailures = false`) if any issues are detected. You do not need to run it manually, but you must ensure the build passes.
+**Note on Detekt:** Detekt runs per module. `./gradlew assembleDebug` (root) and `./gradlew detekt` analyze all modules. `:app:assembleDebug` alone only ran `:app:detekt` historically; the app module's `assemble*` tasks now also depend on every subproject `detekt` task. Still run `./gradlew detekt` explicitly after Kotlin changes — do not rely on compile-only checks.
 
 Only run the checks relevant to what was changed, but **always** run the full test suite for any logic changes.
 
