@@ -87,7 +87,7 @@ fun SettingsScreen(
     onSaveMemory: () -> Unit,
     onCancelMemoryEdit: () -> Unit,
     onDeleteMemory: (String) -> Unit,
-    onOpenToS: () -> Unit,
+    onShowTosSheet: (Boolean) -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
     onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
@@ -290,7 +290,7 @@ fun SettingsScreen(
                 SettingsNavigationItem(
                     title = "Terms of Service",
                     icon = Icons.Default.Info,
-                    onClick = onOpenToS
+                    onClick = { onShowTosSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
@@ -409,6 +409,10 @@ fun SettingsScreen(
             OssLicensesBottomSheet(
                 onDismiss = { onShowOssLicensesSheet(false) }
             )
+        }
+
+        if (uiState.home.isTosSheetOpen) {
+            TosBottomSheet(onDismiss = { onShowTosSheet(false) })
         }
 
         when (val sheet = uiState.vaultReauthSheet) {
@@ -751,7 +755,7 @@ fun PreviewSettingsScreen() {
             onSaveMemory = {},
             onCancelMemoryEdit = {},
             onDeleteMemory = {},
-            onOpenToS = {},
+            onShowTosSheet = {},
             onShowFeedbackSheet = {},
             onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},

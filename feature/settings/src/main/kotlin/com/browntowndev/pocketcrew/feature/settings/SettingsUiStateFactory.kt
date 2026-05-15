@@ -26,6 +26,7 @@ internal data class SheetVisibilityState(
     val feedback: Boolean = false,
     val visionSettings: Boolean = false,
     val searchSkill: Boolean = false,
+    val tos: Boolean = false,
     val searchSkillTabIndex: Int = 0,
     val ossLicenses: Boolean = false,
 )
@@ -304,6 +305,7 @@ class SettingsUiStateFactory @Inject constructor(
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
                 isSearchSkillSheetOpen = sheetVisibility.searchSkill,
                 isOssLicensesSheetOpen = sheetVisibility.ossLicenses,
+                isTosSheetOpen = sheetVisibility.tos,
                 searchSkillTabIndex = sheetVisibility.searchSkillTabIndex,
                 isReindexing = isReindexing,
                 reindexProgress = reindexProgress,
