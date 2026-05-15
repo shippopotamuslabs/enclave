@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.Flow
  */
 data class SettingsData(
     val theme: AppTheme = AppTheme.SYSTEM,
-    val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
     val customizationEnabled: Boolean = true,
     val selectedPromptOption: SystemPromptOption = SystemPromptOption.CONCISE,
@@ -37,7 +36,6 @@ interface SettingsRepository {
     val settingsFlow: Flow<SettingsData>
 
     suspend fun updateTheme(theme: AppTheme)
-    suspend fun updateHapticPress(value: Boolean)
     suspend fun updateHapticResponse(value: Boolean)
     suspend fun updateCustomizationEnabled(enabled: Boolean)
     suspend fun updateSelectedPromptOption(option: SystemPromptOption)

@@ -1,12 +1,9 @@
 package com.browntowndev.pocketcrew.feature.settings
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -24,7 +21,6 @@ internal fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
@@ -39,7 +35,6 @@ internal fun SettingsRoute(
         onLoginClick = viewModel::onLoginWithGoogle,
         onLogoutClick = viewModel::onLogout,
         onThemeChange = viewModel::onThemeChange,
-        onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
@@ -61,11 +56,9 @@ internal fun SettingsRoute(
         onSaveMemory = viewModel::onSaveMemory,
         onCancelMemoryEdit = viewModel::onCancelMemoryEdit,
         onDeleteMemory = viewModel::onDeleteMemory,
-        onOpenToS = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pocketcrew.ai/terms"))
-            context.startActivity(intent)
-        },
+        onShowTosSheet = viewModel::onShowTosSheet,
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onShowOssLicensesSheet = viewModel::onShowOssLicensesSheet,
         onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
         onSetDefaultModel = viewModel::onSetDefaultModel,

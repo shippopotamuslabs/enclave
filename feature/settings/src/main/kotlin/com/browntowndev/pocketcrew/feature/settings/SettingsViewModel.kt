@@ -187,8 +187,7 @@ internal class SettingsViewModel @Inject constructor(
 
     // --- General / Auth ---
     fun onThemeChange(theme: AppTheme) = generalDelegate.onThemeChange(viewModelScope, TAG, theme)
-    fun onHapticPressChange(enabled: Boolean) = generalDelegate.onHapticPressChange(viewModelScope, TAG, enabled)
-    fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, enabled)
+    fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, TAG, enabled)
     fun onBackgroundInferenceChange(enabled: Boolean) = generalDelegate.onBackgroundInferenceChange(viewModelScope, TAG, enabled)
     fun onLoginWithGoogle() = generalDelegate.onLoginWithGoogle(viewModelScope, TAG, _vaultReauthSheet)
     fun onLogout() = generalDelegate.onLogout(viewModelScope, TAG)
@@ -209,7 +208,9 @@ internal class SettingsViewModel @Inject constructor(
     fun onPromptOptionChange(option: SystemPromptOption) = generalDelegate.onPromptOptionChange(viewModelScope, TAG, option)
     fun onCustomPromptTextChange(text: String) = generalDelegate.onCustomPromptTextChange(viewModelScope, TAG, text)
     fun onSaveCustomization() = generalDelegate.onSaveCustomization(_sheetVisibility)
+    fun onShowTosSheet(show: Boolean) = generalDelegate.onShowTosSheet(_sheetVisibility, show)
     fun onShowFeedbackSheet(show: Boolean) = generalDelegate.onShowFeedbackSheet(_sheetVisibility, show)
+    fun onShowOssLicensesSheet(show: Boolean) = generalDelegate.onShowOssLicensesSheet(_sheetVisibility, show)
     fun onShowVisionSettingsSheet(show: Boolean) = generalDelegate.onShowVisionSettingsSheet(_sheetVisibility, show)
     fun onFeedbackTextChange(text: String) = generalDelegate.onFeedbackTextChange(_feedbackText, text)
     fun onSubmitFeedback() = generalDelegate.onSubmitFeedback(_feedbackText, _sheetVisibility)
