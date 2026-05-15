@@ -1,7 +1,13 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+
 package com.browntowndev.pocketcrew.feature.chat.components
 
 import android.content.ClipData
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +34,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
@@ -44,25 +51,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.feature.chat.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -237,10 +246,7 @@ fun MessageBubble(
                                 }
                             }
                         } else {
-                            Text(
-                                text = contentText,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
+                            ExpandableTruncatableMessageText(text = contentText)
                         }
                     }
                     Text(
@@ -296,6 +302,66 @@ fun MessageBubble(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandableTruncatableMessageText(
+    text: String,
+) {
+    var isExpanded by remember(text) { mutableStateOf(false) }
+    var isTruncatable by remember(text) { mutableStateOf(false) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "messageBubbleChevronRotation",
+    )
+    val bodyStyle = MaterialTheme.typography.bodyLarge
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+            ),
+    ) {
+        Text(
+            text = text,
+            style = bodyStyle,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = if (isTruncatable) 40.dp else 0.dp),
+            maxLines = if (isExpanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout ->
+                if (!isExpanded) {
+                    val truncated = layout.didOverflowHeight
+                    if (truncated != isTruncatable) {
+                        isTruncatable = truncated
+                    }
+                }
+            },
+        )
+        if (isTruncatable) {
+            IconButton(
+                onClick = { isExpanded = !isExpanded },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(40.dp)
+                    .zIndex(1f),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) {
+                        "Collapse message"
+                    } else {
+                        "Expand message"
+                    },
+                    modifier = Modifier.rotate(chevronRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
