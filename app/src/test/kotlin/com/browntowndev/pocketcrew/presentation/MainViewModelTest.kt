@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
+import com.browntowndev.pocketcrew.domain.port.security.BiometricPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
 import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
@@ -18,10 +19,12 @@ import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.VaultReconciliationOutcome
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
@@ -34,6 +37,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -60,7 +64,8 @@ class MainViewModelTest {
     private val cryptoManager = mockk<CryptoManagerPort>()
     private val cloudSyncPort = mockk<CloudSyncPort>()
     private val vaultMetadataPort = mockk<VaultMetadataPort>()
-    private val biometricManager = mockk<AndroidBiometricManager>()
+    private val biometricPort = mockk<BiometricPort>(relaxUnitFun = true)
+    private val biometricManager = mockk<AndroidBiometricManager>(relaxUnitFun = true)
     private val createVaultUseCase = mockk<CreateVaultUseCase>()
     private val unlockVaultUseCase = mockk<UnlockVaultUseCase>()
     private val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>()
@@ -92,8 +97,9 @@ class MainViewModelTest {
 
         coEvery { initializeModelsUseCase() } returns initializedModelsResult
         every { cryptoManager.hasCachedKey() } returns false
-        every { biometricManager.isBiometricAvailable() } returns false
-        every { biometricManager.hasSecureValue(any()) } returns false
+        justRun { cryptoManager.clearKey() }
+        every { biometricPort.isBiometricAvailable() } returns false
+        every { biometricPort.hasSecureValue(any()) } returns false
         every { biometricManager.getEncryptCipher(any()) } returns null
         every { biometricManager.getDecryptCipher(any()) } returns null
         every { getAuthStateUseCase() } returns MutableStateFlow(
@@ -122,6 +128,7 @@ class MainViewModelTest {
             cryptoManager,
             cloudSyncPort,
             vaultMetadataPort,
+            biometricPort,
             biometricManager,
             createVaultUseCase,
             unlockVaultUseCase,
@@ -152,7 +159,7 @@ class MainViewModelTest {
         coEvery { createVaultUseCase(any(), any()) } returns Result.success(byteArrayOf(1, 2, 3))
         every { cryptoManager.encrypt(any()) } returns Result.success(byteArrayOf())
         coEvery { cloudSyncPort.updateVaultVerificationData(any()) } returns Result.success(Unit)
-        every { biometricManager.isBiometricAvailable() } returns false
+        every { biometricPort.isBiometricAvailable() } returns false
 
         advanceUntilIdle()
         viewModel.unlockVault("password")
@@ -182,8 +189,8 @@ class MainViewModelTest {
     @Test
     fun `locked startup exposes biometric unlock when secure value exists`() = runTest(testDispatcher) {
         every { cryptoManager.hasCachedKey() } returns false
-        every { biometricManager.isBiometricAvailable() } returns true
-        every { biometricManager.hasSecureValue(any()) } returns true
+        every { biometricPort.isBiometricAvailable() } returns true
+        every { biometricPort.hasSecureValue(any()) } returns true
 
         viewModel = MainViewModel(
             getAuthStateUseCase,
@@ -192,6 +199,7 @@ class MainViewModelTest {
             cryptoManager,
             cloudSyncPort,
             vaultMetadataPort,
+            biometricPort,
             biometricManager,
             createVaultUseCase,
             unlockVaultUseCase,
@@ -218,8 +226,8 @@ class MainViewModelTest {
     @Test
     fun `finalizeBiometricEnrollment sets isBiometricUnlockPossible when store succeeds`() = runTest(testDispatcher) {
         every { cryptoManager.hasCachedKey() } returns false
-        every { biometricManager.isBiometricAvailable() } returns true
-        every { biometricManager.hasSecureValue(any()) } returnsMany listOf(false, true)
+        every { biometricPort.isBiometricAvailable() } returns true
+        every { biometricPort.hasSecureValue(any()) } returnsMany listOf(false, true)
 
         viewModel = MainViewModel(
             getAuthStateUseCase,
@@ -228,6 +236,7 @@ class MainViewModelTest {
             cryptoManager,
             cloudSyncPort,
             vaultMetadataPort,
+            biometricPort,
             biometricManager,
             createVaultUseCase,
             unlockVaultUseCase,
@@ -255,8 +264,8 @@ class MainViewModelTest {
     @Test
     fun `unlockVault with existing biometric secure value does not request enrollment`() = runTest(testDispatcher) {
         every { cryptoManager.hasCachedKey() } returns false
-        every { biometricManager.isBiometricAvailable() } returns true
-        every { biometricManager.hasSecureValue(any()) } returns true
+        every { biometricPort.isBiometricAvailable() } returns true
+        every { biometricPort.hasSecureValue(any()) } returns true
         coEvery { vaultMetadataPort.getVaultSalt() } returns "c2FsdA=="
         coEvery { vaultMetadataPort.getWrappedDek() } returns "d3JhcA=="
         coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
@@ -272,6 +281,7 @@ class MainViewModelTest {
             cryptoManager,
             cloudSyncPort,
             vaultMetadataPort,
+            biometricPort,
             biometricManager,
             createVaultUseCase,
             unlockVaultUseCase,
@@ -290,6 +300,53 @@ class MainViewModelTest {
         assertFalse(state.isVaultLocked)
         assertNull(state.vaultErrorMessage)
     }
+
+    @Test
+    fun `unlockVault with biometric opt-in runs cloud reconciliation before enrollment`() =
+        runTest(testDispatcher) {
+            stubAuthenticatedExistingVaultUnlock()
+            every { biometricPort.isBiometricAvailable() } returns true
+            every { biometricPort.hasSecureValue(any()) } returns false
+
+            viewModel = MainViewModel(
+                getAuthStateUseCase,
+                loginWithGoogleUseCase,
+                initializeModelsUseCase,
+                cryptoManager,
+                cloudSyncPort,
+                vaultMetadataPort,
+                biometricPort,
+                biometricManager,
+                createVaultUseCase,
+                unlockVaultUseCase,
+                detectVaultReconciliationStateUseCase,
+                adoptCloudVaultUseCase,
+                bootstrapCloudVaultFromLocalUseCase,
+                loggingPort,
+                errorHandler,
+            )
+            advanceUntilIdle()
+            coEvery { detectVaultReconciliationStateUseCase("password") } coAnswers {
+                val ready = viewModel.startupState.value as AppStartupState.Ready
+                assertFalse(ready.isVaultLocked, "vault must be unlocked before cloud reconciliation")
+                assertTrue(
+                    ready.isBiometricEnrollmentPending,
+                    "enrollment flag is set before reconcile; reconcile must still complete before return",
+                )
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            }
+            viewModel.unlockVault("password", enableBiometric = true)
+            advanceUntilIdle()
+
+            val state = viewModel.startupState.value as AppStartupState.Ready
+            assertTrue(state.isBiometricEnrollmentPending)
+            assertFalse(state.isVaultLocked)
+            coVerifyOrder {
+                detectVaultReconciliationStateUseCase("password")
+                cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.startListening()
+            }
+        }
 
     @Test
     fun `unlockVault treats blank vault metadata as missing and creates a new vault`() = runTest(testDispatcher) {
@@ -365,6 +422,11 @@ class MainViewModelTest {
         }
         every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
         every { cryptoManager.cacheDek(dek) } returns Result.success(Unit)
+        val verification = "dGVzdC12ZXJpZmljYXRpb24="
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(verification)
+        coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
+        every { cryptoManager.decrypt(any<ByteArray>(), any()) } returns
+            Result.success(LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING)
 
         viewModel = MainViewModel(
             getAuthStateUseCase,
@@ -373,6 +435,7 @@ class MainViewModelTest {
             cryptoManager,
             cloudSyncPort,
             vaultMetadataPort,
+            biometricPort,
             biometricManager,
             createVaultUseCase,
             unlockVaultUseCase,
@@ -396,12 +459,213 @@ class MainViewModelTest {
         coVerify(exactly = 1) { initializeModelsUseCase() }
         io.mockk.verify { cryptoManager.cacheDek(dek) }
         coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-        verify(exactly = 0) { cloudSyncPort.startListening() }
+        verify(exactly = 1) { cloudSyncPort.startListening() }
         val state = viewModel.startupState.value as AppStartupState.Ready
         assertFalse(state.isUnlocking, "isUnlocking should be false after biometric unlock")
         assertFalse(state.isVaultLocked)
         assertNotNull(state.modelsResult)
         assertNull(state.initializationError)
+    }
+
+    @Test
+    fun `unlockWithBiometricCipher prefers cloud verification over local`() = runTest(testDispatcher) {
+        val dek = ByteArray(32) { 0x55.toByte() }
+        val cipher = mockk<javax.crypto.Cipher>(relaxed = true)
+        val cloudVerification = "Y2xvdWQtdmVyaWZpY2F0aW9u"
+        every {
+            getAuthStateUseCase()
+        } returns MutableStateFlow(
+            com.browntowndev.pocketcrew.domain.port.auth.AuthState.Authenticated(
+                com.browntowndev.pocketcrew.domain.port.auth.UserProfile("u", "n", "e", null),
+            ),
+        )
+        every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
+        every { cryptoManager.cacheDek(dek) } returns Result.success(Unit)
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(cloudVerification)
+        coEvery { vaultMetadataPort.getVaultVerificationData() } returns "bG9jYWwtdmVyaWZpY2F0aW9u"
+        coEvery { vaultMetadataPort.saveVaultVerificationData(cloudVerification) } returns Unit
+        val ciphertextBytes = byteArrayOf(1, 2, 3)
+        every { cryptoManager.decrypt(any<ByteArray>(), any()) } returns
+            Result.success(LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING)
+        every { android.util.Base64.decode(cloudVerification, android.util.Base64.DEFAULT) } returns ciphertextBytes
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+        viewModel.unlockWithBiometricCipher(cipher)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { cloudSyncPort.getVaultVerificationData() }
+        coVerify(exactly = 0) { vaultMetadataPort.getVaultVerificationData() }
+        io.mockk.verify { cryptoManager.decrypt(ciphertextBytes, null) }
+        verify(exactly = 1) { cloudSyncPort.startListening() }
+    }
+
+    @Test
+    fun `unlockWithBiometricCipher invalidates stale biometric when verification fails`() = runTest(testDispatcher) {
+        val dek = ByteArray(32) { 0x55.toByte() }
+        val cipher = mockk<Cipher>(relaxed = true)
+        val cloudVerification = "Y2xvdWQtdmVyaWZpY2F0aW9u"
+        every {
+            getAuthStateUseCase()
+        } returns MutableStateFlow(
+            com.browntowndev.pocketcrew.domain.port.auth.AuthState.Authenticated(
+                com.browntowndev.pocketcrew.domain.port.auth.UserProfile("u", "n", "e", null),
+            ),
+        )
+        every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
+        every { cryptoManager.cacheDek(dek) } returns Result.success(Unit)
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(cloudVerification)
+        every { android.util.Base64.decode(cloudVerification, android.util.Base64.DEFAULT) } returns byteArrayOf(1, 2, 3)
+        every { cryptoManager.decrypt(any<ByteArray>(), any()) } returns
+            Result.failure(IllegalStateException("stale dek"))
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+        viewModel.unlockWithBiometricCipher(cipher)
+        advanceUntilIdle()
+
+        val state = viewModel.startupState.value as AppStartupState.Ready
+        assertTrue(state.isVaultLocked)
+        assertFalse(state.isBiometricUnlockPossible)
+        assertTrue(state.vaultErrorMessage?.contains("password", ignoreCase = true) == true)
+        verify { cryptoManager.clearKey() }
+        verify { biometricPort.clearSecureValue("vault_dek") }
+        verify(exactly = 0) { cloudSyncPort.startListening() }
+    }
+
+    @Test
+    fun `unlockWithBiometricCipher rejects unlock when verification anchor is missing`() = runTest(testDispatcher) {
+        val dek = ByteArray(32) { 0x55.toByte() }
+        val cipher = mockk<Cipher>(relaxed = true)
+        every {
+            getAuthStateUseCase()
+        } returns MutableStateFlow(
+            com.browntowndev.pocketcrew.domain.port.auth.AuthState.Authenticated(
+                com.browntowndev.pocketcrew.domain.port.auth.UserProfile("u", "n", "e", null),
+            ),
+        )
+        every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
+        every { cryptoManager.cacheDek(dek) } returns Result.success(Unit)
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(null)
+        coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+        viewModel.unlockWithBiometricCipher(cipher)
+        advanceUntilIdle()
+
+        val state = viewModel.startupState.value as AppStartupState.Ready
+        assertTrue(state.isVaultLocked)
+        assertFalse(state.isBiometricUnlockPossible)
+        coVerify(exactly = 1) { cloudSyncPort.getVaultVerificationData() }
+        coVerify(exactly = 1) { vaultMetadataPort.getVaultVerificationData() }
+        verify(exactly = 0) { cryptoManager.decrypt(any<ByteArray>(), any()) }
+        verify { cryptoManager.clearKey() }
+        verify { biometricPort.clearSecureValue("vault_dek") }
+        verify(exactly = 0) { cloudSyncPort.startListening() }
+    }
+
+    @Test
+    fun `unlockWithBiometricCipher skips listener when vault reconciliation is pending`() = runTest(testDispatcher) {
+        stubAuthenticatedExistingVaultUnlock()
+        val payload = VaultReconciliationOutcome.MismatchRequiresClobber(
+            cloudDek = ByteArray(32) { 0xCC.toByte() },
+            cloudSalt = "cloud-salt",
+            cloudWrappedDek = "cloud-wrapped",
+            cloudVerification = null,
+        )
+        coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+        viewModel.unlockVault("password")
+        advanceUntilIdle()
+
+        val pendingState = viewModel.startupState.value as AppStartupState.Ready
+        assertNotNull(pendingState.pendingVaultReconciliation)
+
+        val dek = ByteArray(32) { 0x55.toByte() }
+        val cipher = mockk<Cipher>(relaxed = true)
+        every { biometricManager.decryptBytesWithCipher("vault_dek", cipher) } returns dek
+        every { cryptoManager.cacheDek(dek) } returns Result.success(Unit)
+        val verification = "dGVzdC12ZXJpZmljYXRpb24="
+        coEvery { cloudSyncPort.getVaultVerificationData() } returns Result.success(verification)
+        every { cryptoManager.decrypt(any<ByteArray>(), any()) } returns
+            Result.success(LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING)
+
+        clearMocks(cloudSyncPort, answers = false, recordedCalls = true)
+
+        viewModel.unlockWithBiometricCipher(cipher)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { cloudSyncPort.startListening() }
+        val state = viewModel.startupState.value as AppStartupState.Ready
+        assertFalse(state.isVaultLocked)
+        assertNotNull(state.pendingVaultReconciliation)
     }
 
     @Test
@@ -449,7 +713,7 @@ class MainViewModelTest {
             // Recreate VM so init picks up the new auth state stub
             viewModel = MainViewModel(
                 getAuthStateUseCase, loginWithGoogleUseCase, initializeModelsUseCase, cryptoManager,
-                cloudSyncPort, vaultMetadataPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
+                cloudSyncPort, vaultMetadataPort, biometricPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
                 detectVaultReconciliationStateUseCase, adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase, loggingPort, errorHandler,
             )
@@ -479,7 +743,7 @@ class MainViewModelTest {
 
             viewModel = MainViewModel(
                 getAuthStateUseCase, loginWithGoogleUseCase, initializeModelsUseCase, cryptoManager,
-                cloudSyncPort, vaultMetadataPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
+                cloudSyncPort, vaultMetadataPort, biometricPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
                 detectVaultReconciliationStateUseCase, adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase, loggingPort, errorHandler,
             )
@@ -508,7 +772,7 @@ class MainViewModelTest {
 
             viewModel = MainViewModel(
                 getAuthStateUseCase, loginWithGoogleUseCase, initializeModelsUseCase, cryptoManager,
-                cloudSyncPort, vaultMetadataPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
+                cloudSyncPort, vaultMetadataPort, biometricPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
                 detectVaultReconciliationStateUseCase, adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase, loggingPort, errorHandler,
             )
@@ -538,7 +802,7 @@ class MainViewModelTest {
 
         viewModel = MainViewModel(
             getAuthStateUseCase, loginWithGoogleUseCase, initializeModelsUseCase, cryptoManager,
-            cloudSyncPort, vaultMetadataPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
+            cloudSyncPort, vaultMetadataPort, biometricPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
             detectVaultReconciliationStateUseCase, adoptCloudVaultUseCase,
             bootstrapCloudVaultFromLocalUseCase, loggingPort, errorHandler,
         )
@@ -565,7 +829,7 @@ class MainViewModelTest {
 
             viewModel = MainViewModel(
                 getAuthStateUseCase, loginWithGoogleUseCase, initializeModelsUseCase, cryptoManager,
-                cloudSyncPort, vaultMetadataPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
+                cloudSyncPort, vaultMetadataPort, biometricPort, biometricManager, createVaultUseCase, unlockVaultUseCase,
                 detectVaultReconciliationStateUseCase, adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase, loggingPort, errorHandler,
             )
