@@ -3,16 +3,11 @@ import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.DeleteChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -49,8 +44,6 @@ class HistoryViewModelTest {
     private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
     private lateinit var mockRenameChatUseCase: RenameChatUseCase
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
-    private lateinit var mockGetSettingsUseCase: GetSettingsUseCase
-    private lateinit var mockSettingsUseCases: SettingsUseCases
     private lateinit var mockErrorHandler: ViewModelErrorHandler
     private lateinit var viewModel: HistoryViewModel
 
@@ -100,21 +93,7 @@ class HistoryViewModelTest {
         mockDeleteChatUseCase = mockk(relaxed = true)
         mockRenameChatUseCase = mockk(relaxed = true)
         mockTogglePinChatUseCase = mockk(relaxed = true)
-        mockGetSettingsUseCase = mockk(relaxed = true)
-        mockSettingsUseCases = mockk(relaxed = true)
         mockErrorHandler = mockk(relaxed = true)
-
-        every { mockSettingsUseCases.getSettings } returns mockGetSettingsUseCase
-        every { mockGetSettingsUseCase.invoke() } returns MutableStateFlow(
-            SettingsData(
-                theme = AppTheme.SYSTEM,
-                hapticResponse = true,
-                customizationEnabled = false,
-                selectedPromptOption = SystemPromptOption.CONCISE,
-                customPromptText = "",
-                allowMemories = false
-            )
-        )
     }
 
     private fun createViewModel(): HistoryViewModel {
@@ -124,7 +103,6 @@ class HistoryViewModelTest {
             deleteChatUseCase = mockDeleteChatUseCase,
             renameChatUseCase = mockRenameChatUseCase,
             togglePinChatUseCase = mockTogglePinChatUseCase,
-            getSettingsUseCase = mockGetSettingsUseCase,
             errorHandler = mockErrorHandler
         )
     }
@@ -497,25 +475,6 @@ class HistoryViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(0, state.pinnedChats.size)
         assertEquals(0, state.otherChats.size)
-    }
-
-    @Test
-    fun `E5 settings flow error uses defaults`() = runTest(testDispatcher) {
-        val testChat = createTestChat(ChatId("1"), "Test", today, pinned = false)
-        val chatsFlow = MutableStateFlow(listOf(testChat))
-        every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
-        
-        every { mockGetSettingsUseCase.invoke() } returns flow {
-            throw RuntimeException("Settings Error")
-        }
-
-        viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
-        advanceUntilIdle()
-        
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertEquals(1, state.otherChats.size)
     }
 
     // Suite F: Integration Test
