@@ -509,6 +509,10 @@ class MainViewModel
                 )
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
+                        val bioPossibleNow =
+                            result.isSuccess &&
+                                biometricManager.isBiometricAvailable() &&
+                                biometricManager.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
                         if (!result.isSuccess) {
                             loggingPort.error(
                                 TAG,
@@ -516,7 +520,10 @@ class MainViewModel
                                 result.exceptionOrNull(),
                             )
                         }
-                        it.copy(isBiometricEnrollmentPending = false)
+                        it.copy(
+                            isBiometricEnrollmentPending = false,
+                            isBiometricUnlockPossible = bioPossibleNow || it.isBiometricUnlockPossible,
+                        )
                     } else {
                         it
                     }

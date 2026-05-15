@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.extension.RegisterExtension
 import java.util.Base64
+import javax.crypto.Cipher
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -227,6 +228,43 @@ class MainViewModelTest {
         }
 
         coVerify(exactly = 0) { initializeModelsUseCase() }
+    }
+
+    @Test
+    fun `finalizeBiometricEnrollment sets isBiometricUnlockPossible when store succeeds`() = runTest(testDispatcher) {
+        every { cryptoManager.hasCachedKey() } returns false
+        every { biometricManager.isBiometricAvailable() } returns true
+        every { biometricManager.hasSecureValue(any()) } returnsMany listOf(false, true)
+
+        viewModel = MainViewModel(
+            getAuthStateUseCase,
+            loginWithGoogleUseCase,
+            initializeModelsUseCase,
+            cryptoManager,
+            cloudSyncPort,
+            vaultMetadataPort,
+            biometricManager,
+            createVaultUseCase,
+            unlockVaultUseCase,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            loggingPort,
+            errorHandler,
+        )
+        advanceUntilIdle()
+
+        val before = viewModel.startupState.value as AppStartupState.Ready
+        assertFalse(before.isBiometricUnlockPossible, "No secure blob yet at cold start")
+
+        every { cryptoManager.getCachedDek() } returns ByteArray(32) { 7 }
+        coEvery { biometricManager.storeSecureBytesWithCipher(any(), any(), any()) } returns Result.success(Unit)
+        val cipher = mockk<Cipher>(relaxed = true)
+        viewModel.finalizeBiometricEnrollment(cipher)
+        advanceUntilIdle()
+
+        val after = viewModel.startupState.value as AppStartupState.Ready
+        assertTrue(after.isBiometricUnlockPossible)
     }
 
     @Test

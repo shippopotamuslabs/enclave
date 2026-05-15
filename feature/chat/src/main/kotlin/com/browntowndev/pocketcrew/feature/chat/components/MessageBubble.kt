@@ -163,7 +163,7 @@ fun MessageBubble(
             // Bubble
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(fraction = .75f)
+                    .fillMaxWidth(fraction = .85f)
                     .zIndex(1f)
                     .clickable(
                         onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
