@@ -603,13 +603,9 @@ class MainViewModel
                     )
                     if (dek == null) {
                         loggingPort.error(TAG, "unlockWithBiometricCipher: Failed to unwrap DEK")
-                        _startupState.update {
-                            if (it is AppStartupState.Ready) {
-                                it.copy(vaultErrorMessage = "Could not unlock with biometrics. Enter your vault password.")
-                            } else {
-                                it
-                            }
-                        }
+                        invalidateStaleBiometricUnlock(
+                            "Could not unlock with biometrics. Enter your vault password.",
+                        )
                         return@launch
                     }
                     val cached = cryptoManager.cacheDek(dek)
@@ -619,13 +615,9 @@ class MainViewModel
                             "unlockWithBiometricCipher: Failed to cache DEK",
                             cached.exceptionOrNull(),
                         )
-                        _startupState.update {
-                            if (it is AppStartupState.Ready) {
-                                it.copy(vaultErrorMessage = "Could not unlock with biometrics. Enter your vault password.")
-                            } else {
-                                it
-                            }
-                        }
+                        invalidateStaleBiometricUnlock(
+                            "Could not unlock with biometrics. Enter your vault password.",
+                        )
                         return@launch
                     }
 
