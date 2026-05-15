@@ -54,7 +54,6 @@ class SettingsViewModelTest {
 
     private val getSettingsUseCase = mockk<GetSettingsUseCase>()
     private val updateThemeUseCase = mockk<UpdateThemeUseCase>(relaxed = true)
-    private val updateHapticPressUseCase = mockk<UpdateHapticPressUseCase>(relaxed = true)
     private val updateHapticResponseUseCase = mockk<UpdateHapticResponseUseCase>(relaxed = true)
     private val updateCustomizationEnabledUseCase = mockk<UpdateCustomizationEnabledUseCase>(relaxed = true)
     private val updateSelectedPromptOptionUseCase = mockk<UpdateSelectedPromptOptionUseCase>(relaxed = true)
@@ -140,7 +139,6 @@ class SettingsViewModelTest {
             preferences = SettingsPreferencesUseCasesImpl(
                 getSettings = getSettingsUseCase,
                 updateTheme = updateThemeUseCase,
-                updateHapticPress = updateHapticPressUseCase,
                 updateHapticResponse = updateHapticResponseUseCase,
                 updateCustomizationEnabled = updateCustomizationEnabledUseCase,
                 updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
@@ -279,7 +277,6 @@ class SettingsViewModelTest {
     @Test
     fun `initial state is correct`() = runTest {
         assertEquals(AppTheme.SYSTEM, viewModel.uiState.value.home.theme)
-        assertTrue(viewModel.uiState.value.home.hapticPress)
         assertTrue(viewModel.uiState.value.home.hapticResponse)
     }
 
@@ -479,13 +476,6 @@ class SettingsViewModelTest {
         viewModel.onThemeChange(AppTheme.DARK)
         advanceUntilIdle()
         coVerify { updateThemeUseCase(AppTheme.DARK) }
-    }
-
-    @Test
-    fun `onHapticPressChange updates preferences`() = runTest {
-        viewModel.onHapticPressChange(false)
-        advanceUntilIdle()
-        coVerify { updateHapticPressUseCase(false) }
     }
 
     @Test

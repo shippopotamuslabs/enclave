@@ -38,6 +38,12 @@ enum class ToolCallBannerKind {
     MEDIA,
 }
 
+enum class ResponseHapticPhase {
+    None,
+    ThinkingPulse,
+    GeneratingBuzz,
+}
+
 data class ToolCallBannerUi(
     val kind: ToolCallBannerKind,
     val label: String,
@@ -86,8 +92,8 @@ data class ChatUiState(
     val selectedMode: ChatModeUi = ChatModeUi.FAST,
     val isGlobalInferenceBlocked: Boolean = false,
     val shieldReason: String? = null,
-    val hapticPress: Boolean = false,
     val hapticResponse: Boolean = false,
+    val responseHapticPhase: ResponseHapticPhase = ResponseHapticPhase.None,
     val chatId: ChatId? = null,
     val isGenerating: Boolean = false,
     val canStop: Boolean = true,

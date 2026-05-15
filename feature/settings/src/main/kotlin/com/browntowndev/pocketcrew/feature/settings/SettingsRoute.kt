@@ -25,7 +25,6 @@ internal fun SettingsRoute(
         onLoginClick = viewModel::onLoginWithGoogle,
         onLogoutClick = viewModel::onLogout,
         onThemeChange = viewModel::onThemeChange,
-        onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,

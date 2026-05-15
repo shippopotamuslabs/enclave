@@ -182,8 +182,7 @@ internal class SettingsViewModel @Inject constructor(
 
     // --- General / Auth ---
     fun onThemeChange(theme: AppTheme) = generalDelegate.onThemeChange(viewModelScope, TAG, theme)
-    fun onHapticPressChange(enabled: Boolean) = generalDelegate.onHapticPressChange(viewModelScope, TAG, enabled)
-    fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, enabled)
+    fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, TAG, enabled)
     fun onBackgroundInferenceChange(enabled: Boolean) = generalDelegate.onBackgroundInferenceChange(viewModelScope, TAG, enabled)
     fun onLoginWithGoogle() = generalDelegate.onLoginWithGoogle(viewModelScope, TAG, _vaultReauthSheet)
     fun onLogout() = generalDelegate.onLogout(viewModelScope, TAG)

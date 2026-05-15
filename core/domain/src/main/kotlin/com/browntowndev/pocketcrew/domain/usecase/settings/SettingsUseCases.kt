@@ -17,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUse
 interface SettingsPreferencesUseCases {
     val getSettings: GetSettingsUseCase
     val updateTheme: UpdateThemeUseCase
-    val updateHapticPress: UpdateHapticPressUseCase
     val updateHapticResponse: UpdateHapticResponseUseCase
     val updateCustomizationEnabled: UpdateCustomizationEnabledUseCase
     val updateSelectedPromptOption: UpdateSelectedPromptOptionUseCase

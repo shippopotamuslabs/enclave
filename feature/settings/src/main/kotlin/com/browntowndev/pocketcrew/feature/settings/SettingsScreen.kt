@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Palette
@@ -76,7 +75,6 @@ fun SettingsScreen(
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
-    onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
@@ -181,13 +179,6 @@ fun SettingsScreen(
 
             item {
                 SectionHeader(text = "Experience")
-                SettingsToggle(
-                    title = "Haptic Press",
-                    icon = Icons.Default.TouchApp,
-                    checked = uiState.home.hapticPress,
-                    onCheckedChange = onHapticPressChange
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 SettingsToggle(
                     title = "Haptic Response",
                     icon = Icons.Default.Vibration,
@@ -744,7 +735,6 @@ fun PreviewSettingsScreen() {
             onLoginClick = {},
             onLogoutClick = {},
             onThemeChange = {},
-            onHapticPressChange = {},
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
             onShowDataControlsSheet = {},

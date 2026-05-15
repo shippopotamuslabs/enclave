@@ -729,6 +729,7 @@ class ChatViewModel @Inject constructor(
         var canStop = true
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
+        var responseHapticPhase = ResponseHapticPhase.None
         val chatMessages: List<ChatMessage> = reconciledMessages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
@@ -746,6 +747,12 @@ class ChatViewModel @Inject constructor(
                             canStop = false
                         }
                     }
+                    responseHapticPhase =
+                        when (state) {
+                            is IndicatorState.Thinking -> ResponseHapticPhase.ThinkingPulse
+                            is IndicatorState.Generating -> ResponseHapticPhase.GeneratingBuzz
+                            else -> responseHapticPhase
+                        }
                 }
                 chatMessage
             }
@@ -761,8 +768,8 @@ class ChatViewModel @Inject constructor(
             photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
             selectedMode = selectedMode,
             isGlobalInferenceBlocked = isBlocked,
-            hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,
+            responseHapticPhase = responseHapticPhase,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
             canStop = canStop,

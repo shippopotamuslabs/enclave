@@ -31,7 +31,6 @@ class SettingsRepositoryTest {
 
             // Then
             assertEquals(AppTheme.SYSTEM, settings.theme)
-            assertTrue(settings.hapticPress)
             assertTrue(settings.hapticResponse)
             assertTrue(settings.customizationEnabled)
             assertEquals(SystemPromptOption.CONCISE, settings.selectedPromptOption)
@@ -66,30 +65,6 @@ class SettingsRepositoryTest {
                 val settings = repository.settingsFlow.first()
                 assertEquals(theme, settings.theme)
             }
-        }
-
-    // Test updateHapticPress
-
-    @Test
-    fun `updateHapticPress updates value in settingsFlow`() =
-        runTest {
-            // When
-            repository.updateHapticPress(false)
-
-            // Then
-            val settings = repository.settingsFlow.first()
-            assertFalse(settings.hapticPress)
-        }
-
-    @Test
-    fun `updateHapticPress can toggle between true and false`() =
-        runTest {
-            // When
-            repository.updateHapticPress(false)
-            assertFalse(repository.settingsFlow.first().hapticPress)
-
-            repository.updateHapticPress(true)
-            assertTrue(repository.settingsFlow.first().hapticPress)
         }
 
     // Test updateHapticResponse
@@ -223,7 +198,6 @@ class SettingsRepositoryTest {
         runTest {
             // When
             repository.updateTheme(AppTheme.DARK)
-            repository.updateHapticPress(false)
             repository.updateHapticResponse(false)
             repository.updateCustomizationEnabled(false)
             repository.updateSelectedPromptOption(SystemPromptOption.RIGOROUS)
@@ -235,7 +209,6 @@ class SettingsRepositoryTest {
             // Then
             val settings = repository.settingsFlow.first()
             assertEquals(AppTheme.DARK, settings.theme)
-            assertFalse(settings.hapticPress)
             assertFalse(settings.hapticResponse)
             assertFalse(settings.customizationEnabled)
             assertEquals(SystemPromptOption.RIGOROUS, settings.selectedPromptOption)
@@ -256,18 +229,6 @@ class SettingsRepositoryTest {
             // When/Then
             assertThrows(RuntimeException::class.java) {
                 runTest { repository.updateTheme(AppTheme.DARK) }
-            }
-        }
-
-    @Test
-    fun `updateHapticPress throws exception when repository fails`() =
-        runTest {
-            // Given
-            repository.shouldThrowOnUpdateHapticPress = true
-
-            // When/Then
-            assertThrows(RuntimeException::class.java) {
-                runTest { repository.updateHapticPress(false) }
             }
         }
 
