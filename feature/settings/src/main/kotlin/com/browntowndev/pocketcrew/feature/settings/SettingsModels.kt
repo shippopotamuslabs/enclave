@@ -109,6 +109,7 @@ data class SettingsHomeUiState(
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
     val isSearchSkillSheetOpen: Boolean = false,
+    val isTosSheetOpen: Boolean = false,
     val searchSkillTabIndex: Int = 0,
     val isReindexing: Boolean = false,
     val reindexProgress: Float = 0f,
