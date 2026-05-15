@@ -18,7 +18,6 @@ import org.junit.jupiter.api.assertThrows
 import java.io.IOException
 
 class TavilySearchRepositoryTest {
-
     private val okHttpClient = mockk<OkHttpClient>()
     private val apiKeyManager = mockk<ApiKeyManager>()
     private val repository = TavilySearchRepository(okHttpClient, apiKeyManager)
@@ -29,12 +28,14 @@ class TavilySearchRepositoryTest {
         val requestSlot = slot<Request>()
         every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns "tavily-secret"
         every { okHttpClient.newCall(capture(requestSlot)) } returns call
-        every { call.execute() } returns httpResponse(
-            code = 200,
-            body = """
-                {"results":[{"title":"Android 17","url":"https://developer.android.com","content":"Local network permission","score":0.91}]}
-            """.trimIndent()
-        )
+        every { call.execute() } returns
+            httpResponse(
+                code = 200,
+                body =
+                    """
+                    {"results":[{"title":"Android 17","url":"https://developer.android.com","content":"Local network permission","score":0.91}]}
+                    """.trimIndent(),
+            )
 
         val result = repository.search("android 17 local network")
 
@@ -54,9 +55,10 @@ class TavilySearchRepositoryTest {
     fun `search throws when Tavily key is missing`() {
         every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns null
 
-        val error = assertThrows<IllegalStateException> {
-            repository.search("android 17 local network")
-        }
+        val error =
+            assertThrows<IllegalStateException> {
+                repository.search("android 17 local network")
+            }
 
         assertEquals("Tavily API key is required when search is enabled", error.message)
     }
@@ -68,34 +70,41 @@ class TavilySearchRepositoryTest {
         every { okHttpClient.newCall(any()) } returns call
         every { call.execute() } returns httpResponse(code = 503, body = """{"error":"unavailable"}""")
 
-        val error = assertThrows<IOException> {
-            repository.search("android 17 local network")
-        }
+        val error =
+            assertThrows<IOException> {
+                repository.search("android 17 local network")
+            }
 
         assertEquals("Tavily request failed with HTTP 503", error.message)
     }
 
     @Test
     fun `mapResponse normalizes Tavily payload`() {
-        val mapped = repository.mapResponse(
-            query = "android 17 local network",
-            body = """
-                {
-                  "results": [
-                    {"title":"Android 17","url":"https://developer.android.com","content":"Permission change","score":0.8},
-                    {"title":"Issue tracker","url":"https://issuetracker.google.com","content":"Regression","score":0.6}
-                  ]
-                }
-            """.trimIndent()
-        )
+        val mapped =
+            repository.mapResponse(
+                query = "android 17 local network",
+                body =
+                    """
+                    {
+                      "results": [
+                        {"title":"Android 17","url":"https://developer.android.com","content":"Permission change","score":0.8},
+                        {"title":"Issue tracker","url":"https://issuetracker.google.com","content":"Regression","score":0.6}
+                      ]
+                    }
+                    """.trimIndent(),
+            )
 
         assertTrue(mapped.contains("\"query\":\"android 17 local network\""))
         assertTrue(mapped.contains("\"title\":\"Android 17\""))
         assertTrue(mapped.contains("\"title\":\"Issue tracker\""))
     }
 
-    private fun httpResponse(code: Int, body: String): Response =
-        Response.Builder()
+    private fun httpResponse(
+        code: Int,
+        body: String,
+    ): Response =
+        Response
+            .Builder()
             .request(Request.Builder().url("https://api.tavily.com/search").build())
             .protocol(Protocol.HTTP_1_1)
             .code(code)

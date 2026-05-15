@@ -20,7 +20,10 @@ interface TtsProviderDao {
     suspend fun upsertTtsProvider(entity: TtsProviderEntity)
 
     @Query("UPDATE tts_providers SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM tts_providers WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)

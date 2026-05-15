@@ -232,39 +232,57 @@ object OpenRouterRequestMapper {
         return configuredMaxTokens
     }
 
-    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =
-        ChatCompletionFunctionTool.builder()
+    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
+        val paramsBuilder = FunctionParameters.builder()
+            .putAdditionalProperty("type", JsonValue.from("object"))
+            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+            .putAdditionalProperty("required", JsonValue.from(schema.required))
+            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
+            }
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
+            }
+        }
+        return ChatCompletionFunctionTool.builder()
             .function(
                 FunctionDefinition.builder()
                     .name(name)
                     .description(description)
-                    .parameters(
-                        FunctionParameters.builder()
-                            .putAdditionalProperty("type", JsonValue.from("object"))
-                            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-                            .putAdditionalProperty("required", JsonValue.from(schema.required))
-                            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
-                            .build()
-                    )
-                    .strict(true)
+                    .parameters(paramsBuilder.build())
+                    .strict(false)
                     .build()
             )
             .build()
+    }
 
-    private fun ToolDefinition.toResponsesTool(): FunctionTool =
-        FunctionTool.builder()
+    private fun ToolDefinition.toResponsesTool(): FunctionTool {
+        val paramsBuilder = FunctionTool.Parameters.builder()
+            .putAdditionalProperty("type", JsonValue.from("object"))
+            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+            .putAdditionalProperty("required", JsonValue.from(schema.required))
+            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
+            }
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
+            }
+        }
+        return FunctionTool.builder()
             .name(name)
             .description(description)
-            .parameters(
-                FunctionTool.Parameters.builder()
-                    .putAdditionalProperty("type", JsonValue.from("object"))
-                    .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-                    .putAdditionalProperty("required", JsonValue.from(schema.required))
-                    .putAdditionalProperty("additionalProperties", JsonValue.from(false))
-                    .build()
-            )
-            .strict(true)
+            .parameters(paramsBuilder.build())
+            .strict(false)
             .build()
+    }
 
     private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
         val map = mutableMapOf<String, Any>()

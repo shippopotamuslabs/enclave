@@ -8,12 +8,13 @@ internal fun buildApiCredentialsIdentitySignature(
     modelId: String,
     baseUrl: String?,
     apiKey: String,
-): String = buildApiCredentialsIdentitySignature(
-    provider = provider.name,
-    modelId = modelId,
-    baseUrl = baseUrl,
-    apiKey = apiKey,
-)
+): String =
+    buildApiCredentialsIdentitySignature(
+        provider = provider.name,
+        modelId = modelId,
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+    )
 
 internal fun buildApiCredentialsIdentitySignature(
     provider: String,
@@ -22,15 +23,16 @@ internal fun buildApiCredentialsIdentitySignature(
     apiKey: String,
 ): String {
     val normalizedBaseUrl = baseUrl.normalizedBaseUrl()
-    val input = buildString {
-        append(provider.trim())
-        append('|')
-        append(modelId.trim())
-        append('|')
-        append(normalizedBaseUrl)
-        append('|')
-        append(apiKey)
-    }
+    val input =
+        buildString {
+            append(provider.trim())
+            append('|')
+            append(modelId.trim())
+            append('|')
+            append(normalizedBaseUrl)
+            append('|')
+            append(apiKey)
+        }
     val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
     return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
 }

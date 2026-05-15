@@ -721,6 +721,14 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -742,9 +750,17 @@ fun uniffi_docgen_core_checksum_func_generate_docx(
 ): Short
 fun uniffi_docgen_core_checksum_func_generate_pdf(
 ): Short
+fun uniffi_docgen_core_checksum_func_get_append_blocks_schema(
+): Short
 fun uniffi_docgen_core_checksum_func_get_schema(
 ): Short
+fun uniffi_docgen_core_checksum_func_get_start_artifact_schema(
+): Short
+fun uniffi_docgen_core_checksum_func_validate_append_blocks_params(
+): Short
 fun uniffi_docgen_core_checksum_func_validate_document(
+): Short
+fun uniffi_docgen_core_checksum_func_validate_start_artifact_params(
 ): Short
 fun ffi_docgen_core_uniffi_contract_version(
 ): Int
@@ -797,9 +813,17 @@ fun uniffi_docgen_core_fn_func_generate_docx(`json`: RustBuffer.ByValue,uniffi_o
 ): RustBuffer.ByValue
 fun uniffi_docgen_core_fn_func_generate_pdf(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_docgen_core_fn_func_get_append_blocks_schema(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_docgen_core_fn_func_get_schema(uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_docgen_core_fn_func_get_start_artifact_schema(uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_docgen_core_fn_func_validate_append_blocks_params(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 fun uniffi_docgen_core_fn_func_validate_document(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_docgen_core_fn_func_validate_start_artifact_params(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun ffi_docgen_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -936,10 +960,22 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_docgen_core_checksum_func_generate_pdf() != 57740.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_docgen_core_checksum_func_get_append_blocks_schema() != 19995.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_docgen_core_checksum_func_get_schema() != 30172.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_docgen_core_checksum_func_get_start_artifact_schema() != 27179.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_docgen_core_checksum_func_validate_append_blocks_params() != 57884.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_docgen_core_checksum_func_validate_document() != 36613.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_docgen_core_checksum_func_validate_start_artifact_params() != 57046.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1268,6 +1304,15 @@ public object FfiConverterTypeDocGenError : FfiConverterRustBuffer<DocGenExcepti
     )
     }
     
+ fun `getAppendBlocksSchema`(): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_docgen_core_fn_func_get_append_blocks_schema(
+        _status)
+}
+    )
+    }
+    
  fun `getSchema`(): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCall() { _status ->
@@ -1277,11 +1322,38 @@ public object FfiConverterTypeDocGenError : FfiConverterRustBuffer<DocGenExcepti
     )
     }
     
+ fun `getStartArtifactSchema`(): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_docgen_core_fn_func_get_start_artifact_schema(
+        _status)
+}
+    )
+    }
+    
+
+    @Throws(DocGenException::class) fun `validateAppendBlocksParams`(`json`: kotlin.String)
+        = 
+    uniffiRustCallWithError(DocGenException) { _status ->
+    UniffiLib.INSTANCE.uniffi_docgen_core_fn_func_validate_append_blocks_params(
+        FfiConverterString.lower(`json`),_status)
+}
+    
+    
 
     @Throws(DocGenException::class) fun `validateDocument`(`json`: kotlin.String)
         = 
     uniffiRustCallWithError(DocGenException) { _status ->
     UniffiLib.INSTANCE.uniffi_docgen_core_fn_func_validate_document(
+        FfiConverterString.lower(`json`),_status)
+}
+    
+    
+
+    @Throws(DocGenException::class) fun `validateStartArtifactParams`(`json`: kotlin.String)
+        = 
+    uniffiRustCallWithError(DocGenException) { _status ->
+    UniffiLib.INSTANCE.uniffi_docgen_core_fn_func_validate_start_artifact_params(
         FfiConverterString.lower(`json`),_status)
 }
     

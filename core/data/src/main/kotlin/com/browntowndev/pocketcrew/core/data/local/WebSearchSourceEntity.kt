@@ -14,12 +14,12 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
             entity = MessageEntity::class,
             parentColumns = ["id"],
             childColumns = ["message_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
     indices = [
-        Index(value = ["message_id"])
-    ]
+        Index(value = ["message_id"]),
+    ],
 )
 data class WebSearchSourceEntity(
     @PrimaryKey
@@ -42,5 +42,5 @@ data class WebSearchSourceEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
 )

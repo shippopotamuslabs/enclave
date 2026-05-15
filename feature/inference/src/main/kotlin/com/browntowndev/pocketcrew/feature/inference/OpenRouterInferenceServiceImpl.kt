@@ -175,11 +175,15 @@ class OpenRouterInferenceServiceImpl(
                     tag,
                     "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
                 )
+                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
             } catch (e: NotFoundException) {
                 loggingPort.warning(
                     tag,
                     "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
                 )
+                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
             } catch (e: Exception) {
                 if (isClientErrorMessage(e.message)) {
                     loggingPort.warning(
@@ -206,6 +210,24 @@ class OpenRouterInferenceServiceImpl(
             routing = routing
         )
 
+        suspend fun fallbackToChatCompletions() {
+            val chatParams = OpenRouterRequestMapper.mapToChatCompletionParams(
+                modelId = modelId,
+                prompt = prompt,
+                history = requestHistory,
+                options = options,
+                routing = routing
+            )
+            streamChatCompletions(
+                params = chatParams,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+                assistantMessageId = options.assistantMessageId,
+                emitEvent = emitEvent,
+            )
+            emitEvent(InferenceEvent.Finished(modelType))
+        }
+
         try {
             loggingPort.info(
                 tag,
@@ -222,11 +244,13 @@ class OpenRouterInferenceServiceImpl(
                 tag,
                 "OpenRouter Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
             )
+            fallbackToChatCompletions()
         } catch (e: NotFoundException) {
             loggingPort.warning(
                 tag,
                 "OpenRouter Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
             )
+            fallbackToChatCompletions()
         } catch (e: Exception) {
             val isClientError = (e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) ||
                 (e.message?.contains("404") == true || e.message?.contains("Not Found") == true)
@@ -238,22 +262,7 @@ class OpenRouterInferenceServiceImpl(
             } else {
                 throw e
             }
-
-            val chatParams = OpenRouterRequestMapper.mapToChatCompletionParams(
-                modelId = modelId,
-                prompt = prompt,
-                history = requestHistory,
-                options = options,
-                routing = routing
-            )
-            streamChatCompletions(
-                params = chatParams,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-                assistantMessageId = options.assistantMessageId,
-                emitEvent = emitEvent,
-            )
-            emitEvent(InferenceEvent.Finished(modelType))
+            fallbackToChatCompletions()
         }
     }
 

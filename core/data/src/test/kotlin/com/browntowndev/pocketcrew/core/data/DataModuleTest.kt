@@ -2,42 +2,39 @@ package com.browntowndev.pocketcrew.core.data
 
 import android.content.Context
 import androidx.room.DatabaseConfiguration
-import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
-import org.junit.After
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class DataModuleTest {
-
     private lateinit var context: Context
 
-    @Before
+    @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         mockkObject(SQLiteVecInstaller)
-        
+
         // Mock the factory creation to avoid native library loading issues in Robolectric
         val mockFactory = mockk<SupportSQLiteOpenHelper.Factory>(relaxed = true)
         every { SQLiteVecInstaller.createOpenHelperFactory(any()) } returns mockFactory
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         unmockkAll()
     }
@@ -46,7 +43,7 @@ class DataModuleTest {
     fun `providePocketCrewDatabase configures sqlite-vec open helper factory`() {
         // ACT
         val database = DataModule.providePocketCrewDatabase(context)
-        
+
         // ASSERT
         verify { SQLiteVecInstaller.createOpenHelperFactory(context) }
         database.close()
@@ -67,7 +64,7 @@ class DataModuleTest {
                 current = current.superclass
             }
         }
-        
+
         if (configField == null) {
             // Try without the 'm' prefix
             current = database.javaClass
@@ -80,12 +77,12 @@ class DataModuleTest {
             }
         }
 
-        assertNotNull("Could not find configuration field in RoomDatabase hierarchy", configField)
+        assertNotNull(configField, "Could not find configuration field in RoomDatabase hierarchy")
         configField!!.isAccessible = true
         val config = configField.get(database) as? DatabaseConfiguration
-        
+
         val callbacks = config?.callbacks
-        assertTrue("Database should have at least one callback registered in configuration", !callbacks.isNullOrEmpty())
+        assertTrue(!callbacks.isNullOrEmpty(), "Database should have at least one callback registered in configuration")
         database.close()
     }
 }

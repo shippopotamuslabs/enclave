@@ -1,248 +1,90 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
-
-const val SWEEP_DURATION_MS = 1000f      // ← change this for band speed (1000 = 1 second)
-const val FULL_CYCLE_MS = 1000           // ← change this for pause time between pulses
-
-private val DiscoColors = listOf(
-    Color(0xFFFF4D00), Color(0xFFFF6F00), Color(0xFFFF8C00),
-    Color(0xFFFFB300), Color(0xFFFFD000), Color(0xFFEE6A00),
-    Color(0xFFCC4400), Color(0xFFFFFFFF),
-)
-
-private data class PixelData(
-    val normalizedX: Float,
-    val normalizedY: Float,
-    val dist: Float,
-    val gx: Int,
-    val gy: Int,
-    val topLeft: Offset,
-    val size: Size,
-    val cornerRadius: CornerRadius,
+// Pairs of dot indices (0–8 in a 3×3 grid) that light up together.
+// No consecutive pair shares a dot, so every step produces a clean crossfade.
+private val ACTIVATION_SEQUENCE = listOf(
+    0 to 8, 2 to 6, 1 to 7, 3 to 5,
+    4 to 0, 8 to 3, 2 to 7, 5 to 1,
+    6 to 4, 0 to 5, 8 to 1, 3 to 6,
+    4 to 2, 7 to 0, 5 to 8, 1 to 4,
 )
 
 /**
- * Pixelated disco-ball style orb animation — ENHANCED (v12: visible rubber-band pulse).
+ * 3×3 dot-grid animation: two dots illuminate at a time using the primary colour,
+ * cycling through a fixed sequence every 500 ms with a 400 ms alpha crossfade.
+ * Replaces the old per-pixel disco-ball which ran complex trig math at 60 fps.
  *
- * Change for your exact request:
- *   - The sweeping band now ONLY uses the 2 darkest oranges (Hot Burnt + Deep Burnt).
- *   - Pixels inside the band still randomly pick between those two → chunky pixelated look.
- *   - The band is now super visible again while keeping the full random cycling outside it.
+ * Outer Box matches the 46 dp touch/layout footprint of the old orb; the Canvas
+ * is sized to the same 24 dp the old Spacer used, keeping visual alignment identical.
  */
-
 @Composable
-fun DynamicThinkingAnimation(
-    modifier: Modifier = Modifier,
-) {
+fun DynamicThinkingAnimation(modifier: Modifier = Modifier) {
+    var stepIndex by remember { mutableIntStateOf((0 until ACTIVATION_SEQUENCE.size).random()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500L.milliseconds)
+            stepIndex = (stepIndex + 1) % ACTIVATION_SEQUENCE.size
+        }
+    }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "disco_orb")
+    val (activeA, activeB) = ACTIVATION_SEQUENCE[stepIndex]
 
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(animation = tween(1600, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "pulse_scale"
-    )
+    // One animateFloatAsState per dot — drives both opacity and radius from a single value.
+    // Called unconditionally at the top level per Compose rules.
+    val a0 by animateFloatAsState(targetValue = if (activeA == 0 || activeB == 0) 1f else 0.15f, animationSpec = tween(400), label = "a0")
+    val a1 by animateFloatAsState(targetValue = if (activeA == 1 || activeB == 1) 1f else 0.15f, animationSpec = tween(400), label = "a1")
+    val a2 by animateFloatAsState(targetValue = if (activeA == 2 || activeB == 2) 1f else 0.15f, animationSpec = tween(400), label = "a2")
+    val a3 by animateFloatAsState(targetValue = if (activeA == 3 || activeB == 3) 1f else 0.15f, animationSpec = tween(400), label = "a3")
+    val a4 by animateFloatAsState(targetValue = if (activeA == 4 || activeB == 4) 1f else 0.15f, animationSpec = tween(400), label = "a4")
+    val a5 by animateFloatAsState(targetValue = if (activeA == 5 || activeB == 5) 1f else 0.15f, animationSpec = tween(400), label = "a5")
+    val a6 by animateFloatAsState(targetValue = if (activeA == 6 || activeB == 6) 1f else 0.15f, animationSpec = tween(400), label = "a6")
+    val a7 by animateFloatAsState(targetValue = if (activeA == 7 || activeB == 7) 1f else 0.15f, animationSpec = tween(400), label = "a7")
+    val a8 by animateFloatAsState(targetValue = if (activeA == 8 || activeB == 8) 1f else 0.15f, animationSpec = tween(400), label = "a8")
 
-    val rotationDeg by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(animation = tween(2800, easing = LinearEasing), repeatMode = RepeatMode.Restart),
-        label = "rotation"
-    )
-
-    val pulseCycle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(FULL_CYCLE_MS, easing = LinearEasing), repeatMode = RepeatMode.Restart),
-        label = "pulse_cycle"
-    )
+    val dotColor = MaterialTheme.colorScheme.primary
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = pulseScale
-                scaleY = pulseScale
-            }
+        modifier = modifier,
     ) {
-        Spacer(
-            modifier = Modifier
-                .size(24.dp)
-                .drawWithCache {
-                    val center = Offset(size.width / 2, size.height / 2)
-                    val orbRadius = size.minDimension / 2 - 3.5f
-                    val strokeStyle = Stroke(width = 2.0f)
+        Canvas(modifier = Modifier.size(18.dp)) {
+            val dotAlphas = floatArrayOf(a0, a1, a2, a3, a4, a5, a6, a7, a8)
+            val baseRadius = size.minDimension / 11f
+            val pad = size.width * 0.08f
+            val spacingX = (size.width - 2f * pad) / 2f
+            val spacingY = (size.height - 2f * pad) / 2f
 
-                    val clipPath = Path().apply {
-                        addOval(
-                            Rect(
-                                center.x - orbRadius,
-                                center.y - orbRadius,
-                                center.x + orbRadius,
-                                center.y + orbRadius
-                            )
-                        )
-                    }
-
-                    val gridSize = 15
-                    val half = (gridSize - 1) / 2f
-                    val step = (orbRadius * 1.84f) / half
-                    val pixelSize = step * 1.09f
-                    val pixelRectSize = Size(pixelSize, pixelSize)
-                    val pixelCornerRadius = CornerRadius(pixelSize * 0.22f)
-
-                    val pixels = mutableListOf<PixelData>()
-                    for (gy in 0 until gridSize) {
-                        for (gx in 0 until gridSize) {
-                            val relX = gx - half
-                            val relY = gy - half
-                            val dist = sqrt(relX * relX + relY * relY)
-                            val maxDist = half * 0.94f
-                            if (dist > maxDist) continue
-
-                            val px = center.x + relX * step
-                            val py = center.y + relY * step
-
-                            pixels.add(
-                                PixelData(
-                                    normalizedX = relX / half,
-                                    normalizedY = relY / half,
-                                    dist = dist,
-                                    gx = gx,
-                                    gy = gy,
-                                    topLeft = Offset(px - pixelSize / 2, py - pixelSize / 2),
-                                    size = pixelRectSize,
-                                    cornerRadius = pixelCornerRadius
-                                )
-                            )
-                        }
-                    }
-
-                    onDrawBehind {
-                        drawCircle(color = Color(0xFF0F0F1E), radius = orbRadius, center = center)
-                        drawCircle(
-                            color = Color.Black,
-                            radius = orbRadius + 2.2f,
-                            center = center,
-                            style = strokeStyle
-                        )
-
-                        clipPath(clipPath) {
-                            val currentRotation = rotationDeg
-                            val currentPulseCycle = pulseCycle
-                            val sweepFraction = SWEEP_DURATION_MS / FULL_CYCLE_MS
-
-                            pixels.forEach { pixel ->
-                                // === ROUND RUBBER-BAND PULSE ===
-                                val waveProgress = if (currentPulseCycle < sweepFraction) {
-                                    -1.4f + (currentPulseCycle / sweepFraction) * 2.8f
-                                } else 10f
-                                val curvedDist =
-                                    abs(pixel.normalizedX - waveProgress) + (pixel.normalizedY * pixel.normalizedY) * 0.25f
-                                val isInPulse = curvedDist < 0.27f && waveProgress < 5f
-
-                                val finalColor = if (isInPulse) {
-                                    val seed =
-                                        (pixel.gx * 137L + pixel.gy * 149L + (pixel.dist * 23).toLong()) % 10000L.toFloat()
-                                    val facetSpeed = 0.064f + (seed % 31f) * 0.0013f
-                                    val time = currentRotation * 0.82f
-                                    val colorTime = time * facetSpeed + seed * 0.27f
-
-                                    val darkIndex = if ((colorTime % 2).toInt() == 0) 5 else 6
-                                    val pixelColor = DiscoColors[darkIndex]
-
-                                    val shimmer =
-                                        sin((time * 2.9f + seed * 0.9f) * PI.toFloat() / 105f)
-                                    val brightness = 1f + shimmer * 0.44f
-
-                                    val flashTrigger = sin(time * 1.25f + seed * 1.4f)
-                                    if (flashTrigger > 0.89f && shimmer > 0.58f) {
-                                        Color.White
-                                    } else {
-                                        pixelColor.copy(
-                                            red = (pixelColor.red * brightness).coerceAtMost(1f),
-                                            green = (pixelColor.green * brightness).coerceAtMost(1f),
-                                            blue = (pixelColor.blue * brightness).coerceAtMost(1f)
-                                        )
-                                    }
-                                } else {
-                                    val seed =
-                                        (pixel.gx * 137L + pixel.gy * 149L + (pixel.dist * 23).toLong()) % 10000L.toFloat()
-                                    val facetSpeed = 0.064f + (seed % 31f) * 0.0013f
-                                    val time = currentRotation * 0.82f
-                                    val colorTime = time * facetSpeed + seed * 0.27f
-                                    val colorIndex =
-                                        ((colorTime % DiscoColors.size).toInt() % DiscoColors.size + DiscoColors.size) % DiscoColors.size
-                                    val pixelColor = DiscoColors[colorIndex]
-
-                                    val shimmer =
-                                        sin((time * 2.9f + seed * 0.9f) * PI.toFloat() / 105f)
-                                    val brightness = 1f + shimmer * 0.44f
-
-                                    val flashTrigger = sin(time * 1.25f + seed * 1.4f)
-                                    if (flashTrigger > 0.89f && shimmer > 0.58f) Color.White else {
-                                        pixelColor.copy(
-                                            red = (pixelColor.red * brightness).coerceAtMost(1f),
-                                            green = (pixelColor.green * brightness).coerceAtMost(1f),
-                                            blue = (pixelColor.blue * brightness).coerceAtMost(1f)
-                                        )
-                                    }
-                                }
-
-                                drawRoundRect(
-                                    color = finalColor,
-                                    topLeft = pixel.topLeft,
-                                    size = pixel.size,
-                                    cornerRadius = pixel.cornerRadius
-                                )
-                            }
-                        }
-
-                        // Specular highlight
-                        val hlAngle = rotationDeg * 1.25f
-                        val hlX = center.x + sin(hlAngle * PI.toFloat() / 180f) * orbRadius * 0.32f
-                        val hlY = center.y - cos(hlAngle * PI.toFloat() / 180f) * orbRadius * 0.41f
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.38f),
-                            radius = orbRadius * 0.33f,
-                            center = Offset(hlX, hlY),
-                            blendMode = BlendMode.Screen
-                        )
-                    }
-                }
-        )
+            for (i in 0 until 9) {
+                val alpha = dotAlphas[i]
+                val center = Offset(
+                    x = pad + (i % 3) * spacingX,
+                    y = pad + (i / 3) * spacingY,
+                )
+                drawCircle(
+                    color = dotColor.copy(alpha = alpha),
+                    radius = baseRadius * (0.55f + alpha * 0.7f),
+                    center = center,
+                )
+            }
+        }
     }
 }

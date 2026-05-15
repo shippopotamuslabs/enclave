@@ -11,16 +11,15 @@ import javax.inject.Singleton
  * - Model downloads also come from R2 bucket
  */
 @Singleton
-class R2ModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
+class R2ModelUrlProvider
+    @Inject
+    constructor() : ModelUrlProviderPort {
+        companion object {
+            // Cloudflare R2 bucket URL - using custom domain
+            private const val R2_BUCKET_URL = "https://config.pocketcrew.app"
+        }
 
-    companion object {
-        // Cloudflare R2 bucket URL - using custom domain
-        private const val R2_BUCKET_URL = "https://config.pocketcrew.app"
+        override fun getConfigUrl(): String = "$R2_BUCKET_URL/model_config.json"
+
+        override fun getModelDownloadUrl(spec: DownloadFileSpec): String = "$R2_BUCKET_URL/${spec.remoteFileName}"
     }
-
-    override fun getConfigUrl(): String = "$R2_BUCKET_URL/model_config.json"
-
-    override fun getModelDownloadUrl(spec: DownloadFileSpec): String {
-        return "$R2_BUCKET_URL/${spec.remoteFileName}"
-    }
-}

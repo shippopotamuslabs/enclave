@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.feature.inference"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34
@@ -29,6 +29,7 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(libs.kotlin.reflect)
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

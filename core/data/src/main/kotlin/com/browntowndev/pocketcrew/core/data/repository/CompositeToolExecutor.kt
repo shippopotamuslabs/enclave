@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
-import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,74 +28,76 @@ import javax.inject.Singleton
  * - [ToolDefinition.X_SEARCH] → [XSearchToolExecutorImpl]
  */
 @Singleton
-class CompositeToolExecutor @Inject constructor(
-    private val searchToolExecutor: SearchToolExecutorImpl,
-    private val extractToolExecutor: ExtractToolExecutorImpl,
-    private val imageInspectToolExecutor: ImageInspectToolExecutor,
-    private val searchChatHistoryToolExecutor: SearchChatHistoryToolExecutor,
-    private val searchChatToolExecutor: SearchChatToolExecutor,
-    private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
-    private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
-    private val artifactToolExecutor: ArtifactToolExecutor,
-    private val searchArtifactToolExecutor: com.browntowndev.pocketcrew.core.data.artifact.SearchArtifactToolExecutor,
-    private val xSearchToolExecutor: XSearchToolExecutorImpl,
-    private val mediaToolExecutor: MediaToolExecutor,
-    private val eventBus: ToolExecutionEventBus,
-) : ToolExecutorPort {
+class CompositeToolExecutor
+    @Inject
+    constructor(
+        private val searchToolExecutor: SearchToolExecutorImpl,
+        private val extractToolExecutor: ExtractToolExecutorImpl,
+        private val imageInspectToolExecutor: ImageInspectToolExecutor,
+        private val searchChatHistoryToolExecutor: SearchChatHistoryToolExecutor,
+        private val searchChatToolExecutor: SearchChatToolExecutor,
+        private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
+        private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
+        private val artifactToolExecutor: ArtifactToolExecutor,
+        private val searchArtifactToolExecutor: com.browntowndev.pocketcrew.core.data.artifact.SearchArtifactToolExecutor,
+        private val xSearchToolExecutor: XSearchToolExecutorImpl,
+        private val mediaToolExecutor: MediaToolExecutor,
+        private val eventBus: ToolExecutionEventBus,
+    ) : ToolExecutorPort {
+        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            val eventId = UUID.randomUUID().toString()
 
-    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
-        val eventId = UUID.randomUUID().toString()
-        
-        eventBus.emit(
-            ToolExecutionEvent.Started(
-                eventId = eventId,
-                toolName = request.toolName,
-                argumentsJson = request.argumentsJson,
-                chatId = request.chatId,
-                userMessageId = request.userMessageId,
-                modelType = request.modelType
+            eventBus.emit(
+                ToolExecutionEvent.Started(
+                    eventId = eventId,
+                    toolName = request.toolName,
+                    argumentsJson = request.argumentsJson,
+                    chatId = request.chatId,
+                    userMessageId = request.userMessageId,
+                    modelType = request.modelType,
+                ),
             )
-        )
 
-        return try {
-            val result = when (request.toolName) {
-                ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
-                ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
-                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
-                ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
-                ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
-                ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
-                ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
-                ToolDefinition.START_ARTIFACT.name -> artifactToolExecutor.execute(request)
-                ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
-                ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
-                ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
-                ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
-                ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
-                ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
-                else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
+            return try {
+                val result =
+                    when (request.toolName) {
+                        ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
+                        ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
+                        ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
+                        ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
+                        ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
+                        ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
+                        ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
+                        ToolDefinition.START_ARTIFACT.name -> artifactToolExecutor.execute(request)
+                        ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
+                        ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
+                        ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
+                        ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
+                        ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
+                        ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
+                        else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
+                    }
+
+                eventBus.emit(
+                    ToolExecutionEvent.Finished(
+                        eventId = eventId,
+                        chatId = request.chatId,
+                        userMessageId = request.userMessageId,
+                        resultJson = result.resultJson,
+                    ),
+                )
+
+                result
+            } catch (e: Exception) {
+                eventBus.emit(
+                    ToolExecutionEvent.Finished(
+                        eventId = eventId,
+                        chatId = request.chatId,
+                        userMessageId = request.userMessageId,
+                        error = e.message ?: "Unknown error",
+                    ),
+                )
+                throw e
             }
-            
-            eventBus.emit(
-                ToolExecutionEvent.Finished(
-                    eventId = eventId,
-                    chatId = request.chatId,
-                    userMessageId = request.userMessageId,
-                    resultJson = result.resultJson
-                )
-            )
-            
-            result
-        } catch (e: Exception) {
-            eventBus.emit(
-                ToolExecutionEvent.Finished(
-                    eventId = eventId,
-                    chatId = request.chatId,
-                    userMessageId = request.userMessageId,
-                    error = e.message ?: "Unknown error"
-                )
-            )
-            throw e
         }
     }
-}

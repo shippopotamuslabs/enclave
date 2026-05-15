@@ -7,27 +7,30 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
-@Entity(tableName = "message",
-    foreignKeys = [ForeignKey(
-        entity = MessageEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["user_message_id"],
-        onDelete = ForeignKey.CASCADE
-    ), ForeignKey(
-        entity = ChatEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["chat_id"],
-        onDelete = ForeignKey.CASCADE
-    )],
+@Entity(
+    tableName = "message",
+    foreignKeys = [
+        ForeignKey(
+            entity = MessageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["user_message_id"],
+            onDelete = ForeignKey.CASCADE,
+        ), ForeignKey(
+            entity = ChatEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["chat_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
     indices = [
         Index(value = ["user_message_id"]),
-        Index(value = ["chat_id"])
-    ]
+        Index(value = ["chat_id"]),
+    ],
 )
 data class MessageEntity(
     @PrimaryKey
@@ -74,5 +77,5 @@ data class MessageEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
 )

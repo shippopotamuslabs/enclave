@@ -64,7 +64,34 @@ data class SettingsUiState(
     val mediaProviderEditor: MediaProviderEditorUiState = MediaProviderEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
+    val vaultReauthSheet: VaultReauthSheetState = VaultReauthSheetState.Hidden,
 )
+
+/**
+ * Drives the post-Settings-sign-in re-auth bottom sheet. Sign-in alone is not enough to start
+ * cloud sync — the user must also re-enter their vault password so we can reconcile local and
+ * cloud DEKs before the Firestore listener spins up.
+ *
+ *  - [Hidden] — no sheet shown; default.
+ *  - [EnterPassword] — sheet visible, awaiting user password. Carries any inline error
+ *    message (e.g. "Incorrect Vault Password") and an `isUnlocking` flag for the spinner.
+ *  - [ConfirmClobber] — local and cloud DEKs differ; the user must explicitly accept the
+ *    destructive clobber via the dialog overlaid on top of the sheet.
+ */
+sealed interface VaultReauthSheetState {
+    data object Hidden : VaultReauthSheetState
+
+    @Immutable
+    data class EnterPassword(
+        val errorMessage: String? = null,
+        val isUnlocking: Boolean = false,
+    ) : VaultReauthSheetState
+
+    @Immutable
+    data class ConfirmClobber(
+        val isReconciling: Boolean = false,
+    ) : VaultReauthSheetState
+}
 
 @Immutable
 data class SettingsHomeUiState(

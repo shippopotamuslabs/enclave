@@ -57,8 +57,8 @@ class GoogleInferenceServiceImpl(
         closeConversation: Boolean,
     ): Flow<InferenceEvent> = flow {
         try {
-            if (options.imageUris.size > 3600) {
-                throw IllegalArgumentException("Google API supports a maximum of 3600 images per request.")
+            require(options.imageUris.size <= 3600) {
+                "Google API supports a maximum of 3600 images per request."
             }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(

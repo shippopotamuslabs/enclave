@@ -15,110 +15,111 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 @Singleton
-class AndroidAudioPlayer @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val logger: LoggingPort,
-) : AudioPlayerPort {
+class AndroidAudioPlayer
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+        private val logger: LoggingPort,
+    ) : AudioPlayerPort {
+        private var mediaPlayer: MediaPlayer? = null
+        private var tempFile: File? = null
 
-    private var mediaPlayer: MediaPlayer? = null
-    private var tempFile: File? = null
+        init {
+            // Initial cleanup of any stale TTS files from previous sessions
+            cleanStaleTtsFiles()
+        }
 
-    init {
-        // Initial cleanup of any stale TTS files from previous sessions
-        cleanStaleTtsFiles()
-    }
+        override suspend fun playAudio(audioBytes: ByteArray) {
+            stop()
 
-    override suspend fun playAudio(audioBytes: ByteArray) {
-        stop()
+            return suspendCancellableCoroutine { continuation ->
+                try {
+                    // Create a temporary file to store the audio bytes
+                    val ext = detectAudioExtension(audioBytes)
+                    val file = File(context.cacheDir, "tts_playback_${UUID.randomUUID()}$ext")
+                    FileOutputStream(file).use { it.write(audioBytes) }
+                    tempFile = file
 
-        return suspendCancellableCoroutine { continuation ->
-            try {
-                // Create a temporary file to store the audio bytes
-                val ext = detectAudioExtension(audioBytes)
-                val file = File(context.cacheDir, "tts_playback_${UUID.randomUUID()}$ext")
-                FileOutputStream(file).use { it.write(audioBytes) }
-                tempFile = file
+                    val player = MediaPlayer()
+                    mediaPlayer = player
 
-                val player = MediaPlayer()
-                mediaPlayer = player
-
-                player.apply {
-                    setDataSource(context, Uri.fromFile(file))
-                    prepareAsync()
-                    setOnPreparedListener {
-                        it.start()
+                    player.apply {
+                        setDataSource(context, Uri.fromFile(file))
+                        prepareAsync()
+                        setOnPreparedListener {
+                            it.start()
+                        }
+                        setOnCompletionListener {
+                            continuation.resume(Unit)
+                            // Release on completion to free resources immediately.
+                            // Use runCatching since MediaPlayer state transitions may throw.
+                            runCatching { it.stop() }
+                            runCatching { it.release() }
+                            // Null out the reference to prevent double-release
+                            synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
+                            tempFile?.delete()
+                            tempFile = null
+                        }
+                        setOnErrorListener { mp, _, _ ->
+                            continuation.resume(Unit)
+                            runCatching { mp.stop() }
+                            runCatching { mp.release() }
+                            synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
+                            tempFile?.delete()
+                            tempFile = null
+                            true
+                        }
                     }
-                    setOnCompletionListener {
-                        continuation.resume(Unit)
-                        // Release on completion to free resources immediately.
-                        // Use runCatching since MediaPlayer state transitions may throw.
-                        runCatching { it.stop() }
-                        runCatching { it.release() }
-                        // Null out the reference to prevent double-release
-                        synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
-                        tempFile?.delete()
-                        tempFile = null
-                    }
-                    setOnErrorListener { mp, _, _ ->
-                        continuation.resume(Unit)
-                        runCatching { mp.stop() }
-                        runCatching { mp.release() }
-                        synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
-                        tempFile?.delete()
-                        tempFile = null
-                        true
-                    }
-                }
 
-                continuation.invokeOnCancellation {
+                    continuation.invokeOnCancellation {
+                        stop()
+                    }
+                } catch (_: Exception) {
+                    continuation.resume(Unit)
                     stop()
                 }
-            } catch (_: Exception) {
-                continuation.resume(Unit)
-                stop()
             }
         }
-    }
 
-    override fun stop() {
-        try {
-            mediaPlayer?.let { mp ->
-                runCatching { if (mp.isPlaying) mp.stop() }
-                runCatching { mp.release() }
+        override fun stop() {
+            try {
+                mediaPlayer?.let { mp ->
+                    runCatching { if (mp.isPlaying) mp.stop() }
+                    runCatching { mp.release() }
+                }
+                mediaPlayer = null
+                tempFile?.delete()
+                tempFile = null
+            } catch (e: Exception) {
+                logger.error("AndroidAudioPlayer", "Error stopping playback or cleaning temp file", e)
             }
-            mediaPlayer = null
-            tempFile?.delete()
-            tempFile = null
-        } catch (e: Exception) {
-            logger.error("AndroidAudioPlayer", "Error stopping playback or cleaning temp file", e)
         }
-    }
 
-    private fun cleanStaleTtsFiles() {
-        try {
-            context.cacheDir.listFiles { _, name ->
-                name.startsWith("tts_playback_")
-            }?.forEach { it.delete() }
-        } catch (e: Exception) {
-            logger.error("AndroidAudioPlayer", "Error during stale TTS file cleanup", e)
+        private fun cleanStaleTtsFiles() {
+            try {
+                context.cacheDir
+                    .listFiles { _, name ->
+                        name.startsWith("tts_playback_")
+                    }?.forEach { it.delete() }
+            } catch (e: Exception) {
+                logger.error("AndroidAudioPlayer", "Error during stale TTS file cleanup", e)
+            }
         }
-    }
 
-    /**
-     * Detects the audio container format from the magic bytes at the start of [audioBytes]
-     * and returns an appropriate file extension (e.g. ".wav" or ".mp3").
-     */
-    private fun detectAudioExtension(audioBytes: ByteArray): String {
-        return if (audioBytes.size >= 4 && isRiffHeader(audioBytes)) {
-            ".wav"
-        } else {
-            ".mp3"
-        }
-    }
+        /**
+         * Detects the audio container format from the magic bytes at the start of [audioBytes]
+         * and returns an appropriate file extension (e.g. ".wav" or ".mp3").
+         */
+        private fun detectAudioExtension(audioBytes: ByteArray): String =
+            if (audioBytes.size >= 4 && isRiffHeader(audioBytes)) {
+                ".wav"
+            } else {
+                ".mp3"
+            }
 
-    private fun isRiffHeader(audioBytes: ByteArray): Boolean =
-        audioBytes[0] == 'R'.code.toByte() &&
-            audioBytes[1] == 'I'.code.toByte() &&
-            audioBytes[2] == 'F'.code.toByte() &&
-            audioBytes[3] == 'F'.code.toByte()
-}
+        private fun isRiffHeader(audioBytes: ByteArray): Boolean =
+            audioBytes[0] == 'R'.code.toByte() &&
+                audioBytes[1] == 'I'.code.toByte() &&
+                audioBytes[2] == 'F'.code.toByte() &&
+                audioBytes[3] == 'F'.code.toByte()
+    }

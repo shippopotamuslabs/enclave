@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -13,12 +13,12 @@ import org.junit.jupiter.api.Test
  * Verifies correct parsing of JSON objects into DownloadFileSpec.
  */
 class ModelDownloadWorkerTest {
-
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun `parseFileSpecFromJson correctly parses complete file spec`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "Llama-3-8B-Instruct-Q4_K_M.gguf",
                 "localFileName": "Llama-3-8B-Instruct-Q4_K_M.gguf",
@@ -28,7 +28,7 @@ class ModelDownloadWorkerTest {
                 "source": "HUGGING_FACE",
                 "modelFileFormat": "GGUF"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -43,7 +43,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson handles litertlm format`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "gemma-3n-E2B-it-int4.litertlm",
                 "localFileName": "gemma-3n-E2B-it-int4.litertlm",
@@ -53,7 +54,7 @@ class ModelDownloadWorkerTest {
                 "source": "HUGGING_FACE",
                 "modelFileFormat": "LITERTLM"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -63,7 +64,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson defaults modelFileFormat on missing field`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "model.unknown",
                 "localFileName": "model.unknown",
@@ -72,7 +74,7 @@ class ModelDownloadWorkerTest {
                 "huggingFaceModelName": "test/model",
                 "source": "HUGGING_FACE"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -82,7 +84,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson parses mmproj fields`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "model.gguf",
                 "localFileName": "model.gguf",
@@ -96,7 +99,7 @@ class ModelDownloadWorkerTest {
                 "mmprojSha256": "mmsha456",
                 "mmprojSizeInBytes": 500
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -109,7 +112,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson handles empty optional fields`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "model.gguf",
                 "localFileName": "model.gguf",
@@ -119,7 +123,7 @@ class ModelDownloadWorkerTest {
                 "source": "HUGGING_FACE",
                 "modelFileFormat": "GGUF"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -132,7 +136,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson defaults source to HUGGING_FACE when omitted`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "model.gguf",
                 "localFileName": "model.gguf",
@@ -141,7 +146,7 @@ class ModelDownloadWorkerTest {
                 "huggingFaceModelName": "test/model",
                 "modelFileFormat": "GGUF"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
@@ -151,7 +156,8 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson parses utilityType`() {
-        val jsonStr = """
+        val jsonStr =
+            """
             {
                 "remoteFileName": "ggml-base.en.bin",
                 "localFileName": "ggml-base.en.bin",
@@ -162,7 +168,7 @@ class ModelDownloadWorkerTest {
                 "modelFileFormat": "BIN",
                 "utilityType": "WHISPER"
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 

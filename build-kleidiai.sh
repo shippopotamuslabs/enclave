@@ -21,7 +21,7 @@ if [ -z "$ANDROID_HOME" ]; then
     exit 1
 fi
 
-NDK_VERSION="27.0.11718014"
+NDK_VERSION="28.2.13676358"
 NDK_LIB_DIR="$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android"
 KLEIDIAI_DIR="$SCRIPT_DIR/third_party/kleidiai-1.22.0"
 
@@ -34,6 +34,7 @@ echo "=========================================="
 # =============================================================================
 echo ""
 echo "[1/3] Copying libc++_shared.so from NDK..."
+rm -rf "$JNI_LIBS_DIR"
 mkdir -p "$JNI_LIBS_DIR"
 cp "$NDK_LIB_DIR/libc++_shared.so" "$JNI_LIBS_DIR/"
 echo "      -> libc++_shared.so"
@@ -50,7 +51,7 @@ rm -rf "$LLAMA_ANDROID_DIR/build"
     -PCMAKE_ARGS="-DGGML_CPU_ARM_ENABLE_SVE=ON;-DFETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD=$KLEIDIAI_DIR" \
     --no-daemon -q
 
-SVE_LIB=$(find "$LLAMA_ANDROID_DIR/build" -name "libllama-jni-neon.so" -type f 2>/dev/null | head -1)
+SVE_LIB=$(find "$LLAMA_ANDROID_DIR/build" -name "libllama-jni-sve.so" -type f 2>/dev/null | head -1)
 if [ -n "$SVE_LIB" ]; then
     cp "$SVE_LIB" "$JNI_LIBS_DIR/libllama-jni-sve.so"
     echo "      -> libllama-jni-sve.so"

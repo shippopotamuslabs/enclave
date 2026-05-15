@@ -14,10 +14,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.io.IOException
 
 class ExaSearchRepositoryTest {
-
     private val okHttpClient = mockk<OkHttpClient>()
     private val apiKeyManager = mockk<ApiKeyManager>()
     private lateinit var repository: ExaSearchRepository
@@ -30,7 +28,8 @@ class ExaSearchRepositoryTest {
 
     @Test
     fun `search posts Exa request and maps response`() {
-        val jsonResponse = """
+        val jsonResponse =
+            """
             {
               "results": [
                 {
@@ -41,17 +40,19 @@ class ExaSearchRepositoryTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val call = mockk<Call>()
         every { okHttpClient.newCall(any()) } returns call
-        every { call.execute() } returns Response.Builder()
-            .request(Request.Builder().url("https://api.exa.ai/search").build())
-            .protocol(Protocol.HTTP_1_1)
-            .code(200)
-            .message("OK")
-            .body(jsonResponse.toResponseBody())
-            .build()
+        every { call.execute() } returns
+            Response
+                .Builder()
+                .request(Request.Builder().url("https://api.exa.ai/search").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(jsonResponse.toResponseBody())
+                .build()
 
         val result = repository.search("test query")
 
@@ -65,15 +66,17 @@ class ExaSearchRepositoryTest {
     fun `search throws when Exa key is missing`() {
         every { apiKeyManager.get(ApiKeyManager.EXA_SEARCH_ALIAS) } returns null
 
-        val error = assertThrows<IllegalStateException> {
-            repository.search("test query")
-        }
+        val error =
+            assertThrows<IllegalStateException> {
+                repository.search("test query")
+            }
         assertEquals("Exa API key is required when search is enabled and Exa is selected", error.message)
     }
 
     @Test
     fun `extract posts Exa contents request and maps response`() {
-        val jsonResponse = """
+        val jsonResponse =
+            """
             {
               "results": [
                 {
@@ -82,17 +85,19 @@ class ExaSearchRepositoryTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val call = mockk<Call>()
         every { okHttpClient.newCall(any()) } returns call
-        every { call.execute() } returns Response.Builder()
-            .request(Request.Builder().url("https://api.exa.ai/contents").build())
-            .protocol(Protocol.HTTP_1_1)
-            .code(200)
-            .message("OK")
-            .body(jsonResponse.toResponseBody())
-            .build()
+        every { call.execute() } returns
+            Response
+                .Builder()
+                .request(Request.Builder().url("https://api.exa.ai/contents").build())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(jsonResponse.toResponseBody())
+                .build()
 
         val result = repository.extract(listOf("https://exa.ai/page"))
 

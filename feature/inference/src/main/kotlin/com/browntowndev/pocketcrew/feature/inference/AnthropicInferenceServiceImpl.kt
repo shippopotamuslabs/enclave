@@ -40,6 +40,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+@Suppress("MaxLineLength", "MagicNumber")
 class AnthropicInferenceServiceImpl(
     private val client: AnthropicClient,
     private val modelId: String,
@@ -86,8 +87,8 @@ class AnthropicInferenceServiceImpl(
         closeConversation: Boolean
     ): Flow<InferenceEvent> = flow {
         try {
-            if (options.imageUris.size > 20) {
-                throw IllegalArgumentException("Anthropic API supports a maximum of 20 images per request.")
+            require(options.imageUris.size <= 20) {
+                "Anthropic API supports a maximum of 20 images per request."
             }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(

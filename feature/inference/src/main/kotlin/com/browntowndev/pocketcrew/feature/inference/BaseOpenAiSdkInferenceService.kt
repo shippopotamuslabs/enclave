@@ -85,8 +85,8 @@ abstract class BaseOpenAiSdkInferenceService(
         closeConversation: Boolean
     ): Flow<InferenceEvent> = flow {
         try {
-            if (options.imageUris.size > maxImages) {
-                throw IllegalArgumentException("$provider API supports a maximum of $maxImages images per request.")
+            require(options.imageUris.size <= maxImages) {
+                "$provider API supports a maximum of $maxImages images per request."
             }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(

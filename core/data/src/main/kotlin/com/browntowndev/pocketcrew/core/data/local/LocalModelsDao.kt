@@ -21,37 +21,46 @@ interface LocalModelsDao {
      * Returns all active local models that have at least one configuration.
      * Excludes soft-deleted models, which have no configurations.
      */
-    @Query("""
+    @Query(
+        """
         SELECT m.* FROM local_models m
         WHERE m.deleted = 0 AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
-    """)
+    """,
+    )
     suspend fun getAllActive(): List<LocalModelEntity>
 
     /**
      * Flow version of getAllActive(). Returns active models with configs.
      * Excludes soft-deleted models via EXISTS subquery.
      */
-    @Query("""
+    @Query(
+        """
         SELECT m.* FROM local_models m
         WHERE m.deleted = 0 AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
-    """)
+    """,
+    )
     fun observeAllActive(): Flow<List<LocalModelEntity>>
 
     /**
      * Returns soft-deleted models: LocalModelEntity rows that have ZERO configurations.
      * These are models that were downloaded but soft-deleted, available for re-download.
      */
-    @Query("""
+    @Query(
+        """
         SELECT m.* FROM local_models m
         WHERE m.deleted = 0 AND NOT EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
-    """)
+    """,
+    )
     suspend fun getSoftDeletedModels(): List<LocalModelEntity>
 
     @Upsert
     suspend fun upsert(entity: LocalModelEntity): Long
 
     @Query("UPDATE local_models SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: LocalModelId, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: LocalModelId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM local_models WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<LocalModelId>)

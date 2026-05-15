@@ -5,6 +5,7 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Tasks
@@ -18,18 +19,17 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.tasks.await
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import java.io.File
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MediaCloudSyncWorkerTest {
-
     private val context = mockk<Context>(relaxed = true)
     private val workerParams = mockk<WorkerParameters>(relaxed = true)
     private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
@@ -37,65 +37,70 @@ class MediaCloudSyncWorkerTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val localEncryption = FakeLocalDataEncryptionService()
     private val userIdProvider = { "user123" }
 
     private lateinit var worker: MediaCloudSyncWorker
 
-    @Before
+    @BeforeEach
     fun setup() {
         mockkStatic("kotlinx.coroutines.tasks.TasksKt")
-        worker = MediaCloudSyncWorker(
-            context,
-            workerParams,
-            studioMediaDao,
-            storage,
-            loggingPort,
-            cryptoManager,
-            userIdProvider,
-            syncTrigger
-        )
+        worker =
+            MediaCloudSyncWorker(
+                context,
+                workerParams,
+                studioMediaDao,
+                storage,
+                loggingPort,
+                cryptoManager,
+                userIdProvider,
+                syncTrigger,
+                localEncryption,
+            )
     }
 
-    @After
+    @AfterEach
     fun tearDown() {
         unmockkStatic("kotlinx.coroutines.tasks.TasksKt")
     }
 
     @Test
-    fun `doWork recovers from stagingRemoteUrl if present`() = runBlocking {
-        // Arrange
-        val mediaId = "media1"
-        val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Fmedia%2Fmedia1?alt=media"
-        val media = StudioMediaEntity(
-            id = mediaId,
-            prompt = "test",
-            mediaUri = "file:///tmp/media1.jpg",
-            mediaType = "IMAGE",
-            stagingRemoteUrl = stagingUrl
-        )
+    fun `doWork recovers from stagingRemoteUrl if present`() =
+        runBlocking {
+            // Arrange
+            val mediaId = "media1"
+            val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Fmedia%2Fmedia1?alt=media"
+            val media =
+                StudioMediaEntity(
+                    id = mediaId,
+                    prompt = "test",
+                    mediaUri = "file:///tmp/media1.jpg",
+                    mediaType = "IMAGE",
+                    stagingRemoteUrl = "PCENC:v1:aes-gcm:$stagingUrl",
+                )
 
-        coEvery { studioMediaDao.getPendingUploads() } returns listOf(media)
-        coEvery { studioMediaDao.getPendingDeletions() } returns emptyList()
+            coEvery { studioMediaDao.getPendingUploads() } returns listOf(media)
+            coEvery { studioMediaDao.getPendingDeletions() } returns emptyList()
 
-        val storageRef = mockk<StorageReference>(relaxed = true)
-        val metadata = mockk<StorageMetadata>(relaxed = true)
-        
-        every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
-        // Mock storageRef.metadata.await() returns metadata
-        every { storageRef.metadata } returns Tasks.forResult(metadata)
-        // Mock storageRef.downloadUrl.await() returns stagingUrl
-        every { storageRef.downloadUrl } returns Tasks.forResult(android.net.Uri.parse(stagingUrl))
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            val metadata = mockk<StorageMetadata>(relaxed = true)
 
-        // Act
-        val result = worker.doWork()
+            every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+            // Mock storageRef.metadata.await() returns metadata
+            every { storageRef.metadata } returns Tasks.forResult(metadata)
+            // Mock storageRef.downloadUrl.await() returns stagingUrl
+            every { storageRef.downloadUrl } returns Tasks.forResult(android.net.Uri.parse(stagingUrl))
 
-        // Assert
-        assertEquals(ListenableWorker.Result.success(), result)
-        // Verify we DID NOT try to read the file or encrypt it (minimal code would just use the URL)
-        coVerify(exactly = 0) { cryptoManager.encryptBytes(any()) }
-        // Verify we DID NOT try to upload
-        coVerify(exactly = 0) { storageRef.putBytes(any()) }
-        // Verify we marked it uploaded with the recovered URL
-        coVerify { studioMediaDao.markUploaded(mediaId, stagingUrl, any()) }
-    }
+            // Act
+            val result = worker.doWork()
+
+            // Assert
+            assertEquals(ListenableWorker.Result.success(), result)
+            // Verify we DID NOT try to read the file or encrypt it (minimal code would just use the URL)
+            coVerify(exactly = 0) { cryptoManager.encryptBytes(any()) }
+            // Verify we DID NOT try to upload
+            coVerify(exactly = 0) { storageRef.putBytes(any()) }
+            // Verify we marked it uploaded with the recovered URL
+            coVerify { studioMediaDao.markUploaded(mediaId, "PCENC:v1:aes-gcm:$stagingUrl", any()) }
+        }
 }

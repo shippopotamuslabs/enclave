@@ -16,12 +16,16 @@ import javax.inject.Singleton
  * execution but sources haven't been inserted yet, so the UPDATE is a no-op.
  */
 @Singleton
-class ExtractedUrlTracker @Inject constructor() : ExtractedUrlTrackerPort {
-    private val _urls = mutableSetOf<String>()
+class ExtractedUrlTracker
+    @Inject
+    constructor() : ExtractedUrlTrackerPort {
+        private val _urls = mutableSetOf<String>()
 
-    override val urls: Set<String> get() = synchronized(_urls) { _urls.toSet() }
+        override val urls: Set<String> get() = synchronized(_urls) { _urls.toSet() }
 
-    override fun add(url: String) { synchronized(_urls) { _urls.add(url) } }
+        override fun add(url: String) {
+            synchronized(_urls) { _urls.add(url) }
+        }
 
-    override fun clear() = synchronized(_urls) { _urls.clear() }
-}
+        override fun clear() = synchronized(_urls) { _urls.clear() }
+    }

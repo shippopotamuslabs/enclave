@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
@@ -142,6 +143,10 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
+            if (messageSnapshot.transcriptSegments.isNotEmpty()) {
+                accumulator.restoreTranscriptSegments(messageSnapshot.transcriptSegments)
+            }
+
             // Sync artifacts (merge so port-attached placeholders upgrade when inference emits the full doc)
             val mergedArtifacts =
                 mergeArtifactGenerationRequests(accumulator.artifacts.toList(), messageSnapshot.artifacts)
@@ -249,6 +254,7 @@ internal class MessageAccumulator(
     val generatedMediaAssetIds: MutableList<String> = mutableListOf(),
     val generatedMediaTypes: MutableList<String> = mutableListOf(),
     val generatedMediaPrompts: MutableList<String> = mutableListOf(),
+    private val transcriptSegmentsMutable: MutableList<MutableTranscriptSegment> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -257,10 +263,59 @@ internal class MessageAccumulator(
             0
         }
 
+    fun restoreTranscriptSegments(segments: List<MessageTranscriptSegment>) {
+        transcriptSegmentsMutable.clear()
+        segments.forEach { seg ->
+            when (seg) {
+                is MessageTranscriptSegment.Thinking -> transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.THINKING,
+                        text = StringBuilder(seg.text),
+                        thinkingStartMs = seg.thinkingStartTime,
+                        thinkingEndMs = seg.thinkingEndTime,
+                        restoredDurationSeconds = seg.thinkingDurationSeconds?.takeIf { it > 0L },
+                    ),
+                )
+                is MessageTranscriptSegment.AssistantText -> transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                        text = StringBuilder(seg.text),
+                    ),
+                )
+            }
+        }
+    }
+
     fun appendThinking(chunk: String) {
-        thinkingRaw.append(chunk)
-        if (thinkingStartTime == null) {
+        if (thinkingEndTime != null) {
+            thinkingEndTime = null
             thinkingStartTime = System.currentTimeMillis()
+        } else if (thinkingStartTime == null) {
+            thinkingStartTime = System.currentTimeMillis()
+        }
+        thinkingRaw.append(chunk)
+
+        val now = System.currentTimeMillis()
+        when {
+            transcriptSegmentsMutable.isEmpty() -> {
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.THINKING,
+                        text = StringBuilder(chunk),
+                        thinkingStartMs = now,
+                    ),
+                )
+            }
+            transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.ASSISTANT_TEXT -> {
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.THINKING,
+                        text = StringBuilder(chunk),
+                        thinkingStartMs = now,
+                    ),
+                )
+            }
+            else -> transcriptSegmentsMutable.last().text.append(chunk)
         }
     }
 
@@ -269,27 +324,118 @@ internal class MessageAccumulator(
         if (thinkingStartTime != null && thinkingEndTime == null) {
             thinkingEndTime = System.currentTimeMillis()
         }
+
+        when {
+            transcriptSegmentsMutable.isEmpty() -> {
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                        text = StringBuilder(chunk),
+                    ),
+                )
+            }
+            transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.THINKING -> {
+                finalizeOpenThinkingSegment()
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                        text = StringBuilder(chunk),
+                    ),
+                )
+            }
+            else -> transcriptSegmentsMutable.last().text.append(chunk)
+        }
     }
 
-    fun toSnapshot(): MessageSnapshot = MessageSnapshot(
-        messageId = messageId,
-        modelType = modelType,
-        content = content.toString(),
-        thinkingRaw = thinkingRaw.toString(),
-        thinkingDurationSeconds = thinkingDurationSeconds,
-        thinkingStartTime = thinkingStartTime ?: 0L,
-        thinkingEndTime = thinkingEndTime ?: 0L,
-        isComplete = isComplete,
-        messageState = currentState,
-        pipelineStep = pipelineStep,
-        webSearchSources = webSearchSources.toList(),
-        artifacts = artifacts.toList(),
-        generatedMediaUris = generatedMediaUris.toList(),
-        generatedMediaAssetIds = generatedMediaAssetIds.toList(),
-        generatedMediaTypes = generatedMediaTypes.toList(),
-        generatedMediaPrompts = generatedMediaPrompts.toList(),
-    )
+    private fun finalizeOpenThinkingSegment(now: Long = System.currentTimeMillis()) {
+        val last = transcriptSegmentsMutable.lastOrNull() ?: return
+        if (last.kind == TranscriptSegmentKind.THINKING && last.thinkingEndMs == null && last.thinkingStartMs != null) {
+            last.thinkingEndMs = now
+        }
+    }
+
+    private fun finalizeOpenThinkingSegmentIfAny() {
+        val last = transcriptSegmentsMutable.lastOrNull() ?: return
+        if (last.kind == TranscriptSegmentKind.THINKING && last.thinkingEndMs == null && last.thinkingStartMs != null) {
+            last.thinkingEndMs = System.currentTimeMillis()
+        }
+    }
+
+    fun toTranscriptSegments(finalizeOpenThinking: Boolean = true): List<MessageTranscriptSegment> {
+        if (finalizeOpenThinking) {
+            finalizeOpenThinkingSegmentIfAny()
+        }
+        return transcriptSegmentsMutable.mapIndexed { index, seg ->
+            when (seg.kind) {
+                TranscriptSegmentKind.THINKING -> {
+                    val durFromWallClock =
+                        if (seg.thinkingStartMs != null && seg.thinkingEndMs != null) {
+                            val ms = seg.thinkingEndMs!! - seg.thinkingStartMs!!
+                            when {
+                                ms <= 0L -> null
+                                ms < 1000L -> 1L
+                                else -> ms / 1000
+                            }
+                        } else {
+                            null
+                        }
+                    val dur = durFromWallClock ?: seg.restoredDurationSeconds
+                    MessageTranscriptSegment.Thinking(
+                        ordinal = index,
+                        text = seg.text.toString(),
+                        thinkingDurationSeconds = dur,
+                        thinkingStartTime = seg.thinkingStartMs,
+                        thinkingEndTime = seg.thinkingEndMs,
+                    )
+                }
+                TranscriptSegmentKind.ASSISTANT_TEXT -> MessageTranscriptSegment.AssistantText(
+                    ordinal = index,
+                    text = seg.text.toString(),
+                )
+            }
+        }
+    }
+
+    fun toSnapshot(): MessageSnapshot {
+        val shouldFinalizeOpenThinking = currentState != MessageState.THINKING
+        if (shouldFinalizeOpenThinking) {
+            finalizeOpenThinkingSegmentIfAny()
+        }
+        return MessageSnapshot(
+            messageId = messageId,
+            modelType = modelType,
+            content = content.toString(),
+            thinkingRaw = thinkingRaw.toString(),
+            thinkingDurationSeconds = thinkingDurationSeconds,
+            thinkingStartTime = thinkingStartTime ?: 0L,
+            thinkingEndTime = thinkingEndTime ?: 0L,
+            isComplete = isComplete,
+            messageState = currentState,
+            pipelineStep = pipelineStep,
+            webSearchSources = webSearchSources.toList(),
+            artifacts = artifacts.toList(),
+            generatedMediaUris = generatedMediaUris.toList(),
+            generatedMediaAssetIds = generatedMediaAssetIds.toList(),
+            generatedMediaTypes = generatedMediaTypes.toList(),
+            generatedMediaPrompts = generatedMediaPrompts.toList(),
+            transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
+        )
+    }
 }
+
+internal enum class TranscriptSegmentKind {
+    THINKING,
+    ASSISTANT_TEXT,
+}
+
+internal data class MutableTranscriptSegment(
+    val kind: TranscriptSegmentKind,
+    val text: StringBuilder,
+    var thinkingStartMs: Long? = null,
+    var thinkingEndMs: Long? = null,
+    /** From DB restore when wall-clock bounds are missing but denormalized seconds were stored. */
+    var restoredDurationSeconds: Long? = null,
+)
 
 internal fun getPipelineStepForModelType(modelType: ModelType): PipelineStep =
     when (modelType) {

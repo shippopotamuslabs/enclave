@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 data class ArtifactCardUiModel(
     val artifactId: String,
     val title: String,
+    val documentJson: String,
     val badgeLabel: String,
     val subtitle: String,
     val ctaLabel: String,
@@ -18,6 +19,7 @@ fun ArtifactGenerationRequest.toArtifactCardUiModel(): ArtifactCardUiModel =
     ArtifactCardUiModel(
         artifactId = artifactId,
         title = title,
+        documentJson = content,
         badgeLabel = "Doc",
         subtitle = "Document • Generated",
         ctaLabel = "Export",
@@ -50,5 +52,7 @@ sealed class ArtifactExportSheetState {
         val selectedFormat: WizardExportFormat?,
         val selectedDestination: WizardExportDestination?,
         val isExporting: Boolean,
+        val documentJson: String,
+        val errorMessage: String? = null,
     ) : ArtifactExportSheetState()
 }

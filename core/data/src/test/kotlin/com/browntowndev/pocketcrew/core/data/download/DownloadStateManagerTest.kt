@@ -10,12 +10,10 @@ import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResul
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DownloadStateManagerTest {
-
     private lateinit var stateFlow: MutableStateFlow<DownloadState>
     private lateinit var stateManager: DownloadStateManager
 
@@ -46,15 +44,17 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressInit sets all fields from init result`() {
         // Given
-        val files = listOf(
-            FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 100L, 1000L, FileStatus.QUEUED, null)
-        )
-        val initResult = FileProgressInitResult(
-            fileProgressList = files,
-            modelsTotal = 3,
-            modelsComplete = 0,
-            overallProgress = 0f
-        )
+        val files =
+            listOf(
+                FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 100L, 1000L, FileStatus.QUEUED, null),
+            )
+        val initResult =
+            FileProgressInitResult(
+                fileProgressList = files,
+                modelsTotal = 3,
+                modelsComplete = 0,
+                overallProgress = 0f,
+            )
 
         // When
         stateManager.applyProgressInit(initResult)
@@ -69,16 +69,18 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate with null currentDownloads preserves existing list`() {
         // Given - existing state with downloads
-        val existingFiles = listOf(
-            FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 500L, 1000L, FileStatus.DOWNLOADING, 10.0)
-        )
+        val existingFiles =
+            listOf(
+                FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 500L, 1000L, FileStatus.DOWNLOADING, 10.0),
+            )
         stateFlow.value = stateFlow.value.copy(currentDownloads = existingFiles)
 
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.DOWNLOADING,
-            overallProgress = 0.5f,
-            currentDownloads = null // No update to downloads
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.DOWNLOADING,
+                overallProgress = 0.5f,
+                currentDownloads = null, // No update to downloads
+            )
 
         // When
         stateManager.applyProgressUpdate(update)
@@ -91,21 +93,24 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate with non-null currentDownloads replaces existing list`() {
         // Given - existing state with downloads
-        val existingFiles = listOf(
-            FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 500L, 1000L, FileStatus.DOWNLOADING, 10.0)
-        )
+        val existingFiles =
+            listOf(
+                FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 500L, 1000L, FileStatus.DOWNLOADING, 10.0),
+            )
         stateFlow.value = stateFlow.value.copy(currentDownloads = existingFiles)
 
-        val newFiles = listOf(
-            FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 1000L, 1000L, FileStatus.COMPLETE, null),
-            FileProgress("b.bin", "sha-b", listOf(ModelType.VISION), 200L, 2000L, FileStatus.DOWNLOADING, 5.0)
-        )
+        val newFiles =
+            listOf(
+                FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 1000L, 1000L, FileStatus.COMPLETE, null),
+                FileProgress("b.bin", "sha-b", listOf(ModelType.VISION), 200L, 2000L, FileStatus.DOWNLOADING, 5.0),
+            )
 
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.DOWNLOADING,
-            overallProgress = 0.75f,
-            currentDownloads = newFiles
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.DOWNLOADING,
+                overallProgress = 0.75f,
+                currentDownloads = newFiles,
+            )
 
         // When
         stateManager.applyProgressUpdate(update)
@@ -118,16 +123,18 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate with empty list replaces existing list`() {
         // Given - existing state with downloads
-        val existingFiles = listOf(
-            FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 1000L, 1000L, FileStatus.COMPLETE, null)
-        )
+        val existingFiles =
+            listOf(
+                FileProgress("a.bin", "sha-a", listOf(ModelType.MAIN), 1000L, 1000L, FileStatus.COMPLETE, null),
+            )
         stateFlow.value = stateFlow.value.copy(currentDownloads = existingFiles)
 
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.READY,
-            overallProgress = 1.0f,
-            currentDownloads = emptyList() // Explicit empty list
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.READY,
+                overallProgress = 1.0f,
+                currentDownloads = emptyList(), // Explicit empty list
+            )
 
         // When
         stateManager.applyProgressUpdate(update)
@@ -140,10 +147,11 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate sets errorMessage from update`() {
         // Given
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.ERROR,
-            errorMessage = "Network timeout"
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.ERROR,
+                errorMessage = "Network timeout",
+            )
 
         // When
         stateManager.applyProgressUpdate(update)
@@ -156,15 +164,17 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate clears errorMessage when update has null errorMessage`() {
         // Given - existing error
-        stateFlow.value = stateFlow.value.copy(
-            status = DownloadStatus.ERROR,
-            errorMessage = "Previous error"
-        )
+        stateFlow.value =
+            stateFlow.value.copy(
+                status = DownloadStatus.ERROR,
+                errorMessage = "Previous error",
+            )
 
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.IDLE,
-            errorMessage = null // Explicitly null
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.IDLE,
+                errorMessage = null, // Explicitly null
+            )
 
         // When
         stateManager.applyProgressUpdate(update)
@@ -176,19 +186,21 @@ class DownloadStateManagerTest {
     @Test
     fun `applyProgressUpdate preserves fields when update has null optional values`() {
         // Given - existing state with all fields set
-        stateFlow.value = stateFlow.value.copy(
-            overallProgress = 0.5f,
-            modelsComplete = 1,
-            modelsTotal = 3,
-            estimatedTimeRemaining = "5 min",
-            currentSpeedMBs = 12.5,
-            waitingForUnmeteredNetwork = false
-        )
+        stateFlow.value =
+            stateFlow.value.copy(
+                overallProgress = 0.5f,
+                modelsComplete = 1,
+                modelsTotal = 3,
+                estimatedTimeRemaining = "5 min",
+                currentSpeedMBs = 12.5,
+                waitingForUnmeteredNetwork = false,
+            )
 
-        val update = DownloadProgressUpdate(
-            status = DownloadStatus.DOWNLOADING
-            // All optional fields are null — existing values should be preserved
-        )
+        val update =
+            DownloadProgressUpdate(
+                status = DownloadStatus.DOWNLOADING,
+                // All optional fields are null — existing values should be preserved
+            )
 
         // When
         stateManager.applyProgressUpdate(update)

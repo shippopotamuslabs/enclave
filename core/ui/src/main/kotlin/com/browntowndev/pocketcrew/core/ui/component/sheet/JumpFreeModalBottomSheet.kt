@@ -3,11 +3,12 @@ package com.browntowndev.pocketcrew.core.ui.component.sheet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -102,7 +103,7 @@ fun JumpFreeModalBottomSheet(
         tonalElevation = tonalElevation,
         scrimColor = scrimColor,
         dragHandle = dragHandle,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) }
     ) {
         Column(
             modifier = Modifier

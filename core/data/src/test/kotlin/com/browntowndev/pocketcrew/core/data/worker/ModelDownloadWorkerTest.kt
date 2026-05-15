@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("ModelDownloadWorker Tests")
 class ModelDownloadWorkerTest {
-
     private lateinit var mockContext: Context
     private lateinit var mockWorkerParams: WorkerParameters
     private lateinit var mockLogger: LoggingPort
@@ -42,21 +41,21 @@ class ModelDownloadWorkerTest {
 
         every { mockWorkerParams.runAttemptCount } returns 0
 
-        worker = ModelDownloadWorker(
-            context = mockContext,
-            params = mockWorkerParams,
-            logger = mockLogger,
-            notificationManager = mockNotificationManager,
-            progressTracker = mockProgressTracker,
-            fileDownloader = mockFileDownloader,
-            modelUrlProvider = mockModelUrlProvider
-        )
+        worker =
+            ModelDownloadWorker(
+                context = mockContext,
+                params = mockWorkerParams,
+                logger = mockLogger,
+                notificationManager = mockNotificationManager,
+                progressTracker = mockProgressTracker,
+                fileDownloader = mockFileDownloader,
+                modelUrlProvider = mockModelUrlProvider,
+            )
     }
 
     @Nested
     @DisplayName("Worker Initialization Tests")
     inner class WorkerInitializationTests {
-
         @Test
         @DisplayName("Worker is correctly instantiated with all dependencies")
         fun worker_isCorrectlyInstantiated() {
@@ -100,17 +99,17 @@ class ModelDownloadWorkerTest {
     @Nested
     @DisplayName("Input Data Tests")
     inner class InputDataTests {
-
         @Test
         @DisplayName("Worker input data uses KEY_DOWNLOAD_FILES for structured file specs")
         fun inputData_usesKeyDownloadFiles() {
             val filesJson = """[{"remoteFileName":"test.gguf","localFileName":"test.gguf","sha256":"abc123","sizeInBytes":1000,"huggingFaceModelName":"test/model","source":"HUGGING_FACE","modelFileFormat":"GGUF"}]"""
-            every { mockWorkerParams.inputData } returns workDataOf(
-                DownloadWorkKeys.KEY_DOWNLOAD_FILES to filesJson,
-                DownloadWorkKeys.KEY_SESSION_ID to "test-session-123",
-                DownloadWorkKeys.KEY_REQUEST_KIND to "INITIALIZE_MODELS",
-                DownloadWorkKeys.KEY_TARGET_MODEL_ID to ""
-            )
+            every { mockWorkerParams.inputData } returns
+                workDataOf(
+                    DownloadWorkKeys.KEY_DOWNLOAD_FILES to filesJson,
+                    DownloadWorkKeys.KEY_SESSION_ID to "test-session-123",
+                    DownloadWorkKeys.KEY_REQUEST_KIND to "INITIALIZE_MODELS",
+                    DownloadWorkKeys.KEY_TARGET_MODEL_ID to "",
+                )
 
             val inputData = mockWorkerParams.inputData
             assertNotNull(inputData.getString(DownloadWorkKeys.KEY_DOWNLOAD_FILES))

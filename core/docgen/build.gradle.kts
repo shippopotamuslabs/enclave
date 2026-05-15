@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.core.docgen"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34
@@ -26,13 +26,15 @@ android {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(libs.uniffi.kotlin.runtime)
-    implementation("net.java.dev.jna:jna:5.16.0@aar")
+    implementation(libs.uniffi.kotlin.runtime) {
+        exclude(group = "net.java.dev.jna", module = "jna")
+    }
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation(libs.kotlinx.coroutines.core)
 
     // Test dependencies
     testImplementation(libs.junit.jupiter)

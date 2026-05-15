@@ -68,6 +68,7 @@ plans/CFAW/
 app/google-services.json
 
 .vscode/
+.cursor/
 
 android-dev-mcp
 

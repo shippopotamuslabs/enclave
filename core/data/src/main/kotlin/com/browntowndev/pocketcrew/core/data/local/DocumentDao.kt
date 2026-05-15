@@ -4,14 +4,13 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
-import kotlinx.coroutines.flow.Flow
-
 import androidx.room.RawQuery
+import androidx.room.Update
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DocumentDao {
@@ -26,7 +25,7 @@ interface DocumentDao {
         SELECT documents.* FROM documents
         INNER JOIN message ON documents.message_id = message.id
         WHERE message.chat_id = :chatId AND documents.deleted = 0
-        """
+        """,
     )
     fun getDocumentsByChatIdFlow(chatId: ChatId): Flow<List<DocumentEntity>>
 
@@ -40,10 +39,13 @@ interface DocumentDao {
     suspend fun updateDocument(document: DocumentEntity)
 
     @Query("UPDATE documents SET deleted = 1, updated_at = :timestamp, pending_sync = 1 WHERE id = :id")
-    suspend fun deleteDocument(id: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun deleteDocument(
+        id: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query(
-        "UPDATE documents SET target_format = :targetFormat, updated_at = :timestamp, pending_sync = 1 WHERE id = :artifactId"
+        "UPDATE documents SET target_format = :targetFormat, updated_at = :timestamp, pending_sync = 1 WHERE id = :artifactId",
     )
     suspend fun updateTargetFormat(
         artifactId: String,
@@ -52,9 +54,12 @@ interface DocumentDao {
     )
 
     @Query(
-        "UPDATE documents SET deleted = 1, updated_at = :timestamp, pending_sync = 1 WHERE message_id = :messageId"
+        "UPDATE documents SET deleted = 1, updated_at = :timestamp, pending_sync = 1 WHERE message_id = :messageId",
     )
-    suspend fun softDeleteByMessageId(messageId: MessageId, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteByMessageId(
+        messageId: MessageId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query(
         """
@@ -69,9 +74,12 @@ interface DocumentDao {
               WHERE chat_id = :chatId
                 AND deleted = 0
           )
-        """
+        """,
     )
-    suspend fun softDeleteByChatId(chatId: ChatId, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteByChatId(
+        chatId: ChatId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE documents SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()

@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.docgen
 
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.docgen.DocumentGeneratorPort
 import javax.inject.Inject
 
@@ -8,8 +9,9 @@ class LocalDocumentGeneratorAdapter @Inject constructor() : DocumentGeneratorPor
         return try {
             val bytes = com.browntowndev.pocketcrew.core.docgen.generateDocx(json)
             Result.success(bytes)
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (e: Throwable) {
+            Log.e("DocGenAdapter", "generateWordDocument failed", e)
+            Result.failure(Exception(e.message ?: "Word generation failed", e))
         }
     }
 
@@ -17,8 +19,9 @@ class LocalDocumentGeneratorAdapter @Inject constructor() : DocumentGeneratorPor
         return try {
             val bytes = com.browntowndev.pocketcrew.core.docgen.generatePdf(json)
             Result.success(bytes)
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (e: Throwable) {
+            Log.e("DocGenAdapter", "generatePdfDocument failed", e)
+            Result.failure(Exception(e.message ?: "PDF generation failed", e))
         }
     }
 }

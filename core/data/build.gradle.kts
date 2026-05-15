@@ -3,11 +3,12 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.apter.robolectric.junit5)
 }
 
 android {
     namespace = "com.browntowndev.pocketcrew.core.data"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 34
@@ -44,10 +45,10 @@ dependencies {
     implementation(platform(libs.firebase.bom))
 
     // ONNX Runtime
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.26.0")
 
     // SQLite Android wrapper to bypass load_extension restrictions
-    implementation("com.github.requery:sqlite-android:3.45.0")
+    implementation("com.github.requery:sqlite-android:3.49.0")
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -70,11 +71,6 @@ dependencies {
     // OkHttp
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
-    implementation(libs.openai.java)
-    implementation(libs.anthropic.java)
-    implementation(libs.google.genai) {
-        exclude(group = "com.google.protobuf", module = "protobuf-java")
-    }
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
@@ -96,21 +92,17 @@ dependencies {
     implementation(libs.googleid)
 
     // Test dependencies - JUnit 5 (Jupiter)
-    testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.core.ktx)
-    testImplementation("androidx.test:core:1.5.0")
-    testImplementation("androidx.test.ext:junit:1.1.5")
-    testImplementation("androidx.room:room-testing:2.6.1")
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.room.testing)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.apter.junit5.robolectric.extension)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.junit)
-    testRuntimeOnly(libs.junit.vintage.engine)
-    testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.work.testing)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))

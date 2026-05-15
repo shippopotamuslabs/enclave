@@ -118,7 +118,9 @@ fun InputBar(
     speechState: SpeechState,
     selectedImageUris: List<String>,
     selectedFileName: String?,
+@Suppress("UnusedParameter")
     isPhotoAttachmentEnabled: Boolean,
+@Suppress("UnusedParameter")
     photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
@@ -256,6 +258,7 @@ fun InputBar(
                     onInputChange(it)
                 },
                 modifier = Modifier
+                    .padding(vertical = 5.dp)
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
                 textStyle = TextStyle(
@@ -433,7 +436,7 @@ fun PreviewChatInputBar() {
             InputBar(
                 inputText = "Hello World",
                 speechState = SpeechState.Idle,
-                selectedImageUris = emptyList(),
+                selectedImageUris = emptyList<String>(),
                 selectedFileName = "test_file.txt",
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentMaxItems = 1,
@@ -441,6 +444,7 @@ fun PreviewChatInputBar() {
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
                 canStop = true,
+                isGlobalInferenceBlocked = false,
                 onInputChange = {},
                 onModeChange = {},
                 onSend = {},
@@ -449,7 +453,7 @@ fun PreviewChatInputBar() {
                 onFileAttach = {},
                 onClearImage = {},
                 onClearFile = {},
-                onMicClick = {},
+                onMicClick = {}
             )
         }
     }

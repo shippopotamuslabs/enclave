@@ -128,6 +128,12 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     messageState = any(),
                     pipelineStep = any(),
                     webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = any(),
                 )
             }
         }
@@ -190,6 +196,12 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     messageState = MessageState.COMPLETE,
                     pipelineStep = any(),
                     webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = any(),
                 )
             }
         }
@@ -263,6 +275,12 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     messageState = MessageState.COMPLETE,
                     pipelineStep = any(),
                     webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = any(),
                 )
             }
         }

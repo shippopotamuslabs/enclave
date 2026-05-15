@@ -2,9 +2,41 @@ package com.browntowndev.pocketcrew.domain.port.security
 
 interface CryptoManagerPort {
     /**
-     * Derives a secret key from the password and salt, and caches it in memory and persistent storage.
+     * Derives a Key Encryption Key (KEK) from the password and salt using PBKDF2-HMAC-SHA256.
+     * The KEK is returned as raw bytes and is NOT cached. Callers should treat it as transient
+     * and zero it from memory ASAP after using it to wrap/unwrap a DEK.
      */
-    fun deriveAndCacheKey(password: String, salt: ByteArray): Result<Unit>
+    fun deriveKek(password: String, salt: ByteArray): Result<ByteArray>
+
+    /**
+     * Generates a fresh random Data Encryption Key (DEK) of [size] bytes (default 32 bytes / 256 bits).
+     */
+    fun generateDek(size: Int = 32): ByteArray
+
+    /**
+     * Wraps a DEK with a KEK using AES/GCM/NoPadding.
+     * Returns `iv (12 bytes) || ciphertext` — the same layout as [encrypt].
+     */
+    fun wrapDek(dek: ByteArray, kek: ByteArray): Result<ByteArray>
+
+    /**
+     * Unwraps a previously [wrapDek]-produced blob back to the raw DEK using the supplied KEK.
+     * Returns failure (typically wrapping `AEADBadTagException`) when the KEK is wrong or
+     * the blob is corrupted/truncated.
+     */
+    fun unwrapDek(wrapped: ByteArray, kek: ByteArray): Result<ByteArray>
+
+    /**
+     * Caches the supplied DEK as the active data key. Subsequent calls to [encrypt] / [decrypt]
+     * use this DEK. Replaces any previously cached key.
+     */
+    fun cacheDek(dek: ByteArray): Result<Unit>
+
+    /**
+     * Returns the currently cached DEK bytes, or null if the vault is locked.
+     * Used by the biometric enrollment flow to wrap the DEK with an AndroidKeyStore key.
+     */
+    fun getCachedDek(): ByteArray?
 
     /**
      * Clears the cached key from memory and persistent storage.
@@ -22,24 +54,24 @@ interface CryptoManagerPort {
     val isVaultUnlocked: kotlinx.coroutines.flow.StateFlow<Boolean>
 
     /**
-     * Encrypts the plaintext using the cached key.
+     * Encrypts the plaintext using the cached DEK.
      */
-    fun encrypt(plaintext: String): Result<ByteArray>
+    fun encrypt(plaintext: String, aad: ByteArray? = null): Result<ByteArray>
 
     /**
-     * Encrypts the raw bytes using the cached key.
+     * Encrypts the raw bytes using the cached DEK.
      */
-    fun encryptBytes(data: ByteArray): Result<ByteArray>
+    fun encryptBytes(data: ByteArray, aad: ByteArray? = null): Result<ByteArray>
 
     /**
-     * Decrypts the ciphertext using the cached key.
+     * Decrypts the ciphertext using the cached DEK.
      */
-    fun decrypt(ciphertext: ByteArray): Result<String>
+    fun decrypt(ciphertext: ByteArray, aad: ByteArray? = null): Result<String>
 
     /**
-     * Decrypts the raw bytes using the cached key.
+     * Decrypts the raw bytes using the cached DEK.
      */
-    fun decryptBytes(ciphertext: ByteArray): Result<ByteArray>
+    fun decryptBytes(ciphertext: ByteArray, aad: ByteArray? = null): Result<ByteArray>
 
     /**
      * Generates a new random salt for key derivation.
