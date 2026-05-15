@@ -56,22 +56,22 @@ interface CryptoManagerPort {
     /**
      * Encrypts the plaintext using the cached DEK.
      */
-    fun encrypt(plaintext: String): Result<ByteArray>
+    fun encrypt(plaintext: String, aad: ByteArray? = null): Result<ByteArray>
 
     /**
      * Encrypts the raw bytes using the cached DEK.
      */
-    fun encryptBytes(data: ByteArray): Result<ByteArray>
+    fun encryptBytes(data: ByteArray, aad: ByteArray? = null): Result<ByteArray>
 
     /**
      * Decrypts the ciphertext using the cached DEK.
      */
-    fun decrypt(ciphertext: ByteArray): Result<String>
+    fun decrypt(ciphertext: ByteArray, aad: ByteArray? = null): Result<String>
 
     /**
      * Decrypts the raw bytes using the cached DEK.
      */
-    fun decryptBytes(ciphertext: ByteArray): Result<ByteArray>
+    fun decryptBytes(ciphertext: ByteArray, aad: ByteArray? = null): Result<ByteArray>
 
     /**
      * Generates a new random salt for key derivation.
