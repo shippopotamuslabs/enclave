@@ -315,6 +315,10 @@ internal class SettingsGeneralDelegate @Inject constructor(
         sheetVisibility.update { it.copy(customization = false) }
     }
 
+    fun onShowTosSheet(sheetVisibility: MutableStateFlow<SheetVisibilityState>, show: Boolean) {
+        sheetVisibility.update { it.copy(tos = show) }
+    }
+
     fun onShowFeedbackSheet(sheetVisibility: MutableStateFlow<SheetVisibilityState>, show: Boolean) {
         sheetVisibility.update { it.copy(feedback = show) }
     }
