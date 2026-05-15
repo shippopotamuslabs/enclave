@@ -63,7 +63,10 @@ fun OssLicensesBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 16.dp),
             )
-            LazyColumn(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            ) {
                 items(
                     items = OssLicenses.entries,
                     key = { it.name },
