@@ -97,7 +97,7 @@ private fun OssLicenseCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "v${entry.version}",
+                        text = if (entry.version.startsWith("BOM")) entry.version else "v${entry.version}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
