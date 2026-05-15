@@ -176,19 +176,6 @@ class MainViewModel
             }
         }
 
-        fun skipLogin() {
-            _startupState.update {
-                if (it is AppStartupState.Ready) {
-                    it.copy(
-                        isVaultLocked = !cryptoManager.hasCachedKey(),
-                        vaultErrorMessage = null,
-                    )
-                } else {
-                    it
-                }
-            }
-        }
-
         fun unlockVault(password: String, enableBiometric: Boolean = false) {
             if ((startupState.value as? AppStartupState.Ready)?.isUnlocking == true) return
 

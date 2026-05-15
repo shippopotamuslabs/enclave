@@ -180,21 +180,6 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `skipLogin does not unlock a locked vault`() = runTest(testDispatcher) {
-        every { cryptoManager.hasCachedKey() } returns false
-
-        advanceUntilIdle()
-        viewModel.skipLogin()
-
-        val state = viewModel.startupState.value
-        if (state is AppStartupState.Ready) {
-            assertTrue(state.isVaultLocked, "skipLogin must not bypass the Enclave password")
-        } else {
-            throw AssertionError("State should be Ready")
-        }
-    }
-
-    @Test
     fun `locked startup exposes biometric unlock when secure value exists`() = runTest(testDispatcher) {
         every { cryptoManager.hasCachedKey() } returns false
         every { biometricManager.isBiometricAvailable() } returns true
