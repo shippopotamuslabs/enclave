@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.artifact
 
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
+import com.browntowndev.pocketcrew.core.data.security.AadContext
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.inference.SearchArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -21,6 +23,7 @@ class SearchArtifactToolExecutor
     constructor(
         private val documentDao: DocumentDao,
         private val embeddingEngine: EmbeddingEnginePort,
+        private val localEncryption: LocalDataEncryptionService,
     ) : ToolExecutorPort {
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -54,7 +57,14 @@ class SearchArtifactToolExecutor
                         resultJson = """{"status":"error","message":"Artifact not found: ${params.artifactId}"}""",
                     )
 
-            val doc: JsonObject = json.parseToJsonElement(entity.json) as JsonObject
+            val docId = params.artifactId
+            val doc: JsonObject =
+                json.parseToJsonElement(
+                    localEncryption.decryptString(
+                        entity.json,
+                        AadContext("DocumentEntity", "json", docId).toBytes(),
+                    ),
+                ) as JsonObject
             val blocks = doc["blocks"] as JsonArray
 
             val results =

@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -47,7 +48,13 @@ class MediaCloudSyncWorker
                     val storageRef = storage.reference.child("users/$userId/media/${media.id}")
                     var downloadUrl: String? = null
 
-                    val stagingRemoteUrl = media.stagingRemoteUrl?.let(localEncryption::decryptString)
+                    val stagingRemoteUrl =
+                        media.stagingRemoteUrl?.let {
+                            localEncryption.decryptString(
+                                it,
+                                AadContext("StudioMediaEntity", "stagingRemoteUrl", media.id).toBytes(),
+                            )
+                        }
                     if (!stagingRemoteUrl.isNullOrBlank()) {
                         try {
                             storageRef.metadata.await()
@@ -90,10 +97,22 @@ class MediaCloudSyncWorker
                         storageRef.putBytes(encryptedBytes).await()
 
                         downloadUrl = storageRef.downloadUrl.await().toString()
-                        studioMediaDao.updateStagingUrl(media.id, localEncryption.encryptString(downloadUrl))
+                        studioMediaDao.updateStagingUrl(
+                            media.id,
+                            localEncryption.encryptString(
+                                downloadUrl,
+                                AadContext("StudioMediaEntity", "stagingRemoteUrl", media.id).toBytes(),
+                            ),
+                        )
                     }
 
-                    studioMediaDao.markUploaded(media.id, localEncryption.encryptString(downloadUrl))
+                    studioMediaDao.markUploaded(
+                        media.id,
+                        localEncryption.encryptString(
+                            downloadUrl,
+                            AadContext("StudioMediaEntity", "remoteUrl", media.id).toBytes(),
+                        ),
+                    )
                     loggingPort.debug(TAG, "Uploaded media ${media.id}")
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to upload media ${media.id}", e)

@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
@@ -34,7 +35,11 @@ import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
@@ -51,6 +56,7 @@ import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.security.VaultMetadata
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -58,6 +64,7 @@ import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
@@ -107,6 +114,9 @@ class FirestoreDataSource
         private val userIdProvider: () -> String?,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
         private val localEncryption: LocalDataEncryptionService,
+        private val sensitiveSelfHealer: SensitivePersistenceSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
+        private val firestoreSensitiveFieldRepairer: FirestoreSensitiveFieldRepairer =
+            FirestoreSensitiveFieldRepairer(StaticSensitiveFieldCatalog(), sensitiveSelfHealer),
     ) : CloudSyncPort {
         companion object {
             private const val TAG = "FirestoreDataSource"
@@ -166,16 +176,29 @@ class FirestoreDataSource
             )
         }
 
-        private fun String.encryptedForFirestore(): String {
-            check(localEncryption.isEncrypted(this)) {
-                "Firestore sync requires locally encrypted field payloads"
-            }
-            return this
-        }
+        private fun String.encryptedForFirestore(
+            collectionPath: String,
+            entityId: String,
+            firestoreSnakeField: String,
+        ): String =
+            sensitiveSelfHealer.requireEncrypted(
+                ref = FirestoreSensitiveFieldRefMapping.sensitiveFieldRef(collectionPath, firestoreSnakeField),
+                entityId = entityId,
+                value = this,
+                sourceSide = "ROOM",
+            ) ?: this
 
         private fun DocumentSnapshot.getEncryptedField(field: String): String? {
+            val collectionPath = reference.parent.id
             val stringValue = getString(field)
-            if (!stringValue.isNullOrEmpty()) return stringValue
+            if (!stringValue.isNullOrEmpty()) {
+                return sensitiveSelfHealer.requireEncrypted(
+                    ref = FirestoreSensitiveFieldRefMapping.sensitiveFieldRef(collectionPath, field),
+                    entityId = id,
+                    value = stringValue,
+                    sourceSide = "FIRESTORE",
+                )
+            }
             return getBlob(field)?.toBytes()?.takeIf { it.isNotEmpty() }?.decodeToString()
         }
 
@@ -190,7 +213,11 @@ class FirestoreDataSource
                 chatDao.insertIfAbsent(
                     ChatEntity(
                         id = chatId,
-                        name = localEncryption.encryptString("Syncing..."),
+                        name =
+                            localEncryption.encryptString(
+                                "Syncing...",
+                                AadContext("ChatEntity", "name", chatId.value).toBytes(),
+                            ),
                         created = java.util.Date(0),
                         lastModified = java.util.Date(0),
                         pinned = false,
@@ -205,7 +232,11 @@ class FirestoreDataSource
                 MessageEntity(
                     id = messageId,
                     chatId = chatId,
-                    content = localEncryption.encryptString("Syncing..."),
+                    content =
+                        localEncryption.encryptString(
+                            "Syncing...",
+                            AadContext("MessageEntity", "content", messageId.value).toBytes(),
+                        ),
                     role = Role.USER,
                     messageState = MessageState.COMPLETE,
                     createdAt = 0L,
@@ -228,7 +259,7 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: ChatEntity): Map<String, Any?> =
                     mapOf(
-                        "name" to local.name.encryptedForFirestore(),
+                        "name" to local.name.encryptedForFirestore(collectionPath, local.id.value, "name"),
                         "created_at" to local.created.time,
                         "last_modified" to local.lastModified.time,
                         "pinned" to local.pinned,
@@ -274,7 +305,7 @@ class FirestoreDataSource
                     val msgData =
                         mutableMapOf<String, Any?>(
                             "chat_id" to local.chatId.value,
-                            "content" to local.content.encryptedForFirestore(),
+                            "content" to local.content.encryptedForFirestore(collectionPath, local.id.value, "content"),
                             "role" to local.role.apiValue,
                             "message_state" to local.messageState.apiValue,
                             "updated_at" to local.updatedAt,
@@ -283,17 +314,32 @@ class FirestoreDataSource
                     local.createdAt?.let { msgData["created_at"] = it }
                     local.modelType?.let { msgData["model_type"] = it.name }
                     local.userMessageId?.let { msgData["user_message_id"] = it.value }
-                    local.imageUrisJson?.let { msgData["image_uris_json"] = it.encryptedForFirestore() }
+                    local.imageUrisJson?.let {
+                        msgData["image_uris_json"] = it.encryptedForFirestore(collectionPath, local.id.value, "image_uris_json")
+                    }
                     local.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
-                    local.thinkingRaw?.let { msgData["thinking_raw"] = it.encryptedForFirestore() }
+                    local.thinkingRaw?.let {
+                        msgData["thinking_raw"] = it.encryptedForFirestore(collectionPath, local.id.value, "thinking_raw")
+                    }
                     local.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
                     local.thinkingEndTime?.let { msgData["thinking_end_time"] = it }
                     local.pipelineStep?.let { msgData["pipeline_step"] = it.name }
-                    local.artifactsJson?.let { msgData["artifacts_json"] = it.encryptedForFirestore() }
-                    local.generatedMediaUrisJson?.let { msgData["generated_media_uris_json"] = it.encryptedForFirestore() }
-                    local.generatedMediaAssetIdsJson?.let { msgData["generated_media_asset_ids_json"] = it.encryptedForFirestore() }
+                    local.artifactsJson?.let {
+                        msgData["artifacts_json"] = it.encryptedForFirestore(collectionPath, local.id.value, "artifacts_json")
+                    }
+                    local.generatedMediaUrisJson?.let {
+                        msgData["generated_media_uris_json"] =
+                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_uris_json")
+                    }
+                    local.generatedMediaAssetIdsJson?.let {
+                        msgData["generated_media_asset_ids_json"] =
+                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_asset_ids_json")
+                    }
                     local.generatedMediaTypesJson?.let { msgData["generated_media_types_json"] = it }
-                    local.generatedMediaPromptsJson?.let { msgData["generated_media_prompts_json"] = it.encryptedForFirestore() }
+                    local.generatedMediaPromptsJson?.let {
+                        msgData["generated_media_prompts_json"] =
+                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_prompts_json")
+                    }
 
                     return msgData
                 }
@@ -350,7 +396,7 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: ChatSummaryEntity): Map<String, Any?> =
                     mapOf(
                         "chat_id" to local.chatId.value,
-                        "content" to local.content.encryptedForFirestore(),
+                        "content" to local.content.encryptedForFirestore(collectionPath, local.chatId.value, "content"),
                         "last_summarized_message_id" to local.lastSummarizedMessageId?.value,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -410,7 +456,7 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: MemoriesEntity) =
                     mapOf(
                         "category" to local.category.name,
-                        "content" to local.content.encryptedForFirestore(),
+                        "content" to local.content.encryptedForFirestore(collectionPath, local.id, "content"),
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -474,9 +520,9 @@ class FirestoreDataSource
                     return mapOf(
                         "user_message_id" to local.userMessageId.value,
                         "chat_id" to chatId,
-                        "image_uri" to local.imageUri.encryptedForFirestore(),
-                        "prompt_text" to local.promptText.encryptedForFirestore(),
-                        "analysis_text" to local.analysisText.encryptedForFirestore(),
+                        "image_uri" to local.imageUri.encryptedForFirestore(collectionPath, local.id, "image_uri"),
+                        "prompt_text" to local.promptText.encryptedForFirestore(collectionPath, local.id, "prompt_text"),
+                        "analysis_text" to local.analysisText.encryptedForFirestore(collectionPath, local.id, "analysis_text"),
                         "model_type" to local.modelType.name,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -543,9 +589,9 @@ class FirestoreDataSource
                     val chatId = message.chatId.value
                     return mapOf(
                         "message_id" to local.messageId,
-                        "name" to local.name.encryptedForFirestore(),
+                        "name" to local.name.encryptedForFirestore(collectionPath, local.id, "name"),
                         "mime_type" to local.mimeType.name,
-                        "remote_url" to local.remoteUrl?.encryptedForFirestore(),
+                        "remote_url" to local.remoteUrl?.let { it.encryptedForFirestore(collectionPath, local.id, "remote_url") },
                         "sync_status" to local.syncStatus,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -633,9 +679,9 @@ class FirestoreDataSource
                     return mapOf(
                         "message_id" to local.messageId.value,
                         "chat_id" to chatId,
-                        "title" to local.title.encryptedForFirestore(),
-                        "url" to local.url.encryptedForFirestore(),
-                        "content" to local.content.encryptedForFirestore(),
+                        "title" to local.title.encryptedForFirestore(collectionPath, local.id, "title"),
+                        "url" to local.url.encryptedForFirestore(collectionPath, local.id, "url"),
+                        "content" to local.content.encryptedForFirestore(collectionPath, local.id, "content"),
                         "score" to local.score,
                         "extracted" to local.extracted,
                         "updated_at" to local.updatedAt,
@@ -702,7 +748,11 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: MessageTranscriptSegmentEntity): Map<String, Any?> {
                     val message = messageDao.getMessageById(local.messageId)?.message ?: return emptyMap()
                     val chatId = message.chatId.value
-                    return messageTranscriptSegmentToFirestoreMap(local, chatId, local.text.encryptedForFirestore())
+                    return messageTranscriptSegmentToFirestoreMap(
+                        local,
+                        chatId,
+                        local.text.encryptedForFirestore(collectionPath, local.id, "text"),
+                    )
                 }
 
                 override fun fromFirestore(doc: DocumentSnapshot): MessageTranscriptSegmentEntity? =
@@ -749,8 +799,8 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: ApiModelConfigurationEntity) =
                     mapOf(
                         "api_credentials_id" to local.apiCredentialsId.value,
-                        "display_name" to local.displayName.encryptedForFirestore(),
-                        "custom_headers" to local.customHeaders.encryptedForFirestore(),
+                        "display_name" to local.displayName.encryptedForFirestore(collectionPath, local.id.value, "display_name"),
+                        "custom_headers" to local.customHeaders.encryptedForFirestore(collectionPath, local.id.value, "custom_headers"),
                         "max_tokens" to local.maxTokens,
                         "context_window" to local.contextWindow,
                         "temperature" to local.temperature,
@@ -759,7 +809,7 @@ class FirestoreDataSource
                         "min_p" to local.minP,
                         "frequency_penalty" to local.frequencyPenalty,
                         "presence_penalty" to local.presencePenalty,
-                        "system_prompt" to local.systemPrompt.encryptedForFirestore(),
+                        "system_prompt" to local.systemPrompt.encryptedForFirestore(collectionPath, local.id.value, "system_prompt"),
                         "max_tokens_disabled" to local.maxTokensDisabled,
                         "temperature_disabled" to local.temperatureDisabled,
                         "top_p_disabled" to local.topPDisabled,
@@ -847,7 +897,7 @@ class FirestoreDataSource
                 override suspend fun toFirestore(local: LocalModelConfigurationEntity) =
                     mapOf(
                         "local_model_id" to local.localModelId.value,
-                        "display_name" to local.displayName.encryptedForFirestore(),
+                        "display_name" to local.displayName.encryptedForFirestore(collectionPath, local.id.value, "display_name"),
                         "temperature" to local.temperature,
                         "top_k" to local.topK,
                         "top_p" to local.topP,
@@ -857,7 +907,8 @@ class FirestoreDataSource
                         "context_window" to local.contextWindow,
                         "thinking_enabled" to local.thinkingEnabled,
                         "is_system_preset" to local.isSystemPreset,
-                        "system_prompt" to local.systemPrompt?.encryptedForFirestore(),
+                        "system_prompt" to
+                            local.systemPrompt?.encryptedForFirestore(collectionPath, local.id.value, "system_prompt"),
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
@@ -1038,11 +1089,11 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: TtsProviderEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encryptedForFirestore(),
+                        "display_name" to local.displayName.encryptedForFirestore(collectionPath, local.id, "display_name"),
                         "provider" to local.provider.name,
-                        "voice_name" to local.voiceName.encryptedForFirestore(),
-                        "model_name" to local.modelName?.encryptedForFirestore(),
-                        "base_url" to local.baseUrl?.encryptedForFirestore(),
+                        "voice_name" to local.voiceName.encryptedForFirestore(collectionPath, local.id, "voice_name"),
+                        "model_name" to local.modelName?.let { it.encryptedForFirestore(collectionPath, local.id, "model_name") },
+                        "base_url" to local.baseUrl?.let { it.encryptedForFirestore(collectionPath, local.id, "base_url") },
                         "credential_alias" to local.credentialAlias,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -1095,11 +1146,11 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: MediaProviderEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encryptedForFirestore(),
+                        "display_name" to local.displayName.encryptedForFirestore(collectionPath, local.id, "display_name"),
                         "provider" to local.provider.name,
                         "capability" to local.capability.name,
-                        "model_name" to local.modelName?.encryptedForFirestore(),
-                        "base_url" to local.baseUrl?.encryptedForFirestore(),
+                        "model_name" to local.modelName?.let { it.encryptedForFirestore(collectionPath, local.id, "model_name") },
+                        "base_url" to local.baseUrl?.let { it.encryptedForFirestore(collectionPath, local.id, "base_url") },
                         "credential_alias" to local.credentialAlias,
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
@@ -1154,9 +1205,9 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: ApiCredentialsEntity) =
                     mapOf(
-                        "display_name" to local.displayName.encryptedForFirestore(),
+                        "display_name" to local.displayName.encryptedForFirestore(collectionPath, local.id.value, "display_name"),
                         "provider" to local.provider.name,
-                        "base_url" to local.baseUrl?.encryptedForFirestore(),
+                        "base_url" to local.baseUrl?.let { it.encryptedForFirestore(collectionPath, local.id.value, "base_url") },
                         "model_id" to local.modelId,
                         "is_multimodal" to local.isMultimodal,
                         "credential_alias" to local.credentialAlias,
@@ -1217,7 +1268,7 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: StudioAlbumEntity) =
                     mapOf(
-                        "name" to local.name.encryptedForFirestore(),
+                        "name" to local.name.encryptedForFirestore(collectionPath, local.id, "name"),
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
@@ -1265,12 +1316,15 @@ class FirestoreDataSource
 
                 override suspend fun toFirestore(local: StudioMediaEntity) =
                     mapOf(
-                        "prompt" to local.prompt.encryptedForFirestore(),
+                        "prompt" to local.prompt.encryptedForFirestore(collectionPath, local.id, "prompt"),
                         "media_type" to local.mediaType,
                         "created_at" to local.createdAt,
                         "album_id" to local.albumId,
-                        "remote_url" to local.remoteUrl?.encryptedForFirestore(),
-                        "remote_thumbnail_url" to local.remoteThumbnailUrl?.encryptedForFirestore(),
+                        "remote_url" to local.remoteUrl?.let { it.encryptedForFirestore(collectionPath, local.id, "remote_url") },
+                        "remote_thumbnail_url" to
+                            local.remoteThumbnailUrl?.let {
+                                it.encryptedForFirestore(collectionPath, local.id, "remote_thumbnail_url")
+                            },
                         "updated_at" to local.updatedAt,
                         "deleted" to local.deleted,
                     )
@@ -1445,11 +1499,13 @@ class FirestoreDataSource
             val doc = dc.document
             when (dc.type) {
                 DocumentChange.Type.ADDED -> {
+                    repairRemoteDocument(adapter.collectionPath, doc)
                     adapter.fromFirestore(doc)?.let { entity ->
                         adapter.upsertLocal(entity, doc, overwrite = false)
                     }
                 }
                 DocumentChange.Type.MODIFIED -> {
+                    repairRemoteDocument(adapter.collectionPath, doc)
                     adapter.fromFirestore(doc)?.let { entity ->
                         adapter.upsertLocal(entity, doc, overwrite = true)
                     }
@@ -1457,6 +1513,17 @@ class FirestoreDataSource
                 DocumentChange.Type.REMOVED -> {
                     adapter.deleteLocal(doc.id)
                 }
+            }
+        }
+
+        private suspend fun repairRemoteDocument(
+            collectionPath: String,
+            doc: DocumentSnapshot,
+        ) {
+            val data = doc.data ?: return
+            val repaired = firestoreSensitiveFieldRepairer.repairInbound(collectionPath, doc.id, data)
+            if (repaired != data) {
+                doc.reference.set(repaired, SetOptions.merge()).await()
             }
         }
 
@@ -1499,7 +1566,11 @@ class FirestoreDataSource
                         }
                         val data =
                             mapOf(
-                                "name" to localEncryption.encryptString(chat.name),
+                                "name" to
+                                    localEncryption.encryptString(
+                                        chat.name,
+                                        AadContext("ChatEntity", "name", chat.id.value).toBytes(),
+                                    ),
                                 "created_at" to chat.created.time,
                                 "last_modified" to chat.lastModified.time,
                                 "pinned" to chat.pinned,
@@ -1520,7 +1591,11 @@ class FirestoreDataSource
                         val data =
                             mutableMapOf<String, Any?>(
                                 "chat_id" to msgChatId.value,
-                                "content" to localEncryption.encryptString(msg.content.text),
+                                "content" to
+                                    localEncryption.encryptString(
+                                        msg.content.text,
+                                        AadContext("MessageEntity", "content", msg.id.value).toBytes(),
+                                    ),
                                 "role" to msg.role.name,
                                 "message_state" to msg.messageState.name,
                                 "created_at" to msg.createdAt,
@@ -1578,7 +1653,16 @@ class FirestoreDataSource
                     val upserts =
                         batchItems
                             .filter { !adapter.shouldDelete(it) }
-                            .map { entity -> entity to adapter.toFirestore(entity) }
+                            .map { entity ->
+                                val repairedEntity = repairLocalEntityForSync(entity)
+                                val data =
+                                    firestoreSensitiveFieldRepairer.repairOutbound(
+                                        collectionPath = adapter.collectionPath,
+                                        entityId = adapter.getEntityId(repairedEntity),
+                                        data = adapter.toFirestore(repairedEntity),
+                                    )
+                                repairedEntity to data
+                            }
                     val deletes = batchItems.filter { adapter.shouldDelete(it) }
 
                     firestore
@@ -1612,6 +1696,54 @@ class FirestoreDataSource
                         }.await()
                     adapter.markSynced(batchItems)
                 }
+            }
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        private suspend fun <T> repairLocalEntityForSync(entity: T): T {
+            val repaired =
+                when (entity) {
+                    is ChatEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MessageEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is ChatSummaryEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MemoriesEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MessageVisionAnalysisEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MessageFileEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is WebSearchSourceEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MessageTranscriptSegmentEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is ApiModelConfigurationEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is LocalModelConfigurationEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is TtsProviderEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is MediaProviderEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is ApiCredentialsEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is StudioAlbumEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is StudioMediaEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    is DocumentEntity -> SensitiveEntityFieldEncryptors.encrypt(entity, sensitiveSelfHealer)
+                    else -> entity
+                }
+
+            if (repaired != entity) persistRepairedLocalEntity(repaired)
+            return repaired as T
+        }
+
+        private suspend fun persistRepairedLocalEntity(entity: Any?) {
+            when (entity) {
+                is ChatEntity -> chatDao.upsert(entity)
+                is MessageEntity -> messageDao.upsert(entity)
+                is ChatSummaryEntity -> chatSummaryDao.insertOrUpdateSummary(entity)
+                is MemoriesEntity -> memoriesDao.insertMemory(entity)
+                is MessageVisionAnalysisEntity -> messageVisionAnalysisDao.upsert(entity)
+                is MessageFileEntity -> messageFileDao.insert(entity)
+                is WebSearchSourceEntity -> webSearchSourceDao.upsert(entity)
+                is MessageTranscriptSegmentEntity -> messageTranscriptSegmentDao.upsert(entity)
+                is ApiModelConfigurationEntity -> apiModelConfigurationsDao.upsert(entity)
+                is LocalModelConfigurationEntity -> localModelConfigurationsDao.upsert(entity)
+                is TtsProviderEntity -> ttsProviderDao.upsertTtsProvider(entity)
+                is MediaProviderEntity -> mediaProviderDao.upsert(entity)
+                is ApiCredentialsEntity -> apiCredentialsDao.upsert(entity)
+                is StudioAlbumEntity -> studioAlbumDao.insertAlbum(entity)
+                is StudioMediaEntity -> studioMediaDao.insertMedia(entity)
+                is DocumentEntity -> documentDao.insertDocument(entity)
             }
         }
 
@@ -1672,7 +1804,7 @@ class FirestoreDataSource
         override suspend fun updateWrappedDek(wrappedDek: String?): Result<Unit> {
             val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
             return try {
-                val value: Any = wrappedDek ?: com.google.firebase.firestore.FieldValue.delete()
+                val value: Any = wrappedDek ?: FieldValue.delete()
                 firestore
                     .document("users/$userId")
                     .set(mapOf("wrappedDek" to value), SetOptions.merge())
@@ -1697,16 +1829,22 @@ class FirestoreDataSource
             }
         }
 
-        override suspend fun uploadVaultMetadata(
-            metadata: com.browntowndev.pocketcrew.domain.model.security.VaultMetadata,
-        ): Result<Unit> {
+        override suspend fun uploadVaultMetadata(metadata: VaultMetadata): Result<Unit> {
             val userId = userIdProvider() ?: return Result.failure(IllegalStateException("User not signed in"))
             return try {
                 val payload =
                     mapOf(
                         "vaultSalt" to metadata.salt,
-                        "vaultVerification" to (metadata.verification ?: com.google.firebase.firestore.FieldValue.delete()),
-                        "wrappedDek" to (metadata.wrappedDek ?: com.google.firebase.firestore.FieldValue.delete()),
+                        "vaultVerification" to
+                            (
+                                metadata.verification
+                                    ?: FieldValue.delete()
+                            ),
+                        "wrappedDek" to
+                            (
+                                metadata.wrappedDek
+                                    ?: FieldValue.delete()
+                            ),
                     )
                 firestore
                     .document("users/$userId")
@@ -1740,12 +1878,6 @@ class FirestoreDataSource
             embeddingCoordinator.enqueueFullRegeneration()
         }
 
-        private fun String.sha256(): String =
-            java.security.MessageDigest
-                .getInstance("SHA-256")
-                .digest(toByteArray())
-                .joinToString("") { "%02x".format(it) }
-
         private val documentSyncAdapter =
             object : EntitySyncAdapter<com.browntowndev.pocketcrew.core.data.local.DocumentEntity> {
                 override val collectionPath = "documents"
@@ -1772,9 +1904,9 @@ class FirestoreDataSource
                                 ?.message
                                 ?.chatId
                                 ?.value,
-                        "json" to local.json.encryptedForFirestore(),
-                        "title" to local.title.encryptedForFirestore(),
-                        "author" to local.author?.encryptedForFirestore(),
+                        "json" to local.json.encryptedForFirestore(collectionPath, local.id, "json"),
+                        "title" to local.title.encryptedForFirestore(collectionPath, local.id, "title"),
+                        "author" to local.author?.let { it.encryptedForFirestore(collectionPath, local.id, "author") },
                         "target_format" to local.targetFormat?.name,
                         "created_at" to local.createdAt,
                         "updated_at" to local.updatedAt,
@@ -1813,7 +1945,7 @@ class FirestoreDataSource
 
         private fun documentEntityFromDoc(doc: DocumentSnapshot): com.browntowndev.pocketcrew.core.data.local.DocumentEntity? {
             val json = doc.getEncryptedField("json") ?: return null
-            val title = doc.getEncryptedField("title") ?: ""
+            val title = doc.getEncryptedField("title") ?: return null
             val messageIdStr = doc.getString("message_id") ?: return null
             val messageId = MessageId(messageIdStr)
             val targetFormatStr = doc.getString("target_format")

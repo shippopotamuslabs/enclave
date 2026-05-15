@@ -4,14 +4,17 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
-import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
+import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,28 +26,42 @@ class MemoriesRepositoryImpl
         private val memoriesDao: MemoriesDao,
         private val embeddingDao: EmbeddingDao,
         private val embeddingEngine: EmbeddingEnginePort,
-        private val localEncryption: LocalDataEncryptionService,
+        private val healer: SensitivePersistenceSelfHealer,
+        private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : MemoriesRepository {
         private fun triggerSync() = syncTrigger.trigger()
 
         override fun getAllMemoriesFlow(): Flow<List<Memory>> =
-            memoriesDao.getAllMemoriesFlow().map { entities -> entities.map(::toDomain) }
+            memoriesDao.getAllMemoriesFlow().mapLatest { entities ->
+                val repairs = mutableListOf<SensitiveRoomReadRepair>()
+                val out = entities.map { toDomain(it, repairs) }
+                readRepairApplier.apply(repairs)
+                out
+            }
 
-        override suspend fun getCoreMemories(): List<Memory> =
-            memoriesDao
-                .getMemoriesByCategories(
-                    listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES),
-                ).map(::toDomain)
+        override suspend fun getCoreMemories(): List<Memory> {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out =
+                memoriesDao
+                    .getMemoriesByCategories(
+                        listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES),
+                    ).map { toDomain(it, repairs) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         override suspend fun insertMemory(
             category: MemoryCategory,
             content: String,
         ): Memory {
-            val entity = MemoriesEntity(category = category, content = localEncryption.encryptString(content), pendingSync = 1)
+            val entity = SensitiveEntityFieldEncryptors.encrypt(
+                MemoriesEntity(category = category, content = content, pendingSync = 1),
+                healer,
+            )
             memoriesDao.insertMemory(entity)
             updateEmbedding(entity.id, content)
             triggerSync()
-            return toDomain(entity)
+            return toDomain(entity, null)
         }
 
         override suspend fun updateMemory(
@@ -53,19 +70,26 @@ class MemoriesRepositoryImpl
             category: MemoryCategory?,
         ) {
             val existing = memoriesDao.getMemoryById(id) ?: return
-            val updated =
+            val updated = SensitiveEntityFieldEncryptors.encrypt(
                 existing.copy(
-                    content = localEncryption.encryptString(content),
+                    content = content,
                     category = category ?: existing.category,
                     updatedAt = System.currentTimeMillis(),
                     pendingSync = 1,
-                )
+                ),
+                healer,
+            )
             memoriesDao.updateMemory(updated)
             updateEmbedding(updated.id, content)
             triggerSync()
         }
 
-        override suspend fun getMemoryById(id: String): Memory? = memoriesDao.getMemoryById(id)?.let(::toDomain)
+        override suspend fun getMemoryById(id: String): Memory? {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = memoriesDao.getMemoryById(id)?.let { toDomain(it, repairs) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
 
         override suspend fun deleteMemory(id: String) {
             memoriesDao.softDeleteById(id)
@@ -101,15 +125,23 @@ class MemoriesRepositoryImpl
                 ORDER BY distance
                 """.trimIndent()
 
-            return memoriesDao.searchMemoriesRaw(SimpleSQLiteQuery(sql)).map(::toDomain)
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out = memoriesDao.searchMemoriesRaw(SimpleSQLiteQuery(sql)).map { toDomain(it, repairs) }
+            readRepairApplier.apply(repairs)
+            return out
         }
 
-        private fun toDomain(entity: MemoriesEntity): Memory =
-            Memory(
-                id = entity.id,
-                category = entity.category,
-                content = localEncryption.decryptString(entity.content),
-                createdAt = entity.createdAt,
-                updatedAt = entity.updatedAt,
+        private fun toDomain(
+            entity: MemoriesEntity,
+            readRepairs: MutableList<SensitiveRoomReadRepair>?,
+        ): Memory {
+            val decrypted = SensitiveEntityFieldEncryptors.decrypt(entity, healer, readRepairs)
+            return Memory(
+                id = decrypted.id,
+                category = decrypted.category,
+                content = decrypted.content,
+                createdAt = decrypted.createdAt,
+                updatedAt = decrypted.updatedAt,
             )
+        }
     }

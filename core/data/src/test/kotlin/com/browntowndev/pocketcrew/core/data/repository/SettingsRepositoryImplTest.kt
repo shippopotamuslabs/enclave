@@ -11,11 +11,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -47,12 +48,17 @@ class SettingsRepositoryImplTest {
     fun `updateCustomPromptText stores encrypted value and emits plaintext`() =
         runTest {
             val dataStore = createDataStore(backgroundScope)
-            val repository = createRepository(dataStore = dataStore, localEncryption = FakeLocalDataEncryptionService())
+            val fakeEnc = FakeLocalDataEncryptionService()
+            val repository = createRepository(dataStore = dataStore, localEncryption = fakeEnc)
 
             repository.updateCustomPromptText("answer like me")
 
             assertEquals("PCENC:v1:aes-gcm:answer like me", dataStore.data.first()[customPromptTextKey])
             assertEquals("answer like me", repository.settingsFlow.first().customPromptText)
+            assertEquals(
+                "SettingsRepositoryImpl|settings_custom_prompt_text|singleton",
+                fakeEnc.lastEncryptAad?.toString(StandardCharsets.UTF_8),
+            )
         }
 
     @Test
@@ -95,17 +101,6 @@ class SettingsRepositoryImplTest {
             apiKeyManager = apiKeyManager,
             localEncryption = localEncryption,
         )
-    }
-
-    private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-
-        override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
-
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
-
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
     }
 
     private companion object {

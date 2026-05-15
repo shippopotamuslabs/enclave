@@ -173,7 +173,15 @@ class AtRestEncryptionServiceTest {
 
         override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> =
             if (hasCachedKey()) {
-                Result.success("ENC:v1:${String(data)}".toByteArray())
+                // Envelope parsing requires a decoded payload of at least 28 bytes (12 IV + 16 GCM tag block).
+                val out = ByteArray(28)
+                val ct = ByteArray(16)
+                val len = data.size.coerceAtMost(16)
+                if (len > 0) {
+                    data.copyInto(ct, 0, endIndex = len)
+                }
+                System.arraycopy(ct, 0, out, 12, 16)
+                Result.success(out)
             } else {
                 Result.failure(IllegalStateException("locked"))
             }
@@ -182,8 +190,13 @@ class AtRestEncryptionServiceTest {
 
         override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
             if (!hasCachedKey()) return Result.failure(IllegalStateException("locked"))
-            val text = String(ciphertext)
-            return Result.success(text.removePrefix("ENC:v1:").toByteArray())
+            if (ciphertext.size < 28) return Result.failure(IllegalStateException("short ciphertext"))
+            val ct = ciphertext.copyOfRange(12, 28)
+            var end = ct.size
+            while (end > 0 && ct[end - 1] == 0.toByte()) {
+                end--
+            }
+            return Result.success(if (end == 0) ByteArray(0) else ct.copyOf(end))
         }
 
         override fun generateSalt(): ByteArray = byteArrayOf(1, 2, 3)

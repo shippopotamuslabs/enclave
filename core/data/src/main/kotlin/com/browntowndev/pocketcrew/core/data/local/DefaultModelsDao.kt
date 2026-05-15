@@ -24,6 +24,7 @@ interface DefaultModelsDao {
             amc.display_name as apiPresetName,
             lm.huggingface_model_name as localAssetName,
             ac.display_name as apiAssetName,
+            ac.id as apiCredentialsId,
             ac.provider as apiProviderName,
             dm.tts_provider_id as ttsProviderId,
             tp.displayName as ttsAssetName,

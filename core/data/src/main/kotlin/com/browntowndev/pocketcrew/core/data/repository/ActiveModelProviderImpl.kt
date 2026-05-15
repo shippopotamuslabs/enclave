@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -34,9 +35,19 @@ class ActiveModelProviderImpl
                 return ActiveModelConfiguration(
                     id = config.id,
                     isLocal = true,
-                    name = localEncryption.decryptString(config.displayName),
+                    name =
+                        localEncryption.decryptString(
+                            config.displayName,
+                            AadContext("LocalModelConfigurationEntity", "displayName", config.id.value).toBytes(),
+                        ),
                     modelId = model.localFilename,
-                    systemPrompt = config.systemPrompt?.let(localEncryption::decryptString),
+                    systemPrompt =
+                        config.systemPrompt?.let {
+                            localEncryption.decryptString(
+                                it,
+                                AadContext("LocalModelConfigurationEntity", "systemPrompt", config.id.value).toBytes(),
+                            )
+                        },
                     isMultimodal = model.isMultimodal,
                     reasoningEffort = null,
                     temperature = config.temperature,
@@ -66,9 +77,17 @@ class ActiveModelProviderImpl
                 return ActiveModelConfiguration(
                     id = config.id,
                     isLocal = false,
-                    name = localEncryption.decryptString(config.displayName),
+                    name =
+                        localEncryption.decryptString(
+                            config.displayName,
+                            AadContext("ApiModelConfigurationEntity", "displayName", config.id.value).toBytes(),
+                        ),
                     modelId = credentials.modelId,
-                    systemPrompt = localEncryption.decryptString(config.systemPrompt),
+                    systemPrompt =
+                        localEncryption.decryptString(
+                            config.systemPrompt,
+                            AadContext("ApiModelConfigurationEntity", "systemPrompt", config.id.value).toBytes(),
+                        ),
                     isMultimodal = credentials.isMultimodal,
                     reasoningEffort =
                         config.reasoningEffort?.let {

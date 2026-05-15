@@ -30,8 +30,10 @@ class MemoriesRepositoryTest {
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     private val fakeEncryption = object : com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService {
-        override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
     private val noOpLogger = object : com.browntowndev.pocketcrew.domain.port.inference.LoggingPort {

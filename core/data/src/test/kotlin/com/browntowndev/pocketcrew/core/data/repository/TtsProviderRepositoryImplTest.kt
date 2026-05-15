@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
@@ -22,11 +23,12 @@ class TtsProviderRepositoryImplTest {
     private val ttsProviderDao: TtsProviderDao = mockk()
     private val apiKeyManager: ApiKeyManager = mockk(relaxed = true)
     private val syncTrigger: CloudSyncTrigger = mockk(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
     private lateinit var repository: TtsProviderRepositoryImpl
 
     @BeforeEach
     fun setUp() {
-        repository = TtsProviderRepositoryImpl(syncTrigger, ttsProviderDao, apiKeyManager, FakeLocalDataEncryptionService())
+        repository = TtsProviderRepositoryImpl(syncTrigger, ttsProviderDao, apiKeyManager, testSensitiveSelfHealer(FakeLocalDataEncryptionService()), readRepairApplier)
     }
 
     @Test
@@ -62,9 +64,9 @@ class TtsProviderRepositoryImplTest {
                 ttsProviderDao.upsertTtsProvider(
                     match {
                         it.id == "1" &&
-                            it.displayName == "ENC:v1:xAI TTS" &&
+                            it.displayName == "PCENC:v1:aes-gcm:xAI TTS" &&
                             it.provider == ApiProvider.XAI &&
-                            it.baseUrl == "ENC:v1:https://api.x.ai" &&
+                            it.baseUrl == "PCENC:v1:aes-gcm:https://api.x.ai" &&
                             it.credentialAlias == "alias-x"
                     },
                 )
@@ -80,7 +82,8 @@ class TtsProviderRepositoryImplTest {
                     syncTrigger,
                     ttsProviderDao,
                     apiKeyManager,
-                    FakeLocalDataEncryptionService(),
+                    testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                    readRepairApplier,
                 )
             val asset =
                 TtsProviderAsset(
@@ -96,11 +99,11 @@ class TtsProviderRepositoryImplTest {
             coEvery { ttsProviderDao.getTtsProvider("1") } returns
                 TtsProviderEntity(
                     "1",
-                    "ENC:v1:xAI TTS",
+                    "PCENC:v1:aes-gcm:xAI TTS",
                     ApiProvider.XAI,
-                    "ENC:v1:eve",
-                    "ENC:v1:tts-1",
-                    "ENC:v1:https://api.x.ai",
+                    "PCENC:v1:aes-gcm:eve",
+                    "PCENC:v1:aes-gcm:tts-1",
+                    "PCENC:v1:aes-gcm:https://api.x.ai",
                     "alias-x",
                 )
 
@@ -110,10 +113,10 @@ class TtsProviderRepositoryImplTest {
             coVerify {
                 ttsProviderDao.upsertTtsProvider(
                     match {
-                        it.displayName == "ENC:v1:xAI TTS" &&
-                            it.voiceName == "ENC:v1:eve" &&
-                            it.modelName == "ENC:v1:tts-1" &&
-                            it.baseUrl == "ENC:v1:https://api.x.ai"
+                        it.displayName == "PCENC:v1:aes-gcm:xAI TTS" &&
+                            it.voiceName == "PCENC:v1:aes-gcm:eve" &&
+                            it.modelName == "PCENC:v1:aes-gcm:tts-1" &&
+                            it.baseUrl == "PCENC:v1:aes-gcm:https://api.x.ai"
                     },
                 )
             }

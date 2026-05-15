@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -27,6 +28,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
     private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: MessageRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     @BeforeEach
     fun setup() {
@@ -43,7 +45,8 @@ class MessageRepositoryImplGetMessagesForChatTest {
                 chatSummaryDao,
                 embeddingDao,
                 transactionProvider,
-                FakeLocalDataEncryptionService(),
+                testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier,
             )
     }
 

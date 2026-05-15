@@ -5,14 +5,18 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import javax.inject.Inject
 
 /**
@@ -23,6 +27,8 @@ class SettingsRepositoryImpl
     constructor(
         private val dataStore: DataStore<Preferences>,
         private val apiKeyManager: ApiKeyManager,
+        private val localEncryption: LocalDataEncryptionService = LocalDataEncryptionService.NoOp,
+        private val loggingPort: LoggingPort = NoOpLoggingPort,
     ) : SettingsRepository {
         companion object {
             private val THEME_KEY = stringPreferencesKey("settings_theme")
@@ -40,55 +46,61 @@ class SettingsRepositoryImpl
             private val X_API_KEY_PRESENT_KEY = booleanPreferencesKey("settings_x_api_key_present")
             private val SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY = booleanPreferencesKey("settings_show_search_provider_switch_alert")
             private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
+            private const val TAG = "SettingsRepository"
         }
 
         override val settingsFlow: Flow<SettingsData> =
-            dataStore.data.map { preferences ->
-                SettingsData(
-                    theme =
-                        preferences[THEME_KEY]?.let { name ->
-                            try {
-                                AppTheme.valueOf(name)
-                            } catch (_: IllegalArgumentException) {
-                                AppTheme.SYSTEM
-                            }
-                        } ?: AppTheme.SYSTEM,
-                    hapticPress = preferences[HAPTIC_PRESS_KEY] ?: true,
-                    hapticResponse = preferences[HAPTIC_RESPONSE_KEY] ?: true,
-                    customizationEnabled = preferences[CUSTOMIZATION_ENABLED_KEY] ?: true,
-                    selectedPromptOption =
-                        preferences[SELECTED_PROMPT_OPTION_KEY]?.let { name ->
-                            try {
-                                SystemPromptOption.valueOf(name)
-                            } catch (_: IllegalArgumentException) {
-                                SystemPromptOption.CONCISE
-                            }
-                        } ?: SystemPromptOption.CONCISE,
-                    customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY] ?: "",
-                    allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
-                    searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
-                    searchProvider =
-                        preferences[SEARCH_PROVIDER_KEY]?.let { name ->
-                            try {
-                                SearchProvider.valueOf(name)
-                            } catch (_: IllegalArgumentException) {
-                                SearchProvider.TAVILY
-                            }
-                        } ?: SearchProvider.TAVILY,
-                    tavilyKeyPresent =
-                        preferences[TAVILY_KEY_PRESENT_KEY]
-                            ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
-                    exaKeyPresent =
-                        preferences[EXA_KEY_PRESENT_KEY]
-                            ?: apiKeyManager.has(ApiKeyManager.EXA_SEARCH_ALIAS),
-                    xSearchEnabled = preferences[X_SEARCH_ENABLED_KEY] ?: false,
-                    xApiKeyPresent =
-                        preferences[X_API_KEY_PRESENT_KEY]
-                            ?: apiKeyManager.has(ApiKeyManager.X_SEARCH_ALIAS),
-                    showSearchProviderSwitchAlert = preferences[SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY] ?: true,
-                    backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
-                )
-            }
+            dataStore.data
+                .onEach { preferences ->
+                    repairCustomPromptText(preferences[CUSTOM_PROMPT_TEXT_KEY])
+                }.map { preferences ->
+                    SettingsData(
+                        theme =
+                            preferences[THEME_KEY]?.let { name ->
+                                try {
+                                    AppTheme.valueOf(name)
+                                } catch (_: IllegalArgumentException) {
+                                    AppTheme.SYSTEM
+                                }
+                            } ?: AppTheme.SYSTEM,
+                        hapticPress = preferences[HAPTIC_PRESS_KEY] ?: true,
+                        hapticResponse = preferences[HAPTIC_RESPONSE_KEY] ?: true,
+                        customizationEnabled = preferences[CUSTOMIZATION_ENABLED_KEY] ?: true,
+                        selectedPromptOption =
+                            preferences[SELECTED_PROMPT_OPTION_KEY]?.let { name ->
+                                try {
+                                    SystemPromptOption.valueOf(name)
+                                } catch (_: IllegalArgumentException) {
+                                    SystemPromptOption.CONCISE
+                                }
+                            } ?: SystemPromptOption.CONCISE,
+                        customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY]?.let { stored ->
+                            localEncryption.decryptString(stored, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
+                        } ?: "",
+                        allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
+                        searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
+                        searchProvider =
+                            preferences[SEARCH_PROVIDER_KEY]?.let { name ->
+                                try {
+                                    SearchProvider.valueOf(name)
+                                } catch (_: IllegalArgumentException) {
+                                    SearchProvider.TAVILY
+                                }
+                            } ?: SearchProvider.TAVILY,
+                        tavilyKeyPresent =
+                            preferences[TAVILY_KEY_PRESENT_KEY]
+                                ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
+                        exaKeyPresent =
+                            preferences[EXA_KEY_PRESENT_KEY]
+                                ?: apiKeyManager.has(ApiKeyManager.EXA_SEARCH_ALIAS),
+                        xSearchEnabled = preferences[X_SEARCH_ENABLED_KEY] ?: false,
+                        xApiKeyPresent =
+                            preferences[X_API_KEY_PRESENT_KEY]
+                                ?: apiKeyManager.has(ApiKeyManager.X_SEARCH_ALIAS),
+                        showSearchProviderSwitchAlert = preferences[SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY] ?: true,
+                        backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
+                    )
+                }
 
         override suspend fun updateTheme(theme: AppTheme) {
             dataStore.edit { preferences ->
@@ -122,8 +134,57 @@ class SettingsRepositoryImpl
 
         override suspend fun updateCustomPromptText(text: String) {
             dataStore.edit { preferences ->
-                preferences[CUSTOM_PROMPT_TEXT_KEY] = text
+                preferences[CUSTOM_PROMPT_TEXT_KEY] = localEncryption.encryptString(text, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
             }
+        }
+
+        private suspend fun repairCustomPromptText(stored: String?) {
+            if (stored.isNullOrEmpty() || localEncryption.isEncrypted(stored)) return
+            if (!localEncryption.isUnlocked()) {
+                loggingPort.warning(
+                    TAG,
+                    "Sensitive persistence self-heal owner=SettingsRepositoryImpl field=customPromptText action=DEFERRED_LOCKED",
+                )
+                return
+            }
+            val encrypted = localEncryption.encryptString(stored, AadContext("SettingsRepositoryImpl", "settings_custom_prompt_text", "singleton").toBytes())
+            if (encrypted == stored) return
+            dataStore.edit { preferences ->
+                preferences[CUSTOM_PROMPT_TEXT_KEY] = encrypted
+            }
+            loggingPort.warning(
+                TAG,
+                "Sensitive persistence self-heal owner=SettingsRepositoryImpl field=customPromptText action=REPAIRED",
+            )
+        }
+
+        private object NoOpLoggingPort : LoggingPort {
+            override fun debug(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun info(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun warning(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun error(
+                tag: String,
+                message: String,
+                throwable: Throwable?,
+            ) = Unit
+
+            override fun recordException(
+                tag: String,
+                message: String,
+                throwable: Throwable,
+            ) = Unit
         }
 
         override suspend fun updateAllowMemories(allowed: Boolean) {
