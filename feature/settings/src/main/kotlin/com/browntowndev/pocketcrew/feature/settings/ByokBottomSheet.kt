@@ -1,13 +1,14 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,9 +35,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -154,13 +158,6 @@ fun ByokBottomSheet(
                         ByokAssetListView(
                             apiModels = uiState.apiProvidersSheet.assets,
                             onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
-                            onEditAsset = { asset ->
-                                hideAndNavigate {
-                                    onSelectApiModelAsset(asset)
-                                    onSelectApiModelConfig(null)
-                                    onNavigateToByokConfigure()
-                                }
-                            },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
                             },
@@ -227,7 +224,6 @@ fun ByokBottomSheet(
 private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
-    onEditAsset: (ApiModelAssetUi) -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onAddAsset: () -> Unit
 ) {
@@ -243,14 +239,6 @@ private fun ByokAssetListView(
             text = "Manage your own API keys and model configurations.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        
-        Text(
-            text = "Hint: long press to edit/delete the provider.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
@@ -259,19 +247,42 @@ private fun ByokAssetListView(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(apiModels, key = { it.credentialsId.value }) { asset ->
-                var menuExpanded by remember { mutableStateOf(false) }
+                val dismissState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = { value ->
+                        if (value == SwipeToDismissBoxValue.EndToStart) {
+                            onRequestDeleteAsset(asset)
+                            false
+                        } else true
+                    }
+                )
 
-                Box {
+                SwipeToDismissBox(
+                    state = dismissState,
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    enableDismissFromStartToEnd = false,
+                    backgroundContent = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
+                ) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = { onSelectAsset(asset) },
-                                onLongClick = { menuExpanded = true }
-                            ),
+                            .clickable { onSelectAsset(asset) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         )
                     ) {
                         Row(
@@ -319,26 +330,6 @@ private fun ByokAssetListView(
                                 modifier = Modifier.padding(start = 4.dp)
                             )
                         }
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = {
-                                menuExpanded = false
-                                onEditAsset(asset)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete") },
-                            onClick = {
-                                menuExpanded = false
-                                onRequestDeleteAsset(asset)
-                            }
-                        )
                     }
                 }
             }
@@ -441,20 +432,44 @@ private fun ByokConfigListView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
-                var menuExpanded by remember { mutableStateOf(false) }
-                val isDeleteEnabled = asset.configurations.size > 1
+                val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
+                val dismissState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = { value ->
+                        if (value == SwipeToDismissBoxValue.EndToStart) {
+                            onRequestDeleteConfig(config)
+                            false
+                        } else true
+                    }
+                )
 
-                Box {
+                SwipeToDismissBox(
+                    state = dismissState,
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    enableDismissFromStartToEnd = false,
+                    gesturesEnabled = isSwipeEnabled,
+                    backgroundContent = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
+                ) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = { onEditConfig(config) },
-                                onLongClick = { menuExpanded = true }
-                            ),
+                            .clickable { onEditConfig(config) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         )
                     ) {
                         Row(
@@ -475,37 +490,7 @@ private fun ByokConfigListView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-
-                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = "Options for ${config.displayName}",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = {
-                                menuExpanded = false
-                                onEditConfig(config)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete") },
-                            enabled = isDeleteEnabled,
-                            onClick = {
-                                menuExpanded = false
-                                onRequestDeleteConfig(config)
-                            }
-                        )
                     }
                 }
             }
@@ -552,6 +537,8 @@ private sealed interface ByokDeleteTarget {
 }
 
 private fun Double.format(digits: Int) = "%.${digits}f".format(this)
+
+internal fun isPresetSwipeDeletionEnabled(configurationCount: Int): Boolean = configurationCount > 1
 
 // ==================== PREVIEWS ====================
 

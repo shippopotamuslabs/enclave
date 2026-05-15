@@ -328,12 +328,15 @@ class SettingsUiStateFactory @Inject constructor(
             ),
             localModelsSheet = LocalModelsSheetUiState(
                 isVisible = localModelsState.isSheetOpen,
-                models = localModels,
-                availableDownloads = localModelsState.availableToDownloadModels.map(localModelAssetUiMapper::map),
+                models = localModels.filter { !it.isSoftDeleted },
+                availableDownloads = localModels.filter { it.isSoftDeleted },
                 selectedAsset = refreshedSelectedLocalAsset,
             ),
             localModelEditor = LocalModelEditorUiState(
-                selectedAsset = refreshedSelectedLocalAsset,
+                selectedAsset = refreshedSelectedLocalAsset
+                    ?: localModelsState.configDraft?.localModelId
+                        ?.takeIf { it.value.isNotEmpty() }
+                        ?.let { id -> localModels.find { it.metadataId == id } },
                 configDraft = localModelsState.configDraft,
             ),
             apiProvidersSheet = ApiProvidersSheetUiState(
@@ -488,6 +491,7 @@ class SettingsUiStateFactory @Inject constructor(
             ModelType.TTS,
             ModelType.IMAGE_GENERATION,
             ModelType.VIDEO_GENERATION,
+            ModelType.VISION,
         )
     }
 }

@@ -156,7 +156,7 @@ fun LocalModelConfigureScreen(
                 value = config.displayName,
                 onValueChange = { onConfigChange(config.copy(displayName = it)) },
                 label = { Text("Preset Name (e.g. Creative)") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("DisplayNameField"),
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                 readOnly = config.isSystemPreset,
@@ -425,7 +425,8 @@ fun LocalModelConfigureScreen(
                 Switch(
                     checked = config.thinkingEnabled,
                     onCheckedChange = { onConfigChange(config.copy(thinkingEnabled = it)) },
-                    enabled = !config.isSystemPreset
+                    enabled = !config.isSystemPreset,
+                    modifier = Modifier.testTag("ThinkingSwitch")
                 )
             }
 
