@@ -45,6 +45,8 @@ class StudioMediaFetcher(
         val encryptedBytes = responseBody.bytes()
         responseBody.close()
 
+        // Firebase Storage payloads are encrypted with [CryptoManagerPort.encryptBytes] using default
+        // (null) AAD in [MediaCloudSyncWorker]; byte-level crypto is not row-bound like Room string fields.
         val decryptionResult = cryptoManager.decryptBytes(encryptedBytes)
         
         if (decryptionResult.isFailure) {

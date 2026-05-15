@@ -150,6 +150,14 @@ class MultimodalViewModel @Inject constructor(
         }
         .distinctUntilChanged()
 
+    private val hasVideoModelFlow = defaultModelRepository.observeDefaults()
+        .map { assignments ->
+            assignments.any { assignment ->
+                assignment.modelType == ModelType.VIDEO_GENERATION && assignment.mediaProviderId != null
+            }
+        }
+        .distinctUntilChanged()
+
     init {
         observeSpeechResults()
         observeCapabilities()
@@ -295,6 +303,7 @@ class MultimodalViewModel @Inject constructor(
         _speechState,
         _isPlayingTts,
         _referenceMediaType,
+        hasVideoModelFlow,
     ) { args ->
         val prompt = args[0] as String
         val isGenerating = args[1] as Boolean
@@ -320,6 +329,7 @@ class MultimodalViewModel @Inject constructor(
         val speechState = args[17] as SpeechState
         val isPlayingTts = args[18] as Boolean
         val referenceMediaType = args[19] as MediaCapability?
+        val hasVideoModel = args[20] as Boolean
         
         val gallery = (albums.flatMap { it.items }.filter { it.id in sessionSavedAssetIds } + sessionMedia)
             .distinctBy { it.localUri.substringAfterLast('/') }
@@ -352,7 +362,8 @@ class MultimodalViewModel @Inject constructor(
             referenceMediaType = referenceMediaType,
             videoGenerationState = videoGenerationState,
             speechState = speechState,
-            isPlayingTts = isPlayingTts
+            isPlayingTts = isPlayingTts,
+            hasVideoModel = hasVideoModel,
         )
     }.stateIn(
         scope = viewModelScope,
