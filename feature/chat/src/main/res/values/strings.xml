@@ -13,7 +13,12 @@
     <string name="artifact_export_format_both">Both</string>
     <string name="artifact_export_dest_share">Share</string>
     <string name="artifact_export_dest_download">Download</string>
-    <string name="artifact_export_continue">Continue</string>
+    <string name="artifact_export_next">Next</string>
+    <string name="artifact_export_format_pdf_subtitle">Best for reading and printing</string>
+    <string name="artifact_export_format_word_subtitle">Editable .docx for Office &amp; Docs</string>
+    <string name="artifact_export_format_both_subtitle">PDF and Word in one export</string>
+    <string name="artifact_export_dest_share_subtitle">Send via apps, links, or nearby share</string>
+    <string name="artifact_export_dest_download_subtitle">Save to Downloads on this device</string>
     <string name="artifact_export_action">Export</string>
     <string name="artifact_export_back">Back</string>
     <string name="artifact_export_close">Close export sheet</string>

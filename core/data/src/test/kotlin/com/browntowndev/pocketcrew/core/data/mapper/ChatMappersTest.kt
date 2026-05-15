@@ -3,109 +3,113 @@ package com.browntowndev.pocketcrew.core.data.mapper
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.util.Date
 
 class ChatMappersTest {
-
     // region isSyncing derivation tests
 
     @Test
     fun `toDomain placeholderRow setsIsSyncingTrue`() {
-        val entity = ChatEntity(
-            id = ChatId("chat-placeholder"),
-            name = "Syncing...",
-            created = Date(0),
-            lastModified = Date(0),
-            pinned = false,
-            pendingSync = 0,
-            updatedAt = 0L
-        )
+        val entity =
+            ChatEntity(
+                id = ChatId("chat-placeholder"),
+                name = "Syncing...",
+                created = Date(0),
+                lastModified = Date(0),
+                pinned = false,
+                pendingSync = 0,
+                updatedAt = 0L,
+            )
 
         val domain = entity.toDomain()
 
-        assertTrue("Expected isSyncing=true for placeholder row", domain.isSyncing)
+        assertTrue(domain.isSyncing, "Expected isSyncing=true for placeholder row")
     }
 
     @Test
     fun `toDomain realLocalRow isSyncingFalse`() {
-        val entity = ChatEntity(
-            id = ChatId("chat-local"),
-            name = "My Chat",
-            created = Date(1_000_000L),
-            lastModified = Date(1_000_000L),
-            pinned = false,
-            pendingSync = 1,
-            updatedAt = 1_000_000L
-        )
+        val entity =
+            ChatEntity(
+                id = ChatId("chat-local"),
+                name = "My Chat",
+                created = Date(1_000_000L),
+                lastModified = Date(1_000_000L),
+                pinned = false,
+                pendingSync = 1,
+                updatedAt = 1_000_000L,
+            )
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for real local row (pendingSync=1)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for real local row (pendingSync=1)")
     }
 
     @Test
     fun `toDomain realSyncedRow isSyncingFalse`() {
-        val entity = ChatEntity(
-            id = ChatId("chat-synced"),
-            name = "Synced Chat",
-            created = Date(2_000_000L),
-            lastModified = Date(2_000_000L),
-            pinned = false,
-            pendingSync = 0,
-            updatedAt = 2_000_000L
-        )
+        val entity =
+            ChatEntity(
+                id = ChatId("chat-synced"),
+                name = "Synced Chat",
+                created = Date(2_000_000L),
+                lastModified = Date(2_000_000L),
+                pinned = false,
+                pendingSync = 0,
+                updatedAt = 2_000_000L,
+            )
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for synced row (updatedAt > 0)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for synced row (updatedAt > 0)")
     }
 
     @Test
     fun `toDomain oldSyncedRowMissingUpdatedAt isSyncingFalse`() {
         // Edge case: old Firestore chat doc missing updated_at field, defaults to 0L
         // But created timestamp is real, so should NOT be marked as syncing
-        val entity = ChatEntity(
-            id = ChatId("chat-old-synced"),
-            name = "Old Synced Chat",
-            created = Date(1_500_000L),
-            lastModified = Date(1_500_000L),
-            pinned = false,
-            pendingSync = 0,
-            updatedAt = 0L  // Missing field, defaulted to 0L
-        )
+        val entity =
+            ChatEntity(
+                id = ChatId("chat-old-synced"),
+                name = "Old Synced Chat",
+                created = Date(1_500_000L),
+                lastModified = Date(1_500_000L),
+                pinned = false,
+                pendingSync = 0,
+                updatedAt = 0L, // Missing field, defaulted to 0L
+            )
 
         val domain = entity.toDomain()
 
-        assertFalse("Expected isSyncing=false for old synced row with real created timestamp (created.time > 0)", domain.isSyncing)
+        assertFalse(domain.isSyncing, "Expected isSyncing=false for old synced row with real created timestamp (created.time > 0)")
     }
 
     // endregion
 
     @Test
     fun `WebSearchSourceEntity toDomain maps extracted field`() {
-        val entity = WebSearchSourceEntity(
-            id = "src-1",
-            messageId = MessageId("msg-1"),
-            title = "Test",
-            url = "https://example.com",
-            content = "Content",
-            score = 0.9,
-            extracted = true,
-        )
+        val entity =
+            WebSearchSourceEntity(
+                id = "src-1",
+                messageId = MessageId("msg-1"),
+                title = "Test",
+                url = "https://example.com",
+                content = "Content",
+                score = 0.9,
+                extracted = true,
+            )
 
         val domain = entity.toDomain()
 
@@ -116,15 +120,16 @@ class ChatMappersTest {
 
     @Test
     fun `WebSearchSourceEntity toDomain defaults extracted to false`() {
-        val entity = WebSearchSourceEntity(
-            id = "src-2",
-            messageId = MessageId("msg-1"),
-            title = "Test",
-            url = "https://example.com",
-            content = "Content",
-            score = 0.5,
-            extracted = false,
-        )
+        val entity =
+            WebSearchSourceEntity(
+                id = "src-2",
+                messageId = MessageId("msg-1"),
+                title = "Test",
+                url = "https://example.com",
+                content = "Content",
+                score = 0.5,
+                extracted = false,
+            )
 
         val domain = entity.toDomain()
 
@@ -133,15 +138,16 @@ class ChatMappersTest {
 
     @Test
     fun `WebSearchSource toEntity maps extracted field`() {
-        val domain = WebSearchSource(
-            id = "src-3",
-            messageId = MessageId("msg-1"),
-            title = "Test",
-            url = "https://example.com",
-            content = "Content",
-            score = 0.8,
-            extracted = true,
-        )
+        val domain =
+            WebSearchSource(
+                id = "src-3",
+                messageId = MessageId("msg-1"),
+                title = "Test",
+                url = "https://example.com",
+                content = "Content",
+                score = 0.8,
+                extracted = true,
+            )
 
         val entity = domain.toEntity()
 
@@ -152,14 +158,15 @@ class ChatMappersTest {
 
     @Test
     fun `WebSearchSource toEntity defaults extracted to false`() {
-        val domain = WebSearchSource(
-            id = "src-4",
-            messageId = MessageId("msg-1"),
-            title = "Test",
-            url = "https://example.com",
-            content = "Content",
-            score = 0.3,
-        )
+        val domain =
+            WebSearchSource(
+                id = "src-4",
+                messageId = MessageId("msg-1"),
+                title = "Test",
+                url = "https://example.com",
+                content = "Content",
+                score = 0.3,
+            )
 
         val entity = domain.toEntity()
 
@@ -168,15 +175,16 @@ class ChatMappersTest {
 
     @Test
     fun `round-trip preserves extracted true`() {
-        val original = WebSearchSource(
-            id = "src-5",
-            messageId = MessageId("msg-1"),
-            title = "Round Trip",
-            url = "https://round.com",
-            content = "Round",
-            score = 1.0,
-            extracted = true,
-        )
+        val original =
+            WebSearchSource(
+                id = "src-5",
+                messageId = MessageId("msg-1"),
+                title = "Round Trip",
+                url = "https://round.com",
+                content = "Round",
+                score = 1.0,
+                extracted = true,
+            )
 
         val entity = original.toEntity()
         val roundTripped = entity.toDomain()
@@ -193,17 +201,18 @@ class ChatMappersTest {
         val types = listOf("IMAGE", "VIDEO")
         val prompts = listOf("prompt1", "prompt2")
 
-        val entity = MessageEntity(
-            id = MessageId("msg-1"),
-            chatId = ChatId("chat-1"),
-            content = "Hello",
-            role = Role.ASSISTANT,
-            messageState = MessageState.COMPLETE,
-            generatedMediaUrisJson = Json.encodeToString(uris),
-            generatedMediaAssetIdsJson = Json.encodeToString(assetIds),
-            generatedMediaTypesJson = Json.encodeToString(types),
-            generatedMediaPromptsJson = Json.encodeToString(prompts)
-        )
+        val entity =
+            MessageEntity(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content = "Hello",
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                generatedMediaUrisJson = Json.encodeToString(uris),
+                generatedMediaAssetIdsJson = Json.encodeToString(assetIds),
+                generatedMediaTypesJson = Json.encodeToString(types),
+                generatedMediaPromptsJson = Json.encodeToString(prompts),
+            )
 
         val domain = entity.toDomain()
 
@@ -215,17 +224,18 @@ class ChatMappersTest {
 
     @Test
     fun `MessageEntity toDomain handles null media fields with empty lists`() {
-        val entity = MessageEntity(
-            id = MessageId("msg-1"),
-            chatId = ChatId("chat-1"),
-            content = "Hello",
-            role = Role.ASSISTANT,
-            messageState = MessageState.COMPLETE,
-            generatedMediaUrisJson = null,
-            generatedMediaAssetIdsJson = null,
-            generatedMediaTypesJson = null,
-            generatedMediaPromptsJson = null
-        )
+        val entity =
+            MessageEntity(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content = "Hello",
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                generatedMediaUrisJson = null,
+                generatedMediaAssetIdsJson = null,
+                generatedMediaTypesJson = null,
+                generatedMediaPromptsJson = null,
+            )
 
         val domain = entity.toDomain()
 
@@ -242,20 +252,22 @@ class ChatMappersTest {
         val types = listOf("IMAGE")
         val prompts = listOf("prompt1")
 
-        val domain = Message(
-            id = MessageId("msg-1"),
-            chatId = ChatId("chat-1"),
-            content = Content(
-                text = "Hello",
-                generatedMediaUris = uris,
-                generatedMediaAssetIds = assetIds,
-                generatedMediaTypes = types,
-                generatedMediaPrompts = prompts
-            ),
-            role = Role.ASSISTANT,
-            messageState = MessageState.COMPLETE,
-            modelType = ModelType.FAST
-        )
+        val domain =
+            Message(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content =
+                    Content(
+                        text = "Hello",
+                        generatedMediaUris = uris,
+                        generatedMediaAssetIds = assetIds,
+                        generatedMediaTypes = types,
+                        generatedMediaPrompts = prompts,
+                    ),
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                modelType = ModelType.FAST,
+            )
 
         val entity = domain.toEntity()
 
@@ -267,20 +279,22 @@ class ChatMappersTest {
 
     @Test
     fun `Message mapping round-trip preserves media metadata`() {
-        val original = Message(
-            id = MessageId("msg-1"),
-            chatId = ChatId("chat-1"),
-            content = Content(
-                text = "Hello",
-                generatedMediaUris = listOf("uri1", "uri2"),
-                generatedMediaAssetIds = listOf("id1", "id2"),
-                generatedMediaTypes = listOf("IMAGE", "IMAGE"),
-                generatedMediaPrompts = listOf("p1", "p2")
-            ),
-            role = Role.ASSISTANT,
-            messageState = MessageState.COMPLETE,
-            modelType = ModelType.FAST
-        )
+        val original =
+            Message(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content =
+                    Content(
+                        text = "Hello",
+                        generatedMediaUris = listOf("uri1", "uri2"),
+                        generatedMediaAssetIds = listOf("id1", "id2"),
+                        generatedMediaTypes = listOf("IMAGE", "IMAGE"),
+                        generatedMediaPrompts = listOf("p1", "p2"),
+                    ),
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                modelType = ModelType.FAST,
+            )
 
         val roundTripped = original.toEntity().toDomain()
 

@@ -190,6 +190,68 @@ object ToolEnvelopeParser {
         throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
+    private data class WrappedToolCallParse(val payload: String, val envelopeRange: IntRange)
+
+    private fun indexOfMatchingClosingBrace(text: String, openBraceIndex: Int): Int? {
+        var depth = 0
+        var inString = false
+        var stringDelim: Char? = null
+        var escape = false
+        var i = openBraceIndex
+        while (i < text.length) {
+            val c = text[i]
+            if (inString) {
+                if (escape) {
+                    escape = false
+                } else when (c) {
+                    '\\' -> escape = true
+                    stringDelim -> inString = false
+                }
+            } else {
+                when (c) {
+                    '"', '\'' -> {
+                        inString = true
+                        stringDelim = c
+                    }
+                    '{' -> depth++
+                    '}' -> {
+                        depth--
+                        if (depth == 0) return i
+                    }
+                }
+            }
+            i++
+        }
+        return null
+    }
+
+    private fun normalizeSingleQuotedToolCallPayload(payload: String): String {
+        val t = payload.trim()
+        return if (t.startsWith("{") && payload.contains("'name'")) {
+            payload.replace('\'', '"')
+        } else {
+            payload
+        }
+    }
+
+    private fun normalizeTypographyQuotesInExtractedField(value: String): String =
+        value.replace('\u201c', '"').replace('\u201d', '"')
+
+    private fun parseWrappedToolCall(text: String): WrappedToolCallParse? {
+        val tagOpen = "<tool_call>"
+        val start = text.indexOf(tagOpen, ignoreCase = true)
+        if (start < 0) return null
+        val jsonStart = text.indexOf('{', start + tagOpen.length)
+        if (jsonStart < 0) return null
+        val jsonEnd = indexOfMatchingClosingBrace(text, jsonStart) ?: return null
+        val rawPayload = text.substring(jsonStart, jsonEnd + 1)
+        val payload = normalizeSingleQuotedToolCallPayload(rawPayload)
+        val close = text.indexOf("</tool_call>", jsonEnd + 1, ignoreCase = true)
+        if (close < 0) return null
+        val exclusiveEnd = close + "</tool_call>".length
+        return WrappedToolCallParse(payload, start until exclusiveEnd)
+    }
+
     @Suppress("ThrowsCount", "CyclomaticComplexMethod")
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
         val glmMatch = GLM_TOOL_CALL_REGEX.find(text)
@@ -213,17 +275,24 @@ object ToolEnvelopeParser {
             null
         }
 
-        val wrappedMatch = if (text.contains("<tool_call")) {
-            WRAPPED_TOOL_CALL_REGEX.find(text)
-                ?: throw IllegalStateException("Malformed tool_call envelope")
-        } else {
-            null
+        val wrapped =
+            parseWrappedToolCall(text)
+                ?: WRAPPED_TOOL_CALL_REGEX.find(text)?.let {
+                    WrappedToolCallParse(
+                        normalizeSingleQuotedToolCallPayload(it.groupValues[1]),
+                        it.range,
+                    )
+                }
+
+        if (text.contains("<tool_call", ignoreCase = true) && wrapped == null) {
+            throw IllegalStateException("Malformed tool_call envelope")
         }
 
         val payload = when {
-            cdataMatch != null -> cdataMatch.groupValues[1]
-            wrappedMatch != null -> wrappedMatch.groupValues[1]
-            else -> RAW_TOOL_CALL_REGEX.matchEntire(text)?.groupValues?.get(2)
+            cdataMatch != null -> normalizeSingleQuotedToolCallPayload(cdataMatch.groupValues[1])
+            wrapped != null -> wrapped.payload
+            else ->
+                RAW_TOOL_CALL_REGEX.matchEntire(text)?.groupValues?.get(2)?.let(::normalizeSingleQuotedToolCallPayload)
         } ?: run {
             if (text.contains("{\"name\"") || text.contains(""""name":""")) {
                 throw IllegalStateException("Malformed tool_call envelope")
@@ -283,12 +352,12 @@ object ToolEnvelopeParser {
             )
         }
 
-        if (wrappedMatch != null) {
+        if (wrapped != null) {
             return LocalToolEnvelope(
                 toolName = toolName,
                 argumentsJson = argumentsJson,
-                visiblePrefix = text.substring(0, wrappedMatch.range.first),
-                visibleSuffix = text.substring(wrappedMatch.range.last + 1),
+                visiblePrefix = text.substring(0, wrapped.envelopeRange.first),
+                visibleSuffix = text.substring(wrapped.envelopeRange.last + 1),
             )
         }
 
@@ -319,7 +388,7 @@ object ToolEnvelopeParser {
             val json = Json.parseToJsonElement(argumentsJson).jsonObject
             val value = json[fieldName]?.jsonPrimitive?.content
             if (!value.isNullOrBlank()) {
-                return value.trim()
+                return normalizeTypographyQuotesInExtractedField(value.trim())
             }
         } catch (_: Exception) {
             // Fallback to regex if JSON parsing fails (common in partial local model streams)
@@ -332,6 +401,7 @@ object ToolEnvelopeParser {
             ?.let(::unescapeJson)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
+            ?.let(::normalizeTypographyQuotesInExtractedField)
             ?: throw IllegalArgumentException("Tool argument '$fieldName' is required")
     }
 

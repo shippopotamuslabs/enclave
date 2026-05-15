@@ -14,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.junit.Assert.assertNotNull
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -154,5 +155,86 @@ class LocalModelConfigureScreenTest {
         }
 
         composeTestRule.onNodeWithTag("SaveButton").assertIsNotEnabled()
+    }
+
+    @Test
+    fun displayNameField_isDisabled_forSystemPreset() {
+        val uiState = SettingsUiState(
+            localModelEditor = LocalModelEditorUiState(
+                configDraft = LocalModelConfigUi(
+                    isSystemPreset = true,
+                    displayName = "System Default"
+                )
+            )
+        )
+
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = "GGUF",
+                    onNavigateBack = {},
+                    onConfigChange = {},
+                    onSave = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("DisplayNameField").assertIsNotEnabled()
+    }
+
+    @Test
+    fun thinkingSwitch_isDisabled_forSystemPreset() {
+        val uiState = SettingsUiState(
+            localModelEditor = LocalModelEditorUiState(
+                configDraft = LocalModelConfigUi(
+                    isSystemPreset = true,
+                    displayName = "System Default"
+                )
+            )
+        )
+
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = "GGUF",
+                    onNavigateBack = {},
+                    onConfigChange = {},
+                    onSave = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("ThinkingSwitch").assertIsNotEnabled()
+    }
+
+    @Test
+    fun configValues_displayedFromDraft_notDefaults() {
+        val uiState = SettingsUiState(
+            localModelEditor = LocalModelEditorUiState(
+                configDraft = LocalModelConfigUi(
+                    isSystemPreset = false,
+                    displayName = "Creative",
+                    contextWindow = "8192"
+                )
+            )
+        )
+
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = "GGUF",
+                    onNavigateBack = {},
+                    onConfigChange = {},
+                    onSave = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("DisplayNameField").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Creative").assertIsDisplayed()
+        composeTestRule.onNodeWithText("8192").assertIsDisplayed()
     }
 }

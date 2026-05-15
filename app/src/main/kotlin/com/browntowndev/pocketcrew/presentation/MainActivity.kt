@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.presentation
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -10,18 +9,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-
+import kotlinx.coroutines.launch
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultMismatchConfirmDialog
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.feature.settings.components.UnlockVaultScreen
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.feature.settings.components.UnlockVaultScreen
+import com.browntowndev.pocketcrew.presentation.security.BiometricPromptCoordinator
 import com.browntowndev.pocketcrew.presentation.security.BiometricPromptHelper
 import javax.inject.Inject
 
@@ -70,8 +79,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             Box(modifier = Modifier.Companion.fillMaxSize())
                         }
                         is AppStartupState.Ready -> {
-                            if (currentState.pendingBiometricEnrollmentPassword != null) {
-                                LaunchedEffect(currentState.pendingBiometricEnrollmentPassword) {
+                            if (currentState.isBiometricEnrollmentPending) {
+                                LaunchedEffect(currentState.isBiometricEnrollmentPending) {
                                     val cipher = viewModel.getBiometricEncryptCipher()
                                     if (cipher != null) {
                                         val result = biometricHelper.showPrompt(
@@ -80,12 +89,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                             cipher = cipher
                                         )
                                         result.onSuccess { crypto ->
-                                            crypto?.cipher?.let { 
-                                                viewModel.finalizeBiometricEnrollment(
-                                                    password = currentState.pendingBiometricEnrollmentPassword,
-                                                    cipher = it
-                                                ) 
-                                            }
+                                            crypto?.cipher?.let { viewModel.finalizeBiometricEnrollment(it) }
                                         }.onFailure {
                                             loggingPort.error(TAG, "Biometric enrollment failed", it)
                                             viewModel.cancelBiometricEnrollment()
@@ -99,33 +103,33 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             if (currentState.isVaultLocked) {
                                 // Auto-trigger biometric if available
                                 if (currentState.isBiometricUnlockPossible) {
-                                    LaunchedEffect(Unit) {
-                                        val cipher = viewModel.getBiometricDecryptCipher()
-                                        if (cipher != null) {
-                                            val result = biometricHelper.showPrompt(
-                                                title = "Unlock Vault",
-                                                subtitle = "Scan to unlock your encrypted data",
-                                                cipher = cipher
-                                            )
-                                            result.onSuccess { crypto ->
-                                                crypto?.cipher?.let { viewModel.unlockWithBiometricCipher(it) }
+                                    BiometricVaultUnlockEffect(
+                                        isEnabled = true,
+                                        isUnlocking = currentState.isUnlocking,
+                                        onPrompt = {
+                                            val cipher = viewModel.getBiometricDecryptCipher()
+                                            if (cipher != null) {
+                                                val result = biometricHelper.showPrompt(
+                                                    title = "Unlock Vault",
+                                                    subtitle = "Scan to unlock your encrypted data",
+                                                    cipher = cipher,
+                                                )
+                                                result.onSuccess { crypto ->
+                                                    crypto?.cipher?.let { viewModel.unlockWithBiometricCipher(it) }
+                                                }
                                             }
-                                        }
-                                    }
+                                        },
+                                    )
                                 }
 
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
+                                    isUnlocking = currentState.isUnlocking,
+                                    isBiometricUnlockConfigured = currentState.isBiometricUnlockPossible,
                                     errorMessage = currentState.vaultErrorMessage,
-                                    isReindexing = currentState.isReindexing,
-                                    reindexProgress = currentState.reindexProgress,
                                     onLoginClick = {
                                         loggingPort.debug(TAG, "UnlockVaultScreen: Sign in clicked")
                                         viewModel.loginWithGoogle()
-                                    },
-                                    onSkipClick = {
-                                        loggingPort.debug(TAG, "UnlockVaultScreen: Skip clicked")
-                                        viewModel.skipLogin()
                                     },
                                     onSubmitVaultPassword = { password, enableBiometric ->
                                         loggingPort.debug(TAG, "Vault dialog submitted bio=$enableBiometric")
@@ -140,6 +144,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     errorMessage = currentState.initializationError,
                                     navigationIntent = latestIntent,
                                 )
+
+                                currentState.pendingVaultReconciliation?.let { pending ->
+                                    VaultMismatchConfirmDialog(
+                                        isReconciling = pending.isReconciling,
+                                        onConfirm = { viewModel.confirmAdoptCloud() },
+                                        onCancel = { viewModel.cancelReconciliation() },
+                                    )
+                                }
                             }
                         }
                     }
@@ -152,5 +164,49 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         latestIntent = intent
+    }
+}
+
+@Composable
+private fun BiometricVaultUnlockEffect(
+    isEnabled: Boolean,
+    isUnlocking: Boolean,
+    onPrompt: suspend () -> Unit,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val coordinator = remember { BiometricPromptCoordinator() }
+    val latestOnPrompt by rememberUpdatedState(onPrompt)
+
+    DisposableEffect(lifecycleOwner, isEnabled, isUnlocking) {
+        fun launchPromptIfAllowed() {
+            coordinator.tryStartPrompt(
+                isEnabled = isEnabled,
+                isUnlocking = isUnlocking,
+            ) {
+                scope.launch {
+                    try {
+                        latestOnPrompt()
+                    } finally {
+                        coordinator.finishPrompt()
+                    }
+                }
+            }
+        }
+
+        if (isEnabled) {
+            launchPromptIfAllowed()
+        }
+
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                launchPromptIfAllowed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 }

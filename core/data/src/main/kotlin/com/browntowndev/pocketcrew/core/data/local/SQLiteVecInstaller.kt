@@ -21,9 +21,8 @@ internal object SQLiteVecInstaller {
         return RequerySQLiteOpenHelperFactory(
             listOf(
                 object : ConfigurationOptions {
-                    override fun apply(configuration: SQLiteDatabaseConfiguration): SQLiteDatabaseConfiguration {
-                        return configureSQLiteVecExtension(configuration, extensionPath)
-                    }
+                    override fun apply(configuration: SQLiteDatabaseConfiguration): SQLiteDatabaseConfiguration =
+                        configureSQLiteVecExtension(configuration, extensionPath)
                 },
             ),
         )
@@ -71,12 +70,13 @@ internal object SQLiteVecInstaller {
             return nativeLibrary.absolutePath.removeSuffix(".so")
         }
         return installSQLiteVecExtension(
-            apkSourceFiles = buildList {
-                add(File(context.applicationInfo.sourceDir))
-                context.applicationInfo.splitSourceDirs
-                    ?.map(::File)
-                    ?.let(::addAll)
-            },
+            apkSourceFiles =
+                buildList {
+                    add(File(context.applicationInfo.sourceDir))
+                    context.applicationInfo.splitSourceDirs
+                        ?.map(::File)
+                        ?.let(::addAll)
+                },
             outputDirectory = context.noBackupFilesDir,
             supportedAbis = Build.SUPPORTED_ABIS.toList(),
         )

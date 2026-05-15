@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class FtsSanitizerTest {
-
     @Test
     fun `sanitize empty string returns empty`() {
         assertEquals("", FtsSanitizer.sanitize(""))
@@ -47,8 +46,8 @@ class FtsSanitizerTest {
     @Test
     fun `sanitize preserves accented characters`() {
         // e + combining acute accent
-        val accentedE = "e\u0301" 
-        assertEquals("${accentedE}*", FtsSanitizer.sanitize(accentedE))
+        val accentedE = "e\u0301"
+        assertEquals("$accentedE*", FtsSanitizer.sanitize(accentedE))
         // single code point é
         assertEquals("é*", FtsSanitizer.sanitize("é"))
     }

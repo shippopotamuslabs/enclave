@@ -9,15 +9,25 @@ import java.io.File
  * Helper class placed in the 'android.print' package to bypass visibility restrictions
  * on PrintDocumentAdapter callbacks. This allows headless PDF generation without the print UI.
  */
-class PdfPrinter(private val attributes: PrintAttributes) {
-
+class PdfPrinter(
+    private val attributes: PrintAttributes,
+) {
     interface Callback {
-        fun onSuccess(file: File, pageCount: Int)
+        fun onSuccess(
+            file: File,
+            pageCount: Int,
+        )
+
         fun onFailure(error: String)
+
         fun onCancelled()
     }
 
-    fun generatePdf(adapter: PrintDocumentAdapter, file: File, callback: Callback) {
+    fun generatePdf(
+        adapter: PrintDocumentAdapter,
+        file: File,
+        callback: Callback,
+    ) {
         adapter.onStart()
 
         adapter.onLayout(
@@ -25,14 +35,18 @@ class PdfPrinter(private val attributes: PrintAttributes) {
             attributes,
             CancellationSignal(),
             object : PrintDocumentAdapter.LayoutResultCallback() {
-                override fun onLayoutFinished(info: PrintDocumentInfo, changed: Boolean) {
+                override fun onLayoutFinished(
+                    info: PrintDocumentInfo,
+                    changed: Boolean,
+                ) {
                     try {
-                        val pfd = ParcelFileDescriptor.open(
-                            file,
-                            ParcelFileDescriptor.MODE_READ_WRITE or
-                            ParcelFileDescriptor.MODE_CREATE or
-                            ParcelFileDescriptor.MODE_TRUNCATE
-                        )
+                        val pfd =
+                            ParcelFileDescriptor.open(
+                                file,
+                                ParcelFileDescriptor.MODE_READ_WRITE or
+                                    ParcelFileDescriptor.MODE_CREATE or
+                                    ParcelFileDescriptor.MODE_TRUNCATE,
+                            )
 
                         adapter.onWrite(
                             arrayOf(PageRange.ALL_PAGES),
@@ -56,7 +70,7 @@ class PdfPrinter(private val attributes: PrintAttributes) {
                                     adapter.onFinish()
                                     callback.onCancelled()
                                 }
-                            }
+                            },
                         )
                     } catch (e: Exception) {
                         adapter.onFinish()
@@ -74,7 +88,7 @@ class PdfPrinter(private val attributes: PrintAttributes) {
                     callback.onCancelled()
                 }
             },
-            Bundle()
+            Bundle(),
         )
     }
 }

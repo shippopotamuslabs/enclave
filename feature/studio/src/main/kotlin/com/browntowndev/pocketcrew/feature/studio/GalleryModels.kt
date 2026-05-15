@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_
 data class GalleryUiState(
     val albums: List<GalleryAlbumUi> = emptyList(),
     val isLoading: Boolean = false,
+    val hasVideoModel: Boolean = false,
 )
 
 @Immutable

@@ -41,8 +41,16 @@ fun ChatScreen(
     onClearFile: () -> Unit,
     onShieldTap: () -> Unit,
     onMicClick: () -> Unit,
-    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
-    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
+    onArtifactCardClick: (
+        com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
+    ) -> Unit = { _, _ -> },
+    onNavigateToStudio: (
+        ids: List<String>,
+        uris: List<String>,
+        types: List<String>,
+        prompts: List<String>
+    ) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
     onShareTurn: () -> Unit = {},
     onShareFullChat: () -> Unit = {},
@@ -73,7 +81,6 @@ fun ChatScreen(
             ChatTopBar(
                 onMenuClick = onNavigateToHistory,
                 onNewChatClick = onNewChat,
-                isThinking = uiState.isGenerating,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -100,6 +107,7 @@ fun ChatScreen(
                     activeToolCallBanner = uiState.activeToolCallBanner,
                     activeIndicatorMessageId = uiState.activeIndicatorMessageId,
                     hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
+                    chatMode = uiState.selectedMode,
                     onEditMessage = onEditMessage,
                     onPlayAudio = onPlayAudio,
                     onArtifactCardClick = onArtifactCardClick,

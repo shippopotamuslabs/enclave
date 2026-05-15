@@ -29,7 +29,7 @@ ksp {
 
 android {
     namespace = "com.browntowndev.pocketcrew"
-    compileSdk = 36
+    compileSdk = 37
 
     testOptions {
         unitTests {
@@ -98,6 +98,8 @@ android {
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/INDEX.LIST"
             excludes += "mozilla/public-suffix-list.txt"
+            excludes += "META-INF/AL2.0"
+            excludes += "META-INF/LGPL2.1"
         }
     }
 }
@@ -200,6 +202,9 @@ configurations.all {
     resolutionStrategy.eachDependency {
         if (requested.group == "io.grpc") {
             useVersion(libs.versions.grpc.get())
+        }
+        if (requested.group == "net.java.dev.jna" && requested.name == "jna") {
+            useVersion(libs.versions.jna.get())
         }
     }
 }

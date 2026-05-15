@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  * @property thinkingStartTime Timestamp when thinking started
  * @property thinkingEndTime Timestamp when thinking ended
  * @property modelType The model type used to generate this message (for Crew mode tracking)
+ * @property transcriptSegments Ordered CoT / answer runs for interleaved transcript UI (empty if not recorded)
  */
 data class Message(
     val id: MessageId,
@@ -34,13 +35,23 @@ data class Message(
     val thinkingEndTime: Long? = null,
     val modelType: ModelType? = null,
     val webSearchSources: List<WebSearchSource> = emptyList(),
+    val transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
 ) {
     /**
      * Computed duration in seconds from timestamps.
-     * Returns null if either timestamp is missing.
+     * Returns null if either timestamp is missing or the span is non-positive.
+     * Sub-second spans round up to one second so denormalized UI does not read "0s".
      */
     val computedDurationSeconds: Long?
-        get() = if (thinkingStartTime != null && thinkingEndTime != null) {
-            (thinkingEndTime - thinkingStartTime) / 1000
-        } else null
+        get() {
+            val start = thinkingStartTime ?: return null
+            val end = thinkingEndTime ?: return null
+            if (end < start) return null
+            val ms = end - start
+            return when {
+                ms <= 0L -> null
+                ms < 1000L -> 1L
+                else -> ms / 1000
+            }
+        }
 }

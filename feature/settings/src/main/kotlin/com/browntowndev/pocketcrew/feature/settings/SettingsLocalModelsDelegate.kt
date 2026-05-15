@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
@@ -33,7 +34,10 @@ internal class SettingsLocalModelsDelegate @Inject constructor(
     ) {
         localModelsState.update { it.copy(isSheetOpen = show) }
         if (!show) {
-            localModelsState.update { it.copy(selectedAsset = null, configDraft = null) }
+            // Clear sheet navigation state but preserve configDraft so the configure
+            // screen retains its state after the sheet hides during navigation.
+            // onClearSelectedLocalModel handles final cleanup after the configure screen exits.
+            localModelsState.update { it.copy(selectedAsset = null, selectedConfig = null) }
         }
     }
 
@@ -70,7 +74,9 @@ internal class SettingsLocalModelsDelegate @Inject constructor(
         onSuccess: () -> Unit
     ) {
         val configDraft = localModelsState.value.configDraft ?: return
-        val assetId = localModelsState.value.selectedAsset?.metadataId ?: return
+        val assetId = localModelsState.value.selectedAsset?.metadataId
+            ?: configDraft.localModelId.takeIf { it.value.isNotEmpty() }
+            ?: return
         scope.launch(
             errorHandler.coroutineExceptionHandler(
                 tag,

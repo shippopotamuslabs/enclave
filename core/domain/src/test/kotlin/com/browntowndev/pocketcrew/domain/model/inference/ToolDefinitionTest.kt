@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
+import com.browntowndev.pocketcrew.domain.usecase.chat.ToolCallStrategy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -9,6 +10,57 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ToolDefinitionTest {
+    private val nullableSchemaJson =
+        """
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "author": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["title"]
+        }
+        """.trimIndent()
+
+    @Test
+    fun `nullable schema types are rendered safely for LiteRT native examples`() {
+        withSchemaProviderCleared {
+            val tool =
+                ToolDefinition(
+                    name = "nullable_tool",
+                    description = "Tool used to verify nullable schema handling",
+                    parametersClass = StartArtifactParams::class,
+                    schemaOverride = ToolSchema.fromFullSchema(nullableSchemaJson),
+                )
+
+            assertEquals(
+                """call:nullable_tool{title: <|"|>...<|"|>, author: <|"|>...<|"|>}""",
+                tool.toExample(ToolCallStrategy.LITE_RT_NATIVE),
+            )
+        }
+    }
+
+    @Test
+    fun `nullable schema types are rendered safely for JSON envelope examples`() {
+        withSchemaProviderCleared {
+            val tool =
+                ToolDefinition(
+                    name = "nullable_tool",
+                    description = "Tool used to verify nullable schema handling",
+                    parametersClass = StartArtifactParams::class,
+                    schemaOverride = ToolSchema.fromFullSchema(nullableSchemaJson),
+                )
+
+            assertEquals(
+                """ActionResult{"name":"nullable_tool","arguments":{"title":"...","author":"..."}}ActionResult""",
+                tool.toExample(ToolCallStrategy.JSON_XML_ENVELOPE),
+            )
+        }
+    }
 
     @Test
     fun `web_extract constant has correct name and description`() {
@@ -163,5 +215,15 @@ class ToolDefinitionTest {
         val decoded: WebExtractParams = ToolDefinition.WEB_EXTRACT.decodeArguments(json)
 
         assertEquals(params, decoded)
+    }
+
+    private inline fun <T> withSchemaProviderCleared(block: () -> T): T {
+        val previousProvider = ToolDefinition.schemaProvider
+        ToolDefinition.schemaProvider = null
+        return try {
+            block()
+        } finally {
+            ToolDefinition.schemaProvider = previousProvider
+        }
     }
 }

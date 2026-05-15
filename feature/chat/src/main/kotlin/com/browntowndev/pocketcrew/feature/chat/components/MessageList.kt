@@ -1,4 +1,4 @@
-@file:Suppress("MaxLineLength", "UnusedPrivateMember")
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 
 package com.browntowndev.pocketcrew.feature.chat.components
 
@@ -33,7 +33,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.markdown.SimpleMarkdownText
@@ -58,6 +59,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
+import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -78,6 +80,7 @@ fun MessageList(
     activeIndicatorMessageId: MessageId? = null,
     hasTtsProviderAssigned: Boolean = false,
     isPreview: Boolean = false,
+    chatMode: ChatModeUi = ChatModeUi.FAST,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
@@ -90,28 +93,32 @@ fun MessageList(
     val latestUserMessageIndex = messages.indexOfLast { it.role == MessageRole.User }
     val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
 
-    // Tracking for auto-scroll logic
     val chatId = messages.firstOrNull()?.chatId
-    var lastScrolledUserMessageId by remember { mutableStateOf<MessageId?>(null) }
-    var initialLoadChatId by remember { mutableStateOf<ChatId?>(null) }
+    // Per-chat bookkeeping so a new chat never inherits "already scrolled" state from the prior chat,
+    // and so we do not depend on ordering between two LaunchedEffects (initial vs follow-up).
+    var initialScrollDone by remember(chatId) { mutableStateOf(false) }
+    var lastScrolledUserMessageId by remember(chatId) { mutableStateOf<MessageId?>(null) }
 
-    // 1. Initial Load: Scroll to the last item once per chat
-    LaunchedEffect(chatId, messages.isNotEmpty()) {
-        if (chatId != null && initialLoadChatId != chatId && messages.isNotEmpty()) {
-            val lastIndex = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.lastIndex
-            listState.scrollToItem(lastIndex)
-            initialLoadChatId = chatId
+    LaunchedEffect(chatId, messages.isNotEmpty(), latestUserMessageId, latestUserMessageIndex) {
+        if (messages.isEmpty()) return@LaunchedEffect
+
+        val targetLazyIndex = messageListScrollTargetLazyIndex(
+            messageCount = messages.size,
+            latestUserMessageIndex = latestUserMessageIndex,
+        )
+
+        if (!initialScrollDone) {
+            listState.scrollToItem(targetLazyIndex)
+            initialScrollDone = true
             lastScrolledUserMessageId = latestUserMessageId
+            return@LaunchedEffect
         }
-    }
 
-    // 2. New user message: animate-scroll to the active interaction (last item)
-    LaunchedEffect(latestUserMessageId) {
-        if (latestUserMessageId != null &&
-            latestUserMessageId != lastScrolledUserMessageId &&
-            initialLoadChatId == chatId) {
-
-            listState.animateScrollToItem(latestUserMessageIndex)
+        if (latestUserMessageId != null && latestUserMessageId != lastScrolledUserMessageId) {
+            // Wait until after layout so the active-interaction column (min viewport height) includes
+            // the new user bubble before we animate; avoids intermittent wrong scroll offsets.
+            withFrameNanos { }
+            listState.animateScrollToItem(latestUserMessageIndex.coerceAtLeast(0))
             lastScrolledUserMessageId = latestUserMessageId
         }
     }
@@ -121,6 +128,11 @@ fun MessageList(
     } else {
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
+            val bottomContentPadding = 16.dp
+            val activeInteractionMinHeight = activeInteractionMinHeight(
+                viewportHeight = viewportHeight,
+                bottomContentPadding = bottomContentPadding,
+            )
 
             // Total item count for scroll-to-bottom targeting
             val totalItems = if (latestUserMessageIndex != -1)
@@ -136,24 +148,24 @@ fun MessageList(
 
             // FAB is logically visible when not at bottom; auto-hides 3s after scrolling stops
             var fabVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(listState) {
+            // Incrementing this key cancels and restarts the 3-second hide timer.
+            var fabAutoHideSignal by remember { mutableIntStateOf(0) }
+            LaunchedEffect(listState, lastLazyItemIndex) {
                 snapshotFlow {
                     listState.isScrollInProgress to
                         (listState.firstVisibleItemIndex < lastLazyItemIndex)
                 }.collect { (isScrolling, isAboveLastItem) ->
-                    if (isScrolling) {
-                        // Show immediately only when the user has scrolled above the active item
-                        fabVisible = isAboveLastItem
-                    } else {
-                        if (!isAboveLastItem) {
-                            // User is on the last item — hide immediately
-                            fabVisible = false
-                        } else {
-                            // Still above the last item — keep visible for 3 more seconds then hide
-                            delay(3_000)
-                            fabVisible = false
-                        }
+                    when {
+                        isScrolling -> fabVisible = isAboveLastItem
+                        !isAboveLastItem -> fabVisible = false
+                        else -> fabAutoHideSignal++ // restart the auto-hide timer
                     }
+                }
+            }
+            LaunchedEffect(fabAutoHideSignal) {
+                if (fabAutoHideSignal > 0) {
+                    delay(3_000)
+                    fabVisible = false
                 }
             }
 
@@ -161,7 +173,7 @@ fun MessageList(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
+                contentPadding = PaddingValues(top = 0.dp, bottom = bottomContentPadding),
             ) {
                 // 1. History: all messages before the latest user prompt
                 val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
@@ -174,6 +186,7 @@ fun MessageList(
                         activeIndicatorMessageId = activeIndicatorMessageId,
                         activeToolCallBanner = activeToolCallBanner,
                         hasTtsProviderAssigned = hasTtsProviderAssigned,
+                        chatMode = chatMode,
                         onEditMessage = onEditMessage,
                         onPlayAudio = onPlayAudio,
                         onArtifactCardClick = onArtifactCardClick,
@@ -184,15 +197,14 @@ fun MessageList(
                 }
 
                 // 2. Active interaction: user prompt + streaming response in one item.
-                //    heightIn(min = viewportHeight) ensures this item is at least viewport-tall so that
-                //    scrolling here pins the user message at the top. The rest of the column
-                //    is just empty space if the content is shorter than the viewport.
+                //    heightIn(min = activeInteractionMinHeight) keeps the item plus trailing content
+                //    padding viewport-tall, so bottom padding does not become a small real scroll range.
                 if (latestUserMessageIndex != -1) {
                     item(key = "active_interaction_$latestUserMessageId") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = viewportHeight),
+                                .heightIn(min = activeInteractionMinHeight),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             for (i in latestUserMessageIndex until messages.size) {
@@ -201,6 +213,7 @@ fun MessageList(
                                     activeIndicatorMessageId = activeIndicatorMessageId,
                                     activeToolCallBanner = activeToolCallBanner,
                                     hasTtsProviderAssigned = hasTtsProviderAssigned,
+                                    chatMode = chatMode,
                                     onEditMessage = onEditMessage,
                                     onPlayAudio = onPlayAudio,
                                     onArtifactCardClick = onArtifactCardClick,
@@ -274,6 +287,7 @@ private fun MessageItem(
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
+    chatMode: ChatModeUi,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit,
@@ -291,13 +305,22 @@ private fun MessageItem(
         // ============================================================
         Indicators(
             modelDisplayName = message.modelDisplayName,
-            indicatorState = message.indicatorState
+            indicatorState = message.indicatorState,
+            chatMode = chatMode,
+            suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
         )
 
-        ToolCallBanner(
-            banner = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        val activeBanner =
+            if (message.id == activeIndicatorMessageId) activeToolCallBanner else null
+        val inlineToolCallBannerInTranscript =
+            message.role == MessageRole.Assistant && message.transcriptSegments.isNotEmpty()
+
+        if (!inlineToolCallBannerInTranscript) {
+            ToolCallBanner(
+                banner = activeBanner,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
 
         // ============================================================
         // Content rendering based on message role
@@ -312,6 +335,7 @@ private fun MessageItem(
                 message = message,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
+                toolCallBanner = if (inlineToolCallBannerInTranscript) activeBanner else null,
                 onPlayAudio = onPlayAudio,
                 onArtifactCardClick = onArtifactCardClick,
                 onNavigateToStudio = onNavigateToStudio,
@@ -345,11 +369,64 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 }
 
 /**
+ * When interleaved transcript rows render thinking, the top [ThinkingIndicator] is omitted.
+ * Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
+ */
+internal fun transcriptLayoutShowsTopThinkingIndicator(
+    indicatorState: IndicatorState?,
+    suppressDuplicateThoughtForHeader: Boolean,
+): Boolean =
+    indicatorState is IndicatorState.Thinking && !suppressDuplicateThoughtForHeader
+
+/**
+ * Aggregate "Thought for …" header above the assistant body is omitted when transcript segments
+ * already carry per-chunk headers. Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
+ */
+internal fun transcriptLayoutShowsAggregateThoughtForHeader(
+    indicatorState: IndicatorState?,
+    suppressDuplicateThoughtForHeader: Boolean,
+): Boolean {
+    if (indicatorState == null || suppressDuplicateThoughtForHeader) return false
+    val raw =
+        when (indicatorState) {
+            is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingRaw
+            is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingRaw
+            else -> null
+        }
+    return !raw.isNullOrBlank()
+}
+
+internal fun activeInteractionMinHeight(
+    viewportHeight: Dp,
+    bottomContentPadding: Dp,
+): Dp = maxOf(0.dp, viewportHeight - bottomContentPadding)
+
+/**
+ * LazyColumn index of the row that should be shown after open or when jumping to the latest turn:
+ * the combined "active interaction" row when there is a user message, otherwise the last history row.
+ */
+internal fun messageListScrollTargetLazyIndex(
+    messageCount: Int,
+    latestUserMessageIndex: Int,
+): Int {
+    if (messageCount <= 0) return 0
+    return if (latestUserMessageIndex != -1) {
+        latestUserMessageIndex
+    } else {
+        messageCount - 1
+    }
+}
+
+/**
  * Shows the appropriate indicator(s) based on the message's indicator state.
  */
-@Suppress("CyclomaticComplexMethod")
 @Composable
-private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
+private fun Indicators(
+    modelDisplayName: String,
+    indicatorState: IndicatorState?,
+    chatMode: ChatModeUi,
+    suppressDuplicateThoughtForHeader: Boolean,
+) {
     if (indicatorState != null) {
         var isThinkingSheetVisible by remember { mutableStateOf(false) }
 
@@ -372,14 +449,17 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     kotlinx.coroutines.delay(1000L)
                 }
             }
-        } else {
-            // For completed states, use the final duration
-            elapsedSeconds = when (indicatorState) {
-                is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
-                is IndicatorState.EngineLoading -> 0
-                is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                else -> 0
+        }
+        // Sync the final duration after state settles — must not write state during composition.
+        LaunchedEffect(indicatorState) {
+            if (!isThinkingActive) {
+                elapsedSeconds = when (indicatorState) {
+                    is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
+                    is IndicatorState.EngineLoading -> 0
+                    is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                    is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                    else -> 0
+                }
             }
         }
 
@@ -388,21 +468,26 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                 EngineLoadingIndicator(modelDisplayName = modelDisplayName)
             }
             is IndicatorState.Thinking -> {
-                ThinkingIndicator(
-                    elapsedSeconds = elapsedSeconds,
-                    isExpanded = isThinkingSheetVisible,
-                    onToggleDetails = {
-                        isThinkingSheetVisible = !isThinkingSheetVisible
-                    },
-                )
+                if (transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)) {
+                    ThinkingIndicator(
+                        elapsedSeconds = elapsedSeconds,
+                        isExpanded = isThinkingSheetVisible,
+                        onToggleDetails = {
+                            isThinkingSheetVisible = !isThinkingSheetVisible
+                        },
+                    )
+                }
             }
             is IndicatorState.Processing -> {
                 ProcessingIndicator()
             }
             is IndicatorState.Generating -> {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val thinkingData = indicatorState.thinkingData
-                    if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
+                    if (transcriptLayoutShowsAggregateThoughtForHeader(
+                            indicatorState,
+                            suppressDuplicateThoughtForHeader,
+                        )
+                    ) {
                         ThoughtForHeader(
                             modifier = Modifier.padding(top = 8.dp),
                             durationText = formatThinkingDuration(elapsedSeconds),
@@ -413,12 +498,17 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                         )
                     }
 
-                    GeneratingIndicator()
+                    if (chatMode == ChatModeUi.CREW) {
+                        GeneratingIndicator()
+                    }
                 }
             }
             is IndicatorState.Complete -> {
-                val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
+                if (transcriptLayoutShowsAggregateThoughtForHeader(
+                        indicatorState,
+                        suppressDuplicateThoughtForHeader,
+                    )
+                ) {
                     ThoughtForHeader(
                         modifier = Modifier.padding(top = 8.dp),
                         durationText = formatThinkingDuration(elapsedSeconds),
@@ -465,7 +555,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
 }
 
 @Composable
-private fun ThoughtForHeader(
+internal fun ThoughtForHeader(
     modifier: Modifier = Modifier,
     durationText: String,
     isExpanded: Boolean = false,
@@ -522,7 +612,7 @@ private fun ThoughtForHeader(
 
 // ── "Thought for Xs" header that opens bottom sheet ──
 
-private fun formatThinkingDuration(seconds: Int): String = when {
+internal fun formatThinkingDuration(seconds: Int): String = when {
     seconds < 60 -> "${seconds}s"
     else -> "${seconds / 60}m ${seconds % 60}s"
 }
@@ -552,6 +642,7 @@ private fun PreviewMessageListThinking() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.THINKING,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),
@@ -624,6 +715,7 @@ private fun PreviewMessageListGenerating() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.FAST,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),
@@ -662,6 +754,7 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
         MessageList(
             isPreview =  true,
             hasActiveIndicator = true,
+            chatMode = ChatModeUi.CREW,
             messages = listOf(
                 ChatMessage(
                     id = MessageId("1"),

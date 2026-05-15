@@ -53,7 +53,7 @@ internal fun TtsConfigureRoute(
     }
 
     val handleBack: () -> Unit = {
-        viewModel.onBackToByokList()
+        viewModel.onBackToTtsList()
         onNavigateBack()
     }
 
@@ -66,7 +66,7 @@ internal fun TtsConfigureRoute(
         onSelectReusableApiCredential = viewModel::onSelectReusableTtsApiCredential,
         onSaveTtsProvider = {
             viewModel.onSaveTtsProvider(onSuccess = {
-                viewModel.onBackToByokList()
+                viewModel.onBackToTtsList()
                 onNavigateBack()
             })
         },

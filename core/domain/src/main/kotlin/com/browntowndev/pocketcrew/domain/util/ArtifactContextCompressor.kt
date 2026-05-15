@@ -23,6 +23,7 @@ object ArtifactContextCompressor {
      * Compresses the provided history by squashing consecutive APPEND_BLOCKS calls.
      * Retains the literal text of the very last block for continuity.
      */
+    @Suppress("NestedBlockDepth")
     fun compress(history: List<ChatMessage>): List<ChatMessage> {
         val compressed = mutableListOf<ChatMessage>()
         var appendBlocksFound = false

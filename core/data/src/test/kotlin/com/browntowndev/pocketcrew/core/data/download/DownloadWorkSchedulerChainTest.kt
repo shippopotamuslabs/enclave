@@ -1,26 +1,22 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.content.Context
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkContinuation
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import com.browntowndev.pocketcrew.domain.model.download.DownloadRequestKind
 import com.browntowndev.pocketcrew.domain.model.download.DownloadWorkRequest
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -34,7 +30,6 @@ import org.junit.jupiter.api.Test
  * - Scheduler uses structured DownloadWorkRequest
  */
 class DownloadWorkSchedulerChainTest {
-
     private lateinit var mockContext: Context
     private lateinit var mockWorkManager: WorkManager
     private lateinit var mockContinuation: WorkContinuation
@@ -59,23 +54,25 @@ class DownloadWorkSchedulerChainTest {
     @Test
     fun `SCHED_03 - finalizer input includes static metadata before parent merge`() {
         // Given: A structured DownloadWorkRequest
-        val request = DownloadWorkRequest(
-            files = listOf(
-                DownloadFileSpec(
-                    remoteFileName = "test.gguf",
-                    localFileName = "test.gguf",
-                    sha256 = "sha123",
-                    sizeInBytes = 1000L,
-                    huggingFaceModelName = "test/model",
-                    source = "HUGGING_FACE",
-                    modelFileFormat = "GGUF",
-                )
-            ),
-            sessionId = "session-1",
-            requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
-            targetModelId = LocalModelId("model-123"),
-            wifiOnly = true,
-        )
+        val request =
+            DownloadWorkRequest(
+                files =
+                    listOf(
+                        DownloadFileSpec(
+                            remoteFileName = "test.gguf",
+                            localFileName = "test.gguf",
+                            sha256 = "sha123",
+                            sizeInBytes = 1000L,
+                            huggingFaceModelName = "test/model",
+                            source = "HUGGING_FACE",
+                            modelFileFormat = "GGUF",
+                        ),
+                    ),
+                sessionId = "session-1",
+                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                targetModelId = LocalModelId("model-123"),
+                wifiOnly = true,
+            )
 
         // Capture the work requests
         val downloadSlot = slot<OneTimeWorkRequest>()
@@ -112,23 +109,25 @@ class DownloadWorkSchedulerChainTest {
     @Test
     fun `SCHED_05 - wifi-only request uses UNMETERED network constraint`() {
         // Given
-        val request = DownloadWorkRequest(
-            files = listOf(
-                DownloadFileSpec(
-                    remoteFileName = "test.gguf",
-                    localFileName = "test.gguf",
-                    sha256 = "sha123",
-                    sizeInBytes = 1000L,
-                    huggingFaceModelName = "test/model",
-                    source = "HUGGING_FACE",
-                    modelFileFormat = "GGUF",
-                )
-            ),
-            sessionId = "session-1",
-            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
-            targetModelId = null,
-            wifiOnly = true,
-        )
+        val request =
+            DownloadWorkRequest(
+                files =
+                    listOf(
+                        DownloadFileSpec(
+                            remoteFileName = "test.gguf",
+                            localFileName = "test.gguf",
+                            sha256 = "sha123",
+                            sizeInBytes = 1000L,
+                            huggingFaceModelName = "test/model",
+                            source = "HUGGING_FACE",
+                            modelFileFormat = "GGUF",
+                        ),
+                    ),
+                sessionId = "session-1",
+                requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                targetModelId = null,
+                wifiOnly = true,
+            )
 
         val downloadSlot = slot<OneTimeWorkRequest>()
         every { mockWorkManager.beginUniqueWork(any(), any(), capture(downloadSlot)) } returns mockContinuation
@@ -146,23 +145,25 @@ class DownloadWorkSchedulerChainTest {
     @Test
     fun `SCHED_06 - non-wifi request uses CONNECTED network constraint`() {
         // Given
-        val request = DownloadWorkRequest(
-            files = listOf(
-                DownloadFileSpec(
-                    remoteFileName = "test.gguf",
-                    localFileName = "test.gguf",
-                    sha256 = "sha123",
-                    sizeInBytes = 1000L,
-                    huggingFaceModelName = "test/model",
-                    source = "HUGGING_FACE",
-                    modelFileFormat = "GGUF",
-                )
-            ),
-            sessionId = "session-1",
-            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
-            targetModelId = null,
-            wifiOnly = false,
-        )
+        val request =
+            DownloadWorkRequest(
+                files =
+                    listOf(
+                        DownloadFileSpec(
+                            remoteFileName = "test.gguf",
+                            localFileName = "test.gguf",
+                            sha256 = "sha123",
+                            sizeInBytes = 1000L,
+                            huggingFaceModelName = "test/model",
+                            source = "HUGGING_FACE",
+                            modelFileFormat = "GGUF",
+                        ),
+                    ),
+                sessionId = "session-1",
+                requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                targetModelId = null,
+                wifiOnly = false,
+            )
 
         val downloadSlot = slot<OneTimeWorkRequest>()
         every { mockWorkManager.beginUniqueWork(any(), any(), capture(downloadSlot)) } returns mockContinuation
@@ -180,23 +181,25 @@ class DownloadWorkSchedulerChainTest {
     @Test
     fun `SCHED_07 - uses REPLACE policy for single pipeline`() {
         // Given
-        val request = DownloadWorkRequest(
-            files = listOf(
-                DownloadFileSpec(
-                    remoteFileName = "test.gguf",
-                    localFileName = "test.gguf",
-                    sha256 = "sha123",
-                    sizeInBytes = 1000L,
-                    huggingFaceModelName = "test/model",
-                    source = "HUGGING_FACE",
-                    modelFileFormat = "GGUF",
-                )
-            ),
-            sessionId = "session-1",
-            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
-            targetModelId = null,
-            wifiOnly = true,
-        )
+        val request =
+            DownloadWorkRequest(
+                files =
+                    listOf(
+                        DownloadFileSpec(
+                            remoteFileName = "test.gguf",
+                            localFileName = "test.gguf",
+                            sha256 = "sha123",
+                            sizeInBytes = 1000L,
+                            huggingFaceModelName = "test/model",
+                            source = "HUGGING_FACE",
+                            modelFileFormat = "GGUF",
+                        ),
+                    ),
+                sessionId = "session-1",
+                requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                targetModelId = null,
+                wifiOnly = true,
+            )
 
         val policySlot = slot<ExistingWorkPolicy>()
         every { mockWorkManager.beginUniqueWork(any(), capture(policySlot), any<OneTimeWorkRequest>()) } returns mockContinuation
@@ -213,23 +216,25 @@ class DownloadWorkSchedulerChainTest {
     @Test
     fun `SCHED_08 - download worker input contains request metadata`() {
         // Given
-        val request = DownloadWorkRequest(
-            files = listOf(
-                DownloadFileSpec(
-                    remoteFileName = "test.gguf",
-                    localFileName = "test.gguf",
-                    sha256 = "sha123",
-                    sizeInBytes = 1000L,
-                    huggingFaceModelName = "test/model",
-                    source = "HUGGING_FACE",
-                    modelFileFormat = "GGUF",
-                )
-            ),
-            sessionId = "session-abc",
-            requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
-            targetModelId = LocalModelId("model-456"),
-            wifiOnly = true,
-        )
+        val request =
+            DownloadWorkRequest(
+                files =
+                    listOf(
+                        DownloadFileSpec(
+                            remoteFileName = "test.gguf",
+                            localFileName = "test.gguf",
+                            sha256 = "sha123",
+                            sizeInBytes = 1000L,
+                            huggingFaceModelName = "test/model",
+                            source = "HUGGING_FACE",
+                            modelFileFormat = "GGUF",
+                        ),
+                    ),
+                sessionId = "session-abc",
+                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                targetModelId = LocalModelId("model-456"),
+                wifiOnly = true,
+            )
 
         val downloadSlot = slot<OneTimeWorkRequest>()
         every { mockWorkManager.beginUniqueWork(any(), any(), capture(downloadSlot)) } returns mockContinuation

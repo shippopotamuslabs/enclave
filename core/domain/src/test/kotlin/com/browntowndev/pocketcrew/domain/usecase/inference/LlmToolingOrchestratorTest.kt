@@ -1,7 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.inference
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -1155,6 +1158,205 @@ class LlmToolingOrchestratorTest {
         assertTrue(exceptionThrown, "Should throw when model ignores persistent context-full warning")
         // Params should have been rebuilt at least once
         assertTrue(paramsReceivedHistory.size > 1, "Should have received rebuilt params")
+    }
+
+    // ── FEAT-llm-tool-self-heal (TDD RED) ─────────────────────────────────────
+
+    @Test
+    fun `self-heal disables further tool calls after soft failure budget is exhausted`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "web_search",
+            argumentsJson = """{"query":"bad"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        val softFailureResult = ToolExecutionResult(
+            toolName = "web_search",
+            resultJson = """{"error":"validation_failed"}""",
+        )
+        coEvery { toolExecutor.execute(any()) } returns softFailureResult
+
+        val allowToolCallFlags = mutableListOf<Boolean>()
+        var inferencePass = 0
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 20,
+            onInferencePass = { _, allowToolCall ->
+                allowToolCallFlags += allowToolCall
+                inferencePass++
+                if (inferencePass <= 4) "tool" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { params, _, results -> "mapped-$inferencePass-${results.first().second}" },
+            onFinished = { _, _, _ -> },
+        )
+
+        assertTrue(allowToolCallFlags.size >= 4, "Expected at least four inference passes")
+        assertFalse(
+            allowToolCallFlags[3],
+            "After three consecutive soft tool failures, allowToolCall must be false on the next pass",
+        )
+    }
+
+    @Test
+    fun `self-heal resets consecutive soft failure counter after a hard tool failure`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "web_search",
+            argumentsJson = """{"query":"q"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        val softFailureResult = ToolExecutionResult(
+            toolName = "web_search",
+            resultJson = """{"error":"soft"}""",
+        )
+        var toolExecCount = 0
+        coEvery { toolExecutor.execute(any()) } coAnswers {
+            toolExecCount++
+            if (toolExecCount == 3) throw RuntimeException("hard_failure")
+            softFailureResult
+        }
+
+        val allowToolCallFlags = mutableListOf<Boolean>()
+        var inferencePass = 0
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 30,
+            onInferencePass = { _, allowToolCall ->
+                allowToolCallFlags += allowToolCall
+                inferencePass++
+                if (inferencePass <= 6) "tool" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "mapped-$inferencePass" },
+            onFinished = { _, _, _ -> },
+        )
+
+        assertEquals(7, allowToolCallFlags.size, "Six tool passes then one no-tool pass")
+        assertFalse(
+            allowToolCallFlags[6],
+            "After three consecutive soft failures following a hard failure, allowToolCall must be false",
+        )
+    }
+
+    @Test
+    fun `self-heal logs validation retry exhaustion after repeated all-error tool turns`() = runTest {
+        val r1 = ToolCallRequest("web_search", """{"query":"a"}""", "TEST", ModelType.FAST)
+        val r2 = ToolCallRequest("web_search", """{"query":"b"}""", "TEST", ModelType.FAST)
+        val err = ToolExecutionResult("web_search", """{"error":"invalid_arguments"}""")
+        coEvery { toolExecutor.execute(any()) } returns err
+
+        var inferencePass = 0
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "SelfHealTag",
+            maxToolCalls = 20,
+            onInferencePass = { _, _ ->
+                inferencePass++
+                if (inferencePass <= 3) "parallel-errors" else "no-tool"
+            },
+            onToolCallDetected = { response ->
+                if (response == "parallel-errors") listOf(r1, r2) else emptyList()
+            },
+            onToolResultsMapped = { p, _, _ -> "$p-$inferencePass" },
+            onFinished = { _, _, _ -> },
+        )
+
+        io.mockk.verify(atLeast = 1) {
+            loggingPort.warning(
+                "SelfHealTag",
+                match { it.contains("validation retry exhausted", ignoreCase = true) },
+            )
+        }
+    }
+
+    @Test
+    fun `artifact auto-finalize does not inflate finished toolCallCount for UI budgets`() = runTest {
+        val chatId = ChatId("c-self-heal")
+        val userId = MessageId("u-self-heal")
+        val assistantId = MessageId("a-self-heal")
+        val startRequest = ToolCallRequest(
+            toolName = ToolDefinition.START_ARTIFACT.name,
+            argumentsJson = """{"title":"Doc"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+            chatId = chatId,
+            userMessageId = userId,
+            assistantMessageId = assistantId,
+        )
+        val incompleteAppend = ToolCallRequest(
+            toolName = ToolDefinition.APPEND_BLOCKS.name,
+            argumentsJson = """{"artifactId":"art-x","blocks":[],"isComplete":false}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+            chatId = chatId,
+            userMessageId = userId,
+            assistantMessageId = assistantId,
+        )
+        coEvery { toolExecutor.execute(any()) } coAnswers {
+            val req = firstArg<ToolCallRequest>()
+            when (req.toolName) {
+                ToolDefinition.START_ARTIFACT.name ->
+                    ToolExecutionResult(
+                        req.toolName,
+                        """{"status":"success","artifactId":"art-x","message":"ok"}""",
+                    )
+                ToolDefinition.APPEND_BLOCKS.name ->
+                    ToolExecutionResult(
+                        req.toolName,
+                        """{"status":"success","totalBlocks":1,"isComplete":false,"message":"partial"}""",
+                    )
+                else -> ToolExecutionResult(req.toolName, "{}")
+            }
+        }
+
+        var inferencePass = 0
+        var finishedCount = -1
+        var mapInvocations = 0
+        var lastMappedParams: String? = null
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "p0",
+            tag = "TestTag",
+            maxToolCalls = 20,
+            onInferencePass = { _, _ ->
+                inferencePass++
+                when (inferencePass) {
+                    1 -> "start-tool"
+                    2 -> "append-tool"
+                    else -> "done"
+                }
+            },
+            onToolCallDetected = { phase ->
+                when (phase) {
+                    "start-tool" -> listOf(startRequest)
+                    "append-tool" -> listOf(incompleteAppend)
+                    else -> emptyList()
+                }
+            },
+            onToolResultsMapped = { params, _, _ ->
+                mapInvocations++
+                val next = "mapped-$mapInvocations"
+                lastMappedParams = next
+                next
+            },
+            onFinished = { _, toolCallCount, lastResponse ->
+                finishedCount = toolCallCount
+                assertEquals("done", lastResponse)
+                assertEquals("mapped-2", lastMappedParams)
+            },
+        )
+
+        assertEquals(2, mapInvocations, "Auto-finalize must not invoke onToolResultsMapped (scroll regression guard)")
+        assertEquals(2, finishedCount, "Finished toolCallCount must exclude synthetic auto-finalize executions")
     }
 }
 

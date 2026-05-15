@@ -35,7 +35,10 @@ interface ApiCredentialsDao {
     suspend fun upsert(entity: ApiCredentialsEntity): Long
 
     @Query("UPDATE api_credentials SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: ApiCredentialsId, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: ApiCredentialsId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM api_credentials WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<ApiCredentialsId>)

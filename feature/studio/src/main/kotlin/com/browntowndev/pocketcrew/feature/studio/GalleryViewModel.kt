@@ -3,7 +3,9 @@ package com.browntowndev.pocketcrew.feature.studio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
+import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -22,6 +25,7 @@ import javax.inject.Inject
 class GalleryViewModel @Inject constructor(
     private val studioRepository: StudioRepositoryPort,
     private val shareMediaPort: ShareMediaPort,
+    private val defaultModelRepository: DefaultModelRepositoryPort,
 ) : ViewModel() {
     private val userAlbums = studioRepository.observeAllAlbums()
     private val itemAspectRatios = MutableStateFlow<Map<String, Float>>(emptyMap())
@@ -30,11 +34,20 @@ class GalleryViewModel @Inject constructor(
         assets.map { asset -> asset.toUi() }
     }
 
+    private val hasVideoModelFlow = defaultModelRepository.observeDefaults()
+        .map { assignments ->
+            assignments.any { assignment ->
+                assignment.modelType == ModelType.VIDEO_GENERATION && assignment.mediaProviderId != null
+            }
+        }
+        .distinctUntilChanged()
+
     val uiState: StateFlow<GalleryUiState> = combine(
         mediaItems,
         userAlbums,
         itemAspectRatios,
-    ) { media, albums, ratios ->
+        hasVideoModelFlow,
+    ) { media, albums, ratios, hasVideoModel ->
         val albumItems = mutableMapOf<String, MutableList<StudioMediaUi>>()
         albumItems[DEFAULT_GALLERY_ALBUM_ID] = mutableListOf()
         albums.forEach { albumItems[it.id] = mutableListOf() }
@@ -60,6 +73,7 @@ class GalleryViewModel @Inject constructor(
                 )
             },
             isLoading = false,
+            hasVideoModel = hasVideoModel,
         )
     }.stateIn(
         scope = viewModelScope,

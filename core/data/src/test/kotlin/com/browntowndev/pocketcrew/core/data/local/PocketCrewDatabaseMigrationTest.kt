@@ -1,33 +1,40 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class PocketCrewDatabaseMigrationTest {
-
     @Test
     fun `database exposes expected tables and omits legacy ones`() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
         val sqliteDb = db.openHelper.writableDatabase
 
         fun hasTable(tableName: String): Boolean {
-            val cursor = sqliteDb.query(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                arrayOf(tableName)
-            )
+            val cursor =
+                sqliteDb.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    arrayOf(tableName),
+                )
             return cursor.use { it.count == 1 }
         }
 
@@ -37,6 +44,7 @@ class PocketCrewDatabaseMigrationTest {
         assertTrue(hasTable("api_model_configurations"))
         assertTrue(hasTable("default_models"))
         assertTrue(hasTable("chat_summary"))
+        assertTrue(hasTable("message_transcript_segment"))
         assertFalse(hasTable("models"))
         assertFalse(hasTable("api_models"))
 
@@ -46,23 +54,25 @@ class PocketCrewDatabaseMigrationTest {
         cursor.close()
 
         val credentialsColumns = sqliteDb.query("PRAGMA table_info('api_credentials')")
-        val credentialColumnNames = buildList {
-            credentialsColumns.use {
-                while (it.moveToNext()) {
-                    add(it.getString(it.getColumnIndexOrThrow("name")))
+        val credentialColumnNames =
+            buildList {
+                credentialsColumns.use {
+                    while (it.moveToNext()) {
+                        add(it.getString(it.getColumnIndexOrThrow("name")))
+                    }
                 }
             }
-        }
         assertTrue(credentialColumnNames.contains("api_key_signature"))
 
         val indexCursor = sqliteDb.query("PRAGMA index_list('api_credentials')")
-        val indexNames = buildList {
-            indexCursor.use {
-                while (it.moveToNext()) {
-                    add(it.getString(it.getColumnIndexOrThrow("name")))
+        val indexNames =
+            buildList {
+                indexCursor.use {
+                    while (it.moveToNext()) {
+                        add(it.getString(it.getColumnIndexOrThrow("name")))
+                    }
                 }
             }
-        }
         assertTrue(indexNames.contains("index_api_credentials_api_key_signature"))
 
         db.close()
@@ -70,20 +80,24 @@ class PocketCrewDatabaseMigrationTest {
 
     @Test
     fun `api credentials schema does not keep identity uniqueness index`() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
         try {
             val sqliteDb = db.openHelper.readableDatabase
             val cursor = sqliteDb.query("PRAGMA index_list('api_credentials')")
-            val indexNames = buildList {
-                cursor.use {
-                    while (it.moveToNext()) {
-                        add(it.getString(it.getColumnIndexOrThrow("name")))
+            val indexNames =
+                buildList {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
                     }
                 }
-            }
 
             assertFalse(indexNames.contains("index_api_credentials_provider_model_id_base_url"))
         } finally {
@@ -93,38 +107,44 @@ class PocketCrewDatabaseMigrationTest {
 
     @Test
     fun `migration 5-6 adds pending_sync column to all syncable tables`() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
         try {
             val sqliteDb = db.openHelper.readableDatabase
-            val syncableTables = listOf(
-                "message_file",
-                "message_vision_analysis",
-                "studio_gallery",
-                "studio_albums",
-                "api_credentials",
-                "api_model_configurations",
-                "local_model_configurations",
-                "default_models",
-                "local_models",
-                "memories",
-                "web_search_source",
-                "tts_providers",
-                "media_providers",
-            )
+            val syncableTables =
+                listOf(
+                    "message_file",
+                    "message_vision_analysis",
+                    "studio_gallery",
+                    "studio_albums",
+                    "api_credentials",
+                    "api_model_configurations",
+                    "local_model_configurations",
+                    "default_models",
+                    "local_models",
+                    "memories",
+                    "web_search_source",
+                    "message_transcript_segment",
+                    "tts_providers",
+                    "media_providers",
+                )
             for (table in syncableTables) {
                 val cursor = sqliteDb.query("PRAGMA table_info('$table')")
-                val columnNames = buildList {
-                    cursor.use {
-                        while (it.moveToNext()) {
-                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                val columnNames =
+                    buildList {
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                add(it.getString(it.getColumnIndexOrThrow("name")))
+                            }
                         }
                     }
-                }
-                assertTrue("$table should have pending_sync column", columnNames.contains("pending_sync"))
+                assertTrue(columnNames.contains("pending_sync"), "$table should have pending_sync column")
             }
         } finally {
             db.close()
@@ -133,23 +153,27 @@ class PocketCrewDatabaseMigrationTest {
 
     @Test
     fun `migration 5-6 pending_sync column defaults to 0`() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
         try {
             val sqliteDb = db.openHelper.readableDatabase
             val cursor = sqliteDb.query("PRAGMA table_info('memories')")
-            val pendingSyncDefault = buildMap {
-                cursor.use {
-                    while (it.moveToNext()) {
-                        val name = it.getString(it.getColumnIndexOrThrow("name"))
-                        val dflt = it.getString(it.getColumnIndexOrThrow("dflt_value"))
-                        put(name, dflt)
+            val pendingSyncDefault =
+                buildMap {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            val name = it.getString(it.getColumnIndexOrThrow("name"))
+                            val dflt = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                            put(name, dflt)
+                        }
                     }
                 }
-            }
             assertEquals("0", pendingSyncDefault["pending_sync"])
         } finally {
             db.close()
@@ -158,29 +182,164 @@ class PocketCrewDatabaseMigrationTest {
 
     @Test
     fun `web_search_source table has extracted column with default false`() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
         try {
             val sqliteDb = db.openHelper.readableDatabase
 
             val cursor = sqliteDb.query("PRAGMA table_info('web_search_source')")
-            val extractedColumn = buildMap {
-                cursor.use {
-                    while (it.moveToNext()) {
-                        val name = it.getString(it.getColumnIndexOrThrow("name"))
-                        val defaultValue = it.getString(it.getColumnIndexOrThrow("dflt_value"))
-                        put(name, defaultValue)
+            val extractedColumn =
+                buildMap {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            val name = it.getString(it.getColumnIndexOrThrow("name"))
+                            val defaultValue = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                            put(name, defaultValue)
+                        }
                     }
                 }
-            }
 
-            assertTrue("extracted column should exist", extractedColumn.containsKey("extracted"))
-            assertEquals("extracted should default to 0 (false)", "0", extractedColumn["extracted"])
+            assertTrue(extractedColumn.containsKey("extracted"), "extracted column should exist")
+            assertEquals("0", extractedColumn["extracted"], "extracted should default to 0 (false)")
         } finally {
             db.close()
+        }
+    }
+
+    @Test
+    fun `migration 3 to 4 creates message_transcript_segment and indexes`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_3_4_verify.db"
+        context.deleteDatabase(dbName)
+
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val openHelper =
+            factory.create(
+                SupportSQLiteOpenHelper.Configuration
+                    .builder(context)
+                    .name(dbName)
+                    .callback(
+                        object : SupportSQLiteOpenHelper.Callback(3) {
+                            override fun onCreate(db: SupportSQLiteDatabase) {
+                                // Empty schema at version 3 — migration only adds the transcript table.
+                            }
+
+                            override fun onUpgrade(
+                                db: SupportSQLiteDatabase,
+                                oldVersion: Int,
+                                newVersion: Int,
+                            ) {
+                                // Not used; migration invoked explicitly below.
+                            }
+                        },
+                    ).build(),
+            )
+        val db = openHelper.writableDatabase
+        try {
+            PocketCrewDatabaseMigrations.MIGRATION_3_4.migrate(db)
+
+            fun hasTable(tableName: String): Boolean {
+                val cursor =
+                    db.query(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                        arrayOf(tableName),
+                    )
+                return cursor.use { it.count == 1 }
+            }
+
+            assertTrue(hasTable("message_transcript_segment"))
+
+            val indexCursor = db.query("PRAGMA index_list('message_transcript_segment')")
+            val indexNames =
+                buildList {
+                    indexCursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+            assertTrue(indexNames.contains("index_message_transcript_segment_message_id"))
+            assertTrue(indexNames.contains("index_message_transcript_segment_message_id_ordinal"))
+        } finally {
+            db.close()
+            openHelper.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test
+    fun `migration 4 to 5 adds sync columns and non unique ordinal index`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_4_5_verify.db"
+        context.deleteDatabase(dbName)
+
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val openHelper =
+            factory.create(
+                SupportSQLiteOpenHelper.Configuration
+                    .builder(context)
+                    .name(dbName)
+                    .callback(
+                        object : SupportSQLiteOpenHelper.Callback(3) {
+                            override fun onCreate(db: SupportSQLiteDatabase) {
+                                // Not used.
+                            }
+
+                            override fun onUpgrade(
+                                db: SupportSQLiteDatabase,
+                                oldVersion: Int,
+                                newVersion: Int,
+                            ) {
+                            }
+                        },
+                    ).build(),
+            )
+        val db = openHelper.writableDatabase
+        try {
+            PocketCrewDatabaseMigrations.MIGRATION_3_4.migrate(db)
+            PocketCrewDatabaseMigrations.MIGRATION_4_5.migrate(db)
+
+            val columns =
+                buildList {
+                    val cursor = db.query("PRAGMA table_info('message_transcript_segment')")
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+            assertTrue(columns.contains("pending_sync"))
+            assertTrue(columns.contains("updated_at"))
+            assertTrue(columns.contains("deleted"))
+
+            val indexCursor = db.query("PRAGMA index_list('message_transcript_segment')")
+            val indexSql =
+                buildList {
+                    indexCursor.use {
+                        while (it.moveToNext()) {
+                            val name = it.getString(it.getColumnIndexOrThrow("name"))
+                            val ic = db.query("SELECT sql FROM sqlite_master WHERE type='index' AND name=?", arrayOf(name))
+                            val sql = ic.use { if (it.moveToFirst()) it.getString(0) else null }
+                            if (sql != null) add(sql)
+                        }
+                    }
+                }
+            val ordinalIdx = indexSql.find { it.contains("message_id") && it.contains("ordinal") }
+            assertTrue(ordinalIdx != null)
+            assertTrue(
+                ordinalIdx!!.contains("CREATE INDEX"),
+                "ordinal index should be non-unique (CREATE INDEX)",
+            )
+        } finally {
+            db.close()
+            openHelper.close()
+            context.deleteDatabase(dbName)
         }
     }
 }

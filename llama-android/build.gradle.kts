@@ -4,8 +4,8 @@ plugins {
 
 android {
     namespace = "com.browntowndev.pocketcrew.llama"
-    compileSdk = 36
-    ndkVersion = "27.0.11718014"
+    compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         minSdk = 34
@@ -17,7 +17,20 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags("-std=c++17")
-                arguments("-DGGML_CPU_ARM_ENABLE_SVE=OFF")
+                
+                // Base arguments
+                val cmakeArgs = mutableListOf(
+                    "-DGGML_CPU_ARM_ENABLE_SVE=OFF",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                )
+                
+                // Support overriding via -PCMAKE_ARGS (used by build-kleidiai.sh)
+                if (project.hasProperty("CMAKE_ARGS")) {
+                    val extraArgs = project.property("CMAKE_ARGS").toString().split(";")
+                    cmakeArgs.addAll(extraArgs)
+                }
+                
+                arguments(*cmakeArgs.toTypedArray())
             }
         }
     }
@@ -58,4 +71,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.kotlin.test.junit5)
 }

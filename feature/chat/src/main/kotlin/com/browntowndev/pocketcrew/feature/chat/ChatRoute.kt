@@ -3,16 +3,18 @@ package com.browntowndev.pocketcrew.feature.chat
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,9 +53,10 @@ fun ChatRoute(
 
     if (exportSheet is ArtifactExportSheetState.Visible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
+        JumpFreeModalBottomSheet(
             onDismissRequest = viewModel::dismissArtifactExportSheet,
             sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         ) {
             ArtifactExportWizardContent(
                 state = exportSheet,

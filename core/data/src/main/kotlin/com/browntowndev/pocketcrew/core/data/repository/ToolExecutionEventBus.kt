@@ -10,18 +10,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ToolExecutionEventBus @Inject constructor() : ToolExecutionEventPort {
-    private val _events = MutableSharedFlow<ToolExecutionEvent>(
-        extraBufferCapacity = 64,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-    override val events: SharedFlow<ToolExecutionEvent> = _events.asSharedFlow()
+class ToolExecutionEventBus
+    @Inject
+    constructor() : ToolExecutionEventPort {
+        private val _events =
+            MutableSharedFlow<ToolExecutionEvent>(
+                extraBufferCapacity = 64,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
+        override val events: SharedFlow<ToolExecutionEvent> = _events.asSharedFlow()
 
-    /**
-     * Internal API for the data layer to broadcast events.
-     * Uses tryEmit to ensure it never blocks the caller (inference engine).
-     */
-    fun emit(event: ToolExecutionEvent) {
-        _events.tryEmit(event)
+        /**
+         * Internal API for the data layer to broadcast events.
+         * Uses tryEmit to ensure it never blocks the caller (inference engine).
+         */
+        fun emit(event: ToolExecutionEvent) {
+            _events.tryEmit(event)
+        }
     }
-}

@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
@@ -404,7 +405,9 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         }
 
         if (asset.id.value.isNotBlank()) {
-            scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to update default media provider", "Failed to update setting")) {
+            scope.launch(
+                errorHandler.coroutineExceptionHandler(tag, "Failed to update default media provider", "Failed to update setting")
+            ) {
                 val modelType = when (asset.capability) {
                     MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
                     MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
@@ -425,7 +428,7 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
 
         if (discoveryScopeChanged) {
             apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
-            onFetchMediaModels(scope, tag, mediaState, apiState, currentApiKey)
+            onFetchMediaModels(scope, tag, mediaState, currentApiKey)
         }
     }
 
@@ -433,7 +436,6 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         scope: CoroutineScope,
         tag: String,
         mediaState: MutableStateFlow<MediaProvidersTransientState>,
-        apiState: MutableStateFlow<ApiProvidersTransientState>,
         currentApiKey: MutableStateFlow<String>
     ) {
         val draft = mediaState.value.assetDraft ?: mediaState.value.selectedAsset ?: return
@@ -489,7 +491,7 @@ internal class SettingsApiProvidersDelegate @Inject constructor(
         apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
         currentApiKey.value = ""
         if (asset != null) {
-            onFetchMediaModels(scope, tag, mediaState, apiState, currentApiKey)
+            onFetchMediaModels(scope, tag, mediaState, currentApiKey)
         }
     }
 

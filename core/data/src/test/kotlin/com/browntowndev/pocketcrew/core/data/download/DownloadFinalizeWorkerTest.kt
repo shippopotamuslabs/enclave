@@ -5,18 +5,18 @@ import android.util.Log
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
-import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
-import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,11 +24,10 @@ import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -46,7 +45,6 @@ import org.junit.jupiter.api.Test
  * EXPECTED: Tests PASS after worker is implemented.
  */
 class DownloadFinalizeWorkerTest {
-
     companion object {
         const val KEY_SESSION_ID = "work_session_id"
         const val KEY_REQUEST_KIND = "request_kind"
@@ -118,15 +116,16 @@ class DownloadFinalizeWorkerTest {
         every { mockLoggingPort.error(any(), any(), any()) } returns Unit
 
         // Create the worker with all dependencies
-        worker = DownloadFinalizeWorker(
-            context = mockContext,
-            workerParams = mockWorkerParams,
-            localModelRepository = mockLocalModelRepository,
-            modelConfigFetcher = mockModelConfigFetcher,
-            syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
-            embeddingCoordinator = mockEmbeddingCoordinator,
-            logger = mockLoggingPort
-        )
+        worker =
+            DownloadFinalizeWorker(
+                context = mockContext,
+                workerParams = mockWorkerParams,
+                localModelRepository = mockLocalModelRepository,
+                modelConfigFetcher = mockModelConfigFetcher,
+                syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
+                embeddingCoordinator = mockEmbeddingCoordinator,
+                logger = mockLoggingPort,
+            )
     }
 
     /**
@@ -146,28 +145,31 @@ class DownloadFinalizeWorkerTest {
      * Then embeddingCoordinator.enqueueFullRegeneration() is called
      */
     @Test
-    fun `triggers embedding regeneration when onnx model is finalized`() = runTest {
-        // Given: INITIALIZE_MODELS with ONNX model SHA
-        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `triggers embedding regeneration when onnx model is finalized`() =
+        runTest {
+            // Given: INITIALIZE_MODELS with ONNX model SHA
+            val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val onnxAsset = createTestAsset("model.onnx", SHA_ONNX).let { asset ->
-            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+            val onnxAsset =
+                createTestAsset("model.onnx", SHA_ONNX).let { asset ->
+                    asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+                }
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: Embedding regeneration should be triggered
+            coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
         }
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
-
-        // When: Run the worker
-        worker.doWork()
-
-        // Then: Embedding regeneration should be triggered
-        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
-    }
 
     /**
      * Scenario: triggers embedding regeneration when onnx vocab is finalized
@@ -177,28 +179,31 @@ class DownloadFinalizeWorkerTest {
      * Then embeddingCoordinator.enqueueFullRegeneration() is called
      */
     @Test
-    fun `triggers embedding regeneration when onnx vocab is finalized`() = runTest {
-        // Given: INITIALIZE_MODELS with ONNX vocab SHA
-        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `triggers embedding regeneration when onnx vocab is finalized`() =
+        runTest {
+            // Given: INITIALIZE_MODELS with ONNX vocab SHA
+            val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val onnxVocabAsset = createTestAsset("vocab.txt", SHA_ONNX).let { asset ->
-            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_VOCAB))
+            val onnxVocabAsset =
+                createTestAsset("vocab.txt", SHA_ONNX).let { asset ->
+                    asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_VOCAB))
+                }
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxVocabAsset))
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: Embedding regeneration should be triggered
+            coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
         }
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxVocabAsset))
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
-
-        // When: Run the worker
-        worker.doWork()
-
-        // Then: Embedding regeneration should be triggered
-        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
-    }
 
     /**
      * Scenario: does not trigger embedding regeneration when no onnx assets are finalized
@@ -208,26 +213,28 @@ class DownloadFinalizeWorkerTest {
      * Then embeddingCoordinator.enqueueFullRegeneration() is NOT called
      */
     @Test
-    fun `does not trigger embedding regeneration when no onnx assets are finalized`() = runTest {
-        // Given: INITIALIZE_MODELS with standard model SHA
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `does not trigger embedding regeneration when no onnx assets are finalized`() =
+        runTest {
+            // Given: INITIALIZE_MODELS with standard model SHA
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val standardAsset = createTestAsset("model1.gguf", SHA_1)
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(standardAsset))
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            val standardAsset = createTestAsset("model1.gguf", SHA_1)
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(standardAsset))
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // When: Run the worker
-        worker.doWork()
+            // When: Run the worker
+            worker.doWork()
 
-        // Then: Embedding regeneration should NOT be triggered
-        coVerify(inverse = true) { mockEmbeddingCoordinator.enqueueFullRegeneration() }
-    }
+            // Then: Embedding regeneration should NOT be triggered
+            coVerify(inverse = true) { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+        }
 
     /**
      * Scenario: triggers embedding regeneration when onnx model is restored
@@ -237,31 +244,33 @@ class DownloadFinalizeWorkerTest {
      * Then embeddingCoordinator.enqueueFullRegeneration() is called
      */
     @Test
-    fun `triggers embedding regeneration when onnx model is restored`() = runTest {
-        // Given: RESTORE_SOFT_DELETED_MODEL with ONNX model
-        val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `triggers embedding regeneration when onnx model is restored`() =
+        runTest {
+            // Given: RESTORE_SOFT_DELETED_MODEL with ONNX model
+            val downloadedShas = Json.encodeToString(listOf(SHA_ONNX))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val onnxAsset = createTestAsset("model.onnx", SHA_ONNX).let { asset ->
-            asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+            val onnxAsset =
+                createTestAsset("model.onnx", SHA_ONNX).let { asset ->
+                    asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
+                }
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns onnxAsset
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+            coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns onnxAsset
+
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: Embedding regeneration should be triggered
+            coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
         }
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns onnxAsset
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
-        coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns onnxAsset
-
-        // When: Run the worker
-        worker.doWork()
-
-        // Then: Embedding regeneration should be triggered
-        coVerify { mockEmbeddingCoordinator.enqueueFullRegeneration() }
-    }
-
 
     /**
      * Scenario: fails when requestKind is missing
@@ -270,20 +279,22 @@ class DownloadFinalizeWorkerTest {
      * Then the worker returns terminal failure
      */
     @Test
-    fun `fails when requestKind is missing`() = runTest {
-        // Given: Input without requestKind
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID
-            // Missing KEY_REQUEST_KIND
-        )
-        setInputData(inputData)
+    fun `fails when requestKind is missing`() =
+        runTest {
+            // Given: Input without requestKind
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    // Missing KEY_REQUEST_KIND
+                )
+            setInputData(inputData)
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Should return terminal failure
-        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-    }
+            // Then: Should return terminal failure
+            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+        }
 
     /**
      * Scenario: fails when sessionId is missing
@@ -292,20 +303,22 @@ class DownloadFinalizeWorkerTest {
      * Then the worker returns terminal failure
      */
     @Test
-    fun `fails when sessionId is missing`() = runTest {
-        // Given: Input without sessionId
-        val inputData = workDataOf(
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE
-            // Missing KEY_SESSION_ID
-        )
-        setInputData(inputData)
+    fun `fails when sessionId is missing`() =
+        runTest {
+            // Given: Input without sessionId
+            val inputData =
+                workDataOf(
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    // Missing KEY_SESSION_ID
+                )
+            setInputData(inputData)
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Should return terminal failure
-        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-    }
+            // Then: Should return terminal failure
+            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+        }
 
     /**
      * Scenario: success output includes finalizer stage
@@ -314,31 +327,34 @@ class DownloadFinalizeWorkerTest {
      * Then output includes workerStage = FINALIZE
      */
     @Test
-    fun `success output includes finalizer stage`() = runTest {
-        // Given: Valid startup finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `success output includes finalizer stage`() =
+        runTest {
+            // Given: Valid startup finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        // Remote config with matching SHA
-        val remoteAsset = createTestAsset("model1.gguf", SHA_1)
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            // Remote config with matching SHA
+            val remoteAsset = createTestAsset("model1.gguf", SHA_1)
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Success output includes finalizer stage
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        val outputData = (result as androidx.work.ListenableWorker.Result.Success).outputData
-        assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
-    }
+            // Then: Success output includes finalizer stage
+            assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+            val outputData = (result as androidx.work.ListenableWorker.Result.Success).outputData
+            assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
+        }
 
     // ===== 3.3 Startup Finalization Tests =====
 
@@ -351,53 +367,57 @@ class DownloadFinalizeWorkerTest {
      * Then SyncLocalModelRegistryUseCase is invoked for those slots only
      */
     @Test
-    fun `startup finalizer activates downloaded slots by SHA`() = runTest {
-        // Given: Startup finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1, SHA_2))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
-
-        // Remote config with matching SHAs
-        val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
-        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2).copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("test-id"),
-                    displayName = "Test",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.VISION)
+    fun `startup finalizer activates downloaded slots by SHA`() =
+        runTest {
+            // Given: Startup finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1, SHA_2))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
                 )
-            )
-        )
-        val remoteConfig = listOf(remoteAsset1, remoteAsset2)
+            setInputData(inputData)
 
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfig)
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            // Remote config with matching SHAs
+            val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
+            val remoteAsset2 =
+                createTestAsset("model2.gguf", SHA_2).copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId("test-id"),
+                                displayName = "Test",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.VISION),
+                            ),
+                        ),
+                )
+            val remoteConfig = listOf(remoteAsset1, remoteAsset2)
 
-        // When: Run the worker
-        worker.doWork()
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfig)
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // Then: SyncLocalModelRegistryUseCase should be called for matching slots
-        coVerify {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: SyncLocalModelRegistryUseCase should be called for matching slots
+            coVerify {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+            }
+            coVerify {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
+            }
         }
-        coVerify {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
-        }
-    }
 
     /**
      * Scenario: startup finalizer ignores remote assets not downloaded in this session
@@ -407,76 +427,83 @@ class DownloadFinalizeWorkerTest {
      * Then only A-backed slots are activated
      */
     @Test
-    fun `startup finalizer ignores remote assets not downloaded in this session`() = runTest {
-        // Given: Only SHA_1 was downloaded, but remote config has SHA_1, SHA_2, SHA_3
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
-
-        val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
-        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2).copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("test-id"),
-                    displayName = "Test",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.VISION)
+    fun `startup finalizer ignores remote assets not downloaded in this session`() =
+        runTest {
+            // Given: Only SHA_1 was downloaded, but remote config has SHA_1, SHA_2, SHA_3
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
                 )
-            )
-        )
-        val remoteAsset3 = createTestAsset("model3.gguf", "sha-not-downloaded").copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("test-id"),
-                    displayName = "Test",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.DRAFT_ONE)
+            setInputData(inputData)
+
+            val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
+            val remoteAsset2 =
+                createTestAsset("model2.gguf", SHA_2).copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId("test-id"),
+                                displayName = "Test",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.VISION),
+                            ),
+                        ),
                 )
-            )
-        )
+            val remoteAsset3 =
+                createTestAsset("model3.gguf", "sha-not-downloaded").copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId("test-id"),
+                                displayName = "Test",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.DRAFT_ONE),
+                            ),
+                        ),
+                )
 
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset1, remoteAsset2, remoteAsset3)
-        )
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset1, remoteAsset2, remoteAsset3),
+                )
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // When: Run the worker
-        worker.doWork()
+            // When: Run the worker
+            worker.doWork()
 
-        // Then: Only SHA_1 asset should be synced
-        coVerify {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+            // Then: Only SHA_1 asset should be synced
+            coVerify {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+            }
+            // SHA_2 and SHA_3 should NOT be synced (not downloaded)
+            coVerify(inverse = true) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
+            }
+            coVerify(inverse = true) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.DRAFT_ONE, remoteAsset3)
+            }
         }
-        // SHA_2 and SHA_3 should NOT be synced (not downloaded)
-        coVerify(inverse = true) {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
-        }
-        coVerify(inverse = true) {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.DRAFT_ONE, remoteAsset3)
-        }
-    }
 
     /**
      * Scenario: startup finalizer is idempotent under retry
@@ -485,32 +512,35 @@ class DownloadFinalizeWorkerTest {
      * Then registry state converges without duplicates
      */
     @Test
-    fun `startup finalizer is idempotent under retry`() = runTest {
-        // Given: Valid startup finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `startup finalizer is idempotent under retry`() =
+        runTest {
+            // Given: Valid startup finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val remoteAsset = createTestAsset("model1.gguf", SHA_1)
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            val remoteAsset = createTestAsset("model1.gguf", SHA_1)
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // When: Run the worker twice (simulating retry)
-        worker.doWork()
-        worker.doWork()
+            // When: Run the worker twice (simulating retry)
+            worker.doWork()
+            worker.doWork()
 
-        // Then: Both runs succeed (idempotent behavior)
-        // The use case should be called twice but not fail
-        coVerify(exactly = 2) {
-            mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset)
+            // Then: Both runs succeed (idempotent behavior)
+            // The use case should be called twice but not fail
+            coVerify(exactly = 2) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset)
+            }
         }
-    }
 
     // ===== 3.4 Soft-Deleted Restore Finalization Tests =====
 
@@ -522,26 +552,28 @@ class DownloadFinalizeWorkerTest {
      * Then it returns terminal failure
      */
     @Test
-    fun `restore finalizer requires target model id`() = runTest {
-        // Given: Restore input WITHOUT targetModelId (invalid)
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-            // Missing KEY_TARGET_MODEL_ID
-        )
-        setInputData(inputData)
+    fun `restore finalizer requires target model id`() =
+        runTest {
+            // Given: Restore input WITHOUT targetModelId (invalid)
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                    // Missing KEY_TARGET_MODEL_ID
+                )
+            setInputData(inputData)
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Should return failure
-        assertTrue(
-            result is androidx.work.ListenableWorker.Result.Failure,
-            "Worker should return failure when targetModelId is missing for restore request"
-        )
-    }
+            // Then: Should return failure
+            assertTrue(
+                result is androidx.work.ListenableWorker.Result.Failure,
+                "Worker should return failure when targetModelId is missing for restore request",
+            )
+        }
 
     /**
      * Scenario: restore finalizer restores configs only after successful download
@@ -551,63 +583,68 @@ class DownloadFinalizeWorkerTest {
      * Then restoreSoftDeletedModel(modelId, rebuiltConfigs) is called
      */
     @Test
-    fun `restore finalizer restores configs only after successful download`() = runTest {
-        // Given: Restore finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
-
-        // Soft-deleted asset exists in repository
-        val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
-
-        // Remote config has matching SHA
-        val remoteAsset = softDeletedAsset.copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId(MODEL_ID),
-                    displayName = "Restored Preset",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "Test",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.MAIN)
+    fun `restore finalizer restores configs only after successful download`() =
+        runTest {
+            // Given: Restore finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
                 )
-            )
-        )
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
+            setInputData(inputData)
 
-        coEvery {
-            mockLocalModelRepository.restoreSoftDeletedModel(any(), any())
-        } returns softDeletedAsset
+            // Soft-deleted asset exists in repository
+            val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // Remote config has matching SHA
+            val remoteAsset =
+                softDeletedAsset.copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId(MODEL_ID),
+                                displayName = "Restored Preset",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "Test",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.MAIN),
+                            ),
+                        ),
+                )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
 
-        // Then: restoreSoftDeletedModel should be called
-        coVerify {
-            mockLocalModelRepository.restoreSoftDeletedModel(
-                LocalModelId(MODEL_ID),
-                match { configs ->
-                    configs.isNotEmpty() &&
+            coEvery {
+                mockLocalModelRepository.restoreSoftDeletedModel(any(), any())
+            } returns softDeletedAsset
+
+            // When: Run the worker
+            val result = worker.doWork()
+
+            // Then: restoreSoftDeletedModel should be called
+            coVerify {
+                mockLocalModelRepository.restoreSoftDeletedModel(
+                    LocalModelId(MODEL_ID),
+                    match { configs ->
+                        configs.isNotEmpty() &&
                             configs.all { it.isSystemPreset && it.localModelId.value == MODEL_ID }
-                }
-            )
+                    },
+                )
+            }
         }
-    }
 
     /**
      * Scenario: restore finalizer rebuilds system presets from remote config
@@ -618,74 +655,79 @@ class DownloadFinalizeWorkerTest {
      * - isSystemPreset = true
      */
     @Test
-    fun `restore finalizer rebuilds system presets from remote config`() = runTest {
-        // Given: Restore finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
-
-        val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
-
-        // Remote config with multiple presets
-        val remoteAsset = softDeletedAsset.copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("original-id"),
-                    displayName = "Preset 1",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "Test",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.MAIN)
-                ),
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("original-id-2"),
-                    displayName = "Preset 2",
-                    temperature = 0.8,
-                    topK = 50,
-                    topP = 0.9,
-                    minP = 0.0,
-                    repetitionPenalty = 1.0,
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    systemPrompt = "Test 2",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.MAIN)
+    fun `restore finalizer rebuilds system presets from remote config`() =
+        runTest {
+            // Given: Restore finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
                 )
-            )
-        )
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
-        coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
+            setInputData(inputData)
 
-        // When: Run the worker
-        worker.doWork()
+            val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
 
-        // Then: Restored configs should have targetModelId and isSystemPreset=true
-        coVerify {
-            mockLocalModelRepository.restoreSoftDeletedModel(
-                eq(LocalModelId(MODEL_ID)),
-                match { configs ->
-                    configs.size == 2 &&
+            // Remote config with multiple presets
+            val remoteAsset =
+                softDeletedAsset.copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId("original-id"),
+                                displayName = "Preset 1",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "Test",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.MAIN),
+                            ),
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId("original-id-2"),
+                                displayName = "Preset 2",
+                                temperature = 0.8,
+                                topK = 50,
+                                topP = 0.9,
+                                minP = 0.0,
+                                repetitionPenalty = 1.0,
+                                maxTokens = 2048,
+                                contextWindow = 2048,
+                                systemPrompt = "Test 2",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.MAIN),
+                            ),
+                        ),
+                )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
+            coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
+
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: Restored configs should have targetModelId and isSystemPreset=true
+            coVerify {
+                mockLocalModelRepository.restoreSoftDeletedModel(
+                    eq(LocalModelId(MODEL_ID)),
+                    match { configs ->
+                        configs.size == 2 &&
                             configs.all { it.isSystemPreset && it.localModelId.value == MODEL_ID }
-                }
-            )
+                    },
+                )
+            }
         }
-    }
 
     /**
      * Scenario: restore finalizer does not call SyncLocalModelRegistryUseCase
@@ -694,52 +736,57 @@ class DownloadFinalizeWorkerTest {
      * Then role-slot assignment is not performed
      */
     @Test
-    fun `restore finalizer does not call SyncLocalModelRegistryUseCase`() = runTest {
-        // Given: Restore finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
-
-        val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
-
-        val remoteAsset = softDeletedAsset.copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId(MODEL_ID),
-                    displayName = "Restored",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.MAIN)
+    fun `restore finalizer does not call SyncLocalModelRegistryUseCase`() =
+        runTest {
+            // Given: Restore finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
                 )
-            )
-        )
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
-        coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
+            setInputData(inputData)
 
-        // When: Run the worker
-        worker.doWork()
+            val softDeletedAsset = createTestAsset("model.gguf", SHA_1)
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns softDeletedAsset
 
-        // Then: SyncLocalModelRegistryUseCase should NOT be called for restore
-        coVerify(inverse = true) {
-            mockSyncLocalModelRegistryUseCase.invoke(any(), any())
+            val remoteAsset =
+                softDeletedAsset.copy(
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                localModelId = LocalModelId(MODEL_ID),
+                                displayName = "Restored",
+                                temperature = 0.7,
+                                topK = 40,
+                                topP = 0.95,
+                                minP = 0.0,
+                                repetitionPenalty = 1.1,
+                                maxTokens = 4096,
+                                contextWindow = 4096,
+                                systemPrompt = "",
+                                isSystemPreset = true,
+                                thinkingEnabled = false,
+                                defaultAssignments = listOf(ModelType.MAIN),
+                            ),
+                        ),
+                )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
+            coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
+
+            // When: Run the worker
+            worker.doWork()
+
+            // Then: SyncLocalModelRegistryUseCase should NOT be called for restore
+            coVerify(inverse = true) {
+                mockSyncLocalModelRegistryUseCase.invoke(any(), any())
+            }
         }
-    }
 
     /**
      * Scenario: restore finalizer fails if soft-deleted asset no longer exists
@@ -748,25 +795,27 @@ class DownloadFinalizeWorkerTest {
      * Then it returns terminal failure
      */
     @Test
-    fun `restore finalizer fails if soft-deleted asset no longer exists`() = runTest {
-        // Given: Restore input but asset not found
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `restore finalizer fails if soft-deleted asset no longer exists`() =
+        runTest {
+            // Given: Restore input but asset not found
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns null
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns null
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Should return failure
-        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-    }
+            // Then: Should return failure
+            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+        }
 
     // ===== 3.5 Terminal Output Tests =====
 
@@ -777,32 +826,35 @@ class DownloadFinalizeWorkerTest {
      * Then output includes sessionId, requestKind, workerStage = FINALIZE
      */
     @Test
-    fun `finalizer success output includes session and request metadata`() = runTest {
-        // Given: Valid finalization input
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `finalizer success output includes session and request metadata`() =
+        runTest {
+            // Given: Valid finalization input
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        val remoteAsset = createTestAsset("model1.gguf", SHA_1)
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            listOf(remoteAsset)
-        )
-        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            val remoteAsset = createTestAsset("model1.gguf", SHA_1)
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(
+                    listOf(remoteAsset),
+                )
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Output includes metadata
-        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        val outputData = (result as androidx.work.ListenableWorker.Result.Success).outputData
-        assertEquals(SESSION_ID, outputData.getString(KEY_SESSION_ID))
-        assertEquals(REQUEST_INITIALIZE, outputData.getString(KEY_REQUEST_KIND))
-        assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
-    }
+            // Then: Output includes metadata
+            assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+            val outputData = (result as androidx.work.ListenableWorker.Result.Success).outputData
+            assertEquals(SESSION_ID, outputData.getString(KEY_SESSION_ID))
+            assertEquals(REQUEST_INITIALIZE, outputData.getString(KEY_REQUEST_KIND))
+            assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
+        }
 
     /**
      * Scenario: finalizer failure output includes error metadata
@@ -811,61 +863,67 @@ class DownloadFinalizeWorkerTest {
      * Then output includes sessionId, requestKind, workerStage = FINALIZE, error_message
      */
     @Test
-    fun `finalizer failure output includes error metadata`() = runTest {
-        // Given: Finalization that will fail
-        val downloadedShas = Json.encodeToString(listOf(SHA_1))
-        val inputData = workDataOf(
-            KEY_SESSION_ID to SESSION_ID,
-            KEY_REQUEST_KIND to REQUEST_RESTORE,
-            KEY_TARGET_MODEL_ID to MODEL_ID,
-            KEY_DOWNLOADED_SHAS to downloadedShas,
-        )
-        setInputData(inputData)
+    fun `finalizer failure output includes error metadata`() =
+        runTest {
+            // Given: Finalization that will fail
+            val downloadedShas = Json.encodeToString(listOf(SHA_1))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_RESTORE,
+                    KEY_TARGET_MODEL_ID to MODEL_ID,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
 
-        // Asset not found - causes failure
-        coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns null
+            // Asset not found - causes failure
+            coEvery { mockLocalModelRepository.getAssetById(LocalModelId(MODEL_ID)) } returns null
 
-        // When: Run the worker
-        val result = worker.doWork()
+            // When: Run the worker
+            val result = worker.doWork()
 
-        // Then: Failure output includes metadata
-        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-        val outputData = (result as androidx.work.ListenableWorker.Result.Failure).outputData
-        assertEquals(SESSION_ID, outputData.getString(KEY_SESSION_ID))
-        assertEquals(REQUEST_RESTORE, outputData.getString(KEY_REQUEST_KIND))
-        assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
-    }
+            // Then: Failure output includes metadata
+            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+            val outputData = (result as androidx.work.ListenableWorker.Result.Failure).outputData
+            assertEquals(SESSION_ID, outputData.getString(KEY_SESSION_ID))
+            assertEquals(REQUEST_RESTORE, outputData.getString(KEY_REQUEST_KIND))
+            assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
+        }
 
     // ===== Helper method =====
 
-    private fun createTestAsset(localFileName: String, sha256: String): LocalModelAsset {
-        return LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = LocalModelId("test-id"),
-                huggingFaceModelName = "test/model",
-                remoteFileName = localFileName,
-                localFileName = localFileName,
-                sha256 = sha256,
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("test-id"),
-                    displayName = "Test",
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    systemPrompt = "",
-                    isSystemPreset = true,
-                    thinkingEnabled = false,
-                    defaultAssignments = listOf(ModelType.MAIN)
-                )
-            )
+    private fun createTestAsset(
+        localFileName: String,
+        sha256: String,
+    ): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("test-id"),
+                    huggingFaceModelName = "test/model",
+                    remoteFileName = localFileName,
+                    localFileName = localFileName,
+                    sha256 = sha256,
+                    sizeInBytes = 1000000L,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                ),
+            configurations =
+                listOf(
+                    LocalModelConfiguration(
+                        localModelId = LocalModelId("test-id"),
+                        displayName = "Test",
+                        temperature = 0.7,
+                        topK = 40,
+                        topP = 0.95,
+                        minP = 0.0,
+                        repetitionPenalty = 1.1,
+                        maxTokens = 4096,
+                        contextWindow = 4096,
+                        systemPrompt = "",
+                        isSystemPreset = true,
+                        thinkingEnabled = false,
+                        defaultAssignments = listOf(ModelType.MAIN),
+                    ),
+                ),
         )
-    }
 }

@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
@@ -53,9 +54,11 @@ import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +75,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
@@ -94,7 +98,7 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
-@Suppress("LargeClass")
+@Suppress("TooManyFunctions", "ComplexCondition", "MaxLineLength", "LargeClass")
 class ChatViewModel @Inject constructor(
     private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
@@ -134,6 +138,7 @@ class ChatViewModel @Inject constructor(
                 selectedFormat = null,
                 selectedDestination = null,
                 isExporting = false,
+                documentJson = card.documentJson,
             )
     }
 
@@ -143,12 +148,12 @@ class ChatViewModel @Inject constructor(
 
     fun onArtifactExportSelectFormat(format: WizardExportFormat) {
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
-        _artifactExportSheet.value = visible.copy(selectedFormat = format)
+        _artifactExportSheet.value = visible.copy(selectedFormat = format, errorMessage = null)
     }
 
     fun onArtifactExportSelectDestination(destination: WizardExportDestination) {
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
-        _artifactExportSheet.value = visible.copy(selectedDestination = destination)
+        _artifactExportSheet.value = visible.copy(selectedDestination = destination, errorMessage = null)
     }
 
     fun onArtifactExportWizardBack() {
@@ -160,6 +165,7 @@ class ChatViewModel @Inject constructor(
                             sheet.copy(
                                 step = ArtifactExportWizardStep.CHOOSE_FORMAT,
                                 selectedDestination = null,
+                                errorMessage = null,
                             )
                     }
                     ArtifactExportWizardStep.CHOOSE_FORMAT -> {
@@ -175,7 +181,7 @@ class ChatViewModel @Inject constructor(
         val visible = _artifactExportSheet.value as? ArtifactExportSheetState.Visible ?: return
         if (visible.selectedFormat == null) return
         _artifactExportSheet.value =
-            visible.copy(step = ArtifactExportWizardStep.CHOOSE_DESTINATION)
+            visible.copy(step = ArtifactExportWizardStep.CHOOSE_DESTINATION, errorMessage = null)
     }
 
     fun onConfirmArtifactExport() {
@@ -183,81 +189,78 @@ class ChatViewModel @Inject constructor(
         if (visible.selectedFormat == null || visible.selectedDestination == null) return
         viewModelScope.launch {
             _artifactExportSheet.update { prev: ArtifactExportSheetState ->
-                (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = true) ?: prev
+                (prev as? ArtifactExportSheetState.Visible)?.copy(
+                    isExporting = true,
+                    errorMessage = null,
+                ) ?: prev
             }
-            val artifact =
-                resolveArtifactGenerationRequest(
-                    messageId = visible.messageId,
-                    artifactId = visible.artifactId,
-                )
-            if (artifact == null) {
-                _artifactExportMessages.emit("Could not find this document.")
-                dismissArtifactExportSheet()
-                return@launch
-            }
-            if (artifact.content.isBlank()) {
-                _artifactExportMessages.emit("Document is still generating. Try again in a moment.")
-                dismissArtifactExportSheet()
-                return@launch
-            }
-            val format =
-                when (visible.selectedFormat) {
-                    WizardExportFormat.PDF -> ArtifactExportFormat.PDF
-                    WizardExportFormat.WORD -> ArtifactExportFormat.WORD
-                    WizardExportFormat.BOTH -> ArtifactExportFormat.BOTH
+            try {
+                if (visible.documentJson.isBlank()) {
+                    showArtifactExportError("Document is still generating. Try again in a moment.")
+                    return@launch
                 }
-            val destination =
-                when (visible.selectedDestination) {
-                    WizardExportDestination.SHARE -> ArtifactExportDestination.SHARE
-                    WizardExportDestination.DOWNLOAD -> ArtifactExportDestination.DOWNLOAD
-                }
-            val result =
-                exportArtifactDocumentsUseCase(
-                    ExportArtifactDocumentsCommand(
-                        documentJson = artifact.content,
-                        baseTitle = artifact.title.ifBlank { "artifact" },
-                        format = format,
-                        destination = destination,
-                    ),
-                )
-            if (result.isSuccess) {
-                val outcome = result.getOrNull()!!
-                when (outcome) {
-                    is ArtifactExportOutcome.Shared ->
-                        _artifactExportMessages.emit(
-                            "Share sheet opened for ${outcome.fileCount} file(s).",
-                        )
-                    is ArtifactExportOutcome.Downloaded ->
-                        _artifactExportMessages.emit(
-                            "Saved to Downloads: ${outcome.savedDisplayNames.joinToString()}",
-                        )
-                }
-                when (format) {
-                    ArtifactExportFormat.PDF ->
-                        persistArtifactExportPreference(artifact.artifactId, MimeType.PDF)
-                    ArtifactExportFormat.WORD ->
-                        persistArtifactExportPreference(artifact.artifactId, MimeType.WORD)
-                    ArtifactExportFormat.BOTH -> Unit
-                }
-                dismissArtifactExportSheet()
-            } else {
-                val error = result.exceptionOrNull() ?: Exception("Export failed")
-                _artifactExportMessages.emit(error.message ?: "Export failed")
-                _artifactExportSheet.update { prev: ArtifactExportSheetState ->
-                    (prev as? ArtifactExportSheetState.Visible)?.copy(isExporting = false) ?: prev
-                }
+                val format =
+                    when (visible.selectedFormat) {
+                        WizardExportFormat.PDF -> ArtifactExportFormat.PDF
+                        WizardExportFormat.WORD -> ArtifactExportFormat.WORD
+                        WizardExportFormat.BOTH -> ArtifactExportFormat.BOTH
+                    }
+                val destination =
+                    when (visible.selectedDestination) {
+                        WizardExportDestination.SHARE -> ArtifactExportDestination.SHARE
+                        WizardExportDestination.DOWNLOAD -> ArtifactExportDestination.DOWNLOAD
+                    }
+                val result =
+                    exportArtifactDocumentsUseCase(
+                        ExportArtifactDocumentsCommand(
+                            documentJson = visible.documentJson,
+                            baseTitle = visible.title.ifBlank { "artifact" },
+                            format = format,
+                            destination = destination,
+                        ),
+                    )
+                result
+                    .onSuccess { outcome ->
+                        when (outcome) {
+                            is ArtifactExportOutcome.Shared ->
+                                _artifactExportMessages.send(
+                                    "Share sheet opened for ${outcome.fileCount} file(s).",
+                                )
+                            is ArtifactExportOutcome.Downloaded ->
+                                _artifactExportMessages.send(
+                                    "Saved to Downloads: ${outcome.savedDisplayNames.joinToString()}",
+                                )
+                        }
+                        when (format) {
+                            ArtifactExportFormat.PDF ->
+                                persistArtifactExportPreference(visible.artifactId, MimeType.PDF)
+                            ArtifactExportFormat.WORD ->
+                                persistArtifactExportPreference(visible.artifactId, MimeType.WORD)
+                            ArtifactExportFormat.BOTH -> Unit
+                        }
+                        dismissArtifactExportSheet()
+                    }
+                    .onFailure { error ->
+                        loggingPort.error(TAG, "Artifact export failed", error)
+                        showArtifactExportError(error.message ?: "Export failed")
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                loggingPort.error(TAG, "Artifact export failed", e)
+                showArtifactExportError(e.message ?: "Export failed")
             }
         }
     }
 
-    private suspend fun resolveArtifactGenerationRequest(
-        messageId: MessageId,
-        artifactId: String,
-    ): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest? {
-        val chatId = _currentChatId.value ?: initialChatId ?: return null
-        val messages = chatRepository.getMessagesForChat(chatId).first()
-        val message = messages.find { it.id == messageId } ?: return null
-        return message.content.artifacts.find { it.artifactId == artifactId }
+    private suspend fun showArtifactExportError(message: String) {
+        _artifactExportMessages.send(message)
+        _artifactExportSheet.update { prev: ArtifactExportSheetState ->
+            (prev as? ArtifactExportSheetState.Visible)?.copy(
+                isExporting = false,
+                errorMessage = message,
+            ) ?: prev
+        }
     }
 
     /**
@@ -294,8 +297,8 @@ class ChatViewModel @Inject constructor(
     private val _sharedMessages = MutableStateFlow<List<Message>>(emptyList())
 
     private val _artifactExportSheet = MutableStateFlow<ArtifactExportSheetState>(ArtifactExportSheetState.Hidden)
-    private val _artifactExportMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val artifactExportMessages = _artifactExportMessages.asSharedFlow()
+    private val _artifactExportMessages = Channel<String>(Channel.BUFFERED)
+    val artifactExportMessages = _artifactExportMessages.receiveAsFlow()
     
     // Caches share URLs by ShareOption key to avoid redundant uploads
     private val shareUrlCache = mutableMapOf<com.browntowndev.pocketcrew.domain.model.share.ShareOption, String>()
@@ -527,8 +530,7 @@ class ChatViewModel @Inject constructor(
                             val params = jsonParser.decodeFromString<
                                 com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
                                 >(
-                                com.browntowndev.pocketcrew.domain.model.inference
-                                    .StartArtifactParamsArgumentNormalizer.normalize(event.argumentsJson),
+                                event.argumentsJson,
                             )
                             pendingStartArtifacts[event.eventId] = PendingStartArtifact(title = params.title)
                         } catch (e: Exception) {
@@ -660,7 +662,7 @@ class ChatViewModel @Inject constructor(
         studioRepository.observeAllMedia()
     ) { ephemeral, persisted ->
         (ephemeral + persisted).associateBy { it.id }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
@@ -776,7 +778,7 @@ class ChatViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
         initialValue = ChatUiState()
     )
 
@@ -826,7 +828,104 @@ class ChatViewModel @Inject constructor(
             indicatorState = computeIndicatorState(message),
             modelDisplayName = modelDisplayName,
             webSearchSources = message.webSearchSources,
+            transcriptSegments = mapTranscriptSegmentsToUi(message),
         )
+    }
+
+    private fun mapTranscriptSegmentsToUi(message: Message): List<TranscriptSegmentUi> {
+        val segments = message.transcriptSegments
+        if (segments.isEmpty()) return emptyList()
+        val lastThinkingIndex = segments.indexOfLast { it is MessageTranscriptSegment.Thinking }
+        val lastAnswerIndex = segments.indexOfLast { it is MessageTranscriptSegment.AssistantText }
+        val durationOverrides = distributeThinkingDurationFromAggregate(message, segments)
+        return segments.mapIndexed { index, seg ->
+            when (seg) {
+                is MessageTranscriptSegment.Thinking -> {
+                    val durationSeconds =
+                        durationOverrides[index]
+                            ?: transcriptThinkingDurationSecondsForUi(seg)
+                    TranscriptSegmentUi.ThinkingBlock(
+                        ordinal = seg.ordinal,
+                        text = seg.text,
+                        durationSeconds = durationSeconds,
+                        thinkingStartTimeMs = seg.thinkingStartTime,
+                        isStreaming = index == lastThinkingIndex && message.messageState == MessageState.THINKING,
+                    )
+                }
+                is MessageTranscriptSegment.AssistantText -> TranscriptSegmentUi.AnswerBlock(
+                    ordinal = seg.ordinal,
+                    text = seg.text,
+                    isStreaming = index == lastAnswerIndex && message.messageState == MessageState.GENERATING,
+                )
+            }
+        }
+    }
+
+    private fun effectiveSegmentDurationSeconds(seg: MessageTranscriptSegment.Thinking): Long? {
+        val start = seg.thinkingStartTime
+        val end = seg.thinkingEndTime
+        if (start == null || end == null || end < start) return null
+        val ms = end - start
+        return when {
+            ms <= 0L -> null
+            ms < 1000L -> 1L
+            else -> ms / 1000
+        }
+    }
+
+    /**
+     * Resolves segment duration for transcript UI. A denormalized
+     * [MessageTranscriptSegment.Thinking.thinkingDurationSeconds] of `0` must not suppress
+     * recomputation from [MessageTranscriptSegment.Thinking.thinkingStartTime] /
+     * [MessageTranscriptSegment.Thinking.thinkingEndTime] (persisted 0 while timestamps are valid).
+     */
+    private fun transcriptThinkingDurationSecondsForUi(seg: MessageTranscriptSegment.Thinking): Long? {
+        val stored = seg.thinkingDurationSeconds
+        val fromTimestamps = effectiveSegmentDurationSeconds(seg)
+        return when {
+            stored != null && stored > 0L -> stored
+            fromTimestamps != null -> fromTimestamps
+            else -> stored
+        }
+    }
+
+    /**
+     * When every thinking slice still resolves to 0 / null seconds (e.g. legacy rows without
+     * per-segment timestamps) but the assistant message has a positive aggregate thinking duration,
+     * split that total across thinking rows so "Thought for …" is not all 0s.
+     */
+    private fun distributeThinkingDurationFromAggregate(
+        message: Message,
+        segments: List<MessageTranscriptSegment>,
+    ): Map<Int, Long> {
+        val thinkingIndices =
+            segments.mapIndexedNotNull { i, s -> i.takeIf { s is MessageTranscriptSegment.Thinking } }
+        if (thinkingIndices.isEmpty()) return emptyMap()
+        val allWeak =
+            thinkingIndices.all { i ->
+                val d = transcriptThinkingDurationSecondsForUi(segments[i] as MessageTranscriptSegment.Thinking)
+                d == null || d == 0L
+            }
+        if (!allWeak) return emptyMap()
+        val agg = aggregateThinkingDurationSeconds(message) ?: return emptyMap()
+        if (agg <= 0L) return emptyMap()
+        val n = thinkingIndices.size
+        val base = agg / n
+        val rem = (agg % n).toInt()
+        return thinkingIndices.mapIndexed { idx, segIndex ->
+            val extra = if (idx < rem) 1L else 0L
+            segIndex to base + extra
+        }.toMap()
+    }
+
+    private fun aggregateThinkingDurationSeconds(message: Message): Long? {
+        val stored = message.thinkingDurationSeconds
+        val fromTimestamps = message.computedDurationSeconds
+        return when {
+            stored != null && stored > 0L -> stored
+            fromTimestamps != null -> fromTimestamps
+            else -> stored
+        }
     }
 
     /**
@@ -848,32 +947,45 @@ class ChatViewModel @Inject constructor(
                 IndicatorState.Processing
             }
             MessageState.THINKING -> {
-                // Duration may be null during thinking - compute from timestamps if available
-                val duration = message.thinkingDurationSeconds
+                val duration = aggregateThinkingDurationSeconds(message)
                 IndicatorState.Thinking(
                     thinkingRaw = message.thinkingRaw ?: "",
                     thinkingDurationSeconds = duration ?: 0L,
-                    thinkingStartTime = message.thinkingStartTime ?: 0L
+                    thinkingStartTime = message.thinkingStartTime ?: 0L,
                 )
             }
             MessageState.GENERATING -> {
-                val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val duration = aggregateThinkingDurationSeconds(message)
                 val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Generating(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw, startTime)
-                    else null
+                    thinkingData =
+                        if (!raw.isNullOrBlank() && duration != null) {
+                            ThinkingDataUi(
+                                thinkingDurationSeconds = duration,
+                                thinkingRaw = raw,
+                                thinkingStartTime = startTime,
+                            )
+                        } else {
+                            null
+                        },
                 )
             }
             MessageState.COMPLETE -> {
-                val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val duration = aggregateThinkingDurationSeconds(message)
                 val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Complete(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw, startTime)
-                    else null
+                    thinkingData =
+                        if (!raw.isNullOrBlank() && duration != null) {
+                            ThinkingDataUi(
+                                thinkingDurationSeconds = duration,
+                                thinkingRaw = raw,
+                                thinkingStartTime = startTime,
+                            )
+                        } else {
+                            null
+                        },
                 )
             }
         }
@@ -1358,12 +1470,12 @@ class ChatViewModel @Inject constructor(
         val maxItems = when {
             activeVisionCapable -> when {
                 activeConfig?.isLocal == true -> 1
-                activeConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
-                else -> 20
+                activeConfig?.apiProvider == ApiProvider.GOOGLE -> GOOGLE_VISION_MAX_IMAGES
+                else -> DEFAULT_API_VISION_MAX_IMAGES
             }
             apiVisionConfigured -> when {
-                visionConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
-                else -> 20
+                visionConfig?.apiProvider == ApiProvider.GOOGLE -> GOOGLE_VISION_MAX_IMAGES
+                else -> DEFAULT_API_VISION_MAX_IMAGES
             }
             else -> 0
         }
@@ -1396,6 +1508,9 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private const val SUBSCRIBE_TIMEOUT_MS = 5000L
+        private const val GOOGLE_VISION_MAX_IMAGES = 3600
+        private const val DEFAULT_API_VISION_MAX_IMAGES = 20
         private val jsonParser = Json { ignoreUnknownKeys = true }
     }
 

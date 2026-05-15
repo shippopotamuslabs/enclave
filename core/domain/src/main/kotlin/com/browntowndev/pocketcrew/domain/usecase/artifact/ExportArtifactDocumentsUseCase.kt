@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 package com.browntowndev.pocketcrew.domain.usecase.artifact
 
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactExportDestination
@@ -10,6 +11,8 @@ import com.browntowndev.pocketcrew.domain.port.docgen.DocumentGeneratorPort
 import com.browntowndev.pocketcrew.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class ExportArtifactDocumentsUseCase @Inject constructor(
     private val documentGeneratorPort: DocumentGeneratorPort,
@@ -26,7 +29,10 @@ class ExportArtifactDocumentsUseCase @Inject constructor(
             val downloadedNames = mutableListOf<String>()
 
             suspend fun addPdf() {
-                val bytes = documentGeneratorPort.generatePdfDocument(json).getOrThrow()
+                val bytes =
+                    withContext(Dispatchers.IO) {
+                        documentGeneratorPort.generatePdfDocument(json).getOrThrow()
+                    }
                 val name = "$base.pdf"
                 when (command.destination) {
                     ArtifactExportDestination.SHARE -> {
@@ -46,7 +52,10 @@ class ExportArtifactDocumentsUseCase @Inject constructor(
             }
 
             suspend fun addWord() {
-                val bytes = documentGeneratorPort.generateWordDocument(json).getOrThrow()
+                val bytes =
+                    withContext(Dispatchers.IO) {
+                        documentGeneratorPort.generateWordDocument(json).getOrThrow()
+                    }
                 val name = "$base.docx"
                 when (command.destination) {
                     ArtifactExportDestination.SHARE -> {

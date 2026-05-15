@@ -16,9 +16,11 @@ object FtsSanitizer {
     fun sanitize(query: String): String {
         if (query.isBlank()) return ""
 
-        val sanitized = query.replace(FtsConstants.invalidCharsRegex, " ")
-            .replace(FtsConstants.multipleSpacesRegex, " ")
-            .trim()
+        val sanitized =
+            query
+                .replace(FtsConstants.invalidCharsRegex, " ")
+                .replace(FtsConstants.multipleSpacesRegex, " ")
+                .trim()
 
         if (sanitized.isEmpty()) return ""
 
@@ -40,9 +42,10 @@ object FtsSanitizer {
      * For example: ["cow", "cow photo", "moo"] -> "cow* OR cow* photo* OR moo*"
      */
     fun sanitizeOrQuery(queries: List<String>): String {
-        val sanitizedQueries = queries
-            .map { sanitize(it) }
-            .filter { it.isNotBlank() }
+        val sanitizedQueries =
+            queries
+                .map { sanitize(it) }
+                .filter { it.isNotBlank() }
 
         if (sanitizedQueries.isEmpty()) return ""
 

@@ -25,4 +25,5 @@ data class MessageSnapshot(
     val generatedMediaAssetIds: List<String> = emptyList(),
     val generatedMediaTypes: List<String> = emptyList(),
     val generatedMediaPrompts: List<String> = emptyList(),
+    val transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
 )

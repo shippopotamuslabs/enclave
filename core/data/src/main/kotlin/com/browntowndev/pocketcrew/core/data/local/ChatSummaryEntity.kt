@@ -15,19 +15,19 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
             entity = ChatEntity::class,
             parentColumns = ["id"],
             childColumns = ["chat_id"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = MessageEntity::class,
             parentColumns = ["id"],
             childColumns = ["last_summarized_message_id"],
-            onDelete = ForeignKey.SET_NULL
-        )
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["chat_id"], unique = true),
-        Index(value = ["last_summarized_message_id"])
-    ]
+        Index(value = ["last_summarized_message_id"]),
+    ],
 )
 data class ChatSummaryEntity(
     @PrimaryKey(autoGenerate = true)
@@ -46,5 +46,5 @@ data class ChatSummaryEntity(
     @ColumnInfo(name = "deleted", defaultValue = "0")
     val deleted: Boolean = false,
     @ColumnInfo(name = "updated_at", defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
 )

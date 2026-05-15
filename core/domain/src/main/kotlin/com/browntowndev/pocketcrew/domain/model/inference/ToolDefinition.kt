@@ -7,11 +7,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -27,7 +25,7 @@ data class ToolDefinition(
 ) {
     val schema: ToolSchema by lazy {
         schemaProvider?.getSchema(name)?.let { ToolSchema.fromFullSchema(it) }
-            ?: schemaOverride 
+            ?: schemaOverride
             ?: ToolSchemaGenerator.generateSchema(parametersClass)
     }
 
@@ -52,20 +50,43 @@ data class ToolDefinition(
         val json = buildJsonObject {
             properties.forEach { (key, value) ->
                 val jsonObject = value as JsonObject
-                val type = jsonObject["type"]?.jsonPrimitive?.content ?: "string"
-                val enumValues = jsonObject["enum"]?.jsonArray
-                
-                if (enumValues != null && enumValues.isNotEmpty()) {
-                    put(key, enumValues[0].jsonPrimitive.content)
+                val type = jsonObject.resolveSchemaType() ?: "string"
+                val enumValue = jsonObject.firstEnumValue()
+
+                if (enumValue != null) {
+                    put(key, enumValue)
                 } else {
                     when (type) {
                         "string" -> put(key, "...")
                         "integer", "number" -> put(key, 0)
                         "boolean" -> put(key, false)
                         "array" -> {
-                            val itemType = jsonObject["items"]?.jsonObject?.get("type")?.jsonPrimitive?.content ?: "string"
+                            val itemsObj = jsonObject["items"]?.jsonObject
+                            val exampleElement: JsonElement =
+                                when {
+                                    itemsObj?.firstEnumValue() != null -> {
+                                        itemsObj.firstEnumValue()!!
+                                    }
+                                    itemsObj?.containsKey("oneOf") == true ||
+                                        itemsObj?.containsKey("anyOf") == true ||
+                                        itemsObj?.resolveSchemaType() == "object" -> {
+                                        buildJsonObject {
+                                            put("type", "paragraph")
+                                            put("text", "...")
+                                        }
+                                    }
+                                    else -> {
+                                        val itemType = itemsObj?.resolveSchemaType() ?: "string"
+                                        when (itemType) {
+                                            "string" -> JsonPrimitive("...")
+                                            "integer", "number" -> JsonPrimitive(0)
+                                            "boolean" -> JsonPrimitive(false)
+                                            else -> JsonPrimitive("...")
+                                        }
+                                    }
+                                }
                             putJsonArray(key) {
-                                if (itemType == "string") add(JsonPrimitive("...")) else add(JsonPrimitive(0))
+                                add(exampleElement)
                             }
                         }
                         else -> putJsonObject(key) {}
@@ -80,17 +101,32 @@ data class ToolDefinition(
         val properties = schema.properties
         return properties.entries.joinToString(", ") { (key, value) ->
             val jsonObject = value as JsonObject
-            val type = jsonObject["type"]?.jsonPrimitive?.content ?: "string"
-            val enumValues = jsonObject["enum"]?.jsonArray
-            
-            val exampleVal = if (enumValues != null && enumValues.isNotEmpty()) {
-                "<|\"|>${enumValues[0].jsonPrimitive.content}<|\"|>"
+            val type = jsonObject.resolveSchemaType() ?: "string"
+            val enumValue = jsonObject.firstEnumValue()
+
+            val exampleVal = if (enumValue != null) {
+                "<|\"|>${enumValue.exampleLiteral()}<|\"|>"
             } else {
                 when (type) {
                     "string" -> "<|\"|>...<|\"|>"
                     "integer", "number" -> "0"
                     "boolean" -> "false"
-                    "array" -> "<|\"|>...<|\"|>" // LiteRT expects comma-sep string for arrays
+                    "array" -> {
+                        val itemsObj = jsonObject["items"]?.jsonObject
+                        val inner =
+                            when {
+                                itemsObj?.firstEnumValue() != null -> {
+                                    itemsObj.firstEnumValue()!!.exampleLiteral()
+                                }
+                                itemsObj?.containsKey("oneOf") == true ||
+                                    itemsObj?.containsKey("anyOf") == true ||
+                                    itemsObj?.resolveSchemaType() == "object" -> {
+                                    """[{"type":"paragraph","text":"..."}]"""
+                                }
+                                else -> "..."
+                            }
+                        "<|\"|>$inner<|\"|>"
+                    }
                     else -> "<|\"|>...<|\"|>"
                 }
             }
@@ -101,11 +137,7 @@ data class ToolDefinition(
     @Suppress("UNCHECKED_CAST")
     fun <T : ToolParameters> decodeArguments(argumentsJson: String): T {
         val serializer = json.serializersModule.serializer(parametersClass.java) as KSerializer<T>
-        val payload = when (name) {
-            START_ARTIFACT.name -> StartArtifactParamsArgumentNormalizer.normalize(argumentsJson)
-            else -> argumentsJson
-        }
-        return json.decodeFromString(serializer, payload)
+        return json.decodeFromString(serializer, argumentsJson)
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -264,3 +296,38 @@ data class ToolDefinition(
         }
     }
 }
+
+private fun JsonObject.resolveSchemaType(): String? {
+    val typeElement = this["type"]
+    return when (typeElement) {
+        is JsonPrimitive -> typeElement.content
+        is JsonArray -> typeElement.resolveArraySchemaType()
+        else -> {
+            this["oneOf"]?.jsonArray?.resolveCompositeSchemaType()
+                ?: this["anyOf"]?.jsonArray?.resolveCompositeSchemaType()
+        }
+    }
+}
+
+private fun JsonArray.resolveArraySchemaType(): String? {
+    val primitiveTypes = mapNotNull { (it as? JsonPrimitive)?.content }
+    return primitiveTypes.firstOrNull { it != "null" }
+}
+
+private fun JsonArray.resolveCompositeSchemaType(): String? =
+    mapNotNull { candidate ->
+        when (candidate) {
+            is JsonObject -> candidate.resolveSchemaType()
+            is JsonPrimitive -> candidate.content.takeIf { it != "null" }
+            else -> null
+        }
+    }.firstOrNull()
+
+private fun JsonObject.firstEnumValue(): JsonElement? =
+    (this["enum"] as? JsonArray)?.firstOrNull()
+
+private fun JsonElement.exampleLiteral(): String =
+    when (this) {
+        is JsonPrimitive -> content
+        else -> toString()
+    }

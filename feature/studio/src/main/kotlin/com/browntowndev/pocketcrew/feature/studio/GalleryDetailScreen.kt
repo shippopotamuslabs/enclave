@@ -32,8 +32,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,15 +46,22 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import com.browntowndev.pocketcrew.core.ui.component.FullscreenMediaViewer
 import com.browntowndev.pocketcrew.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+
+private const val ANIMATE_DISABLED_TOOLTIP = "Setup a video model in Settings to enable."
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +73,7 @@ fun GalleryDetailScreen(
     onShareMedia: (String) -> Unit,
     onSendToStudio: (String, String, String?) -> Unit,
     onDeleteMedia: (String) -> Unit,
+    hasVideoModel: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val album = remember(albums, albumId) {
@@ -129,6 +139,7 @@ fun GalleryDetailScreen(
 
                         GalleryDetailActionsOverlay(
                             asset = asset,
+                            hasVideoModel = hasVideoModel,
                             onShare = { onShareMedia(asset.id) },
                             onSendToStudio = { mode ->
                                 if (mode == "animate") {
@@ -171,6 +182,7 @@ fun GalleryDetailScreen(
 @Composable
 private fun GalleryDetailActionsOverlay(
     asset: StudioMediaUi,
+    hasVideoModel: Boolean,
     onShare: () -> Unit,
     onSendToStudio: (String) -> Unit,
     onDelete: () -> Unit,
@@ -203,8 +215,20 @@ private fun GalleryDetailActionsOverlay(
         ) {
             ActionItem(Icons.Default.Edit, "Edit", onClick = { onSendToStudio("edit") })
             if (asset.mediaType == MediaCapability.IMAGE) {
-                ActionItem(Icons.Default.Movie, "Animate", onClick = { onSendToStudio("animate") })
-                ActionItem(Icons.Default.FastForward, "Quick Animate", onClick = { onSendToStudio("quick_animate") })
+                ActionItem(
+                    icon = Icons.Default.Movie,
+                    label = "Animate",
+                    onClick = { onSendToStudio("animate") },
+                    enabled = hasVideoModel,
+                    disabledTooltip = if (!hasVideoModel) ANIMATE_DISABLED_TOOLTIP else null,
+                )
+                ActionItem(
+                    icon = Icons.Default.FastForward,
+                    label = "Quick Animate",
+                    onClick = { onSendToStudio("quick_animate") },
+                    enabled = hasVideoModel,
+                    disabledTooltip = if (!hasVideoModel) ANIMATE_DISABLED_TOOLTIP else null,
+                )
             }
             ActionItem(Icons.Default.Share, "Share", onClick = onShare)
             ActionItem(Icons.Default.Delete, "Delete", onClick = onDelete, isDestructive = true)
@@ -214,44 +238,66 @@ private fun GalleryDetailActionsOverlay(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ActionItem(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     isDestructive: Boolean = false,
+    enabled: Boolean = true,
+    disabledTooltip: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clickable(onClick = onClick)
+    val tooltipState = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = {
+            if (!enabled && disabledTooltip != null) {
+                PlainTooltip { Text(disabledTooltip) }
+            }
+        },
+        state = tooltipState,
+        enableUserInput = false,
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .background(
-                    if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
-                    CircleShape
-                )
-                .border(
-                    1.dp,
-                    if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
-                    CircleShape
-                ),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = modifier
+                .alpha(if (enabled) 1f else 0.38f)
+                .clickable {
+                    if (enabled) onClick()
+                    else if (disabledTooltip != null) scope.launch { tooltipState.show() }
+                }
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isDestructive) Color.Red else Color.White,
-                modifier = Modifier.size(24.dp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(
+                        if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
+                        CircleShape
+                    )
+                    .border(
+                        1.dp,
+                        if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isDestructive) Color.Red else Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f)
-        )
     }
 }

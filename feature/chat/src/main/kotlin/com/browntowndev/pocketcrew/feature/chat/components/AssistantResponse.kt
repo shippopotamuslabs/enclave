@@ -31,7 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,16 +62,21 @@ import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
+import com.browntowndev.pocketcrew.feature.chat.TranscriptSegmentUi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // ── Main composable ──
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun AssistantResponse(
     modifier: Modifier = Modifier,
     message: ChatMessage,
     isPreview: Boolean = false,
     hasTtsProviderAssigned: Boolean = false,
+    /** When set with a non-empty transcript, banner is placed under leading thinking UI (see [toolCallBannerInsertAfterSegmentIndex]). */
+    toolCallBanner: ToolCallBannerUi? = null,
     onPlayAudio: (String) -> Unit = {},
     onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
@@ -130,15 +138,103 @@ fun AssistantResponse(
                 }
             )
         } else {
-            // Response content - use StreamingMarkdownText for proper markdown rendering
-            // disable scroll since parent LazyColumn handles scrolling
-            StreamableMarkdownText(
-                markdown = contentText,
-                modifier = Modifier.fillMaxWidth(),
-                enableScroll = false,
-                isStreaming = isStreaming,
-                isPreview = isPreview, // So preview text is rendered
-            )
+            var transcriptSheetVisible by remember { mutableStateOf(false) }
+            var transcriptSheetText by remember { mutableStateOf("") }
+            var transcriptSheetDurationSeconds by remember { mutableStateOf(0L) }
+            var transcriptSheetStreaming by remember { mutableStateOf(false) }
+            var transcriptSheetElapsedSeconds by remember { mutableIntStateOf(0) }
+
+            if (transcriptSheetVisible) {
+                ThinkingDetailsBottomSheet(
+                    isVisible = transcriptSheetVisible,
+                    thinkingDurationSeconds = transcriptSheetDurationSeconds,
+                    thinkingRaw = transcriptSheetText,
+                    elapsedSeconds = transcriptSheetElapsedSeconds,
+                    isStreaming = transcriptSheetStreaming,
+                    onDismiss = { transcriptSheetVisible = false },
+                )
+            }
+
+            fun openThinkingSheet(text: String, durationSeconds: Long?, streaming: Boolean, elapsedForComplete: Int) {
+                transcriptSheetText = text
+                transcriptSheetDurationSeconds = durationSeconds ?: 0L
+                transcriptSheetStreaming = streaming
+                transcriptSheetElapsedSeconds = elapsedForComplete
+                transcriptSheetVisible = true
+            }
+
+            if (message.transcriptSegments.isNotEmpty()) {
+                val insertAfterIndex = toolCallBannerInsertAfterSegmentIndex(message.transcriptSegments)
+                val showBannerBeforeSegments = toolCallBanner != null && insertAfterIndex == null
+                if (showBannerBeforeSegments) {
+                    ToolCallBanner(
+                        banner = toolCallBanner,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                message.transcriptSegments.forEachIndexed { index, segment ->
+                    key(segment.ordinal) {
+                        when (segment) {
+                            is TranscriptSegmentUi.ThinkingBlock -> {
+                                if (segment.isStreaming) {
+                                    LiveThinkingTranscriptRow(
+                                        segment = segment,
+                                        isPreview = isPreview,
+                                        onToggleDetails = {
+                                            openThinkingSheet(
+                                                text = segment.text,
+                                                durationSeconds = null,
+                                                streaming = true,
+                                                elapsedForComplete = 0,
+                                            )
+                                        },
+                                    )
+                                } else {
+                                    ThoughtForHeader(
+                                        durationText = formatThinkingDuration(
+                                            (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
+                                        ),
+                                        isExpanded = false,
+                                        onViewFullThinking = {
+                                            openThinkingSheet(
+                                                text = segment.text,
+                                                durationSeconds = segment.durationSeconds,
+                                                streaming = false,
+                                                elapsedForComplete = (segment.durationSeconds ?: 0L)
+                                                    .toInt()
+                                                    .coerceAtLeast(0),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                            is TranscriptSegmentUi.AnswerBlock -> {
+                                StreamableMarkdownText(
+                                    markdown = segment.text,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enableScroll = false,
+                                    isStreaming = segment.isStreaming && isStreaming,
+                                    isPreview = isPreview,
+                                )
+                            }
+                        }
+                    }
+                    if (toolCallBanner != null && insertAfterIndex == index) {
+                        ToolCallBanner(
+                            banner = toolCallBanner,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                }
+            } else {
+                StreamableMarkdownText(
+                    markdown = contentText,
+                    modifier = Modifier.fillMaxWidth(),
+                    enableScroll = false,
+                    isStreaming = isStreaming,
+                    isPreview = isPreview,
+                )
+            }
 
             // Artifact Cards Scrollable Row
             if (message.content.artifacts.isNotEmpty()) {
@@ -289,6 +385,29 @@ fun AssistantResponse(
             }
         }
     }
+}
+
+@Composable
+private fun LiveThinkingTranscriptRow(
+    segment: TranscriptSegmentUi.ThinkingBlock,
+    isPreview: Boolean,
+    onToggleDetails: () -> Unit,
+) {
+    val startMs = segment.thinkingStartTimeMs ?: 0L
+    var elapsedSeconds by remember(segment.ordinal) { mutableIntStateOf(0) }
+    if (startMs > 0L && !isPreview) {
+        LaunchedEffect(segment.ordinal, startMs) {
+            while (true) {
+                elapsedSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+                delay(1000L)
+            }
+        }
+    }
+    ThinkingIndicator(
+        elapsedSeconds = elapsedSeconds,
+        isExpanded = false,
+        onToggleDetails = onToggleDetails,
+    )
 }
 
 // ── Single completed step row (used for interleaved rendering) ──
@@ -635,4 +754,18 @@ private fun MediaCard(
             }
         }
     }
+}
+
+/**
+ * Where to insert an active [ToolCallBanner] relative to transcript segments so it sits **below**
+ * the **latest** thinking UI (streaming [LiveThinkingTranscriptRow] or completed [ThoughtForHeader])
+ * instead of above it in [MessageItem].
+ *
+ * @return index of the segment **after which** the banner is shown, or `null` if there is no
+ * thinking row yet (e.g. answer-only transcript) so the banner stays above the first segment.
+ */
+internal fun toolCallBannerInsertAfterSegmentIndex(segments: List<TranscriptSegmentUi>): Int? {
+    if (segments.isEmpty()) return null
+    val lastThinkingIndex = segments.indexOfLast { it is TranscriptSegmentUi.ThinkingBlock }
+    return if (lastThinkingIndex >= 0) lastThinkingIndex else null
 }

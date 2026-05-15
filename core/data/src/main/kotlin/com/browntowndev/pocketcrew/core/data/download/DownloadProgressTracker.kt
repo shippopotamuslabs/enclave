@@ -2,15 +2,14 @@ package com.browntowndev.pocketcrew.core.data.download
 
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.browntowndev.pocketcrew.core.data.util.formatBytes
 import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.download.requiredArtifacts
 import com.browntowndev.pocketcrew.domain.model.download.totalArtifactSizeInBytes
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
-import com.browntowndev.pocketcrew.core.data.util.formatBytes
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -27,7 +26,7 @@ data class FileDownloadState(
     val error: String? = null,
     // All model types that use this file (grouped by SHA256)
     // Empty in download worker; populated by orchestrator-level trackers if needed
-    val allModelTypesForFile: List<ModelType> = emptyList()
+    val allModelTypesForFile: List<ModelType> = emptyList(),
 )
 
 /**
@@ -42,7 +41,7 @@ data class ProgressSnapshot(
     val currentFile: String,
     val currentSpeedMBps: Double,
     val etaSeconds: Long,
-    val filesProgress: List<FileProgress>
+    val filesProgress: List<FileProgress>,
 )
 
 /**
@@ -51,7 +50,7 @@ data class ProgressSnapshot(
  */
 class DownloadProgressTracker(
     private val speedTracker: DownloadSpeedTrackerPort,
-    private val formatBytes: (Long) -> String = ::formatBytes
+    private val formatBytes: (Long) -> String = ::formatBytes,
 ) {
     companion object {
         const val PROGRESS_UPDATE_INTERVAL_MS = 500L
@@ -68,16 +67,20 @@ class DownloadProgressTracker(
      * since the download worker does not have model type information.
      */
     fun initialize(specs: List<DownloadFileSpec>) {
-        val initialStates = specs.distinctBy { it.sha256 }.map { spec ->
-            spec.sha256 to FileDownloadState(
-                spec = spec,
-                status = FileStatus.QUEUED,
-                bytesDownloaded = 0L,
-                totalBytes = spec.totalArtifactSizeInBytes(),
-                error = null,
-                allModelTypesForFile = emptyList()
-            )
-        }.toMap()
+        val initialStates =
+            specs
+                .distinctBy { it.sha256 }
+                .map { spec ->
+                    spec.sha256 to
+                        FileDownloadState(
+                            spec = spec,
+                            status = FileStatus.QUEUED,
+                            bytesDownloaded = 0L,
+                            totalBytes = spec.totalArtifactSizeInBytes(),
+                            error = null,
+                            allModelTypesForFile = emptyList(),
+                        )
+                }.toMap()
 
         fileStates = ConcurrentHashMap(initialStates)
     }
@@ -88,13 +91,17 @@ class DownloadProgressTracker(
      * @param update Function that transforms the current FileDownloadState
      * @throws IllegalStateException if the file is not found in the tracker (must call initialize() first)
      */
-    fun updateFileState(sha256: String, update: (FileDownloadState) -> FileDownloadState) {
-        val currentState = fileStates[sha256]
-            ?: throw IllegalStateException(
-                "Cannot update file state for SHA256 '$sha256'. " +
-                "The file was not initialized. " +
-                "Ensure initialize() was called with specs containing this SHA256."
-            )
+    fun updateFileState(
+        sha256: String,
+        update: (FileDownloadState) -> FileDownloadState,
+    ) {
+        val currentState =
+            fileStates[sha256]
+                ?: throw IllegalStateException(
+                    "Cannot update file state for SHA256 '$sha256'. " +
+                        "The file was not initialized. " +
+                        "Ensure initialize() was called with specs containing this SHA256.",
+                )
         val newState = update(currentState)
         fileStates[sha256] = newState
     }
@@ -109,57 +116,65 @@ class DownloadProgressTracker(
         val totalSize = fileStates.values.sumOf { it.totalBytes }
         val totalBytesDownloaded = fileStates.values.sumOf { it.bytesDownloaded }
 
-        val overallProgress = if (totalSize > 0) {
-            totalBytesDownloaded.toFloat() / totalSize
-        } else {
-            completedFiles.toFloat() / totalFiles.coerceAtLeast(1)
-        }
+        val overallProgress =
+            if (totalSize > 0) {
+                totalBytesDownloaded.toFloat() / totalSize
+            } else {
+                completedFiles.toFloat() / totalFiles.coerceAtLeast(1)
+            }
 
-        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.spec?.remoteFileName ?: ""
+        val currentFile =
+            fileStates.values
+                .find { it.status == FileStatus.DOWNLOADING }
+                ?.spec
+                ?.remoteFileName ?: ""
 
         // Calculate PER-FILE speed for each file
-        val filesProgress = fileStates.values.map { state ->
-            val filename = state.spec.remoteFileName
-            val (fileSpeed, fileEta) = if (state.status == FileStatus.DOWNLOADING) {
-                speedTracker.calculateSpeedAndEta(
-                    filename,
-                    state.bytesDownloaded,
-                    state.totalBytes
+        val filesProgress =
+            fileStates.values.map { state ->
+                val filename = state.spec.remoteFileName
+                val (fileSpeed, fileEta) =
+                    if (state.status == FileStatus.DOWNLOADING) {
+                        speedTracker.calculateSpeedAndEta(
+                            filename,
+                            state.bytesDownloaded,
+                            state.totalBytes,
+                        )
+                    } else {
+                        Pair(0.0, -1L)
+                    }
+                FileProgress(
+                    filename = filename,
+                    sha256 = state.spec.sha256,
+                    modelTypes = state.allModelTypesForFile,
+                    bytesDownloaded = state.bytesDownloaded,
+                    totalBytes = state.totalBytes,
+                    status = state.status,
+                    speedMBs = fileSpeed,
                 )
-            } else {
-                Pair(0.0, -1L)
             }
-            FileProgress(
-                filename = filename,
-                sha256 = state.spec.sha256,
-                modelTypes = state.allModelTypesForFile,
-                bytesDownloaded = state.bytesDownloaded,
-                totalBytes = state.totalBytes,
-                status = state.status,
-                speedMBs = fileSpeed
-            )
-        }
 
         // Calculate AGGREGATE speed for the header as SUM of actively downloading file speeds
         val downloadingFiles = filesProgress.filter { it.status == FileStatus.DOWNLOADING && (it.speedMBs ?: 0.0) > 0 }
-        val currentSpeedMBps = if (downloadingFiles.isNotEmpty()) {
-            downloadingFiles.mapNotNull { it.speedMBs }.sum()
-        } else {
-            0.0
-        }
+        val currentSpeedMBps =
+            if (downloadingFiles.isNotEmpty()) {
+                downloadingFiles.mapNotNull { it.speedMBs }.sum()
+            } else {
+                0.0
+            }
 
         // Calculate ETA based on the SLOWEST (furthest away) downloading file
-        val etaSeconds = downloadingFiles
-            .mapNotNull { file ->
-                val remainingBytes = file.totalBytes - file.bytesDownloaded
-                val speedMBs = file.speedMBs
-                if (remainingBytes > 0 && speedMBs != null && speedMBs > 0) {
-                    (remainingBytes / (speedMBs * 1024 * 1024)).toLong()
-                } else {
-                    null
-                }
-            }
-            .maxOrNull() ?: -1L
+        val etaSeconds =
+            downloadingFiles
+                .mapNotNull { file ->
+                    val remainingBytes = file.totalBytes - file.bytesDownloaded
+                    val speedMBs = file.speedMBs
+                    if (remainingBytes > 0 && speedMBs != null && speedMBs > 0) {
+                        (remainingBytes / (speedMBs * 1024 * 1024)).toLong()
+                    } else {
+                        null
+                    }
+                }.maxOrNull() ?: -1L
 
         return ProgressSnapshot(
             overallProgress = overallProgress,
@@ -170,7 +185,7 @@ class DownloadProgressTracker(
             currentFile = currentFile,
             currentSpeedMBps = currentSpeedMBps,
             etaSeconds = etaSeconds,
-            filesProgress = filesProgress
+            filesProgress = filesProgress,
         )
     }
 
@@ -216,16 +231,19 @@ class DownloadProgressTracker(
         // Create a lookup map for per-file speeds from the computed snapshot
         val filesProgressMap = snapshot.filesProgress.associateBy { it.filename }
 
-        val filesProgressArray = fileStates.values.map { state ->
-            val trackingFilename = state.spec.remoteFileName
-            val fileSpeed = if (state.status == FileStatus.DOWNLOADING) {
-                filesProgressMap[trackingFilename]?.speedMBs ?: 0.0
-            } else {
-                0.0
-            }
-            // Use SHA256 as the identifier for re-mapping roles in the UI layer
-            "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|${state.spec.sha256}"
-        }.toTypedArray()
+        val filesProgressArray =
+            fileStates.values
+                .map { state ->
+                    val trackingFilename = state.spec.remoteFileName
+                    val fileSpeed =
+                        if (state.status == FileStatus.DOWNLOADING) {
+                            filesProgressMap[trackingFilename]?.speedMBs ?: 0.0
+                        } else {
+                            0.0
+                        }
+                    // Use SHA256 as the identifier for re-mapping roles in the UI layer
+                    "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|${state.spec.sha256}"
+                }.toTypedArray()
 
         return workDataOf(
             DownloadKey.OVERALL_PROGRESS.key to snapshot.overallProgress,
@@ -237,7 +255,7 @@ class DownloadProgressTracker(
             DownloadKey.PROGRESS.key to (snapshot.overallProgress * 100).toInt(),
             DownloadKey.SPEED_MBPS.key to snapshot.currentSpeedMBps,
             DownloadKey.ETA_SECONDS.key to snapshot.etaSeconds,
-            DownloadKey.FILES_PROGRESS.key to filesProgressArray
+            DownloadKey.FILES_PROGRESS.key to filesProgressArray,
         )
     }
 
@@ -248,9 +266,12 @@ class DownloadProgressTracker(
     fun buildSubText(): String {
         val snapshot = computeOverallProgress()
 
-        val speedString = if (snapshot.currentSpeedMBps > 0) {
-            String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
-        } else ""
+        val speedString =
+            if (snapshot.currentSpeedMBps > 0) {
+                String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
+            } else {
+                ""
+            }
 
         val etaString = speedTracker.formatEta(snapshot.etaSeconds)
 
@@ -298,6 +319,9 @@ class DownloadProgressTracker(
     /**
      * Get current downloading file name.
      */
-    fun getCurrentDownloadingFile(): String? = fileStates.values
-        .find { it.status == FileStatus.DOWNLOADING }?.spec?.remoteFileName
+    fun getCurrentDownloadingFile(): String? =
+        fileStates.values
+            .find { it.status == FileStatus.DOWNLOADING }
+            ?.spec
+            ?.remoteFileName
 }

@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 /**
  * Implementation of [LiteRtConversation] that wraps LiteRT's [Conversation].
  * This adapter handles Message creation and Content parsing, providing a clean
@@ -32,36 +35,40 @@ class ConversationImpl @Inject constructor(
         private const val TAG = "ConversationImpl"
     }
 
+    private val mutex = Mutex()
+
     override fun cancelProcess() {
         Log.d(TAG, "Cancelling LiteRT conversation process")
         conversation.cancelProcess()
     }
 
     override fun sendMessageAsync(message: String, options: GenerationOptions?): Flow<ConversationResponse> = flow {
-        val userMessage = buildUserMessage(message, options)
-        
-        // Map reasoningBudget to LiteRT extraContext toggle
-        // ARCHITECTURE FIX: Pass null to disable thinking instead of "false" string, 
-        // to match official Google Edge Gallery behavior and avoid unintended activation.
-        val extraContext = if ((options?.reasoningBudget ?: 0) > 0) {
-            mapOf("enable_thinking" to "true")
-        } else {
-            null
-        }
-
-        Log.d(
-            TAG,
-            "sendMessageAsync reasoningBudget=${options?.reasoningBudget ?: 0}, enable_thinking_present=${extraContext != null}"
-        )
-
-        conversation.sendMessageAsync(userMessage, extraContext ?: emptyMap()).collect { partialResult ->
-            val text = partialResult.contents.contents
-                .filterIsInstance<Content.Text>()
-                .joinToString(separator = "") { it.text }
+        mutex.withLock {
+            val userMessage = buildUserMessage(message, options)
             
-            val thought = partialResult.channels["thought"] ?: ""
-            
-            emit(ConversationResponse(text = text, thought = thought))
+            // Map reasoningBudget to LiteRT extraContext toggle
+            // ARCHITECTURE FIX: Pass null to disable thinking instead of "false" string, 
+            // to match official Google Edge Gallery behavior and avoid unintended activation.
+            val extraContext = if ((options?.reasoningBudget ?: 0) > 0) {
+                mapOf("enable_thinking" to "true")
+            } else {
+                null
+            }
+
+            Log.d(
+                TAG,
+                "sendMessageAsync reasoningBudget=${options?.reasoningBudget ?: 0}, enable_thinking_present=${extraContext != null}"
+            )
+
+            conversation.sendMessageAsync(userMessage, extraContext ?: emptyMap()).collect { partialResult ->
+                val text = partialResult.contents.contents
+                    .filterIsInstance<Content.Text>()
+                    .joinToString(separator = "") { it.text }
+                
+                val thought = partialResult.channels["thought"] ?: ""
+                
+                emit(ConversationResponse(text = text, thought = thought))
+            }
         }
     }.flowOn(Dispatchers.IO)
 

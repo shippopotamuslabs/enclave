@@ -11,45 +11,34 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
     tableName = "api_credentials",
     indices = [
         Index(value = ["credential_alias"], unique = true),
-        Index(value = ["api_key_signature"], unique = true)
-    ]
+        Index(value = ["api_key_signature"], unique = true),
+    ],
 )
 data class ApiCredentialsEntity(
     @PrimaryKey
     val id: ApiCredentialsId,
-
     @ColumnInfo(name = "display_name")
     val displayName: String,
-
     @ColumnInfo(name = "provider")
     val provider: ApiProvider,
-
     @ColumnInfo(name = "base_url")
     val baseUrl: String? = null,
-
     @ColumnInfo(name = "model_id")
     val modelId: String,
-
     @ColumnInfo(name = "is_multimodal")
     val isMultimodal: Boolean = false,
-
     @ColumnInfo(name = "credential_alias")
     val credentialAlias: String,
-
     @ColumnInfo(name = "encrypted_api_key", typeAffinity = ColumnInfo.BLOB)
     val encryptedApiKey: ByteArray? = null,
-
     @ColumnInfo(name = "api_key_signature")
     val apiKeySignature: String? = null,
-
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis(),
-
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
-
     @ColumnInfo(name = "pending_sync")
     val pendingSync: Int = 0,
     @ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
 )

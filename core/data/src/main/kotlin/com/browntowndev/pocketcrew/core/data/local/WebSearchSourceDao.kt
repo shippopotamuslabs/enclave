@@ -1,8 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -21,7 +19,10 @@ interface WebSearchSourceDao {
     suspend fun getById(id: String): WebSearchSourceEntity?
 
     @Query("UPDATE web_search_source SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    suspend fun softDeleteById(id: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun softDeleteById(
+        id: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM web_search_source WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)
@@ -34,15 +35,20 @@ interface WebSearchSourceDao {
      * Room will re-emit whenever the web_search_source table is modified,
      * fulfilling the requirement to react to markExtracted updates.
      */
-    @Query("""
+    @Query(
+        """
         SELECT web_search_source.* FROM web_search_source
         INNER JOIN message ON web_search_source.message_id = message.id
         WHERE message.chat_id = :chatId AND web_search_source.deleted = 0
-    """)
+    """,
+    )
     fun getByChatIdFlow(chatId: ChatId): Flow<List<WebSearchSourceEntity>>
 
     @Query("UPDATE web_search_source SET extracted = 1, pending_sync = 1, updated_at = :timestamp WHERE url = :url")
-    suspend fun markExtracted(url: String, timestamp: Long = System.currentTimeMillis())
+    suspend fun markExtracted(
+        url: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE web_search_source SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()

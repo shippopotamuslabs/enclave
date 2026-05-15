@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName")
+@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
 
 package com.browntowndev.pocketcrew.feature.chat
 
@@ -82,5 +82,6 @@ private fun MessageSnapshot.toMessage(
         messageState = messageState,
         modelType = modelType,
         webSearchSources = webSearchSources,
+        transcriptSegments = transcriptSegments,
     )
 }

@@ -6,34 +6,37 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.test.runTest
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.UUID
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class ApiModelConfigurationsDaoTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var credDao: ApiCredentialsDao
     private lateinit var configDao: ApiModelConfigurationsDao
 
-    @Before
+    @BeforeEach
     fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            PocketCrewDatabase::class.java
-        ).allowMainThreadQueries().build()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    PocketCrewDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
         credDao = database.apiCredentialsDao()
         configDao = database.apiModelConfigurationsDao()
     }
 
-    @After
+    @AfterEach
     fun teardown() {
         database.close()
     }
@@ -41,46 +44,65 @@ class ApiModelConfigurationsDaoTest {
     private fun nextCredId() = ApiCredentialsId(UUID.randomUUID().toString())
 
     @Test
-    fun `insert and retrieve an API tuning preset`() = runTest {
-        val credId = nextCredId()
-        credDao.upsert(ApiCredentialsEntity(
-            id = credId,
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "key1",
-            displayName = "GPT-4o"
-        ))
+    fun `insert and retrieve an API tuning preset`() =
+        runTest {
+            val credId = nextCredId()
+            credDao.upsert(
+                ApiCredentialsEntity(
+                    id = credId,
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "key1",
+                    displayName = "GPT-4o",
+                ),
+            )
 
-        val configId = ApiModelConfigurationId("test-api-config-1")
-        val config = ApiModelConfigurationEntity(
-            id = configId,
-            apiCredentialsId = credId,
-            displayName = "Default",
-            temperature = 0.7,
-            maxTokens = 4096
-        )
-        configDao.upsert(config)
-        
-        val retrieved = configDao.getById(configId)
-        assertNotNull(retrieved)
-        assertEquals("Default", retrieved?.displayName)
-    }
+            val configId = ApiModelConfigurationId("test-api-config-1")
+            val config =
+                ApiModelConfigurationEntity(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    displayName = "Default",
+                    temperature = 0.7,
+                    maxTokens = 4096,
+                )
+            configDao.upsert(config)
+
+            val retrieved = configDao.getById(configId)
+            assertNotNull(retrieved)
+            assertEquals("Default", retrieved?.displayName)
+        }
 
     @Test
-    fun `multiple presets per API credential`() = runTest {
-        val credId = nextCredId()
-        credDao.upsert(ApiCredentialsEntity(
-            id = credId,
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4o",
-            credentialAlias = "key1",
-            displayName = "GPT-4o"
-        ))
+    fun `multiple presets per API credential`() =
+        runTest {
+            val credId = nextCredId()
+            credDao.upsert(
+                ApiCredentialsEntity(
+                    id = credId,
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    credentialAlias = "key1",
+                    displayName = "GPT-4o",
+                ),
+            )
 
-        configDao.upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-1"), apiCredentialsId = credId, displayName = "Fast"))
-        configDao.upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-2"), apiCredentialsId = credId, displayName = "Thorough"))
+            configDao.upsert(
+                ApiModelConfigurationEntity(
+                    id = ApiModelConfigurationId("test-api-config-1"),
+                    apiCredentialsId = credId,
+                    displayName = "Fast",
+                ),
+            )
+            configDao.upsert(
+                ApiModelConfigurationEntity(
+                    id = ApiModelConfigurationId("test-api-config-2"),
+                    apiCredentialsId = credId,
+                    displayName = "Thorough",
+                ),
+            )
 
-        val allConfigs = configDao.getAllForCredentials(credId)
-        assertEquals(2, allConfigs.size)
-    }
+            val allConfigs = configDao.getAllForCredentials(credId)
+            assertEquals(2, allConfigs.size)
+        }
 }

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.port.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.security.VaultMetadata
 
 interface CloudSyncPort {
     /**
@@ -54,6 +55,30 @@ interface CloudSyncPort {
      * Retrieves the user's vault verification ciphertext from the cloud.
      */
     suspend fun getVaultVerificationData(): Result<String?>
+
+    /**
+     * Persists the wrapped Data Encryption Key (`Base64(iv || aesGcm(KEK, dek))`) on the cloud
+     * user document. Pass `null` to clear the field.
+     */
+    suspend fun updateWrappedDek(wrappedDek: String?): Result<Unit>
+
+    /**
+     * Retrieves the wrapped Data Encryption Key from the cloud user document.
+     */
+    suspend fun getWrappedDek(): Result<String?>
+
+    /**
+     * Atomically writes [VaultMetadata.salt], [VaultMetadata.verification] and
+     * [VaultMetadata.wrappedDek] on the cloud user document. Null verification/wrappedDek
+     * fields are written as Firestore deletes.
+     */
+    suspend fun uploadVaultMetadata(metadata: VaultMetadata): Result<Unit>
+
+    /**
+     * Fetches the cloud-side vault material in a single read. Returns `Result.success(null)`
+     * when the user document does not exist or has no `vaultSalt` field yet.
+     */
+    suspend fun fetchVaultMetadata(): Result<VaultMetadata?>
 
     /**
      * Enqueues a background task to regenerate all embeddings for the local corpus.

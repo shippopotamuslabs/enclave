@@ -142,7 +142,13 @@ fun SearchSkillBottomSheet(
                     WebSearchTabContent(
                         searchState = searchState,
                         onSearchEnabledChange = onSearchEnabledChange,
-                        onSearchProviderChange = { showSwitchConfirm = it },
+                        onSearchProviderChange = { targetProvider ->
+                            if (shouldShowProviderSwitchAlert(searchState, targetProvider)) {
+                                showSwitchConfirm = targetProvider
+                            } else {
+                                onSearchProviderChange(targetProvider)
+                            }
+                        },
                         onTavilyApiKeyChange = onTavilyApiKeyChange,
                         onClearTavilyApiKey = onClearTavilyApiKey,
                         onExaApiKeyChange = onExaApiKeyChange,
@@ -213,6 +219,17 @@ fun SearchSkillBottomSheet(
             }
         )
     }
+}
+
+internal fun shouldShowProviderSwitchAlert(
+    state: SearchSkillEditorUiState,
+    targetProvider: SearchProvider,
+): Boolean {
+    val currentHasKey = when (state.selectedProvider) {
+        SearchProvider.TAVILY -> state.tavilyKeyPresent
+        SearchProvider.EXA -> state.exaKeyPresent
+    }
+    return currentHasKey
 }
 
 @Composable

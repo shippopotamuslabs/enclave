@@ -4,39 +4,45 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioConfig
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
-@RunWith(RobolectricTestRunner::class)
+@ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class AndroidStreamingAudioPlayerTest {
-
     private lateinit var player: AndroidStreamingAudioPlayer
     private val mockLogger: LoggingPort = mockk(relaxed = true)
 
-    @Before
+    @BeforeEach
     fun setUp() {
         player = AndroidStreamingAudioPlayer(mockLogger)
     }
 
     @Test
-    fun `startPlayback initializes with correct parameters`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+    fun `startPlayback initializes with correct parameters`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
 
-        player.initialize(config)
-        player.startPlayback()
+            player.initialize(config)
+            player.startPlayback()
 
-        assertTrue(player.isInitialized())
-    }
+            assertTrue(player.isInitialized())
+        }
 
-    @Test(expected = IllegalStateException::class)
-    fun `enqueueChunk throws when player not initialized`() = runBlocking {
-        player.enqueueChunk(byteArrayOf(1, 2, 3))
-    }
+    @Test
+    fun `enqueueChunk throws when player not initialized`(): Unit =
+        runBlocking {
+            assertThrows<IllegalStateException> {
+                player.enqueueChunk(byteArrayOf(1, 2, 3))
+            }
+        }
 
     @Test
     fun `stop does nothing when player not initialized`() {
@@ -46,14 +52,15 @@ class AndroidStreamingAudioPlayerTest {
     }
 
     @Test
-    fun `enqueueChunk accepts valid PCM data`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
+    fun `enqueueChunk accepts valid PCM data`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
 
-        // Should not throw for valid PCM data
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1)) // 2 samples of 16-bit PCM
-    }
+            // Should not throw for valid PCM data
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1)) // 2 samples of 16-bit PCM
+        }
 
     @Test
     fun `audio format config has correct default values`() {
@@ -65,169 +72,181 @@ class AndroidStreamingAudioPlayerTest {
     }
 
     @Test
-    fun `stop releases resources and requires re-initialize`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
+    fun `stop releases resources and requires re-initialize`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
 
-        player.stop()
-        assertFalse(player.isInitialized())
-    }
-
-    @Test
-    fun `re-initialize after stop creates new AudioTrack`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-
-        // First initialization
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-
-        // Stop and re-initialize
-        player.stop()
-        assertFalse(player.isInitialized())
-
-        // Should be able to re-initialize and use again
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1)) // Should not throw
-    }
+            player.stop()
+            assertFalse(player.isInitialized())
+        }
 
     @Test
-    fun `stop is idempotent - calling multiple times does not throw`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
+    fun `re-initialize after stop creates new AudioTrack`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
 
-        // Multiple stop calls should not throw
-        player.stop()
-        player.stop()
-        player.stop()
-        assertFalse(player.isInitialized())
-    }
-
-    @Test
-    fun `multiple enqueueChunk calls write cumulative data`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
-
-        // Multiple chunks should not throw
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.enqueueChunk(byteArrayOf(2, 3, 2, 3))
-        player.enqueueChunk(byteArrayOf(4, 5, 4, 5))
-    }
-
-    @Test(expected = IllegalStateException::class)
-    fun `startPlayback throws when player not initialized`() {
-        player.startPlayback()
-    }
-
-    @Test
-    fun `sequential lifecycle - initialize play enqueue stop re-initialize play enqueue`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-
-        // First cycle
-        player.initialize(config)
-        player.startPlayback()
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.stop()
-
-        // Second cycle - should work cleanly after stop
-        assertFalse(player.isInitialized())
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.stop()
-        assertFalse(player.isInitialized())
-    }
-
-    @Test
-    fun `initializing when already initialized re-creates AudioTrack`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-
-        // First initialization
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
-
-        // Re-initialize without stopping first
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
-
-        // Should still be usable
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.stop()
-    }
-
-    @Test
-    fun `enqueueChunk after stop without re-initialize throws`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.stop()
-
-        // Should throw because player is no longer initialized
-        var threw = false
-        try {
+            // First initialization
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
             player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        } catch (e: IllegalStateException) {
-            threw = true
-        }
-        assertTrue("Expected IllegalStateException after stop without re-initialize", threw)
-    }
 
-    @Test
-    fun `stop after stop is safe`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
-        player.stop()
+            // Stop and re-initialize
+            player.stop()
+            assertFalse(player.isInitialized())
 
-        // Second stop should not throw
-        player.stop()
-        assertFalse(player.isInitialized())
-    }
-
-    @Test
-    fun `enqueueChunk with large data does not throw`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-        player.initialize(config)
-        player.startPlayback()
-
-        // Large chunk (48KB = 1 second of 24kHz 16-bit mono PCM)
-        val largeChunk = ByteArray(48000) { (it % 256).toByte() }
-        player.enqueueChunk(largeChunk)
-    }
-
-    @Test
-    fun `multiple small chunks then stop then re-initialize lifecycle`() = runBlocking {
-        val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
-
-        player.initialize(config)
-        player.startPlayback()
-
-        // Simulate streaming: enqueue many small chunks
-        repeat(10) { i ->
-            player.enqueueChunk(byteArrayOf(i.toByte(), (i + 1).toByte()))
+            // Should be able to re-initialize and use again
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1)) // Should not throw
         }
 
-        player.stop()
-        assertFalse(player.isInitialized())
+    @Test
+    fun `stop is idempotent - calling multiple times does not throw`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
 
-        // Re-initialize for next utterance
-        player.initialize(config)
-        player.startPlayback()
-        assertTrue(player.isInitialized())
+            // Multiple stop calls should not throw
+            player.stop()
+            player.stop()
+            player.stop()
+            assertFalse(player.isInitialized())
+        }
 
-        player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-        player.stop()
-        assertFalse(player.isInitialized())
+    @Test
+    fun `multiple enqueueChunk calls write cumulative data`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+
+            // Multiple chunks should not throw
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.enqueueChunk(byteArrayOf(2, 3, 2, 3))
+            player.enqueueChunk(byteArrayOf(4, 5, 4, 5))
+        }
+
+    @Test
+    fun `startPlayback throws when player not initialized`() {
+        assertThrows<IllegalStateException> {
+            player.startPlayback()
+        }
     }
+
+    @Test
+    fun `sequential lifecycle - initialize play enqueue stop re-initialize play enqueue`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+
+            // First cycle
+            player.initialize(config)
+            player.startPlayback()
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.stop()
+
+            // Second cycle - should work cleanly after stop
+            assertFalse(player.isInitialized())
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.stop()
+            assertFalse(player.isInitialized())
+        }
+
+    @Test
+    fun `initializing when already initialized re-creates AudioTrack`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+
+            // First initialization
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
+
+            // Re-initialize without stopping first
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
+
+            // Should still be usable
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.stop()
+        }
+
+    @Test
+    fun `enqueueChunk after stop without re-initialize throws`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.stop()
+
+            // Should throw because player is no longer initialized
+            var threw = false
+            try {
+                player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            } catch (e: IllegalStateException) {
+                threw = true
+            }
+            assertTrue(threw, "Expected IllegalStateException after stop without re-initialize")
+        }
+
+    @Test
+    fun `stop after stop is safe`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+            player.stop()
+
+            // Second stop should not throw
+            player.stop()
+            assertFalse(player.isInitialized())
+        }
+
+    @Test
+    fun `enqueueChunk with large data does not throw`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+
+            // Large chunk (48KB = 1 second of 24kHz 16-bit mono PCM)
+            val largeChunk = ByteArray(48000) { (it % 256).toByte() }
+            player.enqueueChunk(largeChunk)
+        }
+
+    @Test
+    fun `multiple small chunks then stop then re-initialize lifecycle`(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+
+            player.initialize(config)
+            player.startPlayback()
+
+            // Simulate streaming: enqueue many small chunks
+            repeat(10) { i ->
+                player.enqueueChunk(byteArrayOf(i.toByte(), (i + 1).toByte()))
+            }
+
+            player.stop()
+            assertFalse(player.isInitialized())
+
+            // Re-initialize for next utterance
+            player.initialize(config)
+            player.startPlayback()
+            assertTrue(player.isInitialized())
+
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            player.stop()
+            assertFalse(player.isInitialized())
+        }
 }

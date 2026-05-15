@@ -18,10 +18,11 @@ import javax.inject.Singleton
  * @param context Android Context for accessing external files directory
  */
 @Singleton
-class ModelConfigProviderImpl @Inject constructor(
-    @ApplicationContext private val context: Context
-) : ModelConfigProvider {
-
-    override val modelsDirectoryPath: String
-        get() = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR).absolutePath
-}
+class ModelConfigProviderImpl
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+    ) : ModelConfigProvider {
+        override val modelsDirectoryPath: String
+            get() = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR).absolutePath
+    }

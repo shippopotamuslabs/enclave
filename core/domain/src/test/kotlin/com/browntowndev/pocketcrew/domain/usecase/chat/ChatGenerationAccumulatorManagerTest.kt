@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
@@ -18,6 +19,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -44,6 +46,84 @@ class ChatGenerationAccumulatorManagerTest {
         assertEquals("answer", snapshot.content)
         assertEquals(PipelineStep.FINAL, snapshot.pipelineStep)
         assertTrue(manager.messages.getValue(MessageId("assistant")).isComplete)
+    }
+
+    @Test
+    fun `second thinking wave clears thinkingEndTime after interleaved answer tokens`() = runTest {
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = mockk(relaxed = true),
+        )
+
+        manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
+        manager.reduce(MessageGenerationState.ThinkingLive("cot1", ModelType.FAST))
+        manager.reduce(MessageGenerationState.GeneratingText("answer1", ModelType.FAST))
+
+        val acc = manager.messages.getValue(MessageId("assistant"))
+        assertTrue(acc.thinkingEndTime != null, "First answer segment should close thinking window")
+        assertEquals(MessageState.GENERATING, acc.currentState)
+
+        manager.reduce(MessageGenerationState.ThinkingLive("cot2", ModelType.FAST))
+
+        assertNull(acc.thinkingEndTime, "New CoT wave must reset end time so duration/timer are not stale")
+        assertEquals(MessageState.THINKING, acc.currentState)
+        assertEquals("cot1cot2", acc.thinkingRaw.toString())
+        assertEquals("answer1", acc.content.toString())
+    }
+
+    @Test
+    fun `interleaved thinking and answer yields ordered transcript segments`() = runTest {
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = mockk(relaxed = true),
+        )
+
+        manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
+        manager.reduce(MessageGenerationState.ThinkingLive("a", ModelType.FAST))
+        manager.reduce(MessageGenerationState.GeneratingText("1", ModelType.FAST))
+        manager.reduce(MessageGenerationState.ThinkingLive("b", ModelType.FAST))
+        manager.reduce(MessageGenerationState.GeneratingText("2", ModelType.FAST))
+
+        val segs = manager.messages.getValue(MessageId("assistant")).toTranscriptSegments()
+        assertEquals(4, segs.size)
+        val t0 = segs[0] as MessageTranscriptSegment.Thinking
+        val a1 = segs[1] as MessageTranscriptSegment.AssistantText
+        val t2 = segs[2] as MessageTranscriptSegment.Thinking
+        val a3 = segs[3] as MessageTranscriptSegment.AssistantText
+        assertEquals("a", t0.text)
+        assertEquals("1", a1.text)
+        assertEquals("b", t2.text)
+        assertEquals("2", a3.text)
+        assertEquals(0, t0.ordinal)
+        assertEquals(3, a3.ordinal)
+    }
+
+    @Test
+    fun `snapshot keeps active thinking segment open until answer starts`() = runTest {
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = mockk(relaxed = true),
+        )
+
+        val snapshot = manager.reduce(MessageGenerationState.ThinkingLive("still thinking", ModelType.FAST))
+            .messages
+            .getValue(MessageId("assistant"))
+        val thinking = snapshot.transcriptSegments.single() as MessageTranscriptSegment.Thinking
+        val accumulator = manager.messages.getValue(MessageId("assistant"))
+
+        assertEquals(MessageState.THINKING, snapshot.messageState)
+        assertNull(thinking.thinkingEndTime)
+        assertNull(thinking.thinkingDurationSeconds)
+        assertNull(accumulator.thinkingEndTime)
     }
 
     @Test

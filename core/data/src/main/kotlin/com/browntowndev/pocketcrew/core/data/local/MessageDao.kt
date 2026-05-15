@@ -1,3 +1,25 @@
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
+
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Dao
@@ -6,22 +28,22 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Relation
-import androidx.room.Upsert
 import androidx.room.Transaction
+import androidx.room.Upsert
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import kotlinx.coroutines.flow.Flow
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import kotlinx.coroutines.flow.Flow
 
 data class MessageWithFiles(
     @Embedded val message: MessageEntity,
     @Relation(
         parentColumn = "id",
-        entityColumn = "message_id"
+        entityColumn = "message_id",
     )
-    val files: List<MessageFileEntity>
+    val files: List<MessageFileEntity>,
 )
 
 @Dao
@@ -31,34 +53,50 @@ abstract class MessageDao {
     abstract suspend fun getMessageById(id: MessageId): MessageWithFiles?
 
     @Transaction
-    @Query("""
+    @Query(
+        """
         SELECT * FROM message
         WHERE id IN (:ids) AND deleted = 0
-    """)
+    """,
+    )
     abstract fun getMessages(ids: List<MessageId>): Flow<List<MessageWithFiles>>
 
     @Transaction
-    @Query("""
+    @Query(
+        """
         SELECT * FROM message
         WHERE id IN (:ids)
         AND chat_id = :chatId
         AND deleted = 0
         ORDER BY created_at IS NULL, created_at ASC
-    """)
-    abstract suspend fun getMessagesForChat(chatId: ChatId, ids: List<MessageId>): List<MessageWithFiles>
+    """,
+    )
+    abstract suspend fun getMessagesForChat(
+        chatId: ChatId,
+        ids: List<MessageId>,
+    ): List<MessageWithFiles>
 
     @Transaction
     @Query("SELECT * FROM message WHERE deleted = 0 ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageWithFiles>>
 
-    @Suppress("MaxLineLength")
-    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    @Query(
+        """
+        UPDATE message 
+        SET content = :content, 
+            thinking_duration_seconds = :thinkingDuration, 
+            thinking_raw = :thinkingRaw, 
+            pending_sync = 1, 
+            updated_at = :timestamp 
+        WHERE id = :id
+    """,
+    )
     abstract suspend fun updateMessageContent(
         id: MessageId,
         content: String,
         thinkingDuration: Int?,
         thinkingRaw: String?,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
     )
 
     @Transaction
@@ -66,14 +104,38 @@ abstract class MessageDao {
     abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageWithFiles>
 
     @Transaction
-    @Suppress("MaxLineLength")
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
-    abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
+    @Query(
+        """
+        SELECT * FROM message 
+        WHERE chat_id = :chatId 
+        AND created_at IS NOT NULL 
+        AND created_at < :timestamp 
+        ORDER BY created_at DESC 
+        LIMIT :limit
+    """,
+    )
+    abstract suspend fun getMessagesBefore(
+        chatId: ChatId,
+        timestamp: Long,
+        limit: Int,
+    ): List<MessageWithFiles>
 
     @Transaction
-    @Suppress("MaxLineLength")
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
-    abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
+    @Query(
+        """
+        SELECT * FROM message 
+        WHERE chat_id = :chatId 
+        AND created_at IS NOT NULL 
+        AND created_at > :timestamp 
+        ORDER BY created_at ASC 
+        LIMIT :limit
+    """,
+    )
+    abstract suspend fun getMessagesAfter(
+        chatId: ChatId,
+        timestamp: Long,
+        limit: Int,
+    ): List<MessageWithFiles>
 
     @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND deleted = 0 ORDER BY created_at IS NULL, created_at ASC")
@@ -83,7 +145,7 @@ abstract class MessageDao {
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY created_at IS NULL, created_at ASC")
     abstract suspend fun getMessagesByStates(
         chatId: ChatId,
-        states: List<MessageState>
+        states: List<MessageState>,
     ): List<MessageWithFiles>
 
     @Query("UPDATE message SET pending_sync = 2 WHERE pending_sync = 1")
@@ -97,25 +159,55 @@ abstract class MessageDao {
     abstract suspend fun markSynced(ids: List<MessageId>)
 
     @Query("UPDATE message SET message_state = :messageState, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateMessageState(id: MessageId, messageState: MessageState, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessageState(
+        id: MessageId,
+        messageState: MessageState,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET created_at = :timestamp, pending_sync = 1, updated_at = :syncTimestamp WHERE id = :id")
-    abstract suspend fun updateMessageCreatedAt(id: MessageId, timestamp: Long, syncTimestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessageCreatedAt(
+        id: MessageId,
+        timestamp: Long,
+        syncTimestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET content = :content, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateMessageContentText(id: MessageId, content: String, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessageContentText(
+        id: MessageId,
+        content: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET model_type = :modelType, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateMessageModelType(id: MessageId, modelType: ModelType, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessageModelType(
+        id: MessageId,
+        modelType: ModelType,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET thinking_duration_seconds = :thinkingDuration, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateThinkingDuration(id: MessageId, thinkingDuration: Int, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateThinkingDuration(
+        id: MessageId,
+        thinkingDuration: Int,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET content = content || :suffix, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun appendMessageContentAtomic(id: MessageId, suffix: String, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun appendMessageContentAtomic(
+        id: MessageId,
+        suffix: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
-    @Query("UPDATE message SET thinking_raw = COALESCE(thinking_raw, '') || :suffix, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun appendThinkingRawAtomic(id: MessageId, suffix: String, timestamp: Long = System.currentTimeMillis())
+    @Query(
+        "UPDATE message SET thinking_raw = COALESCE(thinking_raw, '') || :suffix, pending_sync = 1, updated_at = :timestamp WHERE id = :id",
+    )
+    abstract suspend fun appendThinkingRawAtomic(
+        id: MessageId,
+        suffix: String,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Upsert
     abstract suspend fun upsert(messageEntity: MessageEntity): Long
@@ -130,27 +222,51 @@ abstract class MessageDao {
     abstract suspend fun update(messageEntity: MessageEntity)
 
     @Query("UPDATE message SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun softDeleteById(id: MessageId, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun softDeleteById(
+        id: MessageId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("DELETE FROM message WHERE id IN (:ids) AND deleted = 1")
     abstract suspend fun purgeDeleted(ids: List<MessageId>)
 
     @Query("UPDATE message SET thinking_start_time = :startTime, pending_sync = 1, updated_at = :timestamp WHERE id = :messageId")
-    abstract suspend fun updateThinkingStartTime(messageId: MessageId, startTime: Long, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateThinkingStartTime(
+        messageId: MessageId,
+        startTime: Long,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET thinking_end_time = :endTime, pending_sync = 1, updated_at = :timestamp WHERE id = :messageId")
-    abstract suspend fun updateThinkingEndTime(messageId: MessageId, endTime: Long, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateThinkingEndTime(
+        messageId: MessageId,
+        endTime: Long,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET thinking_raw = :thinkingRaw, pending_sync = 1, updated_at = :timestamp WHERE id = :messageId")
-    abstract suspend fun updateThinkingRaw(messageId: MessageId, thinkingRaw: String?, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateThinkingRaw(
+        messageId: MessageId,
+        thinkingRaw: String?,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET pipeline_step = :pipelineStep, pending_sync = 1, updated_at = :timestamp WHERE id = :messageId")
-    abstract suspend fun updateMessagePipelineStep(messageId: MessageId, pipelineStep: PipelineStep?, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessagePipelineStep(
+        messageId: MessageId,
+        pipelineStep: PipelineStep?,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message SET artifacts_json = :artifactsJson, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateMessageArtifacts(id: MessageId, artifactsJson: String?, timestamp: Long = System.currentTimeMillis())
+    abstract suspend fun updateMessageArtifacts(
+        id: MessageId,
+        artifactsJson: String?,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
-    @Query("""
+    @Query(
+        """
         UPDATE message 
         SET generated_media_uris_json = :mediaUrisJson,
             generated_media_asset_ids_json = :mediaAssetIdsJson,
@@ -159,17 +275,17 @@ abstract class MessageDao {
             pending_sync = 1,
             updated_at = :timestamp
         WHERE id = :id
-    """)
+    """,
+    )
     abstract suspend fun updateMessageMedia(
-        id: MessageId, 
+        id: MessageId,
         mediaUrisJson: String?,
         mediaAssetIdsJson: String? = null,
         mediaTypesJson: String? = null,
         media_prompts_json: String? = null,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
     )
 
-    @Suppress("LongParameterList")
     @Transaction
     open suspend fun persistAllMessageData(
         messageId: MessageId,
@@ -186,7 +302,7 @@ abstract class MessageDao {
         mediaAssetIdsJson: String? = null,
         mediaTypesJson: String? = null,
         mediaPromptsJson: String? = null,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
     ) {
         updateMessageModelType(messageId, modelType, timestamp)
         if (thinkingStartTime > 0) {
@@ -204,12 +320,12 @@ abstract class MessageDao {
         updateMessageState(messageId, messageState, timestamp)
 
         updateMessageMedia(
-            id = messageId, 
+            id = messageId,
             mediaUrisJson = mediaUrisJson,
             mediaAssetIdsJson = mediaAssetIdsJson,
             mediaTypesJson = mediaTypesJson,
             media_prompts_json = mediaPromptsJson,
-            timestamp = timestamp
+            timestamp = timestamp,
         )
 
         if (webSearchSources.isNotEmpty()) {

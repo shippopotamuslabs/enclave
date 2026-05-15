@@ -5,7 +5,6 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import org.junit.Rule
@@ -17,7 +16,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(instrumentedPackages = ["androidx.loader.content"])
 class ArtifactExportWizardContentTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -35,6 +33,7 @@ class ArtifactExportWizardContentTest {
                             selectedFormat = null,
                             selectedDestination = null,
                             isExporting = false,
+                            documentJson = """{"blocks":[]}""",
                         ),
                     onDismiss = {},
                     onSelectFormat = {},
@@ -45,11 +44,11 @@ class ArtifactExportWizardContentTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Continue").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Next").assertIsNotEnabled()
     }
 
     @Test
-    fun `when format preselected continue is enabled`() {
+    fun `when format preselected next is enabled`() {
         composeTestRule.setContent {
             PocketCrewTheme {
                 ArtifactExportWizardContent(
@@ -62,6 +61,7 @@ class ArtifactExportWizardContentTest {
                             selectedFormat = WizardExportFormat.PDF,
                             selectedDestination = null,
                             isExporting = false,
+                            documentJson = """{"blocks":[]}""",
                         ),
                     onDismiss = {},
                     onSelectFormat = {},
@@ -72,8 +72,8 @@ class ArtifactExportWizardContentTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Continue").assertIsEnabled()
+        composeTestRule.onNodeWithText("Next").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Next").assertIsEnabled()
     }
 
     @Test
@@ -90,6 +90,7 @@ class ArtifactExportWizardContentTest {
                             selectedFormat = WizardExportFormat.BOTH,
                             selectedDestination = null,
                             isExporting = false,
+                            documentJson = """{"blocks":[]}""",
                         ),
                     onDismiss = {},
                     onSelectFormat = {},
@@ -102,5 +103,63 @@ class ArtifactExportWizardContentTest {
         }
         composeTestRule.onNodeWithText("Share").assertIsDisplayed()
         composeTestRule.onNodeWithText("Download").assertIsDisplayed()
+    }
+
+    @Test
+    fun `error message is displayed in sheet`() {
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                ArtifactExportWizardContent(
+                    state =
+                        ArtifactExportSheetState.Visible(
+                            messageId = MessageId("m"),
+                            artifactId = "a",
+                            title = "My doc",
+                            step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
+                            selectedFormat = WizardExportFormat.PDF,
+                            selectedDestination = WizardExportDestination.DOWNLOAD,
+                            isExporting = false,
+                            documentJson = """{"blocks":[]}""",
+                            errorMessage = "Export failed",
+                        ),
+                    onDismiss = {},
+                    onSelectFormat = {},
+                    onSelectDestination = {},
+                    onBack = {},
+                    onNext = {},
+                    onConfirmExport = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Export failed").assertIsDisplayed()
+    }
+
+    @Test
+    fun `exporting state displays progress and disables action`() {
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                ArtifactExportWizardContent(
+                    state =
+                        ArtifactExportSheetState.Visible(
+                            messageId = MessageId("m"),
+                            artifactId = "a",
+                            title = "My doc",
+                            step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
+                            selectedFormat = WizardExportFormat.WORD,
+                            selectedDestination = WizardExportDestination.DOWNLOAD,
+                            isExporting = true,
+                            documentJson = """{"blocks":[]}""",
+                        ),
+                    onDismiss = {},
+                    onSelectFormat = {},
+                    onSelectDestination = {},
+                    onBack = {},
+                    onNext = {},
+                    onConfirmExport = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Exporting…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Export").assertIsNotEnabled()
     }
 }
