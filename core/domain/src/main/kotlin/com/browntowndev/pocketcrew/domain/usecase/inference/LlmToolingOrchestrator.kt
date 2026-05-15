@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -48,6 +49,10 @@ class LlmToolingOrchestrator @Inject constructor(
     private val loggingPort: LoggingPort,
 ) {
 
+    private companion object {
+        private val toolOutcomeJson = Json { ignoreUnknownKeys = true }
+    }
+
     /**
      * Executes the tool-calling loop.
      *
@@ -58,6 +63,9 @@ class LlmToolingOrchestrator @Inject constructor(
      * @param tag The logging tag for the service.
      * @param maxToolCalls The maximum number of tool calls allowed (recursion limit).
      * @param onInferencePass A lambda that performs the actual API or Local call.
+     *   The second argument [allowToolCall] is false when the model has hit the recursion/cap budget,
+     *   the context-full warning is active, or three consecutive turns returned only soft tool failures
+     *   (executor returned JSON with an `error` field without throwing).
      * @param onToolCallDetected A lambda that extracts [ToolCallRequest]s from the response.
      *   Returns a list of tool call requests (empty if no tool calls were detected).
      * @param onToolResultsMapped A lambda that updates the parameters with all tool results from the turn.
@@ -93,12 +101,17 @@ class LlmToolingOrchestrator @Inject constructor(
         var toolCallCount = 0
         var lastResponse: TResponse? = null
         var contextFullWarned = false
+        var consecutiveSoftFailureTurns = 0
 
         // Effective limit that can expand for greedy tools
         var effectiveMaxToolCalls = maxToolCalls
 
         while (toolCallCount <= effectiveMaxToolCalls + 1) {
-            val response = onInferencePass(currentParams, toolCallCount < effectiveMaxToolCalls && !contextFullWarned)
+            val allowToolCall =
+                toolCallCount < effectiveMaxToolCalls &&
+                    !contextFullWarned &&
+                    consecutiveSoftFailureTurns < 3
+            val response = onInferencePass(currentParams, allowToolCall)
             lastResponse = response
             
             val toolCalls = try {
@@ -161,39 +174,50 @@ class LlmToolingOrchestrator @Inject constructor(
             }
 
             val turnResults = mutableListOf<Pair<ToolCallRequest, String>>()
+            var turnHadHardFailure = false
+            var turnHadNonSoftOutcome = false
             for (toolCall in toolCalls) {
-                val toolResult = try {
-                    if (toolCallCount >= effectiveMaxToolCalls) {
-                        loggingPort.warning(
-                            tag,
-                            "Recursive tool call limit reached provider=$providerName tool=${toolCall.toolName}"
-                        )
-                        // Report limit as an error to the model instead of crashing
-                        ToolExecutionResult(
-                            toolName = toolCall.toolName,
-                            resultJson = """{"error": "Recursion limit reached. You have called too many tools. """ +
-                                """Do not call any more tools. Provide a final response based on the """ +
-                                """information you already have."}"""
-                        )
-                    } else if (toolCall.toolName == "error_reporter") {
-                        // This is our own synthetic error from extraction failure
-                        ToolExecutionResult(toolCall.toolName, toolCall.argumentsJson)
-                    } else {
-                        ToolEnvelopeParser.requireSupportedTool(toolCall.toolName)
-                        toolExecutor.execute(toolCall)
-                    }
+                val normalizedCall = toolCall.copy(toolName = toolCall.toolName.trim())
+                var toolResult: ToolExecutionResult
+                try {
+                    toolResult =
+                        if (toolCallCount >= effectiveMaxToolCalls) {
+                            loggingPort.warning(
+                                tag,
+                                "Recursive tool call limit reached provider=$providerName tool=${normalizedCall.toolName}"
+                            )
+                            // Report limit as an error to the model instead of crashing
+                            ToolExecutionResult(
+                                toolName = normalizedCall.toolName,
+                                resultJson = """{"error": "Recursion limit reached. You have called too many tools. """ +
+                                    """Do not call any more tools. Provide a final response based on the """ +
+                                    """information you already have."}"""
+                            )
+                        } else if (normalizedCall.toolName == "error_reporter") {
+                            // This is our own synthetic error from extraction failure
+                            ToolExecutionResult(normalizedCall.toolName, normalizedCall.argumentsJson)
+                        } else {
+                            ToolEnvelopeParser.requireSupportedTool(normalizedCall.toolName)
+                            toolExecutor.execute(normalizedCall)
+                        }
                 } catch (e: Exception) {
+                    turnHadHardFailure = true
                     val errorMessage = e.message ?: "Unknown error"
                     loggingPort.error(
                         tag,
-                        "Tool execution failed provider=$providerName tool=${toolCall.toolName} error=$errorMessage",
+                        "Tool execution failed provider=$providerName tool=${normalizedCall.toolName} error=$errorMessage",
                         e
                     )
                     // Return the error as the tool result so the LLM can see it and potentially self-correct
-                    ToolExecutionResult(
-                        toolName = toolCall.toolName,
-                        resultJson = """{"error": "Tool execution failed: $errorMessage"}"""
-                    )
+                    toolResult =
+                        ToolExecutionResult(
+                            toolName = normalizedCall.toolName,
+                            resultJson = """{"error": "Tool execution failed: $errorMessage"}"""
+                        )
+                }
+
+                if (!isSoftFailureResultJson(toolResult.resultJson)) {
+                    turnHadNonSoftOutcome = true
                 }
 
                 // Increment count only for real tool call attempts or reported errors
@@ -201,7 +225,7 @@ class LlmToolingOrchestrator @Inject constructor(
 
                 loggingPort.info(
                     tag,
-                    "Tool call processed provider=$providerName tool=${toolCall.toolName} " +
+                    "Tool call processed provider=$providerName tool=${normalizedCall.toolName} " +
                         "iteration=$toolCallCount resultChars=${toolResult.resultJson.length}"
                 )
 
@@ -209,13 +233,30 @@ class LlmToolingOrchestrator @Inject constructor(
                     json = json,
                     pendingArtifactIds = pendingArtifactIds,
                     updateLastArtifact = { lastArtifactToolCall = it },
-                    toolCall = toolCall,
+                    toolCall = normalizedCall,
                     resultJson = toolResult.resultJson,
                 )
 
-                onToolResult(toolCall, toolResult.resultJson)
-                turnResults.add(toolCall to toolResult.resultJson)
+                onToolResult(normalizedCall, toolResult.resultJson)
+                turnResults.add(normalizedCall to toolResult.resultJson)
             }
+
+            when {
+                turnHadHardFailure || turnHadNonSoftOutcome -> {
+                    consecutiveSoftFailureTurns = 0
+                }
+                toolCalls.isNotEmpty() -> {
+                    consecutiveSoftFailureTurns++
+                    if (toolCalls.size >= 2 && consecutiveSoftFailureTurns >= 3) {
+                        loggingPort.warning(
+                            tag,
+                            "validation retry exhausted provider=$providerName " +
+                                "(repeated parallel tool calls returned only soft errors)",
+                        )
+                    }
+                }
+            }
+
             currentParams = onToolResultsMapped(currentParams, response, turnResults)
 
             // Check if context window is exceeded after adding tool results
@@ -269,7 +310,6 @@ class LlmToolingOrchestrator @Inject constructor(
                         )
                         continue
                     }
-                toolCallCount++
                 loggingPort.info(
                     tag,
                     "Auto-finalize processed artifactId=$artifactId resultChars=${synthResult.resultJson.length}",
@@ -338,5 +378,15 @@ class LlmToolingOrchestrator @Inject constructor(
             (o["artifactId"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
         } catch (_: Exception) {
             null
+        }
+
+    private fun isSoftFailureResultJson(resultJson: String): Boolean =
+        try {
+            when (val element = toolOutcomeJson.parseToJsonElement(resultJson)) {
+                is JsonObject -> element.containsKey("error")
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
         }
 }

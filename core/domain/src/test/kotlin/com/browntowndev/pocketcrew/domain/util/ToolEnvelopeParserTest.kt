@@ -187,4 +187,26 @@ class ToolEnvelopeParserTest {
     fun `requireSupportedTool succeeds for supported tool`() {
         ToolEnvelopeParser.requireSupportedTool("web_search")
     }
+
+    // --- FEAT-llm-tool-self-heal: envelope normalization (RED until parser heals common local-model corruption) ---
+
+    @Test
+    fun `extractLocalToolEnvelope self heals single quoted JSON inside tool_call`() {
+        val rawText =
+            """<tool_call> {'name': 'web_search', 'arguments': {'query': 'weather in London'}} </tool_call>"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(rawText)
+        assertNotNull(envelope)
+        assertEquals("web_search", envelope.toolName)
+        assertEquals("""{"query":"weather in London"}""", envelope.argumentsJson)
+    }
+
+    @Test
+    fun `extractLocalToolEnvelope self heals smart quotes in JSON string values`() {
+        val rawText =
+            """<tool_call> {"name": "web_search", "arguments": {"query": "cost of \u201cbread\u201d in Paris"}} </tool_call>"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(rawText)
+        assertNotNull(envelope)
+        assertEquals("web_search", envelope.toolName)
+        assertEquals("""{"query":"cost of \"bread\" in Paris"}""", envelope.argumentsJson)
+    }
 }
