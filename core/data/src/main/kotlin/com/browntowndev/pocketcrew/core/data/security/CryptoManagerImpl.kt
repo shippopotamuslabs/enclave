@@ -98,9 +98,9 @@ class CryptoManagerImpl
 
         override fun hasCachedKey(): Boolean = cachedKey != null
 
-        override fun encrypt(plaintext: String): Result<ByteArray> = encryptBytes(plaintext.toByteArray(Charsets.UTF_8))
+        override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> = encryptBytes(plaintext.toByteArray(Charsets.UTF_8), aad)
 
-        override fun encryptBytes(data: ByteArray): Result<ByteArray> {
+        override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> {
             val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             return try {
@@ -110,10 +110,10 @@ class CryptoManagerImpl
 
                 val parameterSpec = GCMParameterSpec(TAG_LENGTH, iv)
                 cipher.init(Cipher.ENCRYPT_MODE, key, parameterSpec)
+                if (aad != null) cipher.updateAAD(aad)
 
                 val ciphertext = cipher.doFinal(data)
 
-                // Prepend IV to ciphertext
                 val result = ByteArray(IV_LENGTH + ciphertext.size)
                 System.arraycopy(iv, 0, result, 0, IV_LENGTH)
                 System.arraycopy(ciphertext, 0, result, IV_LENGTH, ciphertext.size)
@@ -124,9 +124,9 @@ class CryptoManagerImpl
             }
         }
 
-        override fun decrypt(ciphertext: ByteArray): Result<String> = decryptBytes(ciphertext).map { String(it, Charsets.UTF_8) }
+        override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> = decryptBytes(ciphertext, aad).map { String(it, Charsets.UTF_8) }
 
-        override fun decryptBytes(ciphertext: ByteArray): Result<ByteArray> {
+        override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
             val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             if (ciphertext.size < IV_LENGTH) {
@@ -136,14 +136,13 @@ class CryptoManagerImpl
             return try {
                 val cipher = Cipher.getInstance(TRANSFORMATION)
 
-                // Extract IV
                 val iv = ByteArray(IV_LENGTH)
                 System.arraycopy(ciphertext, 0, iv, 0, IV_LENGTH)
 
                 val parameterSpec = GCMParameterSpec(TAG_LENGTH, iv)
                 cipher.init(Cipher.DECRYPT_MODE, key, parameterSpec)
+                if (aad != null) cipher.updateAAD(aad)
 
-                // Decrypt the rest
                 val plaintextBytes = cipher.doFinal(ciphertext, IV_LENGTH, ciphertext.size - IV_LENGTH)
 
                 Result.success(plaintextBytes)
