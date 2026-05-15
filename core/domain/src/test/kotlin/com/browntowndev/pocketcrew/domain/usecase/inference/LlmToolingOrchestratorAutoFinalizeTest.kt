@@ -84,4 +84,63 @@ class LlmToolingOrchestratorAutoFinalizeTest {
         assertTrue(synth.argumentsJson.contains("\"isComplete\":true"))
         assertTrue(synth.argumentsJson.contains("art-1"))
     }
+
+    @Test
+    fun `self heals whitespace padded tool names before supported tool validation`() = runTest {
+        val fake =
+            object : ToolExecutorPort {
+                val executed = mutableListOf<ToolCallRequest>()
+
+                override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+                    executed.add(request)
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = """{"status":"success","stub":true}""",
+                    )
+                }
+            }
+        val logging = mockk<LoggingPort>(relaxed = true)
+        val orchestrator = LlmToolingOrchestrator(fake, logging)
+
+        var inferencePass = 0
+        orchestrator.execute(
+            providerName = "test",
+            initialParams = Unit,
+            tag = "LlmToolingOrchestratorAutoFinalizeTest",
+            maxToolCalls = 20,
+            onInferencePass = { _, _ ->
+                inferencePass++
+                Unit
+            },
+            onToolCallDetected = { _ ->
+                when (inferencePass) {
+                    1 ->
+                        listOf(
+                            ToolCallRequest(
+                                toolName = " ${ToolDefinition.WEB_SEARCH.name} ",
+                                argumentsJson = """{"query":"needle"}""",
+                                provider = "test",
+                                modelType = ModelType.FAST,
+                                chatId = ChatId("c1"),
+                                userMessageId = MessageId("u1"),
+                                assistantMessageId = MessageId("a1"),
+                            ),
+                        )
+                    else -> emptyList()
+                }
+            },
+            onToolResultsMapped = { params, _, _ -> params },
+            onContextExceeded = { _, _ -> ContextExceededResult(false) },
+            onToolResult = { _, _ -> },
+            onNoToolCallOnFirstPass = {},
+            onFinished = { _, _, _ -> },
+        )
+
+        assertEquals(
+            1,
+            fake.executed.size,
+            "Expected padded tool name to be trimmed so web_search reaches the executor",
+        )
+        assertEquals(ToolDefinition.WEB_SEARCH.name, fake.executed[0].toolName)
+    }
 }
