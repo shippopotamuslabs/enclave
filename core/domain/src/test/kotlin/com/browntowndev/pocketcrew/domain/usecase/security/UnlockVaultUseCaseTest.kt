@@ -166,13 +166,13 @@ class UnlockVaultUseCaseTest {
         }
         override fun hasCachedKey(): Boolean = dekCached
         override val isVaultUnlocked: StateFlow<Boolean> get() = error("not used")
-        override fun encrypt(plaintext: String): Result<ByteArray> = error("not used")
-        override fun encryptBytes(data: ByteArray): Result<ByteArray> = error("not used")
-        override fun decrypt(ciphertext: ByteArray): Result<String> {
+        override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> = error("not used")
+        override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> = error("not used")
+        override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> {
             decryptCalled = true
             return decryptResult(ciphertext)
         }
-        override fun decryptBytes(ciphertext: ByteArray): Result<ByteArray> = error("not used")
+        override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> = error("not used")
         override fun generateSalt(): ByteArray = ByteArray(16)
         override fun encodeBase64(data: ByteArray): String = error("not used")
         override fun decodeBase64(base64: String): ByteArray = error("not used")
