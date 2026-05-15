@@ -97,6 +97,20 @@ class SettingsDataControlsDelegateTest {
     }
 
     @Test
+    fun `dismiss confirmation is no-op while deleting`() {
+        val dc =
+            MutableStateFlow(
+                DataControlsTransientState(
+                    pendingAction = DataControlsPendingAction.DeleteChats,
+                    isDeleting = true,
+                ),
+            )
+        delegate.onDismissDataControlsConfirmation(dc)
+        assertEquals(DataControlsPendingAction.DeleteChats, dc.value.pendingAction)
+        assertTrue(dc.value.isDeleting)
+    }
+
+    @Test
     fun `confirm delete chats resets state on success`() = runTest {
         val dc = MutableStateFlow(DataControlsTransientState(pendingAction = DataControlsPendingAction.DeleteChats))
         delegate.onConfirmDeleteAllChats(this, "tag", dc)
