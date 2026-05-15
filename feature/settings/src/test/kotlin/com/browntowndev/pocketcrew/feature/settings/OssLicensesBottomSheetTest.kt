@@ -196,7 +196,7 @@ class OssLicensesBottomSheetTest {
         @Test
         fun `OssLicenses entries are sorted alphabetically by name`() {
             val names = OssLicenses.entries.map { it.name }
-            assertEquals(names.sorted(), names)
+            assertEquals(names.sortedBy { it.lowercase() }, names)
         }
 
         // S4-04
