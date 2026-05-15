@@ -28,4 +28,37 @@ class MessageListLayoutTest {
             ),
         )
     }
+
+    @Test
+    fun `scroll target is active row index when a user message exists`() {
+        assertEquals(
+            3,
+            messageListScrollTargetLazyIndex(
+                messageCount = 5,
+                latestUserMessageIndex = 3,
+            ),
+        )
+    }
+
+    @Test
+    fun `scroll target is last history index when there is no user message`() {
+        assertEquals(
+            4,
+            messageListScrollTargetLazyIndex(
+                messageCount = 5,
+                latestUserMessageIndex = -1,
+            ),
+        )
+    }
+
+    @Test
+    fun `scroll target is zero for empty message count`() {
+        assertEquals(
+            0,
+            messageListScrollTargetLazyIndex(
+                messageCount = 0,
+                latestUserMessageIndex = -1,
+            ),
+        )
+    }
 }

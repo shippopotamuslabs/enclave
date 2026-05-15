@@ -4,7 +4,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
@@ -47,11 +46,6 @@ fun StreamableMarkdownText(
 ) {
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
-    val renderIdentity = markdownRenderIdentity(
-        markdown = markdown,
-        isStreaming = isStreaming,
-    )
-
     // In preview mode, use SimpleMarkdownText to avoid library initialization issues
     if (isPreview) {
         SimpleMarkdownText(
@@ -59,27 +53,18 @@ fun StreamableMarkdownText(
             modifier = modifier,
         )
     } else {
-        key(renderIdentity) {
-            SelectionContainer(modifier = modifier) {
-                Markdown(
-                    markdown = markdown,
-                    isStreaming = isStreaming,
-                    theme = darkMarkdownTheme(),
-                    enableScroll = enableScroll,
-                    onLinkClick = onLinkClick,
-                )
-            }
+        // Do not key the subtree on streaming vs complete: that disposal remeasures the
+        // LazyColumn parent row and snaps scroll when streaming finishes.
+        SelectionContainer(modifier = modifier) {
+            Markdown(
+                markdown = markdown,
+                isStreaming = isStreaming,
+                theme = darkMarkdownTheme(),
+                enableScroll = enableScroll,
+                onLinkClick = onLinkClick,
+            )
         }
     }
-}
-
-internal fun markdownRenderIdentity(
-    markdown: String,
-    isStreaming: Boolean,
-): String {
-    if (isStreaming) return "streaming"
-
-    return "complete_${markdown.length}_${markdown.hashCode()}"
 }
 
 /**

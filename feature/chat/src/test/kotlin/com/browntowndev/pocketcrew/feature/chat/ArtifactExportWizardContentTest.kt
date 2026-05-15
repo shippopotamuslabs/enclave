@@ -133,4 +133,33 @@ class ArtifactExportWizardContentTest {
         }
         composeTestRule.onNodeWithText("Export failed").assertIsDisplayed()
     }
+
+    @Test
+    fun `exporting state displays progress and disables action`() {
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                ArtifactExportWizardContent(
+                    state =
+                        ArtifactExportSheetState.Visible(
+                            messageId = MessageId("m"),
+                            artifactId = "a",
+                            title = "My doc",
+                            step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
+                            selectedFormat = WizardExportFormat.WORD,
+                            selectedDestination = WizardExportDestination.DOWNLOAD,
+                            isExporting = true,
+                            documentJson = """{"blocks":[]}""",
+                        ),
+                    onDismiss = {},
+                    onSelectFormat = {},
+                    onSelectDestination = {},
+                    onBack = {},
+                    onNext = {},
+                    onConfirmExport = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Exporting…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Export").assertIsNotEnabled()
+    }
 }

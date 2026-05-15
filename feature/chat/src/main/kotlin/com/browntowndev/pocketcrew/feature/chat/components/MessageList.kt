@@ -33,7 +33,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -93,28 +93,32 @@ fun MessageList(
     val latestUserMessageIndex = messages.indexOfLast { it.role == MessageRole.User }
     val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
 
-    // Tracking for auto-scroll logic
     val chatId = messages.firstOrNull()?.chatId
-    var lastScrolledUserMessageId by remember { mutableStateOf<MessageId?>(null) }
-    var initialLoadChatId by remember { mutableStateOf<ChatId?>(null) }
+    // Per-chat bookkeeping so a new chat never inherits "already scrolled" state from the prior chat,
+    // and so we do not depend on ordering between two LaunchedEffects (initial vs follow-up).
+    var initialScrollDone by remember(chatId) { mutableStateOf(false) }
+    var lastScrolledUserMessageId by remember(chatId) { mutableStateOf<MessageId?>(null) }
 
-    // 1. Initial Load: Scroll to the last item once per chat
-    LaunchedEffect(chatId, messages.isNotEmpty()) {
-        if (chatId != null && initialLoadChatId != chatId && messages.isNotEmpty()) {
-            val lastIndex = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.lastIndex
-            listState.scrollToItem(lastIndex)
-            initialLoadChatId = chatId
+    LaunchedEffect(chatId, messages.isNotEmpty(), latestUserMessageId, latestUserMessageIndex) {
+        if (messages.isEmpty()) return@LaunchedEffect
+
+        val targetLazyIndex = messageListScrollTargetLazyIndex(
+            messageCount = messages.size,
+            latestUserMessageIndex = latestUserMessageIndex,
+        )
+
+        if (!initialScrollDone) {
+            listState.scrollToItem(targetLazyIndex)
+            initialScrollDone = true
             lastScrolledUserMessageId = latestUserMessageId
+            return@LaunchedEffect
         }
-    }
 
-    // 2. New user message: animate-scroll to the active interaction (last item)
-    LaunchedEffect(latestUserMessageId) {
-        if (latestUserMessageId != null &&
-            latestUserMessageId != lastScrolledUserMessageId &&
-            initialLoadChatId == chatId) {
-
-            listState.animateScrollToItem(latestUserMessageIndex)
+        if (latestUserMessageId != null && latestUserMessageId != lastScrolledUserMessageId) {
+            // Wait until after layout so the active-interaction column (min viewport height) includes
+            // the new user bubble before we animate; avoids intermittent wrong scroll offsets.
+            withFrameNanos { }
+            listState.animateScrollToItem(latestUserMessageIndex.coerceAtLeast(0))
             lastScrolledUserMessageId = latestUserMessageId
         }
     }
@@ -396,6 +400,22 @@ internal fun activeInteractionMinHeight(
     viewportHeight: Dp,
     bottomContentPadding: Dp,
 ): Dp = maxOf(0.dp, viewportHeight - bottomContentPadding)
+
+/**
+ * LazyColumn index of the row that should be shown after open or when jumping to the latest turn:
+ * the combined "active interaction" row when there is a user message, otherwise the last history row.
+ */
+internal fun messageListScrollTargetLazyIndex(
+    messageCount: Int,
+    latestUserMessageIndex: Int,
+): Int {
+    if (messageCount <= 0) return 0
+    return if (latestUserMessageIndex != -1) {
+        latestUserMessageIndex
+    } else {
+        messageCount - 1
+    }
+}
 
 /**
  * Shows the appropriate indicator(s) based on the message's indicator state.
