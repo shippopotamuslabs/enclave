@@ -19,12 +19,12 @@ internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
     override fun isEncrypted(stored: String): Boolean =
         stored.startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
 
-    fun encryptString(plaintext: String, aad: ByteArray): String {
+    override fun encryptString(plaintext: String, aad: ByteArray): String {
         lastEncryptAad = aad
         return encryptString(plaintext)
     }
 
-    fun decryptString(stored: String, aad: ByteArray): String {
+    override fun decryptString(stored: String, aad: ByteArray): String {
         lastDecryptAad = aad
         return decryptString(stored)
     }

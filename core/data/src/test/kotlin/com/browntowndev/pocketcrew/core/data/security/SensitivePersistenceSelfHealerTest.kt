@@ -118,16 +118,20 @@ class SensitivePersistenceSelfHealerTest {
 
     private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 
     private class LockedLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = error("locked")
+        override fun encryptString(plaintext: String, aad: ByteArray): String = error("locked")
 
         override fun decryptString(stored: String): String = error("locked")
+        override fun decryptString(stored: String, aad: ByteArray): String = error("locked")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
 
@@ -136,16 +140,21 @@ class SensitivePersistenceSelfHealerTest {
 
     private class ThrowingDecryptEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = throw IllegalArgumentException("bad ciphertext")
+        override fun decryptString(stored: String, aad: ByteArray): String = throw IllegalArgumentException("bad ciphertext")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 
     private class MalformedThrowingEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String =
+            throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
+        override fun decryptString(stored: String, aad: ByteArray): String =
             throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
@@ -153,8 +162,11 @@ class SensitivePersistenceSelfHealerTest {
 
     private class DecryptFailedThrowingEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String =
+            throw DecryptFailedException("tag mismatch", null)
+        override fun decryptString(stored: String, aad: ByteArray): String =
             throw DecryptFailedException("tag mismatch", null)
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
@@ -164,17 +176,15 @@ class SensitivePersistenceSelfHealerTest {
         var lastDecryptAad: ByteArray? = null
 
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
+        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
-        override fun decryptString(stored: String): String {
+        override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+        override fun decryptString(stored: String, aad: ByteArray): String {
+            lastDecryptAad = aad
             return stored.removePrefix("PCENC:v1:aes-gcm:")
         }
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
-
-        fun decryptString(stored: String, aad: ByteArray): String {
-            lastDecryptAad = aad
-            return decryptString(stored)
-        }
     }
 
     // T8: decryptForRead passes entityId-based AAD to LocalDataEncryptionService

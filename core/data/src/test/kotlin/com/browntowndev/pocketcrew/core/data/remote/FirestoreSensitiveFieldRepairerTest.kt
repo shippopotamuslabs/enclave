@@ -124,9 +124,11 @@ class FirestoreSensitiveFieldRepairerTest {
 
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
+        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
 
-        fun encryptString(plaintext: String, aad: ByteArray): String {
+        override fun encryptString(plaintext: String, aad: ByteArray): String {
             encryptedAads.add(aad)
             return encryptString(plaintext)
         }
