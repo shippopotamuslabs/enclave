@@ -289,7 +289,6 @@ class SettingsUiStateFactory @Inject constructor(
         return SettingsUiState(
             home = SettingsHomeUiState(
                 theme = persistedSettings.theme,
-                hapticPress = persistedSettings.hapticPress,
                 hapticResponse = persistedSettings.hapticResponse,
                 backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
                 auth = authState.toUi(),

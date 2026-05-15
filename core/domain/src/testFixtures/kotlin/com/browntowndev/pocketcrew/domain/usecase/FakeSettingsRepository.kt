@@ -21,8 +21,6 @@ class FakeSettingsRepository : SettingsRepository {
 
     private var updateThemeCallCount = 0
     private var lastThemeValue: AppTheme? = null
-    private var updateHapticPressCallCount = 0
-    private var lastHapticPressValue: Boolean? = null
     private var updateHapticResponseCallCount = 0
     private var lastHapticResponseValue: Boolean? = null
     private var updateCustomizationEnabledCallCount = 0
@@ -43,7 +41,6 @@ class FakeSettingsRepository : SettingsRepository {
 
     // Methods to simulate errors
     var shouldThrowOnUpdateTheme = false
-    var shouldThrowOnUpdateHapticPress = false
     var shouldThrowOnUpdateHapticResponse = false
     var shouldThrowOnUpdateCustomizationEnabled = false
     var shouldThrowOnUpdateSelectedPromptOption = false
@@ -59,13 +56,6 @@ class FakeSettingsRepository : SettingsRepository {
         updateThemeCallCount++
         lastThemeValue = theme
         _settingsFlow.value = _settingsFlow.value.copy(theme = theme)
-    }
-
-    override suspend fun updateHapticPress(value: Boolean) {
-        if (shouldThrowOnUpdateHapticPress) throw RuntimeException("Simulated error")
-        updateHapticPressCallCount++
-        lastHapticPressValue = value
-        _settingsFlow.value = _settingsFlow.value.copy(hapticPress = value)
     }
 
     override suspend fun updateHapticResponse(value: Boolean) {
@@ -164,13 +154,6 @@ class FakeSettingsRepository : SettingsRepository {
         }
     }
 
-    fun verifyUpdateHapticPressCalled(times: Int, value: Boolean? = null) {
-        assertEquals(times, updateHapticPressCallCount)
-        if (value != null) {
-            assertEquals(value, lastHapticPressValue)
-        }
-    }
-
     fun verifyUpdateHapticResponseCalled(times: Int, value: Boolean? = null) {
         assertEquals(times, updateHapticResponseCallCount)
         if (value != null) {
@@ -233,7 +216,6 @@ class FakeSettingsRepository : SettingsRepository {
 
     fun resetCallCounts() {
         updateThemeCallCount = 0
-        updateHapticPressCallCount = 0
         updateHapticResponseCallCount = 0
         updateCustomizationEnabledCallCount = 0
         updateSelectedPromptOptionCallCount = 0

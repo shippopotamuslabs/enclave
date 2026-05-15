@@ -108,7 +108,6 @@ class HistoryViewModelTest {
         every { mockGetSettingsUseCase.invoke() } returns MutableStateFlow(
             SettingsData(
                 theme = AppTheme.SYSTEM,
-                hapticPress = true,
                 hapticResponse = true,
                 customizationEnabled = false,
                 selectedPromptOption = SystemPromptOption.CONCISE,
@@ -517,7 +516,6 @@ class HistoryViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertEquals(1, state.otherChats.size)
-        assertTrue(state.hapticPress) // verified from default emit
     }
 
     // Suite F: Integration Test

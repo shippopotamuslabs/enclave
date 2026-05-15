@@ -51,20 +51,14 @@ internal class SettingsGeneralDelegate @Inject constructor(
         }
     }
 
-    fun onHapticPressChange(scope: CoroutineScope, tag: String, enabled: Boolean) {
+    fun onHapticResponseChange(scope: CoroutineScope, tag: String, enabled: Boolean) {
         scope.launch(
             errorHandler.coroutineExceptionHandler(
                 tag,
-                "Failed to update haptic press setting",
-                "Failed to update setting"
-            )
+                "Failed to update haptic response setting",
+                "Failed to update setting",
+            ),
         ) {
-            preferencesUseCases.updateHapticPress(enabled)
-        }
-    }
-
-    fun onHapticResponseChange(scope: CoroutineScope, enabled: Boolean) {
-        scope.launch {
             preferencesUseCases.updateHapticResponse(enabled)
         }
     }
