@@ -681,7 +681,12 @@ class MainViewModelTest {
         coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
         verify(exactly = 0) { cloudSyncPort.startListening() }
         val state = viewModel.startupState.value as AppStartupState.Ready
-        assertTrue(state.vaultErrorMessage?.contains("biometric", ignoreCase = true) == true)
+        assertTrue(state.isVaultLocked)
+        assertFalse(state.isBiometricUnlockPossible)
+        assertTrue(state.vaultErrorMessage?.contains("password", ignoreCase = true) == true)
+        verify { cryptoManager.clearKey() }
+        verify { biometricPort.clearSecureValue("vault_dek") }
+        io.mockk.verify(exactly = 0) { cryptoManager.cacheDek(any()) }
     }
 
     /**
