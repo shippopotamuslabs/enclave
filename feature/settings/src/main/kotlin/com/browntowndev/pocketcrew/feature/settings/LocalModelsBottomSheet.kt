@@ -1,13 +1,14 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,25 +24,23 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,9 +49,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -267,14 +266,6 @@ private fun LocalModelAssetListView(
             text = "Manage your downloaded models and their tuning presets.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        Text(
-            text = "Hint: long press to delete the model.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
@@ -348,23 +339,14 @@ private fun LocalModelAssetCard(
     onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?,
     onReDownloadClick: () -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Box {
+    val card: @Composable () -> Unit = {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
-                    onClick = { onSelectAsset(asset) },
-                    onLongClick = {
-                        if (onRequestDeleteAsset != null) {
-                            menuExpanded = true
-                        }
-                    }
-                ),
+                .clickable { onSelectAsset(asset) },
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
             )
         ) {
             Row(
@@ -455,7 +437,7 @@ private fun LocalModelAssetCard(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Download Complete",
-                                    tint = SUCCESS_COLOR, // Green
+                                    tint = SUCCESS_COLOR,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -480,21 +462,39 @@ private fun LocalModelAssetCard(
                 }
             }
         }
+    }
 
-        if (onRequestDeleteAsset != null) {
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Delete") },
-                    onClick = {
-                        menuExpanded = false
-                        onRequestDeleteAsset(asset)
-                    }
-                )
+    if (isLocalModelAssetSwipeable(onRequestDeleteAsset)) {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) {
+                    onRequestDeleteAsset!!(asset)
+                    false
+                } else true
             }
-        }
+        )
+        SwipeToDismissBox(
+            state = dismissState,
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+            enableDismissFromStartToEnd = false,
+            backgroundContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.errorContainer),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(end = 16.dp)
+                    )
+                }
+            }
+        ) { card() }
+    } else {
+        card()
     }
 }
 
@@ -539,12 +539,8 @@ private fun LocalModelConfigListView(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = { onRequestDeleteAsset(asset) }, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete Local Model ${asset.friendlyName}",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            TextButton(onClick = { onRequestDeleteAsset(asset) }) {
+                Text("Delete Model", color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -553,20 +549,44 @@ private fun LocalModelConfigListView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
-                var menuExpanded by remember { mutableStateOf(false) }
-                val isDeleteEnabled = asset.configurations.size > 1
+                val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
+                val dismissState = rememberSwipeToDismissBoxState(
+                    confirmValueChange = { value ->
+                        if (value == SwipeToDismissBoxValue.EndToStart) {
+                            onRequestDeleteConfig(config)
+                            false
+                        } else true
+                    }
+                )
 
-                Box {
+                SwipeToDismissBox(
+                    state = dismissState,
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    enableDismissFromStartToEnd = false,
+                    gesturesEnabled = isSwipeEnabled,
+                    backgroundContent = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
+                ) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = { onEditConfig(config) },
-                                onLongClick = { menuExpanded = true }
-                            ),
+                            .clickable { onEditConfig(config) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         )
                     ) {
                         Row(
@@ -587,37 +607,7 @@ private fun LocalModelConfigListView(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-
-                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                                Icon(
-                                    Icons.Default.MoreVert,
-                                    contentDescription = "Options for ${config.displayName}",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = {
-                                menuExpanded = false
-                                onEditConfig(config)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete") },
-                            enabled = isDeleteEnabled,
-                            onClick = {
-                                menuExpanded = false
-                                onRequestDeleteConfig(config)
-                            }
-                        )
                     }
                 }
             }
@@ -664,6 +654,9 @@ private sealed interface LocalDeleteTarget {
 }
 
 private fun Double.format(digits: Int) = "%.${digits}f".format(this)
+
+internal fun isLocalModelAssetSwipeable(onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?): Boolean =
+    onRequestDeleteAsset != null
 
 // ==================== PREVIEWS ====================
 

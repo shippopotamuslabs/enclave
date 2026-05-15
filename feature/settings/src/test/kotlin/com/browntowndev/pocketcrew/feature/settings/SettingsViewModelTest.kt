@@ -525,6 +525,82 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `configDraft preserved after sheet dismissed`() = runTest {
+        val asset = MockSettingsData.localModels.first()
+        val config = LocalModelConfigUi(localModelId = asset.metadataId, displayName = "My Preset")
+
+        viewModel.onSelectLocalModelAsset(asset)
+        viewModel.onSelectLocalModelConfig(config)
+        viewModel.onShowModelConfigSheet(false)
+        advanceUntilIdle()
+
+        org.junit.jupiter.api.Assertions.assertNotNull(viewModel.uiState.value.localModelEditor.configDraft)
+    }
+
+    @Test
+    fun `system preset configDraft is preserved after sheet dismissed`() = runTest {
+        val asset = MockSettingsData.localModels.first()
+        val config = LocalModelConfigUi(
+            localModelId = asset.metadataId,
+            displayName = "System Default",
+            isSystemPreset = true
+        )
+
+        viewModel.onSelectLocalModelAsset(asset)
+        viewModel.onSelectLocalModelConfig(config)
+        viewModel.onShowModelConfigSheet(false)
+        advanceUntilIdle()
+
+        org.junit.jupiter.api.Assertions.assertTrue(
+            viewModel.uiState.value.localModelEditor.configDraft?.isSystemPreset == true
+        )
+    }
+
+    @Test
+    fun `config field values preserved after sheet dismissed`() = runTest {
+        val asset = MockSettingsData.localModels.first()
+        val config = LocalModelConfigUi(
+            localModelId = asset.metadataId,
+            displayName = "Creative",
+            temperature = 1.5,
+            contextWindow = "8192",
+            topK = "80"
+        )
+
+        viewModel.onSelectLocalModelAsset(asset)
+        viewModel.onSelectLocalModelConfig(config)
+        viewModel.onShowModelConfigSheet(false)
+        advanceUntilIdle()
+
+        val draft = viewModel.uiState.value.localModelEditor.configDraft
+        org.junit.jupiter.api.Assertions.assertEquals("Creative", draft?.displayName)
+        org.junit.jupiter.api.Assertions.assertEquals(1.5, draft?.temperature)
+        org.junit.jupiter.api.Assertions.assertEquals("8192", draft?.contextWindow)
+    }
+
+    @Test
+    fun `onSaveLocalModelConfig works after sheet dismissed`() = runTest {
+        val asset = MockSettingsData.localModels.first()
+        val config = LocalModelConfigUi(
+            localModelId = asset.metadataId,
+            displayName = "My Preset",
+            contextWindow = "4096"
+        )
+        coEvery { saveLocalModelPresetUseCase(any(), any()) } returns Result.success(
+            com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId("new-id")
+        )
+
+        viewModel.onSelectLocalModelAsset(asset)
+        viewModel.onSelectLocalModelConfig(config)
+        viewModel.onShowModelConfigSheet(false)
+
+        viewModel.onSaveLocalModelConfig(onSuccess = {})
+        advanceUntilIdle()
+
+        coVerify { saveLocalModelPresetUseCase(asset.metadataId, any()) }
+    }
+
+    @Test
     fun `onSaveApiCredentials calls use case and updates state`() = runTest {
         val draft = MockSettingsData.apiModels.first().copy(
             credentialsId = com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId("api-1"),

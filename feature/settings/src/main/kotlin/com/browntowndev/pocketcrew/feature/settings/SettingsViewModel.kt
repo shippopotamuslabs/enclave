@@ -497,6 +497,10 @@ internal class SettingsViewModel @Inject constructor(
         _currentTavilyApiKey.value = ""
         _currentExaApiKey.value = ""
         _searchSkillState.value = SearchSkillTransientState()
-        apiProvidersDelegate.onShowByokSheet(_apiState, true)
+    }
+
+    fun onBackToTtsList() {
+        _currentApiKey.value = ""
+        _ttsState.value = TtsProvidersTransientState()
     }
 }
