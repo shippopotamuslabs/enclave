@@ -61,7 +61,6 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
  *
  * The host is responsible for:
  *  - Outer `Surface` background colour and system-bar / IME insets.
- *  - Showing `Skip for now` (only the cold-start screen needs that).
  *  - Wiring the [onSubmitVaultPassword] callback to a ViewModel.
  *
  * @param showGoogleSignInOnUnauth when true and `authState` is unauthenticated/loading/error,
