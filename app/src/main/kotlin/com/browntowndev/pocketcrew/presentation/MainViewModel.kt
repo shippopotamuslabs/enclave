@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
+import com.browntowndev.pocketcrew.domain.port.security.BiometricPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
 import com.browntowndev.pocketcrew.domain.security.VaultKeystoreAliases
@@ -79,6 +80,7 @@ class MainViewModel
         private val cryptoManager: CryptoManagerPort,
         private val cloudSyncPort: CloudSyncPort,
         private val vaultMetadataPort: VaultMetadataPort,
+        private val biometricPort: BiometricPort,
         private val biometricManager: AndroidBiometricManager,
         private val createVaultUseCase: CreateVaultUseCase,
         private val unlockVaultUseCase: UnlockVaultUseCase,
@@ -106,8 +108,8 @@ class MainViewModel
             viewModelScope.launch {
                 val isLocked = !cryptoManager.hasCachedKey()
                 val isBioPossible = isLocked &&
-                    biometricManager.isBiometricAvailable() &&
-                    biometricManager.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                    biometricPort.isBiometricAvailable() &&
+                    biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
                 loggingPort.debug(TAG, "initializeApp: isLocked=$isLocked, isBioPossible=$isBioPossible")
 
@@ -228,24 +230,32 @@ class MainViewModel
 
                     initializeModelsIfNeeded()
 
-                    if (shouldRequestBiometricEnrollment(enableBiometric)) {
+                    val requestBiometricEnrollment = shouldRequestBiometricEnrollment(enableBiometric)
+                    if (requestBiometricEnrollment) {
                         loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
                         _startupState.update {
-                            if (it is AppStartupState.Ready) it.copy(
-                                isVaultLocked = false,
-                                vaultErrorMessage = null,
-                                isBiometricEnrollmentPending = true,
-                            ) else it
+                            if (it is AppStartupState.Ready) {
+                                it.copy(
+                                    isVaultLocked = false,
+                                    vaultErrorMessage = null,
+                                    isBiometricEnrollmentPending = true,
+                                )
+                            } else {
+                                it
+                            }
                         }
-                        return@launch
-                    }
-
-                    _startupState.update {
-                        if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it
+                    } else {
+                        _startupState.update {
+                            if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it
+                        }
                     }
 
                     if ((startupState.value as? AppStartupState.Ready)?.authState is VaultAuthUiState.Authenticated) {
                         reconcileWithCloudIfNeeded(password)
+                    }
+
+                    if (requestBiometricEnrollment) {
+                        return@launch
                     }
                 } finally {
                     _startupState.update {
@@ -257,8 +267,8 @@ class MainViewModel
 
         private fun shouldRequestBiometricEnrollment(enableBiometric: Boolean): Boolean =
             enableBiometric &&
-                biometricManager.isBiometricAvailable() &&
-                !biometricManager.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                biometricPort.isBiometricAvailable() &&
+                !biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
         private suspend fun resolveOrCreateSalt(): Pair<String, ByteArray> {
             var saltBase64 = vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
@@ -299,6 +309,16 @@ class MainViewModel
                 }
             }
             return verification
+        }
+
+        /** Cloud anchor first so biometric unlock proves the DEK still matches remote vault state. */
+        private suspend fun resolveVerificationPreferCloud(): String? {
+            var verification = cloudSyncPort.getVaultVerificationData().getOrNull()?.takeIf { it.isNotBlank() }
+            if (verification != null) {
+                vaultMetadataPort.saveVaultVerificationData(verification)
+                return verification
+            }
+            return vaultMetadataPort.getVaultVerificationData()?.takeIf { it.isNotBlank() }
         }
 
         private suspend fun persistWrappedDek(wrappedBase64: String, salt: String) {
@@ -457,20 +477,49 @@ class MainViewModel
             }
         }
 
-        @Suppress("ReturnCount")
-        private fun verifyMagicOrFail(verificationCiphertext: String?): Boolean {
-            if (verificationCiphertext == null) return true
+        private fun verifyMagic(
+            verificationCiphertext: String?,
+            requireVerification: Boolean = false,
+        ): Boolean {
+            if (verificationCiphertext == null) return !requireVerification
             val ciphertextBytes = android.util.Base64.decode(verificationCiphertext, android.util.Base64.DEFAULT)
             val decryptResult = cryptoManager.decrypt(ciphertextBytes)
-            if (decryptResult.isFailure || decryptResult.getOrNull() != VAULT_VERIFICATION_MAGIC_STRING) {
-                loggingPort.error(TAG, "verifyMagicOrFail: Verification mismatch — DEK does not decrypt magic string")
-                cryptoManager.clearKey()
-                _startupState.update {
-                    if (it is AppStartupState.Ready) it.copy(vaultErrorMessage = "Incorrect Vault Password") else it
-                }
-                return false
+            return decryptResult.isSuccess && decryptResult.getOrNull() == VAULT_VERIFICATION_MAGIC_STRING
+        }
+
+        @Suppress("ReturnCount")
+        private fun verifyMagicOrFail(verificationCiphertext: String?): Boolean {
+            if (verifyMagic(verificationCiphertext)) return true
+            loggingPort.error(TAG, "verifyMagicOrFail: Verification mismatch — DEK does not decrypt magic string")
+            cryptoManager.clearKey()
+            _startupState.update {
+                if (it is AppStartupState.Ready) it.copy(vaultErrorMessage = "Incorrect Vault Password") else it
             }
-            return true
+            return false
+        }
+
+        private fun invalidateStaleBiometricUnlock(failureMessage: String) {
+            loggingPort.error(TAG, "invalidateStaleBiometricUnlock: $failureMessage")
+            cryptoManager.clearKey()
+            biometricPort.clearSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+            _startupState.update {
+                if (it is AppStartupState.Ready) {
+                    it.copy(
+                        isVaultLocked = true,
+                        isBiometricUnlockPossible = false,
+                        vaultErrorMessage = failureMessage,
+                    )
+                } else {
+                    it
+                }
+            }
+        }
+
+        private suspend fun startCloudListenerIfEligible() {
+            val ready = startupState.value as? AppStartupState.Ready ?: return
+            if (ready.authState !is VaultAuthUiState.Authenticated) return
+            if (ready.pendingVaultReconciliation != null || ready.cloudSyncDeferred) return
+            startCloudSyncAndListen(initialUpload = false)
         }
 
         fun getBiometricEncryptCipher(): Cipher? =
@@ -498,8 +547,8 @@ class MainViewModel
                     if (it is AppStartupState.Ready) {
                         val bioPossibleNow =
                             result.isSuccess &&
-                                biometricManager.isBiometricAvailable() &&
-                                biometricManager.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                                biometricPort.isBiometricAvailable() &&
+                                biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
                         if (!result.isSuccess) {
                             loggingPort.error(
                                 TAG,
@@ -528,9 +577,10 @@ class MainViewModel
             biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
         /**
-         * Biometric unlock only restores the local DEK cache. Cloud sync and listener startup
-         * remain gated behind password-based reconciliation so a stale biometric blob cannot
-         * pull down cloud state before the vault has been re-authenticated.
+         * Biometric unlock restores the local DEK cache after proving it still decrypts the
+         * vault verification anchor (cloud first, then local). Full reconciliation (bootstrap,
+         * clobber, initial upload) remains password-only. A stale biometric blob is cleared and
+         * the user is asked for their vault password.
          */
         fun unlockWithBiometricCipher(cipher: Cipher) {
             if ((startupState.value as? AppStartupState.Ready)?.isUnlocking == true) return
@@ -579,11 +629,20 @@ class MainViewModel
                         return@launch
                     }
 
+                    val biometricFailureMessage =
+                        "Could not unlock with biometrics. Enter your vault password."
+                    if (!verifyMagic(resolveVerificationPreferCloud(), requireVerification = true)) {
+                        invalidateStaleBiometricUnlock(biometricFailureMessage)
+                        return@launch
+                    }
+
                     initializeModelsIfNeeded()
 
                     _startupState.update {
                         if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it
                     }
+
+                    startCloudListenerIfEligible()
                 } finally {
                     _startupState.update {
                         if (it is AppStartupState.Ready) it.copy(isUnlocking = false) else it
