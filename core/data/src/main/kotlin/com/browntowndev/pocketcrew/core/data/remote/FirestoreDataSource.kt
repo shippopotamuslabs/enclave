@@ -1879,20 +1879,23 @@ class FirestoreDataSource
          * Clears documents under each known sync adapter path under `users/{uid}`, then deletes the user doc.
          * Firestore does not cascade-delete subcollections when the parent document is deleted,
          * so omitting the pre-delete sweep would leave orphan collections unless server-side cleanup exists.
+         *
+         * Snapshot listeners are detached only after remote deletion succeeds so a transient failure
+         * (network, permissions, etc.) does not leave the app signed in with sync listeners torn down.
          */
         override suspend fun deleteUserAccount(): Result<Unit> =
             syncMutex.withLock {
                 try {
                     val userId = userIdProvider() ?: return Result.failure(IllegalStateException("Not signed in"))
-                    listenerMutex.withLock {
-                        listenerRegistrations.forEach { it.remove() }
-                        listenerRegistrations.clear()
-                    }
                     val collectionPaths = adapters.map { it.collectionPath }.distinct()
                     for (path in collectionPaths) {
                         deleteAllDocumentsInFirestoreCollection(parentPath = "users/$userId", segment = path)
                     }
                     firestore.document("users/$userId").delete().await()
+                    listenerMutex.withLock {
+                        listenerRegistrations.forEach { it.remove() }
+                        listenerRegistrations.clear()
+                    }
                     Result.success(Unit)
                 } catch (e: Exception) {
                     Result.failure(e)
