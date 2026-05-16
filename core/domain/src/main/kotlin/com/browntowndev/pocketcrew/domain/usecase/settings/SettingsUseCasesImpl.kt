@@ -18,7 +18,6 @@ import javax.inject.Inject
 class SettingsPreferencesUseCasesImpl @Inject constructor(
     override val getSettings: GetSettingsUseCase,
     override val updateTheme: UpdateThemeUseCase,
-    override val updateHapticPress: UpdateHapticPressUseCase,
     override val updateHapticResponse: UpdateHapticResponseUseCase,
     override val updateCustomizationEnabled: UpdateCustomizationEnabledUseCase,
     override val updateSelectedPromptOption: UpdateSelectedPromptOptionUseCase,

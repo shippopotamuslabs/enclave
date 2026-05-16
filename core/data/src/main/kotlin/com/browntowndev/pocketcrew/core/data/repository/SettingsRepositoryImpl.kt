@@ -32,7 +32,6 @@ class SettingsRepositoryImpl
     ) : SettingsRepository {
         companion object {
             private val THEME_KEY = stringPreferencesKey("settings_theme")
-            private val HAPTIC_PRESS_KEY = booleanPreferencesKey("settings_haptic_press")
             private val HAPTIC_RESPONSE_KEY = booleanPreferencesKey("settings_haptic_response")
             private val CUSTOMIZATION_ENABLED_KEY = booleanPreferencesKey("settings_customization_enabled")
             private val SELECTED_PROMPT_OPTION_KEY = stringPreferencesKey("settings_selected_prompt_option")
@@ -70,7 +69,6 @@ class SettingsRepositoryImpl
                                     AppTheme.SYSTEM
                                 }
                             } ?: AppTheme.SYSTEM,
-                        hapticPress = preferences[HAPTIC_PRESS_KEY] ?: true,
                         hapticResponse = preferences[HAPTIC_RESPONSE_KEY] ?: true,
                         customizationEnabled = preferences[CUSTOMIZATION_ENABLED_KEY] ?: true,
                         selectedPromptOption =
@@ -112,12 +110,6 @@ class SettingsRepositoryImpl
         override suspend fun updateTheme(theme: AppTheme) {
             dataStore.edit { preferences ->
                 preferences[THEME_KEY] = theme.name
-            }
-        }
-
-        override suspend fun updateHapticPress(value: Boolean) {
-            dataStore.edit { preferences ->
-                preferences[HAPTIC_PRESS_KEY] = value
             }
         }
 

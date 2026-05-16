@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Palette
@@ -79,7 +78,6 @@ fun SettingsScreen(
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
-    onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
@@ -101,8 +99,9 @@ fun SettingsScreen(
     onSaveMemory: () -> Unit,
     onCancelMemoryEdit: () -> Unit,
     onDeleteMemory: (String) -> Unit,
-    onOpenToS: () -> Unit,
+    onShowTosSheet: (Boolean) -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
@@ -196,13 +195,6 @@ fun SettingsScreen(
 
             item {
                 SectionHeader(text = "Experience")
-                SettingsToggle(
-                    title = "Haptic Press",
-                    icon = Icons.Default.TouchApp,
-                    checked = uiState.home.hapticPress,
-                    onCheckedChange = onHapticPressChange
-                )
-                Spacer(modifier = Modifier.height(8.dp))
                 SettingsToggle(
                     title = "Haptic Response",
                     icon = Icons.Default.Vibration,
@@ -305,7 +297,7 @@ fun SettingsScreen(
                 SettingsNavigationItem(
                     title = "Terms of Service",
                     icon = Icons.Default.Info,
-                    onClick = onOpenToS
+                    onClick = { onShowTosSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
@@ -313,8 +305,14 @@ fun SettingsScreen(
                     icon = Icons.Default.Feedback,
                     onClick = { onShowFeedbackSheet(true) }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Open Source Licenses",
+                    icon = Icons.Default.Info,
+                    onClick = { onShowOssLicensesSheet(true) }
+                )
             }
-            
+
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
@@ -430,6 +428,16 @@ fun SettingsScreen(
                 onClearXApiKey = onClearXApiKey,
                 onSaveXSearch = onSaveXSearchSettings
             )
+        }
+
+        if (uiState.home.isOssLicensesSheetOpen) {
+            OssLicensesBottomSheet(
+                onDismiss = { onShowOssLicensesSheet(false) }
+            )
+        }
+
+        if (uiState.home.isTosSheetOpen) {
+            TosBottomSheet(onDismiss = { onShowTosSheet(false) })
         }
 
         when (val sheet = uiState.vaultReauthSheet) {
@@ -761,7 +769,6 @@ fun PreviewSettingsScreen() {
             onLoginClick = {},
             onLogoutClick = {},
             onThemeChange = {},
-            onHapticPressChange = {},
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
             onShowDataControlsSheet = {},
@@ -783,8 +790,9 @@ fun PreviewSettingsScreen() {
             onSaveMemory = {},
             onCancelMemoryEdit = {},
             onDeleteMemory = {},
-            onOpenToS = {},
+            onShowTosSheet = {},
             onShowFeedbackSheet = {},
+            onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
             onSetDefaultModel = { _, _, _, _, _ -> },

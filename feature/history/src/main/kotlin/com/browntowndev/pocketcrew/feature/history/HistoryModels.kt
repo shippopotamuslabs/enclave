@@ -14,5 +14,4 @@ data class HistoryUiState(
     val pinnedChats: List<HistoryChat> = emptyList(),
     val otherChats: List<HistoryChat> = emptyList(),
     val isLoading: Boolean = false,
-    val hapticPress: Boolean = true,
 )
