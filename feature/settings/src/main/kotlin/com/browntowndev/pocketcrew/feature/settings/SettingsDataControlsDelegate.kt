@@ -56,7 +56,13 @@ internal class SettingsDataControlsDelegate
         }
 
         fun onDismissDataControlsConfirmation(dataControlsState: MutableStateFlow<DataControlsTransientState>) {
-            dataControlsState.update { it.copy(pendingAction = null, isDeleting = false) }
+            dataControlsState.update { current ->
+                if (current.isDeleting) {
+                    current
+                } else {
+                    current.copy(pendingAction = null, isDeleting = false)
+                }
+            }
         }
 
         private fun reportDeleteFailure(
