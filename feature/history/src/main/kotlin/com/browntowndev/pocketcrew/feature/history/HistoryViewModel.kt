@@ -4,15 +4,11 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.DeleteChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,9 +18,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,7 +37,6 @@ class HistoryViewModel @Inject constructor(
     private val deleteChatUseCase: DeleteChatUseCase,
     private val renameChatUseCase: RenameChatUseCase,
     private val togglePinChatUseCase: TogglePinChatUseCase,
-    private val getSettingsUseCase: GetSettingsUseCase,
     private val errorHandler: ViewModelErrorHandler,
 ) : ViewModel() {
 
@@ -62,40 +57,28 @@ class HistoryViewModel @Inject constructor(
     )
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-    val uiState: StateFlow<HistoryUiState> = combine(
-        _searchQuery.debounce(300L).flatMapLatest { query ->
+    val uiState: StateFlow<HistoryUiState> = _searchQuery
+        .debounce(300L)
+        .flatMapLatest { query ->
             if (query.isBlank()) {
                 getAllChatsUseCase().catch { emit(emptyList()) }
             } else {
                 searchChatsUseCase(query).catch { emit(emptyList()) }
             }
-        },
-        getSettingsUseCase().catch { 
-            emit(
-                SettingsData(
-                    theme = AppTheme.SYSTEM,
-                    hapticPress = true,
-                    hapticResponse = true,
-                    customizationEnabled = false,
-                    selectedPromptOption = SystemPromptOption.CONCISE,
-                    customPromptText = "",
-                    allowMemories = false
-                )
-            ) 
         }
-    ) { chats, settings ->
-        val categorized = categorizeChats(chats)
-        HistoryUiState(
-            pinnedChats = categorized.pinned,
-            otherChats = categorized.other,
-            isLoading = false,
-            hapticPress = settings.hapticPress,
+        .map { chats ->
+            val categorized = categorizeChats(chats)
+            HistoryUiState(
+                pinnedChats = categorized.pinned,
+                otherChats = categorized.other,
+                isLoading = false,
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HistoryUiState(isLoading = true),
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = HistoryUiState(isLoading = true),
-    )
 
     private fun categorizeChats(chats: List<Chat>): CategorizedChats {
         val sorted = chats.sortedWith(
