@@ -242,5 +242,5 @@ internal object OssLicenses {
             copyrightHolder = "Ubique Innovation AG",
             licenseText = "Copyright Ubique Innovation AG\n\nLicensed under the Apache License, Version 2.0.",
         ),
-    ).sortedBy { it.name }
+    ).sortedBy { it.name.lowercase() }
 }
