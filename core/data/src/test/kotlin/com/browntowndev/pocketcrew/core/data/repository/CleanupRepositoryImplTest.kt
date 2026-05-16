@@ -35,4 +35,13 @@ class CleanupRepositoryImplTest {
             }
             coVerify { apiKeyManager.clearAllPending() }
         }
+
+    @Test
+    fun `deleteAllArtifacts deletes documents only`() =
+        runTest {
+            cleanupRepository.deleteAllArtifacts()
+
+            coVerify { cleanupDao.deleteDocuments() }
+            coVerify(exactly = 0) { cleanupDao.clearUserData() }
+        }
 }
