@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
@@ -199,7 +200,12 @@ fun DataControlsBottomSheet(
     if (pending != null) {
         val activeRow = allRows.first { it.pending == pending }
         AlertDialog(
-            onDismissRequest = onDismissConfirmation,
+            onDismissRequest = { if (!dc.isDeleting) onDismissConfirmation() },
+            properties =
+                DialogProperties(
+                    dismissOnBackPress = !dc.isDeleting,
+                    dismissOnClickOutside = !dc.isDeleting,
+                ),
             title = { Text("Are you sure?") },
             text = { Text(activeRow.alertBody) },
             confirmButton = {
@@ -211,7 +217,10 @@ fun DataControlsBottomSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismissConfirmation) {
+                TextButton(
+                    onClick = onDismissConfirmation,
+                    enabled = !dc.isDeleting,
+                ) {
                     Text("Cancel")
                 }
             },
