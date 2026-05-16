@@ -136,6 +136,8 @@ class SettingsViewModelTest {
         val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>()
         val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>()
 
+        val dataControlsUseCases = mockk<SettingsDataControlsUseCases>(relaxed = true)
+
         val settingsUseCases = SettingsUseCasesImpl(
             preferences = SettingsPreferencesUseCasesImpl(
                 getSettings = getSettingsUseCase,
@@ -197,6 +199,7 @@ class SettingsViewModelTest {
                 getAuthState = getAuthStateUseCase,
             ),
             memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
+            dataControls = dataControlsUseCases,
         )
 
         val embeddingProgressPort = mockk<com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort>()
@@ -227,6 +230,7 @@ class SettingsViewModelTest {
             cloudSyncPort,
         )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
+        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler)
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
         val apiProvidersDelegate = SettingsApiProvidersDelegate(settingsUseCases.apiProviders, settingsUseCases.tts, settingsUseCases.media, deletionHelper, apiModelAssetUiMapper, ttsProviderAssetUiMapper, errorHandler)
@@ -245,6 +249,7 @@ class SettingsViewModelTest {
             ),
             generalDelegate = generalDelegate,
             memoriesDelegate = memoriesDelegate,
+            dataControlsDelegate = dataControlsDelegate,
             localModelsDelegate = localModelsDelegate,
             apiProvidersDelegate = apiProvidersDelegate,
             searchDelegate = searchDelegate,

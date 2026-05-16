@@ -82,6 +82,16 @@ class SettingsAuthUseCasesImpl @Inject constructor(
     override val getAuthState: GetAuthStateUseCase,
 ) : SettingsAuthUseCases
 
+class SettingsDataControlsUseCasesImpl
+    @Inject
+    constructor(
+        override val deleteAllChats: DeleteAllChatsUseCase,
+        override val deleteAllMedia: DeleteAllMediaUseCase,
+        override val deleteAllMemories: DeleteAllMemoriesUseCase,
+        override val deleteAllArtifacts: DeleteAllArtifactsUseCase,
+        override val deleteAccount: DeleteAccountUseCase,
+    ) : SettingsDataControlsUseCases
+
 class SettingsMemoriesUseCasesImpl @Inject constructor(
     private val memoriesRepository: com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository,
 ) : SettingsMemoriesUseCases {
@@ -103,4 +113,5 @@ class SettingsUseCasesImpl @Inject constructor(
     override val media: SettingsMediaUseCases,
     override val auth: SettingsAuthUseCases,
     override val memories: SettingsMemoriesUseCases,
+    override val dataControls: SettingsDataControlsUseCases,
 ) : SettingsUseCases

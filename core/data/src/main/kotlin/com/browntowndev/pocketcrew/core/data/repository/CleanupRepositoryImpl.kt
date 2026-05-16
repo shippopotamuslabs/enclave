@@ -26,4 +26,10 @@ class CleanupRepositoryImpl
                 apiKeyManager.clearAllPending()
             }
         }
+
+        override suspend fun deleteAllArtifacts() {
+            withContext(Dispatchers.IO) {
+                database.cleanupDao().deleteDocuments()
+            }
+        }
     }

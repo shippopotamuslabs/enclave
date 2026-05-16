@@ -88,6 +88,14 @@ interface SettingsMemoriesUseCases {
     suspend fun deleteMemory(id: String)
 }
 
+interface SettingsDataControlsUseCases {
+    val deleteAllChats: DeleteAllChatsUseCase
+    val deleteAllMedia: DeleteAllMediaUseCase
+    val deleteAllMemories: DeleteAllMemoriesUseCase
+    val deleteAllArtifacts: DeleteAllArtifactsUseCase
+    val deleteAccount: DeleteAccountUseCase
+}
+
 interface SettingsUseCases {
     val preferences: SettingsPreferencesUseCases
     val localModels: SettingsLocalModelUseCases
@@ -98,6 +106,7 @@ interface SettingsUseCases {
     val media: SettingsMediaUseCases
     val auth: SettingsAuthUseCases
     val memories: SettingsMemoriesUseCases
+    val dataControls: SettingsDataControlsUseCases
 
     val getSettings: GetSettingsUseCase
         get() = preferences.getSettings
