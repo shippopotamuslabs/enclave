@@ -8,20 +8,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
-import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.google.genai.types.Content
-import com.google.genai.types.FunctionCall
 import com.google.genai.types.FunctionCallingConfig
 import com.google.genai.types.FunctionCallingConfigMode
 import com.google.genai.types.GenerateContentConfig
@@ -45,7 +36,6 @@ class GoogleInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
-    val orchestrator: LlmToolingOrchestrator,
 ) : RustCompatibleInferenceService {
 
     companion object {
@@ -106,11 +96,6 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
-            return
-        }
-
         logImagePayloads(options)
 
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
@@ -137,245 +122,6 @@ class GoogleInferenceServiceImpl(
         )
         emitEvent(InferenceEvent.Finished(modelType))
     }
-
-    @Suppress("ThrowsCount")
-    private suspend fun executeToolingPrompt(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ) {
-        logImagePayloads(options)
-        val request = GoogleRequestMapper.mapToGenerateContentRequest(
-            prompt = prompt,
-            history = requestHistory,
-            options = options,
-        )
-
-        val toolLoopPayloads = mutableListOf<String>()
-        try {
-            orchestrator.execute<List<Content>, GoogleSdkResult>(
-                providerName = PROVIDER,
-                initialParams = request.contents,
-                tag = TAG,
-                maxToolCalls = options.maxToolCalls,
-                onInferencePass = { params, allowToolCall ->
-
-                    sdkClient.generateContentStream(
-                        modelId = modelId,
-                        contents = params,
-                        config = request.config,
-                        allowToolCall = allowToolCall,
-                        emitEvent = emitEvent
-                    )
-                },
-                onToolCallDetected = { response ->
-                    response.functionCall?.let { functionCall ->
-                        val toolName = functionCall.name().orElseThrow {
-                            IllegalStateException("Google tool execution failed before final response")
-                        }
-                        listOf(
-                            ToolCallRequest(
-                                toolName = toolName,
-                                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(
-                                    toolName = toolName,
-                                    arguments = functionCall.args().orElse(emptyMap())
-                                ),
-                                provider = PROVIDER,
-                                modelType = modelType,
-                                chatId = options.chatId,
-                                userMessageId = options.userMessageId,
-                                assistantMessageId = options.assistantMessageId,
-                            )
-                        )
-                    } ?: emptyList()
-                },
-                onToolResultsMapped = { params, response, results ->
-                    // Truncate large tool results when context window is known
-                    val truncationAvailableTokens = options.contextWindow?.let { cw ->
-                        val budget = ContextWindowPlanner.budgetFor(
-                            contextWindowTokens = cw,
-                            options = options,
-                            modelId = modelId,
-                            tokenCounter = JTokkitTokenCounter,
-                        )
-                        val usedTokens = ContextWindowPlanner.estimatePromptTokens(
-                            history = requestHistory,
-                            systemPrompt = null,
-                            currentPrompt = prompt,
-                            toolResultPayloads = toolLoopPayloads,
-                            modelId = modelId,
-                            tokenCounter = JTokkitTokenCounter,
-                        ) ?: 0
-                        (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
-                    }
-                    val functionResponses = results.map { (toolCall, resultJson) ->
-                        val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
-                            NativeToolResultFormatter.truncateForApiContext(
-                                resultJson = resultJson,
-                                availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
-                                tokenCounter = JTokkitTokenCounter,
-                                modelId = modelId,
-                            )
-                        } else {
-                            resultJson
-                        }
-                        // Google expects one part per function response in a user-role Content
-                        // If they were parallel, we'd still have the initial function call names
-                        // For now, we assume the model emitted only one or we map each by its toolName.
-                        buildFunctionResponsePart(toolCall.toolName, truncatedResult)
-                    }
-
-                    toolLoopPayloads += functionResponses.map { it.toString() }
-                    val contextExceeded = estimateContextExceeded(
-                        requestHistory = requestHistory,
-                        prompt = prompt,
-                        options = options,
-                        toolResultPayloads = toolLoopPayloads,
-                    ).contextExceeded
-
-                    params + listOfNotNull(
-                        response.assistantContent,
-                        Content.builder()
-                            .role("user")
-                            .parts(functionResponses)
-                            .build(),
-                        stopToolsWarningContent().takeIf { contextExceeded },
-                    )
-                },
-                onContextExceeded = { _, results ->
-                    val result = estimateContextExceeded(
-                        requestHistory = requestHistory,
-                        prompt = prompt,
-                        options = options,
-                        toolResultPayloads = toolLoopPayloads,
-                    )
-
-                    if (result.contextExceeded && 
-                        results.any { it.first.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
-                        // Try to compress history specifically for artifact loop
-                        loggingPort.info(TAG, "Attempting artifact context compression provider=$PROVIDER")
-                        val compressedHistory = com.browntowndev.pocketcrew.domain.util.ArtifactContextCompressor.compress(
-                            requestHistory
-                        )
-                        
-                        // Rebuild params with compressed history
-                        val rebuiltRequest = GoogleRequestMapper.mapToGenerateContentRequest(
-                            prompt = prompt,
-                            history = compressedHistory,
-                            options = options,
-                        )
-                        ContextExceededResult(contextExceeded = false, rebuiltParams = rebuiltRequest.contents)
-                    } else {
-                        ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
-                    }
-                },
-                onToolResult = { toolCall, resultJson ->
-                    if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
-                        toolCall.toolName == ToolDefinition.X_SEARCH.name) {
-                        val assistantMessageId = options.assistantMessageId
-                        if (assistantMessageId != null) {
-                            val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
-                            if (sources.isNotEmpty()) {
-                                emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
-                            }
-                        }
-                    }
-
-                    if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
-                        try {
-                            val appendParams =
-                                toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
-                            com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
-                                .parseCompleteArtifact(resultJson)
-                                ?.let { complete ->
-                                    emitEvent(
-                                        InferenceEvent.Artifacts(
-                                            artifacts = listOf(
-                                                com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                                    artifactId = appendParams.artifactId,
-                                                    title = complete.title,
-                                                    content = complete.documentJson,
-                                                ),
-                                            ),
-                                            modelType = modelType,
-                                        ),
-                                    )
-                                }
-                        } catch (e: Exception) {
-                            loggingPort.error(TAG, "Failed to parse append_blocks result", e)
-                        }
-                    }
-
-                    if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
-                        toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
-                        toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
-                        val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
-                        if (mediaResult.uris.isNotEmpty()) {
-                            emitEvent(
-                                InferenceEvent.Media(
-                                    mediaUris = mediaResult.uris,
-                                    mediaIds = mediaResult.ids,
-                                    mediaTypes = mediaResult.types,
-                                    prompts = mediaResult.prompts,
-                                    modelType = modelType
-                                )
-                            )
-                        }
-                    }
-                },
-                onFinished = { _, _, _ ->
-                    emitEvent(InferenceEvent.Finished(modelType))
-                }
-            )
-        } catch (e: IllegalArgumentException) {
-            throw e
-        } catch (e: IllegalStateException) {
-            throw e
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            throw IllegalStateException("Google tool execution failed before final response", e)
-        }
-    }
-
-    /**
-     * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
-     * API providers are stateless between requests, so summarization happens before the request is sent;
-     * mid-loop history rebuilding is possible but not yet implemented for API providers.
-     * Returns a [ContextExceededResult] indicating whether context is exceeded after
-     * any mid-loop history rebuilding.
-     */
-    private fun estimateContextExceeded(
-        requestHistory: List<ChatMessage>,
-        prompt: String,
-        options: GenerationOptions,
-        toolResultPayloads: List<String>,
-    ): ContextExceededResult<List<Content>> {
-        val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
-        val contextExceeded = ToolContextBudget.isApiContextExceeded(
-            contextWindowTokens = contextWindow,
-            history = requestHistory,
-            systemPrompt = null,
-            currentPrompt = prompt,
-            toolResultPayloads = toolResultPayloads,
-            options = options,
-            modelId = modelId,
-        )
-        if (contextExceeded) {
-            loggingPort.warning(
-                TAG,
-                "Google context exceeded mid-loop: window=$contextWindow"
-            )
-        }
-        return ContextExceededResult(contextExceeded)
-    }
-
-    private fun stopToolsWarningContent(): Content =
-        Content.builder()
-            .role("user")
-            .parts(listOf(Part.fromText(ContextWindowPlanner.STOP_TOOLS_WARNING)))
-            .build()
 
     private fun buildFunctionResponsePart(
         toolName: String,

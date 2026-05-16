@@ -14,9 +14,9 @@ import kotlinx.coroutines.withContext
 /**
  * Uses [Provider] to break a Dagger/Hilt constructor-injection cycle:
  *
- * InferenceFactoryImpl → LlmToolingOrchestrator → ToolExecutorPort
- *   → CompositeToolExecutor → ImageInspectToolExecutor → AnalyzeImageUseCase
- *   → InferenceFactoryPort → InferenceFactoryImpl (cycle).
+ * InferenceFactoryImpl → RustLoopInferenceService → ToolExecutorPort → CompositeToolExecutor
+ *   → ImageInspectToolExecutor → AnalyzeImageUseCase → InferenceFactoryPort
+ *   → InferenceFactoryImpl (cycle).
  *
  * The factory is only needed at invoke-time, not at construction-time,
  * so [Provider] yields the correct semantics: lazy resolution after the

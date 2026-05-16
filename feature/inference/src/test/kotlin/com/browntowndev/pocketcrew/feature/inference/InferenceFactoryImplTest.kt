@@ -24,7 +24,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.google.genai.Client
 import com.openai.client.OpenAIClient
@@ -95,7 +94,6 @@ class InferenceFactoryImplTest {
                 anthropicClientProvider = anthropicClientProvider,
                 googleGenAiClientProvider = googleGenAiClientProvider,
                 loggingPort = loggingPort,
-                orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
                 inferenceLockManager = inferenceLockManager,
                 toolExecutionEventPort = mockk(relaxed = true),
                 agentLoopPort = agentLoopPort,
@@ -568,76 +566,6 @@ class InferenceFactoryImplTest {
                     headers = any(),
                 )
             }
-        }
-
-    @Test
-    fun `withInferenceService injects one shared tool executor into supported remote providers`() =
-        runTest {
-            val openAiService =
-                resolveApiService(
-                    provider = ApiProvider.OPENAI,
-                    modelType = ModelType.FAST,
-                    apiConfigId = ApiModelConfigurationId("21"),
-                    apiCredentialsId = ApiCredentialsId("31"),
-                    modelId = "gpt-4o",
-                ).let(::unwrapRustLoop) as ApiInferenceServiceImpl
-            val openRouterService =
-                resolveApiService(
-                    provider = ApiProvider.OPENROUTER,
-                    modelType = ModelType.THINKING,
-                    apiConfigId = ApiModelConfigurationId("22"),
-                    apiCredentialsId = ApiCredentialsId("32"),
-                    modelId = "openai/gpt-5.2:nitro",
-                ).let(::unwrapRustLoop) as OpenRouterInferenceServiceImpl
-            val xaiService =
-                resolveApiService(
-                    provider = ApiProvider.XAI,
-                    modelType = ModelType.MAIN,
-                    apiConfigId = ApiModelConfigurationId("23"),
-                    apiCredentialsId = ApiCredentialsId("33"),
-                    modelId = "grok-2",
-                ).let(::unwrapRustLoop) as XaiInferenceServiceImpl
-            val anthropicService =
-                resolveApiService(
-                    provider = ApiProvider.ANTHROPIC,
-                    modelType = ModelType.FINAL_SYNTHESIS,
-                    apiConfigId = ApiModelConfigurationId("24"),
-                    apiCredentialsId = ApiCredentialsId("34"),
-                    modelId = "claude-sonnet-4-20250514",
-                ).let(::unwrapRustLoop) as AnthropicInferenceServiceImpl
-
-            val openAiExecutor = openAiService.orchestrator.toolExecutor
-            assertEquals(toolExecutor, openAiExecutor)
-            assertEquals(openAiExecutor, openRouterService.orchestrator.toolExecutor)
-            assertEquals(openAiExecutor, xaiService.orchestrator.toolExecutor)
-            assertEquals(openAiExecutor, anthropicService.orchestrator.toolExecutor)
-        }
-
-    @Test
-    fun `withInferenceService injects shared tool executor into llama local service`() =
-        runTest {
-            val assignment = DefaultModelAssignment(modelType = ModelType.FAST, localConfigId = LocalModelConfigurationId("config-41"))
-            val asset =
-                com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset(
-                    metadata =
-                        com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata(
-                            id = LocalModelId("51"),
-                            huggingFaceModelName = "test/llama",
-                            remoteFileName = "model.gguf",
-                            localFileName = "model.gguf",
-                            sha256 = "llama-sha",
-                            sizeInBytes = 2048L,
-                            modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF,
-                        ),
-                    configurations = emptyList(),
-                )
-
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns assignment
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-41")) } returns asset
-
-            val service = unwrapRustLoop(factory.withInferenceService(ModelType.FAST) { it }) as LlamaInferenceServiceImpl
-
-            assertEquals(toolExecutor, service.orchestrator.toolExecutor)
         }
 
     @Test

@@ -22,14 +22,8 @@ import com.anthropic.services.blocking.MessageService
 import com.anthropic.services.blocking.ModelService
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -48,7 +42,6 @@ class AnthropicInferenceServiceImplTest {
     private val messageService = mockk<MessageService>()
     private val streamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>()
 
     @Test
     fun `sendPrompt streams text thinking and finished events`() = runTest {
@@ -88,7 +81,6 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -138,7 +130,6 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -173,7 +164,6 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = true).toList()
