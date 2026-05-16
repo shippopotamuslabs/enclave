@@ -1,8 +1,11 @@
 package com.browntowndev.pocketcrew.feature.settings
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +25,13 @@ internal fun SettingsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     SettingsScreen(
         uiState = uiState,
@@ -101,5 +111,6 @@ internal fun SettingsRoute(
         onSubmitVaultReauthPassword = viewModel::onSubmitVaultReauthPassword,
         onConfirmAdoptCloudFromSettings = viewModel::onConfirmAdoptCloudFromSettings,
         onCancelVaultReauth = viewModel::onCancelVaultReauth,
+        snackbarHostState = snackbarHostState,
     )
 }

@@ -232,16 +232,16 @@ internal class SettingsViewModel @Inject constructor(
         dataControlsDelegate.onDismissDataControlsConfirmation(_dataControlsState)
 
     fun onConfirmDeleteAllChats() =
-        dataControlsDelegate.onConfirmDeleteAllChats(viewModelScope, TAG, _dataControlsState)
+        dataControlsDelegate.onConfirmDeleteAllChats(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
 
     fun onConfirmDeleteAllMedia() =
-        dataControlsDelegate.onConfirmDeleteAllMedia(viewModelScope, TAG, _dataControlsState)
+        dataControlsDelegate.onConfirmDeleteAllMedia(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
 
     fun onConfirmDeleteAllMemories() =
-        dataControlsDelegate.onConfirmDeleteAllMemories(viewModelScope, TAG, _dataControlsState)
+        dataControlsDelegate.onConfirmDeleteAllMemories(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
 
     fun onConfirmDeleteAllArtifacts() =
-        dataControlsDelegate.onConfirmDeleteAllArtifacts(viewModelScope, TAG, _dataControlsState)
+        dataControlsDelegate.onConfirmDeleteAllArtifacts(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
 
     fun onConfirmDeleteAccount() =
         dataControlsDelegate.onConfirmDeleteAccount(viewModelScope, TAG, _dataControlsState)
