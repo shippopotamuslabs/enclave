@@ -63,13 +63,13 @@ When all tickets in [`tickets/`](./tickets/) are complete:
 | [AGENT-027](./tickets/AGENT-027.md) | `AgentTransportAdapter` | |
 | [AGENT-028](./tickets/AGENT-028.md) | `AgentSummarizerAdapter` | |
 | [AGENT-029](./tickets/AGENT-029.md) | `AgentToolExecutorAdapter` | |
-| [AGENT-030](./tickets/AGENT-030.md) | Feature flag `UseRustAgentLoop` | |
+| [AGENT-030](./tickets/AGENT-030.md) | Feature flag `UseRustAgentLoop` | deferred by decision |
 | [AGENT-031](./tickets/AGENT-031.md) | Migrate OpenAI-compatible services | |
 | [AGENT-032](./tickets/AGENT-032.md) | Migrate Anthropic & Google | |
 | [AGENT-033](./tickets/AGENT-033.md) | Migrate Llama (envelope) | |
 | [AGENT-034](./tickets/AGENT-034.md) | LiteRT policy bridge | |
 | [AGENT-035](./tickets/AGENT-035.md) | CREW / catalog alignment | deferred |
-| [AGENT-036](./tickets/AGENT-036.md) | Default flag on & soak release | |
+| [AGENT-036](./tickets/AGENT-036.md) | Default flag on & soak release | deferred by decision |
 | [AGENT-037](./tickets/AGENT-037.md) | Slim `ChatHistoryRehydrator` | |
 | [AGENT-038](./tickets/AGENT-038.md) | Tool catalog sync CI check | |
 | [AGENT-039](./tickets/AGENT-039.md) | Agent events → logging / UI | |
@@ -78,7 +78,7 @@ When all tickets in [`tickets/`](./tickets/) are complete:
 | [AGENT-042](./tickets/AGENT-042.md) | Versioning strategy | |
 | [AGENT-043](./tickets/AGENT-043.md) | Remove deprecated Kotlin code | |
 | [AGENT-044](./tickets/AGENT-044.md) | E2E: artifact tool loop | |
-| [AGENT-045](./tickets/AGENT-045.md) | Performance & memory benchmark | |
+| [AGENT-045](./tickets/AGENT-045.md) | Performance & memory benchmark | deferred by decision |
 | [AGENT-046](./tickets/AGENT-046.md) | Native Rust host trait surface | |
 | [AGENT-047](./tickets/AGENT-047.md) | `KvCacheInvalidated` + kv_fixed compaction test | |
 | [AGENT-048](./tickets/AGENT-048.md) | Android CI: NDK cross-compile + assemble smoke | |
@@ -95,6 +95,15 @@ When all tickets in [`tickets/`](./tickets/) are complete:
 | M3 Adapters | 026–030, 049 | Flag off, adapters wired, `Flow<AgentLoopEvent>` works |
 | M4 Integration | 031–038, 050 | All backends migrated, flag on by default |
 | M5 Ship | 039, 041, 042, 043, 044, 045 | E2E passes, benchmarks under budget, legacy deleted |
+
+## Release checklist
+
+- Rebuild Android bindings with `./scripts/build-agent-bindings.sh` after any `agent_core` FFI or version change.
+- Follow `core/agent/README.md` for checked-in binding policy and Android troubleshooting.
+- Verify desktop native trait smoke with `cargo run --example mock_desktop_loop`.
+- Run the artifact tool-loop E2E gate with `UseRustAgentLoop` enabled and a forced small context window; it must fail if the
+  legacy warn-and-crash path is reintroduced.
+- Record AGENT-045 latency and memory results in `benchmarks.md` before deleting legacy Kotlin orchestration.
 
 ## Critical path
 

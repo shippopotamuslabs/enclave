@@ -289,6 +289,7 @@ private fun SettingsUiStateFactory.createMinimal(
     assignmentsState = AssignmentDialogTransientState(),
     deletionState = DeletionTransientState(),
     memoriesState = MemoriesTransientState(),
+    dataControlsState = DataControlsTransientState(),
     currentTavilyApiKey = "",
     currentExaApiKey = "",
     currentXApiKey = "",
@@ -341,7 +342,6 @@ private fun buildMinimalViewModel(): SettingsViewModel {
         preferences = SettingsPreferencesUseCasesImpl(
             getSettings = getSettingsUseCase,
             updateTheme = mockk(relaxed = true),
-            updateHapticPress = mockk(relaxed = true),
             updateHapticResponse = mockk(relaxed = true),
             updateCustomizationEnabled = mockk(relaxed = true),
             updateSelectedPromptOption = mockk(relaxed = true),
@@ -398,6 +398,13 @@ private fun buildMinimalViewModel(): SettingsViewModel {
             getAuthState = getAuthStateUseCase,
         ),
         memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
+        dataControls = SettingsDataControlsUseCasesImpl(
+            deleteAllChats = mockk(relaxed = true),
+            deleteAllMedia = mockk(relaxed = true),
+            deleteAllMemories = mockk(relaxed = true),
+            deleteAllArtifacts = mockk(relaxed = true),
+            deleteAccount = mockk(relaxed = true),
+        ),
     )
 
     val embeddingProgressPort = mockk<EmbeddingProgressPort>()
@@ -444,6 +451,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
         ),
         generalDelegate = generalDelegate,
         memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler),
+        dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler),
         localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler),
         apiProvidersDelegate = SettingsApiProvidersDelegate(
             settingsUseCases.apiProviders,

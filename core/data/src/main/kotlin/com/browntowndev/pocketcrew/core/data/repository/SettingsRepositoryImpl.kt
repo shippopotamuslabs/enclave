@@ -266,4 +266,5 @@ class SettingsRepositoryImpl
                 preferences[BACKGROUND_INFERENCE_ENABLED_KEY] = enabled
             }
         }
+
     }

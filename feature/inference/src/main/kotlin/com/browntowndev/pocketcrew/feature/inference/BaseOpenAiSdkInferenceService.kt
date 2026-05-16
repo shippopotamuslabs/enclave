@@ -1,26 +1,29 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
+import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
@@ -29,13 +32,13 @@ import com.openai.client.OpenAIClient
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
@@ -46,6 +49,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @Suppress("LargeClass")
 abstract class BaseOpenAiSdkInferenceService(
@@ -56,7 +64,7 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
     val orchestrator: LlmToolingOrchestrator,
-) : LlmInferencePort {
+) : RustCompatibleInferenceService {
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -376,6 +384,120 @@ abstract class BaseOpenAiSdkInferenceService(
         conversationHistory.clear()
     }
 
+    override suspend fun completeSingleTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+        onTextToken: suspend (String) -> Unit,
+        onThinkingToken: suspend (String) -> Unit,
+        options: GenerationOptions,
+    ): AgentModelTurnResult {
+        val messages = sessionMessages.mapNotNull { it.toOpenAiChatParam() }
+
+        val builder = ChatCompletionCreateParams.builder()
+            .model(options.modelId ?: modelId)
+            .messages(messages)
+
+        if (allowToolCall && availableTools.isNotEmpty()) {
+            availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+            builder.parallelToolCalls(false)
+        }
+
+        options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
+        options.temperature?.let { builder.temperature(it.toDouble()) }
+        options.topP?.let { builder.topP(it.toDouble()) }
+        options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+
+        val response = streamChatCompletions(
+            params = builder.build(),
+            emitEvent = { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    else -> {}
+                }
+            },
+        )
+
+        val toolCalls = response.functionCalls.mapIndexed { index, call ->
+            AgentRawToolCall(
+                id = response.providerToolCallIds.getOrElse(index) { "" },
+                name = call.toolName,
+                argumentsJson = call.argumentsJson,
+            )
+        }
+
+        return AgentModelTurnResult(
+            assistantText = response.assistantMessageText.takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+        )
+    }
+
+    private fun AgentLoopMessage.toOpenAiChatParam(): ChatCompletionMessageParam? {
+        val metadata = if (metadataJson != "null" && metadataJson.isNotBlank()) {
+            runCatching { Json.parseToJsonElement(metadataJson).jsonObject }.getOrNull()
+        } else null
+
+        return when (role) {
+            Role.SYSTEM -> ChatCompletionMessageParam.ofSystem(
+                ChatCompletionSystemMessageParam.builder().content(content).build()
+            )
+            Role.USER -> ChatCompletionMessageParam.ofUser(
+                ChatCompletionUserMessageParam.builder().content(content).build()
+            )
+            Role.ASSISTANT -> {
+                // CompactSummary (FfiAgentRole.COMPACT_SUMMARY collapsed to ASSISTANT by toDomain())
+                if (id.startsWith("compact-summary-")) {
+                    return ChatCompletionMessageParam.ofSystem(
+                        ChatCompletionSystemMessageParam.builder()
+                            .content("[Conversation summary]\n$content")
+                            .build()
+                    )
+                }
+
+                // Tool result (FfiAgentRole.TOOL collapsed to ASSISTANT by toDomain())
+                val callId = metadata?.get("call_id")?.jsonPrimitive?.content
+                if (callId != null) {
+                    return ChatCompletionMessageParam.ofTool(
+                        ChatCompletionToolMessageParam.builder()
+                            .content(content)
+                            .toolCallId(callId)
+                            .build()
+                    )
+                }
+
+                // Assistant message with optional tool calls
+                val assistantBuilder = ChatCompletionAssistantMessageParam.builder()
+                if (content.isNotBlank()) {
+                    assistantBuilder.content(content)
+                }
+                val rawCalls = metadata?.get("raw_tool_calls")
+                if (rawCalls is JsonArray) {
+                    rawCalls.forEach { tc ->
+                        val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
+                        val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
+                        val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
+                        val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
+                        assistantBuilder.addToolCall(
+                            ChatCompletionMessageFunctionToolCall.builder()
+                                .id(rawCallId)
+                                .function(
+                                    ChatCompletionMessageFunctionToolCall.Function.builder()
+                                        .name(callName)
+                                        .arguments(argsJson)
+                                        .build()
+                                )
+                                .build()
+                        )
+                    }
+                }
+                ChatCompletionMessageParam.ofAssistant(assistantBuilder.build())
+            }
+        }
+    }
+
     /**
      * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
      * For OpenAI Responses API, compaction mid-chain isn't possible (server manages state
@@ -608,7 +730,7 @@ abstract class BaseOpenAiSdkInferenceService(
         }
     }
 
-    protected suspend fun streamChatCompletions(
+    protected open suspend fun streamChatCompletions(
         params: ChatCompletionCreateParams,
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,

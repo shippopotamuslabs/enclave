@@ -2,20 +2,24 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
+import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
@@ -24,8 +28,9 @@ import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.TextBlockParam
-import com.anthropic.models.messages.ToolUseBlockParam
+import com.anthropic.models.messages.ThinkingConfigEnabled
 import com.anthropic.models.messages.ToolResultBlockParam
+import com.anthropic.models.messages.ToolUseBlockParam
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
@@ -37,10 +42,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-@Suppress("MaxLineLength", "MagicNumber")
+@Suppress("MaxLineLength", "MagicNumber", "LargeClass")
 class AnthropicInferenceServiceImpl(
     private val client: AnthropicClient,
     private val modelId: String,
@@ -48,7 +55,7 @@ class AnthropicInferenceServiceImpl(
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     val orchestrator: LlmToolingOrchestrator,
-) : LlmInferencePort {
+) : RustCompatibleInferenceService {
 
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
@@ -69,9 +76,12 @@ class AnthropicInferenceServiceImpl(
     )
 
     companion object {
+        private const val DEFAULT_MAX_TOKENS = 4096L
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
+        private const val THINKING_BUDGET_MEDIUM = 1536L
+        private const val THINKING_BUDGET_XHIGH = 3072L
         private val TOOL_INPUT_JSON_MAPPER = ObjectMapper()
     }
 
@@ -353,6 +363,144 @@ class AnthropicInferenceServiceImpl(
     override suspend fun closeSession() {
         conversationHistory.clear()
     }
+
+    @Suppress("CyclomaticComplexMethod")
+    override suspend fun completeSingleTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+        onTextToken: suspend (String) -> Unit,
+        onThinkingToken: suspend (String) -> Unit,
+        options: GenerationOptions,
+    ): AgentModelTurnResult {
+        val builder = MessageCreateParams.builder()
+            .model(modelId)
+            .maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
+
+        systemPrompt.takeIf { it.isNotBlank() }?.let { builder.system(it) }
+        options.temperature?.let { builder.temperature(it.toDouble()) }
+        options.topP?.let { builder.topP(it.toDouble()) }
+
+        resolveThinkingBudget(options)?.let {
+            builder.thinking(ThinkingConfigEnabled.builder().budgetTokens(it).build())
+        }
+
+        sessionMessages.forEach { msg ->
+            val metadata = if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
+                runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
+            } else null
+
+            when (msg.role) {
+                Role.SYSTEM -> {} // already in systemPrompt param
+                Role.USER -> builder.addMessage(
+                    MessageParam.builder().role(MessageParam.Role.USER).content(msg.content).build()
+                )
+                Role.ASSISTANT -> {
+                    if (msg.id.startsWith("compact-summary-")) {
+                        builder.addMessage(
+                            MessageParam.builder()
+                                .role(MessageParam.Role.USER)
+                                .content("[Conversation summary]\n${msg.content}")
+                                .build()
+                        )
+                        return@forEach
+                    }
+                    val callId = metadata?.get("call_id")?.jsonPrimitive?.content
+                    if (callId != null) {
+                        builder.addMessage(
+                            MessageParam.builder()
+                                .role(MessageParam.Role.USER)
+                                .contentOfBlockParams(
+                                    listOf(
+                                        ContentBlockParam.ofToolResult(
+                                            ToolResultBlockParam.builder()
+                                                .toolUseId(callId)
+                                                .content(msg.content)
+                                                .build()
+                                        )
+                                    )
+                                )
+                                .build()
+                        )
+                        return@forEach
+                    }
+                    val rawCalls = metadata?.get("raw_tool_calls")
+                    val contentBlocks = mutableListOf<ContentBlockParam>()
+                    if (msg.content.isNotBlank()) {
+                        contentBlocks.add(ContentBlockParam.ofText(TextBlockParam.builder().text(msg.content).build()))
+                    }
+                    if (rawCalls is JsonArray) {
+                        rawCalls.forEach { tc ->
+                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
+                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
+                            val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
+                            val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
+                            contentBlocks.add(
+                                ContentBlockParam.ofToolUse(
+                                    ToolUseBlockParam.builder()
+                                        .id(rawCallId)
+                                        .name(callName)
+                                        .input(
+                                            ToolUseBlockParam.Input.builder()
+                                                .putAllAdditionalProperties(toolUseInputProperties(argsJson))
+                                                .build()
+                                        )
+                                        .build()
+                                )
+                            )
+                        }
+                    }
+                    if (contentBlocks.isNotEmpty()) {
+                        builder.addMessage(
+                            MessageParam.builder()
+                                .role(MessageParam.Role.ASSISTANT)
+                                .contentOfBlockParams(contentBlocks)
+                                .build()
+                        )
+                    }
+                }
+            }
+        }
+
+        if (allowToolCall && availableTools.isNotEmpty()) {
+            availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        }
+
+        val accumulatedText = StringBuilder()
+        val response = streamMessages(builder.build()) { event ->
+            when (event) {
+                is InferenceEvent.PartialResponse -> {
+                    accumulatedText.append(event.chunk)
+                    onTextToken(event.chunk)
+                }
+                is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                else -> {}
+            }
+        }
+
+        val toolCalls = response.toolUse?.let { tu ->
+            listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
+        } ?: emptyList()
+
+        return AgentModelTurnResult(
+            assistantText = accumulatedText.toString().takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+        )
+    }
+
+    private fun resolveThinkingBudget(options: GenerationOptions): Long? =
+        when {
+            options.reasoningBudget > 0 -> options.reasoningBudget.toLong().coerceAtLeast(1024L)
+            else -> when (options.reasoningEffort) {
+                null -> null
+                ApiReasoningEffort.LOW -> 1024L
+                ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
+                ApiReasoningEffort.HIGH -> 2048L
+                ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
+            }
+        }
 
     private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)

@@ -2,24 +2,31 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
+import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
+import com.google.genai.types.FunctionCallingConfig
+import com.google.genai.types.FunctionCallingConfigMode
+import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
+import com.google.genai.types.ToolConfig
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +34,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -37,7 +46,7 @@ class GoogleInferenceServiceImpl(
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     val orchestrator: LlmToolingOrchestrator,
-) : LlmInferencePort {
+) : RustCompatibleInferenceService {
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -384,6 +393,123 @@ class GoogleInferenceServiceImpl(
 
     override suspend fun closeSession() {
         conversationHistory.clear()
+    }
+
+    override suspend fun completeSingleTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+        onTextToken: suspend (String) -> Unit,
+        onThinkingToken: suspend (String) -> Unit,
+        options: GenerationOptions,
+    ): AgentModelTurnResult {
+        val contents = mutableListOf<Content>()
+
+        sessionMessages.forEach { msg ->
+            val metadata = if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
+                runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
+            } else null
+
+            when (msg.role) {
+                Role.SYSTEM -> {} // handled via systemInstruction in config
+                Role.USER -> contents.add(
+                    Content.builder().role("user").parts(listOf(Part.fromText(msg.content))).build()
+                )
+                Role.ASSISTANT -> {
+                    if (msg.id.startsWith("compact-summary-")) {
+                        contents.add(
+                            Content.builder()
+                                .role("user")
+                                .parts(listOf(Part.fromText("[Conversation summary]\n${msg.content}")))
+                                .build()
+                        )
+                        return@forEach
+                    }
+                    val callId = metadata?.get("call_id")?.jsonPrimitive?.content
+                    if (callId != null) {
+                        contents.add(
+                            Content.builder()
+                                .role("user")
+                                .parts(listOf(buildFunctionResponsePart(callId, msg.content)))
+                                .build()
+                        )
+                        return@forEach
+                    }
+                    val rawCalls = metadata?.get("raw_tool_calls")
+                    val parts = mutableListOf<Part>()
+                    if (msg.content.isNotBlank()) parts.add(Part.fromText(msg.content))
+                    if (rawCalls is JsonArray) {
+                        rawCalls.forEach { tc ->
+                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
+                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
+                            val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
+                            val args = runCatching {
+                                @Suppress("UNCHECKED_CAST")
+                                com.fasterxml.jackson.databind.ObjectMapper()
+                                    .readValue(argsJson, Map::class.java) as Map<String, Any>
+                            }.getOrElse { emptyMap() }
+                            parts.add(Part.fromFunctionCall(callName, args))
+                        }
+                    }
+                    if (parts.isNotEmpty()) {
+                        contents.add(Content.builder().role("model").parts(parts).build())
+                    }
+                }
+            }
+        }
+
+        val configBuilder = GenerateContentConfig.builder()
+        systemPrompt.takeIf { it.isNotBlank() }?.let {
+            configBuilder.systemInstruction(Content.fromParts(Part.fromText(it)))
+        }
+        options.temperature?.let { configBuilder.temperature(it) }
+        options.topP?.let { configBuilder.topP(it) }
+        options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
+
+        if (allowToolCall && availableTools.isNotEmpty()) {
+            configBuilder.tools(availableTools.map { it.toGoogleTool() })
+            configBuilder.toolConfig(
+                ToolConfig.builder()
+                    .functionCallingConfig(
+                        FunctionCallingConfig.builder().mode(FunctionCallingConfigMode.Known.AUTO).build()
+                    )
+                    .build()
+            )
+        }
+
+        val accumulatedText = StringBuilder()
+        val result = sdkClient.generateContentStream(
+            modelId = modelId,
+            contents = contents,
+            config = configBuilder.build(),
+            allowToolCall = allowToolCall,
+            emitEvent = { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse -> {
+                        accumulatedText.append(event.chunk)
+                        onTextToken(event.chunk)
+                    }
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    else -> {}
+                }
+            },
+        )
+
+        val toolCalls = result.functionCall?.let { fc ->
+            val name = fc.name().orElse(null) ?: return@let null
+            val argsJson = ToolEnvelopeParser.buildArgumentsJson(
+                toolName = name,
+                arguments = fc.args().orElse(emptyMap()),
+            )
+            listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
+        } ?: emptyList()
+
+        return AgentModelTurnResult(
+            assistantText = accumulatedText.toString().takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+        )
     }
 
     private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {

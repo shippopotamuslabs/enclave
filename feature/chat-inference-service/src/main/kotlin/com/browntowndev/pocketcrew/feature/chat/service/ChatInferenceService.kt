@@ -306,10 +306,6 @@ class ChatInferenceService : Service() {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 service = service,
-                contextWindowTokens = config?.contextWindow ?: 4096,
-                shouldSummarize = config?.isLocal != true,
-                currentPrompt = preparedRequest.prompt,
-                options = preparedRequest.options,
             )
             loggingPort.debug(TAG, "history rehydration complete chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
         } catch (e: Exception) {
@@ -340,6 +336,8 @@ class ChatInferenceService : Service() {
                     prompts = event.prompts,
                     modelType = event.modelType
                 )
+                is InferenceEvent.CompactionApplied -> null
+                is InferenceEvent.ToolRepaired -> null
                 is InferenceEvent.Finished -> {
                     maybeShowCompletionNotification(chatId)
                     MessageGenerationState.Finished(event.modelType)
@@ -350,7 +348,7 @@ class ChatInferenceService : Service() {
             publishState(
                 chatId = chatId,
                 assistantMessageId = assistantMessageId,
-                state = state,
+                state = state ?: return@collect,
                 persistenceSession = persistenceSession,
             )
         }

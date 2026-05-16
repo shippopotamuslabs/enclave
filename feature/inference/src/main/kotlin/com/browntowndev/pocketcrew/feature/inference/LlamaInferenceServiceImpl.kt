@@ -3,9 +3,13 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
+import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
@@ -44,6 +48,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
@@ -54,6 +59,7 @@ import javax.inject.Inject
  * Resolves the active model from [LocalModelRepositoryPort] at runtime, eliminating
  * the need for explicit configure() calls at provision time.
  */
+@Suppress("LargeClass")
 class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
@@ -63,7 +69,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val modelType: ModelType,
     val orchestrator: LlmToolingOrchestrator,
-) : LlmInferencePort {
+) : RustCompatibleInferenceService {
 
     companion object {
         private const val TAG = "LlamaInferenceService"
@@ -267,6 +273,70 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 // Session will be reloaded on next sendPrompt due to signature change
             }
         }
+    }
+
+    override suspend fun completeSingleTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+        onTextToken: suspend (String) -> Unit,
+        onThinkingToken: suspend (String) -> Unit,
+        options: GenerationOptions,
+    ): AgentModelTurnResult {
+        val targetModelType = options.modelType ?: modelType
+        val turnOptions = options.copy(
+            toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
+            availableTools = availableTools,
+            systemPrompt = systemPrompt.ifBlank { options.systemPrompt },
+        )
+        val domainHistory = sessionMessages.map(::toLlamaDomainMessage)
+
+        mutex.withLock {
+            history = domainHistory
+        }
+        ensureModelLoaded(targetModelType, turnOptions)
+        sessionManager.setHistory(domainHistory)
+
+        val buffered = streamBufferedGeneration(
+            events = sessionManager.streamAssistantResponseWithOptions(turnOptions),
+            targetModelType = targetModelType,
+            emitVisible = false,
+            emitEvent = { event ->
+                when (event) {
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                    else -> Unit
+                }
+            },
+        )
+        val envelope = if (allowToolCall) {
+            ToolEnvelopeParser.extractLocalToolEnvelope(buffered.fullText)
+        } else {
+            null
+        }
+        if (envelope == null) {
+            emitProcessedText(buffered.fullText, targetModelType) { event ->
+                when (event) {
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                    else -> Unit
+                }
+            }
+        }
+        return AgentModelTurnResult(
+            assistantText = buffered.fullText.takeIf { it.isNotBlank() && envelope == null },
+            toolCalls = envelope?.let {
+                listOf(
+                    AgentRawToolCall(
+                        id = "llama-tool-${System.nanoTime()}",
+                        name = it.toolName,
+                        argumentsJson = it.argumentsJson,
+                    ),
+                )
+            } ?: emptyList(),
+            finishReason = if (envelope != null) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+        )
     }
 
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
@@ -644,6 +714,23 @@ class LlamaInferenceServiceImpl @Inject constructor(
         return BufferedGeneration(
             fullText = completedText.orEmpty(),
         )
+    }
+
+    private fun toLlamaDomainMessage(message: AgentLoopMessage): DomainChatMessage {
+        val metadata = if (message.metadataJson != "null" && message.metadataJson.isNotBlank()) {
+            runCatching { Json.parseToJsonElement(message.metadataJson).jsonObject }.getOrNull()
+        } else {
+            null
+        }
+        val callId = metadata?.get("call_id")?.jsonPrimitive?.contentOrNull
+        return if (callId != null) {
+            DomainChatMessage(
+                role = Role.USER,
+                content = ToolEnvelopeParser.buildLocalToolResultMessage(message.content),
+            )
+        } else {
+            DomainChatMessage(role = message.role, content = message.content)
+        }
     }
 
     private suspend fun emitProcessedText(

@@ -29,6 +29,7 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:agent"))
     implementation(libs.kotlin.reflect)
 
     // AndroidX Core

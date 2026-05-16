@@ -67,6 +67,42 @@ ktlint:
       - "**/build/reports/ktlint/"
     expire_in: 7 days
 
+# Rust agent_core unit tests + catalog parity (AGENT-003 / AGENT-038 / AGENT-050)
+rust-agent-core:
+  image: rust:1.84-bookworm
+  stage: validate
+  variables:
+    GIT_DEPTH: "50"
+    GIT_SUBMODULE_STRATEGY: recursive
+  script:
+    - apt-get update -qq && apt-get install -y -qq jq python3
+    - cd third_party/agent_core && cargo test
+    - cd ../..
+    - chmod +x scripts/check-tool-catalog-sync.sh scripts/check-catalog-schema-parity.py
+    - ./scripts/check-tool-catalog-sync.sh
+    - python3 scripts/check-catalog-schema-parity.py
+  only:
+    changes:
+      - third_party/agent_core/**/*
+      - scripts/check-tool-catalog-sync.sh
+      - scripts/check-catalog-schema-parity.py
+      - core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/inference/ToolDefinition.kt
+      - core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/inference/**/*Params*.kt
+
+# NDK cross-compile + :core:agent assemble smoke (AGENT-048)
+core-agent-assemble:
+  extends: .gradle-base
+  stage: validate
+  script:
+    - chmod +x scripts/build-agent-bindings.sh
+    - ./scripts/build-agent-bindings.sh
+    - ./gradlew :core:agent:assembleDebug
+  only:
+    changes:
+      - third_party/agent_core/**/*
+      - core/agent/**/*
+      - scripts/build-agent-bindings.sh
+
 # =============================================================================
 # STAGE: analyze
 # Runs detekt static analysis. Configured with maxIssues: 0 (zero tolerance).

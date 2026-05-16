@@ -1,7 +1,11 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
@@ -15,6 +19,7 @@ import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiRespon
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.BadRequestException
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.coEvery
 import io.mockk.every
@@ -366,7 +371,219 @@ class BaseOpenAiSdkInferenceServiceTest {
         assertEquals("call_1", "call_1") // Manual verification of the logic I'm fixing
     }
 
+    // ── completeSingleTurn / toOpenAiChatParam ────────────────────────────────
+
+    @Test
+    fun `toOpenAiChatParam maps compact-summary id to system message`() = runTest {
+        var capturedParams: ChatCompletionCreateParams? = null
+        val service = createSingleTurnService(
+            onParams = { capturedParams = it },
+            response = emptyTextResponse(""),
+        )
+
+        service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(
+                    id = "compact-summary-abc",
+                    role = Role.ASSISTANT,
+                    content = "Prior summary",
+                    metadataJson = "null",
+                )
+            ),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        val messages = capturedParams!!.messages()
+        assertEquals(1, messages.size)
+        assertTrue(messages[0].isSystem())
+        assertTrue(messages[0].asSystem().content().asText().contains("[Conversation summary]"))
+        assertTrue(messages[0].asSystem().content().asText().contains("Prior summary"))
+    }
+
+    @Test
+    fun `toOpenAiChatParam maps call_id metadata to tool message`() = runTest {
+        var capturedParams: ChatCompletionCreateParams? = null
+        val service = createSingleTurnService(
+            onParams = { capturedParams = it },
+            response = emptyTextResponse(""),
+        )
+
+        service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(
+                    id = "tool-result-1",
+                    role = Role.ASSISTANT,
+                    content = """{"result": "ok"}""",
+                    metadataJson = """{"call_id": "call_xyz"}""",
+                )
+            ),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        val messages = capturedParams!!.messages()
+        assertEquals(1, messages.size)
+        assertTrue(messages[0].isTool())
+        assertEquals("call_xyz", messages[0].asTool().toolCallId())
+    }
+
+    @Test
+    fun `toOpenAiChatParam maps raw_tool_calls metadata to assistant message with tool calls`() = runTest {
+        var capturedParams: ChatCompletionCreateParams? = null
+        val service = createSingleTurnService(
+            onParams = { capturedParams = it },
+            response = emptyTextResponse(""),
+        )
+
+        service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(
+                    id = "assistant-1",
+                    role = Role.ASSISTANT,
+                    content = "I'll search.",
+                    metadataJson = """{"raw_tool_calls": [{"id": "call_1", "name": "web_search", "arguments_json": "{\"q\":\"test\"}"}]}""",
+                )
+            ),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        val messages = capturedParams!!.messages()
+        assertEquals(1, messages.size)
+        assertTrue(messages[0].isAssistant())
+        val toolCalls = messages[0].asAssistant().toolCalls()
+        assertTrue(toolCalls.isPresent)
+        assertEquals(1, toolCalls.get().size)
+        val functionCall = toolCalls.get()[0].asFunction()
+        assertEquals("web_search", functionCall.function().name())
+        assertEquals("call_1", functionCall.id())
+    }
+
+    @Test
+    fun `toOpenAiChatParam maps plain assistant to assistant message without tool calls`() = runTest {
+        var capturedParams: ChatCompletionCreateParams? = null
+        val service = createSingleTurnService(
+            onParams = { capturedParams = it },
+            response = emptyTextResponse(""),
+        )
+
+        service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(
+                    id = "assistant-plain",
+                    role = Role.ASSISTANT,
+                    content = "Plain response",
+                    metadataJson = "null",
+                )
+            ),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        val messages = capturedParams!!.messages()
+        assertEquals(1, messages.size)
+        assertTrue(messages[0].isAssistant())
+        assertFalse(messages[0].asAssistant().toolCalls().isPresent)
+    }
+
+    @Test
+    fun `completeSingleTurn returns Stop finish reason for text-only response`() = runTest {
+        val service = createSingleTurnService(
+            response = emptyTextResponse("Hello there"),
+        )
+
+        val result = service.completeSingleTurn(
+            sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals("Hello there", result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
+    }
+
+    @Test
+    fun `completeSingleTurn returns ToolUse finish reason for tool call response`() = runTest {
+        val service = createSingleTurnService(
+            response = StreamedOpenAiResponse(
+                emittedAny = true,
+                functionCalls = listOf(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"q":"test"}""",
+                        provider = "TEST",
+                        modelType = ModelType.FAST,
+                    )
+                ),
+                responseId = "resp_1",
+                providerToolCallIds = listOf("call_abc"),
+                providerToolItemIds = listOf("item_abc"),
+                assistantMessageText = "",
+            ),
+        )
+
+        val result = service.completeSingleTurn(
+            sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "search", metadataJson = "null")),
+            systemPrompt = "",
+            availableTools = emptyList(),
+            allowToolCall = true,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        assertEquals(AgentFinishReason.ToolUse, result.finishReason)
+        assertEquals(1, result.toolCalls.size)
+        assertEquals("web_search", result.toolCalls[0].name)
+        assertEquals("call_abc", result.toolCalls[0].id)
+        assertEquals(null, result.assistantText)
+    }
+
     // ── Helper ──────────────────────────────────────────────────────────────────
+
+    private fun createSingleTurnService(
+        response: StreamedOpenAiResponse,
+        onParams: (ChatCompletionCreateParams) -> Unit = {},
+    ): TestableSingleTurnService {
+        return TestableSingleTurnService(
+            client = client,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk<ToolExecutorPort>(relaxed = true), loggingPort),
+            stubResponse = response,
+            onParams = onParams,
+        )
+    }
+
+    private fun emptyTextResponse(text: String = "") = StreamedOpenAiResponse(
+        emittedAny = text.isNotEmpty(),
+        functionCalls = emptyList(),
+        responseId = "resp_stub",
+        providerToolCallIds = emptyList(),
+        providerToolItemIds = emptyList(),
+        assistantMessageText = text,
+    )
 
     private fun createService(toolExecutor: ToolExecutorPort): TestableBaseOpenAiSdkInferenceService {
         return TestableBaseOpenAiSdkInferenceService(
@@ -380,7 +597,37 @@ class BaseOpenAiSdkInferenceServiceTest {
         )
     }
 
-    private class TestableBaseOpenAiSdkInferenceService(
+    private class TestableSingleTurnService(
+        client: OpenAIClient,
+        loggingPort: LoggingPort,
+        orchestrator: LlmToolingOrchestrator,
+        private val stubResponse: StreamedOpenAiResponse,
+        private val onParams: (ChatCompletionCreateParams) -> Unit,
+    ) : TestableBaseOpenAiSdkInferenceService(
+        client = client,
+        modelId = "openai/gpt-5.2",
+        provider = "OPENAI",
+        modelType = ModelType.FAST,
+        baseUrl = null,
+        loggingPort = loggingPort,
+        orchestrator = orchestrator,
+    ) {
+        override suspend fun streamChatCompletions(
+            params: ChatCompletionCreateParams,
+            chatId: ChatId?,
+            userMessageId: MessageId?,
+            assistantMessageId: MessageId?,
+            emitEvent: suspend (InferenceEvent) -> Unit,
+        ): StreamedOpenAiResponse {
+            onParams(params)
+            stubResponse.assistantMessageText.takeIf { it.isNotBlank() }?.let {
+                emitEvent(InferenceEvent.PartialResponse(it, ModelType.FAST))
+            }
+            return stubResponse
+        }
+    }
+
+    private open class TestableBaseOpenAiSdkInferenceService(
         client: OpenAIClient,
         modelId: String,
         provider: String,

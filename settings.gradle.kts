@@ -35,6 +35,7 @@ include(":core:data")
 include(":core:ui")
 include(":core:testing")
 include(":core:docgen")
+include(":core:agent")
 
 // Feature modules
 include(":feature:chat")

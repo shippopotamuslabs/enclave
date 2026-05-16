@@ -28,7 +28,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParam
 import kotlinx.serialization.json.Json as KJson
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.inference.AgentPolicyRepairResult
+import com.browntowndev.pocketcrew.domain.port.inference.AgentPolicyPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -85,6 +89,7 @@ class ConversationManagerImpl @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val loggingPort: LoggingPort,
     private val toolExecutor: ToolExecutorPort,
+    private val agentPolicyPort: AgentPolicyPort = NoopAgentPolicyPort,
 ) : ConversationManager {
 
     private val defaultSystemPrompt = """
@@ -157,10 +162,10 @@ class ConversationManagerImpl @Inject constructor(
     private var transientToolResultTokens: Int = 0
 
     @Volatile
-    private var contextFullWarned: Boolean = false
+    private var latestAssistantMessageId: MessageId? = null
 
     @Volatile
-    private var latestAssistantMessageId: MessageId? = null
+    private var consecutiveSoftFailures: Int = 0
 
     @VisibleForTesting
     internal fun getModelPath(filename: String): String {
@@ -296,7 +301,6 @@ class ConversationManagerImpl @Inject constructor(
                 // currentModelPath = modelPath // Moved to after successful initialization
                 hasTransientToolResults = false
                 transientToolResultTokens = 0
-                contextFullWarned = false
             } else if (conversationChanged) {
                 Log.d(
                     TAG,
@@ -305,7 +309,6 @@ class ConversationManagerImpl @Inject constructor(
                 closeConversationLocked()
                 hasTransientToolResults = false
                 transientToolResultTokens = 0
-                contextFullWarned = false
             } else {
                 Log.d(
                     TAG,
@@ -931,27 +934,33 @@ class ConversationManagerImpl @Inject constructor(
             throw CancellationException("Generation was cancelled")
         }
 
-        // Return a compact error payload instead of throwing across the native boundary.
-        // The LiteRT tool loop can keep running and surface the failure as a model-visible turn.
-        if (contextFullWarned) {
-            loggingPort.error(
-                TAG,
-                "Model ignored context-full warning and called another tool tool=${request.toolName}. Returning stop-tools error payload."
-            )
-            return LocalToolResultPolicy.buildContextWindowExceededToolError(request.toolName)
-        }
+        val effectiveRequest =
+            if (request.provider == "LITERT") {
+                repairLiteRtToolRequest(request)
+            } else {
+                request
+            }
 
         return try {
             loggingPort.debug(
                 TAG,
-                "executeToolSafely entered tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
+                "executeToolSafely entered tool=${effectiveRequest.toolName} provider=${effectiveRequest.provider} modelType=${effectiveRequest.modelType} chatId=${effectiveRequest.chatId?.value ?: "<none>"} userMessageId=${effectiveRequest.userMessageId?.value ?: "<none>"}"
             )
 
             loggingPort.debug(
                 TAG,
-                "Resolved ToolExecutorPort for native tool call tool=${request.toolName}"
+                "Resolved ToolExecutorPort for native tool call tool=${effectiveRequest.toolName}"
             )
-            val rawResultJson = toolExecutor.execute(request).resultJson
+            if (!agentPolicyPort.shouldAllowTool(consecutiveSoftFailures.toUInt(), MAX_SOFT_FAILURE_STREAK)) {
+                loggingPort.warning(
+                    TAG,
+                    "soft-failure streak reached limit; refusing tool dispatch tool=${effectiveRequest.toolName}",
+                )
+                consecutiveSoftFailures += 1
+                return LocalToolResultPolicy.buildContextWindowExceededToolError(effectiveRequest.toolName)
+            }
+
+            val rawResultJson = toolExecutor.execute(effectiveRequest).resultJson
             val modelId = currentModelPath?.substringAfterLast('/')
             val decision = LocalToolResultPolicy.evaluate(
                 rawResultJson = rawResultJson,
@@ -960,11 +969,13 @@ class ConversationManagerImpl @Inject constructor(
                 history = history,
                 transientToolResultTokens = transientToolResultTokens,
                 modelId = modelId,
+                resultJsonLooksSoftFailure = agentPolicyPort::resultJsonLooksSoftFailure,
             )
+            updateSoftFailureStreak(decision.hasErrorPayload)
 
             loggingPort.debug(
                 TAG,
-                "Native tool call completed tool=${request.toolName} finalPayload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
+                "Native tool call completed tool=${effectiveRequest.toolName} finalPayload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
             )
 
             if (decision.shouldTrackTransientToolResult) {
@@ -979,15 +990,19 @@ class ConversationManagerImpl @Inject constructor(
             if (decision.contextFull) {
                 loggingPort.warning(
                     TAG,
-                    "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${decision.totalTokens} window=$currentContextWindow"
+                    "Context nearly full after tool result. Truncating via Rust bridge and scheduling context recreation. tool=${effectiveRequest.toolName} usedTokens=${decision.totalTokens} window=$currentContextWindow"
                 )
-                contextFullWarned = true
+                hasTransientToolResults = true
+                return agentPolicyPort.truncateResult(
+                    decision.finalResult,
+                    CONTEXT_FULL_RESULT_BUDGET_BYTES,
+                )
             }
 
             if (decision.hasErrorPayload) {
                 loggingPort.error(
                     TAG,
-                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
+                    "Native tool call returned error payload tool=${effectiveRequest.toolName} provider=${effectiveRequest.provider} modelType=${effectiveRequest.modelType} chatId=${effectiveRequest.chatId?.value ?: "<none>"} userMessageId=${effectiveRequest.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
                 )
             }
             decision.finalResult
@@ -997,21 +1012,38 @@ class ConversationManagerImpl @Inject constructor(
             val rootCause = t.rootCause()
             loggingPort.error(
                 TAG,
-                "Native tool call failed tool=${request.toolName} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                "Native tool call failed tool=${effectiveRequest.toolName} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                 rootCause,
             )
-            buildToolErrorJson(request.toolName, rootCause)
+            updateSoftFailureStreak(softFailure = true)
+            buildToolErrorJson(effectiveRequest.toolName, rootCause)
         }
     }
 
-    @VisibleForTesting
-    internal fun forceContextFullWarnedForTest(value: Boolean) {
-        contextFullWarned = value
+    private fun updateSoftFailureStreak(softFailure: Boolean) {
+        consecutiveSoftFailures = if (softFailure) {
+            consecutiveSoftFailures + 1
+        } else {
+            0
+        }
     }
 
     @VisibleForTesting
     internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String =
         executeToolSafely(request)
+
+    private fun repairLiteRtToolRequest(request: ToolCallRequest): ToolCallRequest =
+        try {
+            val repaired = agentPolicyPort.repairTool(request.toolName, request.argumentsJson)
+            request.copy(toolName = repaired.resolvedName, argumentsJson = repaired.argumentsJson)
+        } catch (t: Throwable) {
+            val rootCause = t.rootCause()
+            loggingPort.warning(
+                TAG,
+                "LiteRT tool repair unavailable; using raw tool call tool=${request.toolName} cause=${rootCause::class.java.simpleName}: ${rootCause.message}"
+            )
+            request
+        }
 
     private fun buildToolErrorJson(toolName: String, throwable: Throwable): String =
         """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"${escapeJson(throwable::class.java.simpleName)}","message":"${escapeJson(throwable.message ?: "Unknown error")}"}"""
@@ -1176,7 +1208,6 @@ class ConversationManagerImpl @Inject constructor(
         currentSignature = null
         hasTransientToolResults = false
         transientToolResultTokens = 0
-        contextFullWarned = false
         Log.d(TAG, "Closed LiteRT conversation memoryAfterClose=${memorySnapshot()}")
     }
 
@@ -1246,5 +1277,25 @@ class ConversationManagerImpl @Inject constructor(
         private const val TAG = "ConversationManager"
         private const val LOG_TRUNCATE_LENGTH = 120
         private const val TOOL_RESULT_TRUNCATE_LENGTH = 2000
+        private const val MAX_SOFT_FAILURE_STREAK = 3u
+        private const val CONTEXT_FULL_RESULT_BUDGET_BYTES = 256UL
     }
+}
+
+private object NoopAgentPolicyPort : AgentPolicyPort {
+    override fun repairTool(name: String, argsJson: String): AgentPolicyRepairResult =
+        AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
+
+    override fun truncateResult(json: String, budgetBytes: ULong): String =
+        json.take(budgetBytes.toInt())
+
+    override fun shouldAllowTool(softFailureStreak: UInt, maxStreak: UInt): Boolean =
+        softFailureStreak < maxStreak
+
+    override fun resultJsonLooksSoftFailure(json: String): Boolean =
+        runCatching {
+            val obj = KJson.parseToJsonElement(json).jsonObject
+            obj.containsKey("error") ||
+                obj["status"]?.jsonPrimitive?.content?.equals("error", ignoreCase = true) == true
+        }.getOrDefault(false)
 }

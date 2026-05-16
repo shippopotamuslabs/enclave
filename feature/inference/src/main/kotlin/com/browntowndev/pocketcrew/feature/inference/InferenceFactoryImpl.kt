@@ -9,20 +9,24 @@ import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.error.InferenceIOException
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -58,6 +62,9 @@ class InferenceFactoryImpl
         private val orchestrator: LlmToolingOrchestrator,
         private val inferenceLockManager: InferenceLockManager,
         private val toolExecutionEventPort: ToolExecutionEventPort,
+        private val agentLoopPort: AgentLoopPort,
+        private val toolExecutorPort: ToolExecutorPort,
+        private val inferenceFactoryProvider: Provider<InferenceFactoryPort>? = null,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -123,6 +130,8 @@ class InferenceFactoryImpl
             if (!inferenceLockManager.acquireLock(lockType)) {
                 throw InferenceBusyException()
             }
+
+            loggingPort.info(TAG, "AgentLoop: [agent_core] modelType=$modelType")
 
             val service =
                 try {
@@ -277,9 +286,10 @@ class InferenceFactoryImpl
                                 )
                         }
 
-                    activeServices[modelType] = newService
+                    val finalService = wrapWithRustLoop(newService, apiCreds.provider.name, modelType)
+                    activeServices[modelType] = finalService
                     activeIdentities[modelType] = requestedIdentity
-                    return newService
+                    return finalService
                 }
             }
 
@@ -400,9 +410,10 @@ class InferenceFactoryImpl
                                     )
                             }
 
-                        activeServices[modelType] = newService
+                        val finalService = wrapWithRustLoop(newService, apiCreds.provider.name, modelType)
+                        activeServices[modelType] = finalService
                         activeIdentities[modelType] = requestedIdentity
-                        return newService
+                        return finalService
                     }
                 }
             }
@@ -464,7 +475,8 @@ class InferenceFactoryImpl
                 val newService =
                     when (extension) {
                         "gguf" -> {
-                            LlamaInferenceServiceImpl(
+                            wrapWithRustLoop(
+                                service = LlamaInferenceServiceImpl(
                                 sessionManager = llamaChatSessionManagerProvider.get(),
                                 processThinkingTokens = processThinkingTokens,
                                 loggingPort = loggingPort,
@@ -473,6 +485,9 @@ class InferenceFactoryImpl
                                 context = context,
                                 modelType = modelType,
                                 orchestrator = orchestrator,
+                                ),
+                                provider = "LLAMA",
+                                modelType = modelType,
                             )
                         }
                         "litertlm" -> {
@@ -498,6 +513,26 @@ class InferenceFactoryImpl
                 return newService
             }
         }
+
+        private fun wrapWithRustLoop(
+            service: LlmInferencePort,
+            provider: String,
+            modelType: ModelType,
+        ): LlmInferencePort =
+            if (service is RustCompatibleInferenceService) {
+                RustLoopInferenceService(
+                    inner = service,
+                    agentLoopPort = agentLoopPort,
+                    toolExecutor = toolExecutorPort,
+                    loggingPort = loggingPort,
+                    provider = provider,
+                    modelType = modelType,
+                    inferenceFactoryProvider = inferenceFactoryProvider ?: Provider { this },
+                    rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
+                )
+            } else {
+                service
+            }
 
         private suspend fun removeServiceFor(modelType: ModelType) {
             val currentIdentity = activeIdentities[modelType] ?: return

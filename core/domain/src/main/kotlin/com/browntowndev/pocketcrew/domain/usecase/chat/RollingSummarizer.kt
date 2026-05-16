@@ -8,7 +8,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.util.TokenCounter
 import kotlinx.coroutines.flow.toList
 
-internal class RollingSummarizer(
+// Called from RustLoopInferenceService.summarize via the AGENT-028 summary tier.
+class RollingSummarizer(
     private val loggingPort: LoggingPort,
     private val tokenCounter: TokenCounter,
 ) {

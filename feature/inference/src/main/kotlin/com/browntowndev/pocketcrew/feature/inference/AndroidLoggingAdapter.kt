@@ -4,11 +4,13 @@ import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Implementation of [LoggingPort] that uses Android's Log utility.
  * This adapter lives in the inference layer where Android SDK is available.
  */
+@Singleton
 class AndroidLoggingAdapter @Inject constructor() : LoggingPort {
     override fun debug(tag: String, message: String) {
         Log.d(tag, message)

@@ -281,48 +281,20 @@ object OpenAiRequestMapper {
         }
     }
 
-    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
-        val paramsBuilder = FunctionParameters.builder()
-            .putAdditionalProperty("type", JsonValue.from("object"))
-            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-            .putAdditionalProperty("required", JsonValue.from(schema.required))
-            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
-        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) {
-                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
-            }
-        }
-        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) {
-                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
-            }
-        }
-        return ChatCompletionFunctionTool.builder()
-            .function(
-                FunctionDefinition.builder()
-                    .name(name)
-                    .description(description)
-                    .parameters(paramsBuilder.build())
-                    .strict(true)
-                    .build()
-            )
-            .build()
-    }
-
     private fun ToolDefinition.toResponsesTool(): FunctionTool {
         val paramsBuilder = FunctionTool.Parameters.builder()
             .putAdditionalProperty("type", JsonValue.from("object"))
-            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
             .putAdditionalProperty("required", JsonValue.from(schema.required))
             .putAdditionalProperty("additionalProperties", JsonValue.from(false))
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) {
-                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
+                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toJsonMap()))
             }
         }
         schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) {
-                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
+                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toJsonMap()))
             }
         }
         return FunctionTool.builder()
@@ -331,31 +303,6 @@ object OpenAiRequestMapper {
             .parameters(paramsBuilder.build())
             .strict(true)
             .build()
-    }
-
-    private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
-        val map = mutableMapOf<String, Any>()
-        forEach { (k, v) ->
-            map[k] = v.toPrimitiveOrMap()
-        }
-        return map
-    }
-
-    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any {
-        return when (this) {
-            is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) content
-                else {
-                    content.toBooleanStrictOrNull()
-                        ?: content.toLongOrNull()
-                        ?: content.toDoubleOrNull()
-                        ?: content
-                }
-            }
-            is kotlinx.serialization.json.JsonObject -> toMap()
-            is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
-            else -> Any()
-        }
     }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
@@ -421,3 +368,48 @@ object OpenAiRequestMapper {
         return builder.build()
     }
 }
+
+internal fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
+    val paramsBuilder = FunctionParameters.builder()
+        .putAdditionalProperty("type", JsonValue.from("object"))
+        .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
+        .putAdditionalProperty("required", JsonValue.from(schema.required))
+        .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+    schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+        if (defs is kotlinx.serialization.json.JsonObject) {
+            paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toJsonMap()))
+        }
+    }
+    schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+        if (defs is kotlinx.serialization.json.JsonObject) {
+            paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toJsonMap()))
+        }
+    }
+    return ChatCompletionFunctionTool.builder()
+        .function(
+            FunctionDefinition.builder()
+                .name(name)
+                .description(description)
+                .parameters(paramsBuilder.build())
+                .strict(true)
+                .build()
+        )
+        .build()
+}
+
+private fun kotlinx.serialization.json.JsonObject.toJsonMap(): Map<String, Any> {
+    val map = mutableMapOf<String, Any>()
+    forEach { (k, v) -> map[k] = v.toJsonPrimitiveOrMap() }
+    return map
+}
+
+private fun kotlinx.serialization.json.JsonElement.toJsonPrimitiveOrMap(): Any =
+    when (this) {
+        is kotlinx.serialization.json.JsonPrimitive -> {
+            if (isString) content
+            else content.toBooleanStrictOrNull() ?: content.toLongOrNull() ?: content.toDoubleOrNull() ?: content
+        }
+        is kotlinx.serialization.json.JsonObject -> toJsonMap()
+        is kotlinx.serialization.json.JsonArray -> map { it.toJsonPrimitiveOrMap() }
+        else -> Any()
+    }
