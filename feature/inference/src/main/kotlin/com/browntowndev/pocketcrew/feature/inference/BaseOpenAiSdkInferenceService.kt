@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.feature.inference
 
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -16,15 +15,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
-import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
-import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
-import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -38,7 +28,6 @@ import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseInputItem
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
@@ -63,7 +52,6 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val modelType: ModelType,
     protected val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
-    val orchestrator: LlmToolingOrchestrator,
 ) : RustCompatibleInferenceService {
 
     companion object {
@@ -141,239 +129,6 @@ abstract class BaseOpenAiSdkInferenceService(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     )
-
-    protected abstract fun mapToolingResponseParams(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-    ): ResponseCreateParams
-
-    protected abstract fun mapToolingFollowUpResponseParams(
-        currentParams: ResponseCreateParams,
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        initialResponse: StreamedOpenAiResponse,
-        results: List<Pair<ToolCallRequest, String>>,
-        appendStopToolsWarning: Boolean,
-    ): ResponseCreateParams
-
-    protected open fun mapToolingChatCompletionParams(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-    ): ChatCompletionCreateParams =
-        OpenAiRequestMapper.mapToChatCompletionParams(
-            modelId = modelId,
-            prompt = prompt,
-            history = requestHistory,
-            options = options
-        )
-
-    protected open fun mapToolingFollowUpChatCompletionParams(
-        currentParams: ChatCompletionCreateParams,
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        initialResponse: StreamedOpenAiResponse,
-        results: List<Pair<ToolCallRequest, String>>,
-        appendStopToolsWarning: Boolean,
-    ): ChatCompletionCreateParams {
-        val builder = currentParams.toBuilder()
-        val messages = currentParams.messages().toMutableList()
-
-        initialResponse.assistantMessageText
-            .takeIf { it.isNotBlank() }
-            ?.let { assistantText ->
-                messages.add(
-                    ChatCompletionMessageParam.ofAssistant(
-                        ChatCompletionAssistantMessageParam.builder()
-                            .content(assistantText)
-                            .build()
-                    )
-                )
-            }
-
-        results.forEach { (_, resultJson) ->
-            messages.add(
-                ChatCompletionMessageParam.ofUser(
-                    ChatCompletionUserMessageParam.builder()
-                        .content(resultJson)
-                        .build()
-                )
-            )
-        }
-
-        if (appendStopToolsWarning) {
-            messages.add(
-                ChatCompletionMessageParam.ofUser(
-                    ChatCompletionUserMessageParam.builder()
-                        .content(ContextWindowPlanner.STOP_TOOLS_WARNING)
-                        .build()
-                )
-            )
-        }
-
-        builder.messages(messages)
-        return builder.build()
-    }
-
-    protected suspend fun executeToolingPrompt(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-            emitEvent: suspend (InferenceEvent) -> Unit
-    ) {
-        logImagePayloads(options)
-        val toolLoopPayloads = mutableListOf<String>()
-
-        val initialParams = mapToolingResponseParams(
-            prompt = prompt,
-            options = options,
-            requestHistory = requestHistory,
-        )
-
-        orchestrator.execute(
-            providerName = provider,
-            initialParams = initialParams,
-            tag = tag,
-            maxToolCalls = options.maxToolCalls,
-            onInferencePass = { params, _allowToolCall ->
-
-                streamResponses(
-                    params = params,
-                    chatId = options.chatId,
-                    userMessageId = options.userMessageId,
-                    assistantMessageId = options.assistantMessageId,
-                    emitEvent = emitEvent,
-                )
-            },
-            onToolCallDetected = { response ->
-                val sdkCalls = response.functionCalls
-                sdkCalls.ifEmpty {
-                    val rawText = response.assistantMessageText
-                    val envelope =
-                        runCatching { ToolEnvelopeParser.extractLocalToolEnvelope(rawText) }.getOrNull()
-                    if (envelope != null) {
-                        listOf(
-                            ToolCallRequest(
-                                toolName = envelope.toolName,
-                                argumentsJson = envelope.argumentsJson,
-                                provider = provider,
-                                modelType = modelType,
-                                chatId = options.chatId,
-                                userMessageId = options.userMessageId,
-                                assistantMessageId = options.assistantMessageId,
-                            )
-                        )
-                    } else {
-                        emptyList()
-                    }
-                }
-            },
-            onToolResultsMapped = { params, response, results ->
-                toolLoopPayloads += results.map { it.second }
-                val contextExceeded = estimateContextExceeded(
-                    requestHistory = requestHistory,
-                    prompt = prompt,
-                    options = options,
-                    toolResultPayloads = toolLoopPayloads,
-                ).contextExceeded
-                mapToolingFollowUpResponseParams(
-                    currentParams = params,
-                    prompt = prompt,
-                    options = options,
-                    requestHistory = requestHistory,
-                    initialResponse = response,
-                    results = results,
-                    appendStopToolsWarning = contextExceeded,
-                )
-            },
-            onContextExceeded = { _, results ->
-                val result = estimateContextExceeded(
-                    requestHistory = requestHistory,
-                    prompt = prompt,
-                    options = options,
-                    toolResultPayloads = toolLoopPayloads,
-                )
-
-                if (result.contextExceeded && 
-                    results.any { it.first.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
-                    // Try to compress history specifically for artifact loop
-                    loggingPort.info(tag, "Attempting artifact context compression provider=$provider")
-                    val compressedHistory = com.browntowndev.pocketcrew.domain.util.ArtifactContextCompressor.compress(
-                        requestHistory
-                    )
-                    
-                    // Rebuild params with compressed history
-                    val rebuiltParams = mapToolingResponseParams(
-                        prompt = prompt,
-                        options = options,
-                        requestHistory = compressedHistory,
-                    )
-                    ContextExceededResult(contextExceeded = false, rebuiltParams = rebuiltParams)
-                } else {
-                    ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
-                }
-            },
-            onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
-                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
-                    val assistantMessageId = options.assistantMessageId
-                    if (assistantMessageId != null) {
-                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
-                        if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
-                        }
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
-                    try {
-                        val appendParams =
-                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
-                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
-                            ?.let { complete ->
-                                emitEvent(
-                                    InferenceEvent.Artifacts(
-                                        artifacts = listOf(
-                                            ArtifactGenerationRequest(
-                                                artifactId = appendParams.artifactId,
-                                                title = complete.title,
-                                                content = complete.documentJson,
-                                            ),
-                                        ),
-                                        modelType = modelType,
-                                    ),
-                                )
-                            }
-                    } catch (e: Exception) {
-                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
-                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
-                    if (mediaResult.uris.isNotEmpty()) {
-                        emitEvent(
-                            InferenceEvent.Media(
-                                mediaUris = mediaResult.uris,
-                                mediaIds = mediaResult.ids,
-                                mediaTypes = mediaResult.types,
-                                prompts = mediaResult.prompts,
-                                modelType = modelType
-                            )
-                        )
-                    }
-                }
-            },
-            onFinished = { _, _, _ ->
-                emitEvent(InferenceEvent.Finished(modelType))
-            }
-        )
-    }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
@@ -498,38 +253,6 @@ abstract class BaseOpenAiSdkInferenceService(
         }
     }
 
-    /**
-     * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
-     * For OpenAI Responses API, compaction mid-chain isn't possible (server manages state
-     * via previousResponseId), so this only detects and reports.
-     * Returns a [ContextExceededResult] indicating whether context is exceeded after
-     * any compaction attempt.
-     */
-    protected open fun estimateContextExceeded(
-        requestHistory: List<ChatMessage>,
-        prompt: String,
-        options: GenerationOptions,
-        toolResultPayloads: List<String> = emptyList(),
-    ): ContextExceededResult<ResponseCreateParams> {
-        val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
-        val contextExceeded = ToolContextBudget.isApiContextExceeded(
-            contextWindowTokens = contextWindow,
-            history = requestHistory,
-            systemPrompt = null,
-            currentPrompt = prompt,
-            toolResultPayloads = toolResultPayloads,
-            options = options,
-            modelId = modelId,
-        )
-        if (contextExceeded) {
-            loggingPort.warning(
-                tag,
-                "Context exceeded mid-loop: window=$contextWindow provider=$provider"
-            )
-        }
-        return ContextExceededResult(contextExceeded)
-    }
-
     protected fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
         loggingPort.debug(
@@ -584,149 +307,6 @@ abstract class BaseOpenAiSdkInferenceService(
                 handler.handleEvent(event, state)
             }
             return handler.toStreamedResponse(state)
-        }
-    }
-
-    protected suspend fun executeChatCompletionsToolingPrompt(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        emitEvent: suspend (InferenceEvent) -> Unit
-    ) {
-        logImagePayloads(options)
-        val toolLoopPayloads = mutableListOf<String>()
-
-        val initialParams = mapToolingChatCompletionParams(
-            prompt = prompt,
-            options = options,
-            requestHistory = requestHistory,
-        )
-
-        orchestrator.execute(
-            providerName = provider,
-            initialParams = initialParams,
-            tag = tag,
-            maxToolCalls = options.maxToolCalls,
-            onInferencePass = { params, _ ->
-                streamChatCompletions(
-                    params = params,
-                    chatId = options.chatId,
-                    userMessageId = options.userMessageId,
-                    assistantMessageId = options.assistantMessageId,
-                    emitEvent = emitEvent,
-                )
-            },
-            onToolCallDetected = { response ->
-                val sdkCalls = response.functionCalls.map {
-                    it.copy(
-                        chatId = options.chatId,
-                        userMessageId = options.userMessageId,
-                        assistantMessageId = options.assistantMessageId,
-                    )
-                }
-                sdkCalls.ifEmpty {
-                    val rawText = response.assistantMessageText
-                    val envelope =
-                        runCatching { ToolEnvelopeParser.extractLocalToolEnvelope(rawText) }.getOrNull()
-                    if (envelope != null) {
-                        listOf(
-                            ToolCallRequest(
-                                toolName = envelope.toolName,
-                                argumentsJson = envelope.argumentsJson,
-                                provider = provider,
-                                modelType = modelType,
-                                chatId = options.chatId,
-                                userMessageId = options.userMessageId,
-                                assistantMessageId = options.assistantMessageId,
-                            )
-                        )
-                    } else {
-                        emptyList()
-                    }
-                }
-            },
-            onToolResultsMapped = { params, response, results ->
-                toolLoopPayloads += results.map { it.second }
-                val contextExceeded = estimateContextExceeded(
-                    requestHistory = requestHistory,
-                    prompt = prompt,
-                    options = options,
-                    toolResultPayloads = toolLoopPayloads,
-                ).contextExceeded
-                mapToolingFollowUpChatCompletionParams(
-                    currentParams = params,
-                    prompt = prompt,
-                    options = options,
-                    requestHistory = requestHistory,
-                    initialResponse = response,
-                    results = results,
-                    appendStopToolsWarning = contextExceeded,
-                )
-            },
-            onContextExceeded = { _, _ ->
-                val result = estimateContextExceeded(
-                    requestHistory = requestHistory,
-                    prompt = prompt,
-                    options = options,
-                    toolResultPayloads = toolLoopPayloads,
-                )
-                ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
-            },
-            onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
-                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
-                    val assistantMessageId = options.assistantMessageId
-                    if (assistantMessageId != null) {
-                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
-                        if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
-                        }
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
-                    try {
-                        val appendParams =
-                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
-                        AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)
-                            ?.let { complete ->
-                                emitEvent(
-                                    InferenceEvent.Artifacts(
-                                        artifacts = listOf(
-                                            ArtifactGenerationRequest(
-                                                artifactId = appendParams.artifactId,
-                                                title = complete.title,
-                                                content = complete.documentJson,
-                                            ),
-                                        ),
-                                        modelType = modelType,
-                                    ),
-                                )
-                            }
-                    } catch (e: Exception) {
-                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
-                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
-                    if (mediaResult.uris.isNotEmpty()) {
-                        emitEvent(
-                            InferenceEvent.Media(
-                                mediaUris = mediaResult.uris,
-                                mediaIds = mediaResult.ids,
-                                mediaTypes = mediaResult.types,
-                                prompts = mediaResult.prompts,
-                                modelType = modelType
-                            )
-                        )
-                    }
-                }
-            },
-        ) { _, _, _ ->
-            emitEvent(InferenceEvent.Finished(modelType))
         }
     }
 

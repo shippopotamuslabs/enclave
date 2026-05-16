@@ -5,12 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -33,7 +29,6 @@ import com.openai.models.responses.ResponseFunctionCallArgumentsDoneEvent
 import com.openai.services.blocking.ResponseService
 import io.mockk.mockk
 import io.mockk.coVerify
-import io.mockk.coEvery
 import io.mockk.every
 import java.util.Optional
 import java.util.stream.Stream
@@ -57,7 +52,6 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort)
         )
 
         val messages = listOf(ChatMessage(Role.USER, "Hello"))
@@ -78,7 +72,6 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort)
         )
 
         val merged = service.mergeSystemPrompt(
@@ -104,176 +97,12 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort)
         )
 
         val history = listOf(ChatMessage(Role.USER, "hello"))
         val merged = service.mergeSystemPrompt(history, "   ")
 
         assertEquals(history, merged)
-    }
-
-    @Test
-    fun `search enabled prompt completes one tool round trip before final assistant text`() = runTest {
-        val client = mockk<OpenAIClient>()
-        val responseService = mockk<ResponseService>()
-        val initialStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
-        val followUpStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
-        val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
-        every { client.responses() } returns responseService
-        every { responseService.createStreaming(any<ResponseCreateParams>()) } returnsMany listOf(
-            initialStreamResponse,
-            followUpStreamResponse,
-        )
-        every { initialStreamResponse.stream() } returns Stream.of(
-            mockReasoningEvent("Need to search first."),
-            mockFunctionCallDoneEvent(),
-            mockCompletedEvent(responseId = "resp_call_1"),
-        )
-        every { initialStreamResponse.close() } returns Unit
-        every { followUpStreamResponse.stream() } returns Stream.of(
-            mockReasoningEvent("Need to review search results."),
-            mockOutputTextEvent("Use the search result summary."),
-            mockCompletedEvent(responseId = "resp_followup"),
-        )
-        every { followUpStreamResponse.close() } returns Unit
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
-        )
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = ApiInferenceServiceImpl(
-            client = client,
-            modelId = "gpt-4o",
-            provider = "OPENAI",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-
-        val events = service.sendPrompt(
-            prompt = "Find recent Android agent news",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-            ),
-            closeConversation = false,
-        ).toList()
-
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Need to search first." })
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Need to review search results." })
-        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Use the search result summary." })
-        assertTrue(events.any { it is InferenceEvent.Finished && it.modelType == ModelType.FAST })
-        coVerify(exactly = 1) { toolExecutor.execute(any()) }
-    }
-
-    @Test
-    fun `search enabled prompt supports multiple tool calls up to limit`() = runTest {
-        val client = mockk<OpenAIClient>()
-        val responseService = mockk<ResponseService>()
-        val stream1 = mockk<StreamResponse<ResponseStreamEvent>>()
-        val stream2 = mockk<StreamResponse<ResponseStreamEvent>>()
-        val stream3 = mockk<StreamResponse<ResponseStreamEvent>>()
-        val finalStream = mockk<StreamResponse<ResponseStreamEvent>>()
-        val toolExecutor = mockk<ToolExecutorPort>()
-
-        every { client.responses() } returns responseService
-        every { responseService.createStreaming(any<ResponseCreateParams>()) } returnsMany listOf(
-            stream1, stream2, stream3, finalStream
-        )
-
-        every { stream1.stream() } returns Stream.of(mockFunctionCallDoneEvent(), mockCompletedEvent("r1"))
-        every { stream1.close() } returns Unit
-        every { stream2.stream() } returns Stream.of(mockFunctionCallDoneEvent(), mockCompletedEvent("r2"))
-        every { stream2.close() } returns Unit
-        every { stream3.stream() } returns Stream.of(mockFunctionCallDoneEvent(), mockCompletedEvent("r3"))
-        every { stream3.close() } returns Unit
-        every { finalStream.stream() } returns Stream.of(mockOutputTextEvent("Final Answer"), mockCompletedEvent("r4"))
-        every { finalStream.close() } returns Unit
-
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
-
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = ApiInferenceServiceImpl(
-            client = client,
-            modelId = "gpt-4o",
-            provider = "OPENAI",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-
-        val events = service.sendPrompt(
-            prompt = "Search 3 times",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH)
-            ),
-            closeConversation = false,
-        ).toList()
-
-        assertEquals("Final Answer", (events.filterIsInstance<InferenceEvent.PartialResponse>().last()).chunk)
-        assertEquals(1, events.filterIsInstance<InferenceEvent.Finished>().size)
-        coVerify(exactly = 3) { toolExecutor.execute(any()) }
-    }
-
-    @Test
-    fun `search enabled prompt reapplies system instructions on follow up response request`() = runTest {
-        val client = mockk<OpenAIClient>()
-        val responseService = mockk<ResponseService>()
-        val initialStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
-        val followUpStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
-        val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
-        val capturedParams = mutableListOf<ResponseCreateParams>()
-
-        every { client.responses() } returns responseService
-        every { responseService.createStreaming(capture(capturedParams)) } returnsMany listOf(
-            initialStreamResponse,
-            followUpStreamResponse,
-        )
-        every { initialStreamResponse.stream() } returns Stream.of(
-            mockFunctionCallDoneEvent(),
-            mockCompletedEvent(responseId = "resp_call_1"),
-        )
-        every { initialStreamResponse.close() } returns Unit
-        every { followUpStreamResponse.stream() } returns Stream.of(
-            mockOutputTextEvent("Use the search result summary."),
-            mockCompletedEvent(responseId = "resp_followup"),
-        )
-        every { followUpStreamResponse.close() } returns Unit
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
-        )
-
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = ApiInferenceServiceImpl(
-            client = client,
-            modelId = "gpt-4o",
-            provider = "OPENAI",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-        service.setHistory(listOf(ChatMessage(Role.SYSTEM, "Stay concise and cite sources.")))
-
-        service.sendPrompt(
-            prompt = "Find recent Android agent news",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-            ),
-            closeConversation = false,
-        ).toList()
-
-        assertEquals(2, capturedParams.size)
-        assertTrue(capturedParams.first().instructions().isPresent)
-        assertEquals("Stay concise and cite sources.", capturedParams.first().instructions().get())
-        assertTrue(capturedParams[1].instructions().isPresent)
-        assertEquals("Stay concise and cite sources.", capturedParams[1].instructions().get())
     }
 
     @Test
@@ -305,7 +134,6 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
         )
 
         val events = service.sendPrompt(
@@ -322,132 +150,6 @@ class ApiInferenceServiceImplTest {
 
         assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Falling back to chat." })
         coVerify(exactly = 1) { responseService.createStreaming(any<ResponseCreateParams>()) }
-    }
-
-    @Test
-    fun `executeToolingPrompt falls back to chat completions tooling on 404 error`() = runTest {
-        val client = mockk<OpenAIClient>(relaxed = true)
-        val responseService = mockk<ResponseService>(relaxed = true)
-        val chatService = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
-        val completionService = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
-        val chatStreamResponse = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
-
-        every { client.responses() } returns responseService
-        every { client.chat() } returns chatService
-        every { chatService.completions() } returns completionService
-        every { completionService.createStreaming(any<ChatCompletionCreateParams>()) } returns chatStreamResponse
-
-        // Mock 404 error on Responses API for tooling
-        every { responseService.createStreaming(any<ResponseCreateParams>()) } throws RuntimeException("404 Not Found")
-
-        // Mock successful Chat Completions API for tooling fallback
-        every { chatStreamResponse.stream() } returns Stream.of(
-            mockChatChunk("Falling back to chat tooling."),
-        )
-        every { chatStreamResponse.close() } returns Unit
-
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = ApiInferenceServiceImpl(
-            client = client,
-            modelId = "gpt-4o",
-            provider = "OPENAI",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
-        )
-
-        val events = service.sendPrompt(
-            prompt = "Use tools",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-                apiProvider = ApiProvider.OPENAI,
-                modelId = "gpt-4o"
-            ),
-            closeConversation = false,
-        ).toList()
-
-        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Falling back to chat tooling." })
-        coVerify(exactly = 1) { responseService.createStreaming(any<ResponseCreateParams>()) }
-    }
-
-    @Test
-    fun `executeToolingPrompt aggregates fragmented native tool calls in chat completions fallback`() = runTest {
-        val client = mockk<OpenAIClient>(relaxed = true)
-        val responseService = mockk<ResponseService>(relaxed = true)
-        val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
-        val chatService = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
-        val completionService = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
-        val chatStreamResponse1 = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
-        val chatStreamResponse2 = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
-
-        every { client.responses() } returns responseService
-        every { client.chat() } returns chatService
-        every { chatService.completions() } returns completionService
-        
-        // Fail the first pass to trigger fallback
-        every { responseService.createStreaming(any<ResponseCreateParams>()) } throws RuntimeException("404 Not Found")
-
-        // Mock pass 1: Model emits tool call
-        every { client.chat().completions().createStreaming(any<ChatCompletionCreateParams>()) } answers {
-            val params = firstArg<ChatCompletionCreateParams>()
-            if (params.messages().size == 1) chatStreamResponse1 else chatStreamResponse2
-        }
-        
-        every { chatStreamResponse1.stream() } returns Stream.of(
-            mockChatToolCallChunk(index = 0, id = "call_abc", name = "web_search", args = "{\"query\":"),
-            mockChatToolCallChunk(index = 0, args = "\"android news\"}"),
-            mockChatFinishChunk(finishReason = "tool_calls")
-        )
-        every { chatStreamResponse1.close() } returns Unit
-
-        // Mock tool execution
-        coEvery { toolExecutor.execute(match { it.toolName == "web_search" }) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = "{\"results\":[]}"
-        )
-
-        // Pass 2: Follow-up
-        val pass2Matcher: (ChatCompletionCreateParams) -> Boolean = { it.messages().size > 2 }
-        every { client.chat().completions().createStreaming(match(pass2Matcher)) } returns chatStreamResponse2
-        
-        every { chatStreamResponse2.stream() } returns Stream.of(
-            mockChatChunk("Here are the results."),
-            mockChatFinishChunk(finishReason = "stop")
-        )
-        every { chatStreamResponse2.close() } returns Unit
-
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = ApiInferenceServiceImpl(
-            client = client,
-            modelId = "gpt-4o",
-            provider = "OPENAI",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-
-        val events = service.sendPrompt(
-            prompt = "Search news",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-                apiProvider = ApiProvider.OPENAI,
-                modelId = "gpt-4o"
-            ),
-            closeConversation = false,
-        ).toList()
-
-        // Verify behavioral intent:
-        // 1. Fragmented tool call was aggregated
-        coVerify(exactly = 1) { 
-            toolExecutor.execute(any()) 
-        }
-        
-        // 2. Final response received
-        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Here are the results." })
     }
 
     private fun mockChatToolCallChunk(

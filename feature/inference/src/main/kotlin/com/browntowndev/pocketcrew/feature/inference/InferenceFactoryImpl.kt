@@ -25,7 +25,6 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -59,7 +58,6 @@ class InferenceFactoryImpl
         private val anthropicClientProvider: AnthropicClientProviderPort,
         private val googleGenAiClientProvider: GoogleGenAiClientProviderPort,
         private val loggingPort: LoggingPort,
-        private val orchestrator: LlmToolingOrchestrator,
         private val inferenceLockManager: InferenceLockManager,
         private val toolExecutionEventPort: ToolExecutionEventPort,
         private val agentLoopPort: AgentLoopPort,
@@ -216,7 +214,6 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
-                                    orchestrator = orchestrator,
                                 )
                             ApiProvider.GOOGLE -> {
                                 val client =
@@ -237,7 +234,6 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
-                                    orchestrator = orchestrator,
                                 )
                             }
                             ApiProvider.OPENROUTER ->
@@ -253,7 +249,6 @@ class InferenceFactoryImpl
                                     routing = apiConfig.openRouterRouting,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
-                                    orchestrator = orchestrator,
                                 )
                             ApiProvider.XAI ->
                                 XaiInferenceServiceImpl(
@@ -267,7 +262,6 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
-                                    orchestrator = orchestrator,
                                 )
                             else ->
                                 ApiInferenceServiceImpl(
@@ -282,7 +276,6 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
-                                    orchestrator = orchestrator,
                                 )
                         }
 
@@ -340,7 +333,6 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
-                                        orchestrator = orchestrator,
                                     )
                                 ApiProvider.GOOGLE -> {
                                     val client =
@@ -361,7 +353,6 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
-                                        orchestrator = orchestrator,
                                     )
                                 }
                                 ApiProvider.OPENROUTER ->
@@ -377,7 +368,6 @@ class InferenceFactoryImpl
                                         routing = apiConfig.openRouterRouting,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
-                                        orchestrator = orchestrator,
                                     )
                                 ApiProvider.XAI ->
                                     XaiInferenceServiceImpl(
@@ -391,7 +381,6 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
-                                        orchestrator = orchestrator,
                                     )
                                 else ->
                                     ApiInferenceServiceImpl(
@@ -406,7 +395,6 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
-                                        orchestrator = orchestrator,
                                     )
                             }
 
@@ -484,7 +472,6 @@ class InferenceFactoryImpl
                                 activeModelProvider = activeModelProvider,
                                 context = context,
                                 modelType = modelType,
-                                orchestrator = orchestrator,
                                 ),
                                 provider = "LLAMA",
                                 modelType = modelType,

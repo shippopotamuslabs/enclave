@@ -15,13 +15,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -40,7 +35,6 @@ class AnthropicInferenceServiceImplExtendedTest {
     private val messageService = mockk<MessageService>()
     private val streamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>()
 
     private lateinit var service: AnthropicInferenceServiceImpl
 
@@ -51,7 +45,6 @@ class AnthropicInferenceServiceImplExtendedTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
     }
 
@@ -228,7 +221,6 @@ class AnthropicInferenceServiceImplExtendedTest {
             modelId = "claude-haiku-4-20250514",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val textDelta = mockk<TextDelta>()

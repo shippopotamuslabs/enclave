@@ -11,17 +11,13 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -45,7 +41,6 @@ class LlamaInferenceServiceImplTest {
     private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var context: Context
-    private lateinit var toolExecutor: ToolExecutorPort
 
     @BeforeEach
     fun setup() {
@@ -60,7 +55,6 @@ class LlamaInferenceServiceImplTest {
         localModelRepository = mockk()
         activeModelProvider = mockk()
         context = mockk(relaxed = true)
-        toolExecutor = mockk()
 
         every { context.getExternalFilesDir(null) } returns File("/tmp")
 
@@ -101,110 +95,6 @@ class LlamaInferenceServiceImplTest {
     @AfterEach
     fun tearDown() {
         unmockkStatic(Log::class)
-    }
-
-    @Test
-    fun `sendPrompt hides llama tool envelope and resumes the same session with tool result`() = runTest {
-        coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returnsMany listOf(
-            flowOf(
-                GenerationEvent.Completed(
-                    """<think>Need to search first.</think><tool_call>{"name":"web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
-                )
-            ),
-            flowOf(
-                GenerationEvent.Completed(
-                    "<think>Reviewing search result.</think>Use the search result summary."
-                )
-            )
-        )
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
-        )
-
-        val service = createService()
-
-        val events = service.sendPrompt(
-            prompt = "Find recent Android tool calling news",
-            options = searchEnabledOptions(),
-            closeConversation = false,
-        ).toList()
-
-        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Use the search result summary." })
-        assertTrue(events.any { it is InferenceEvent.Finished && it.modelType == ModelType.FAST })
-        coVerify(exactly = 2) { sessionManager.sendUserMessage(any()) }
-        coVerify(exactly = 1) {
-            sessionManager.sendUserMessage(
-                "<tool_result>{\"query\":\"latest android tool calling\",\"results\":[{\"url\":\"https://example.invalid/stub\"}]}</tool_result>"
-            )
-        }
-        coVerify(exactly = 1) { toolExecutor.execute(any()) }
-    }
-
-    @Test
-    fun `sendPrompt surfaces malformed llama tool envelope as feedback turn`() = runTest {
-        coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-
-        // Pass 1: Return a malformed envelope
-        // Pass 2: Return a normal response to finish the loop
-        var passCount = 0
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } answers {
-            passCount++
-            if (passCount == 1) {
-                flowOf(GenerationEvent.Completed("""<tool_call>{"name":"web_search","arguments":"""))
-            } else {
-                flowOf(
-                    GenerationEvent.Token("Corrected."),
-                    GenerationEvent.Completed("Corrected.")
-                )
-            }
-        }
-
-        val service = createService()
-
-        val events = service.sendPrompt(
-            prompt = "Find recent Android tool calling news",
-            options = searchEnabledOptions(),
-            closeConversation = false,
-        ).toList()
-
-        // Check that a tool_result was sent with the error message
-        coVerify {
-            sessionManager.sendUserMessage(match { it.contains("Failed to parse tool call envelope") })
-        }
-
-        // Check that we got the final response from pass 2
-        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Corrected." })
-    }
-
-    @Test
-    fun `sendPrompt wraps llama replay failure as typed resume error`() = runTest {
-        coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returnsMany listOf(
-            flowOf(
-                GenerationEvent.Completed(
-                    """<tool_call>{"name":"web_search","arguments":{"query":"latest android tool calling"}}</tool_call>"""
-                )
-            ),
-            flowOf(GenerationEvent.Error(RuntimeException("resume boom")))
-        )
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
-        )
-
-        val service = createService()
-
-        val events = service.sendPrompt(
-            prompt = "Find recent Android tool calling news",
-            options = searchEnabledOptions(),
-            closeConversation = false,
-        ).toList()
-
-        val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is RuntimeException)
-        assertEquals("resume boom", error.cause.message)
     }
 
     @Test
@@ -320,14 +210,5 @@ class LlamaInferenceServiceImplTest {
             activeModelProvider = activeModelProvider,
             context = context,
             modelType = modelType,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-
-    private fun searchEnabledOptions(): GenerationOptions =
-        GenerationOptions(
-            reasoningBudget = 0,
-            modelType = ModelType.FAST,
-            modelId = "7",
-            systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
         )
 }

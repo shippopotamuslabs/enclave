@@ -10,30 +10,21 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 
-import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
-import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
 import java.io.File
@@ -66,9 +57,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private val loggingPort: LoggingPort,
     private val localModelRepository: LocalModelRepositoryPort,
     private val activeModelProvider: ActiveModelProviderPort,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val modelType: ModelType,
-    val orchestrator: LlmToolingOrchestrator,
 ) : RustCompatibleInferenceService {
 
     companion object {
@@ -91,18 +81,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
         val fullText: String,
     )
 
-    private data class BufferedToolPass(
-        val fullText: String,
-    )
-
     private val mutex = Mutex()
     private var currentSignature: SessionSignature? = null
-    private var currentContextWindow: Int = 4096
-    private var currentSystemPrompt: String = ""
     private var history: List<DomainChatMessage> = emptyList()
     private var isInitialized = false
     private var hasTriedCpuFallback = false
-    private var transientToolResultTokens: Int = 0
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
@@ -198,8 +181,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 sessionManager.startNewConversation()
                 isInitialized = true
                 currentSignature = newSignature
-                currentContextWindow = samplingConfig.contextWindow
-                currentSystemPrompt = systemPrompt
             } catch (e: CancellationException) {
                 throw e
             } catch (e: JavaCancellationException) {
@@ -224,8 +205,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     sessionManager.startNewConversation()
                     isInitialized = true
                     currentSignature = newSignature
-                    currentContextWindow = cpuConfig.contextWindow
-                    currentSystemPrompt = systemPrompt
                     Log.i(TAG, "Successfully initialized with CPU fallback")
                 } else {
                     throw e
@@ -342,8 +321,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
         // Get model type from options (we'll need to add it to GenerationOptions)
         val targetModelType = options.modelType ?: ModelType.FAST
-        transientToolResultTokens = 0
-
         var imageUrisToProcess = options.imageUris
         if (imageUrisToProcess.size > 1) {
             Log.w(TAG, "Llama supports only 1 image per request. Ignoring extra images.")
@@ -384,14 +361,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
         try {
             sessionManager.sendUserMessage(prompt)
-
-            if (ToolEnvelopeParser.hasLocalToolContract(processedOptions.systemPrompt)) {
-                executeToolingPrompt(processedOptions, targetModelType) { send(it) }
-                if (closeConversation) {
-                    sessionManager.clearConversation()
-                }
-                return@channelFlow
-            }
 
             // Use options-aware streaming instead of mutating samplingConfig
             sessionManager.streamAssistantResponseWithOptions(processedOptions).collect { event ->
@@ -468,186 +437,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
             }
         }
     }.flowOn(Dispatchers.Default)
-
-    private suspend fun executeToolingPrompt(
-        options: GenerationOptions,
-        targetModelType: ModelType,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ) {
-        orchestrator.execute(
-            providerName = "LLAMA",
-            initialParams = options,
-            tag = TAG,
-            maxToolCalls = options.maxToolCalls,
-            onInferencePass = { params, allowToolCall ->
-                collectToolPreparationPass(
-                    events = sessionManager.streamAssistantResponseWithOptions(params),
-                    targetModelType = targetModelType,
-                    emitEvent = emitEvent,
-                )
-            },
-            onToolCallDetected = { pass ->
-                ToolEnvelopeParser.extractLocalToolEnvelope(pass.fullText)?.let { envelope ->
-                    listOf(
-                        ToolCallRequest(
-                            toolName = envelope.toolName,
-                            argumentsJson = envelope.argumentsJson,
-                            provider = "LLAMA",
-                            modelType = targetModelType,
-                            chatId = options.chatId,
-                            userMessageId = options.userMessageId,
-                            assistantMessageId = options.assistantMessageId,
-                        )
-                    )
-                } ?: emptyList()
-            },
-            onToolResultsMapped = { params, _, results ->
-                val tokenCounter = JTokkitTokenCounter
-                val modelId = currentSignature?.modelId?.value
-                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
-                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
-
-                results.forEach { (_, resultJson) ->
-                    val evaluation = ToolContextBudget.evaluate(
-                        contextWindowTokens = currentContextWindow,
-                        systemPromptTokens = systemPromptTokens,
-                        historyTokens = historyTokens,
-                        transientToolResultTokens = transientToolResultTokens,
-                        options = GenerationOptions(reasoningBudget = 0),
-                        modelId = modelId,
-                        tokenCounter = tokenCounter,
-                    )
-                    val truncatedResult = NativeToolResultFormatter.truncateToolResult(
-                        resultJson = resultJson,
-                        contextWindowTokens = currentContextWindow,
-                        estimatedUsedTokens = evaluation.totalTokens,
-                        bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
-                        tokenCounter = tokenCounter,
-                        modelId = modelId,
-                    )
-                    if (!truncatedResult.contains("\"error\"")) {
-                        transientToolResultTokens += tokenCounter.countTokens(truncatedResult, modelId) + 30
-                    }
-                    val toolResultMessage = if (evaluation.contextFull) {
-                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult) +
-                            "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
-                    } else {
-                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult)
-                    }
-                    sessionManager.sendUserMessage(toolResultMessage)
-                }
-                params
-            },
-            onContextExceeded = { _, _ ->
-                // Llama uses local KV cache, so mid-loop rebuilding is not feasible.
-                // Estimate current pressure from the same inputs used by ToolContextBudget.
-                val tokenCounter = JTokkitTokenCounter
-                val modelId = currentSignature?.modelId?.value
-                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
-                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
-                val evaluation = ToolContextBudget.evaluate(
-                    contextWindowTokens = currentContextWindow,
-                    systemPromptTokens = systemPromptTokens,
-                    historyTokens = historyTokens,
-                    transientToolResultTokens = transientToolResultTokens,
-                    options = GenerationOptions(reasoningBudget = 0),
-                    modelId = modelId,
-                    tokenCounter = tokenCounter,
-                )
-                val ratio = if (currentContextWindow > 0) {
-                    evaluation.totalTokens.toFloat() / currentContextWindow.toFloat()
-                } else {
-                    0f
-                }
-                if (ratio > 0.9f) {
-                    ContextExceededResult(contextExceeded = true)
-                } else {
-                    if (evaluation.contextFull) {
-                        @Suppress("MaxLineLength")
-                        loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
-                    }
-                    ContextExceededResult(evaluation.contextFull)
-                }
-            },
-            onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
-                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
-                    val assistantMessageId = options.assistantMessageId
-                    if (assistantMessageId != null) {
-                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
-                        if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.WebSearchResults(sources, targetModelType))
-                        }
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
-                    try {
-                        val appendParams =
-                            toolCall.parameters as com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
-                        com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
-                            .parseCompleteArtifact(resultJson)
-                            ?.let { complete ->
-                                emitEvent(
-                                    InferenceEvent.Artifacts(
-                                        artifacts = listOf(
-                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
-                                                artifactId = appendParams.artifactId,
-                                                title = complete.title,
-                                                content = complete.documentJson,
-                                            ),
-                                        ),
-                                        modelType = targetModelType,
-                                    ),
-                                )
-                            }
-                    } catch (e: Exception) {
-                        loggingPort.error(TAG, "Failed to parse append_blocks result", e)
-                    }
-                }
-
-                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
-                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
-                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
-                    if (mediaResult.uris.isNotEmpty()) {
-                        emitEvent(
-                            InferenceEvent.Media(
-                                mediaUris = mediaResult.uris,
-                                mediaIds = mediaResult.ids,
-                                mediaTypes = mediaResult.types,
-                                prompts = mediaResult.prompts,
-                                modelType = targetModelType
-                            )
-                        )
-                    }
-                }
-            },
-            onNoToolCallOnFirstPass = { pass ->
-                emitProcessedText(pass.fullText, targetModelType, emitEvent)
-            },
-            onFinished = { _, toolCallCount, lastResponse ->
-                if (toolCallCount > 0 && lastResponse != null) {
-                    emitProcessedText(lastResponse.fullText, targetModelType, emitEvent)
-                }
-                emitEvent(InferenceEvent.Finished(targetModelType))
-            }
-        )
-    }
-
-    private suspend fun collectToolPreparationPass(
-        events: Flow<GenerationEvent>,
-        targetModelType: ModelType,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ): BufferedToolPass {
-        val buffered = streamBufferedGeneration(
-            events = events,
-            targetModelType = targetModelType,
-            emitVisible = false,
-            emitEvent = emitEvent,
-        )
-        return BufferedToolPass(fullText = buffered.fullText)
-    }
 
     private suspend fun streamBufferedGeneration(
         events: Flow<GenerationEvent>,

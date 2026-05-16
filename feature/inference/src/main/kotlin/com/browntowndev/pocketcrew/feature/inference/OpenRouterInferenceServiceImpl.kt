@@ -1,24 +1,14 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
-import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.errors.NotFoundException
-import com.openai.models.responses.ResponseFunctionToolCall
-import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseInputItem
 
 class OpenRouterInferenceServiceImpl(
     client: OpenAIClient,
@@ -27,7 +17,6 @@ class OpenRouterInferenceServiceImpl(
     private val routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     baseUrl: String? = null,
     loggingPort: LoggingPort,
-    orchestrator: LlmToolingOrchestrator,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
@@ -35,130 +24,9 @@ class OpenRouterInferenceServiceImpl(
     modelType = modelType,
     baseUrl = baseUrl,
     loggingPort = loggingPort,
-    orchestrator = orchestrator,
 ) {
 
     override val tag: String = "OpenRouterInferenceService"
-
-    override fun mapToolingResponseParams(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-    ): ResponseCreateParams =
-        OpenRouterRequestMapper.mapToResponseParams(
-            modelId = modelId,
-            prompt = prompt,
-            history = requestHistory,
-            options = options,
-            routing = routing,
-        )
-
-    override fun mapToolingFollowUpResponseParams(
-        currentParams: ResponseCreateParams,
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        initialResponse: StreamedOpenAiResponse,
-        results: List<Pair<ToolCallRequest, String>>,
-        appendStopToolsWarning: Boolean,
-    ): ResponseCreateParams {
-        // Truncate large tool results when context window is known
-        val truncationAvailableTokens = options.contextWindow?.let { cw ->
-            val budget = ContextWindowPlanner.budgetFor(
-                contextWindowTokens = cw,
-                options = options,
-                modelId = modelId,
-                tokenCounter = JTokkitTokenCounter,
-            )
-            val usedTokens = ContextWindowPlanner.estimatePromptTokens(
-                history = requestHistory,
-                systemPrompt = null,
-                currentPrompt = prompt,
-                toolResultPayloads = results.map { it.second },
-                modelId = modelId,
-                tokenCounter = JTokkitTokenCounter,
-            ) ?: 0
-            (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
-        }
-        val builder = currentParams.toBuilder()
-        val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
-            currentParams.input().get().asResponse().toMutableList()
-        } else {
-            mutableListOf()
-        }
-
-        initialResponse.assistantMessageText
-            .takeIf { it.isNotBlank() }
-            ?.let { assistantText ->
-                inputItems += ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
-                        .role(ResponseInputItem.Message.Role.of("assistant"))
-                        .addInputTextContent(assistantText)
-                        .build()
-                )
-            }
-
-        // Map results back to their corresponding function calls in the initial response
-        results.forEach { (toolCall, resultJson) ->
-            val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
-                NativeToolResultFormatter.truncateForApiContext(
-                    resultJson = resultJson,
-                    availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
-                    tokenCounter = JTokkitTokenCounter,
-                    modelId = modelId,
-                )
-            } else {
-                resultJson
-            }
-            val index = initialResponse.functionCalls.indexOf(toolCall)
-
-            val callId = if (index != -1) {
-                initialResponse.providerToolCallIds.getOrElse(index) {
-                    throw IllegalStateException("Missing function call id at index $index for OpenRouter follow-up")
-                }
-            } else {
-                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
-            }
-
-            val functionItemId = if (index != -1) {
-                initialResponse.providerToolItemIds.getOrElse(index) {
-                    "fc_${callId.sanitizeForOpenRouterId()}"
-                }
-            } else {
-                "fc_${callId}"
-            }
-
-            inputItems += ResponseInputItem.ofFunctionCall(
-                ResponseFunctionToolCall.builder()
-                    .id(functionItemId)
-                    .callId(callId)
-                    .name(toolCall.toolName)
-                    .arguments(toolCall.argumentsJson)
-                    .build()
-            )
-            inputItems += ResponseInputItem.ofFunctionCallOutput(
-                ResponseInputItem.FunctionCallOutput.builder()
-                    .id("fco_${callId.sanitizeForOpenRouterId()}")
-                    .callId(callId)
-                    .output(truncatedResult)
-                    .build()
-            )
-        }
-
-        if (appendStopToolsWarning) {
-            inputItems += ResponseInputItem.ofMessage(
-                ResponseInputItem.Message.builder()
-                    .role(ResponseInputItem.Message.Role.of("user"))
-                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
-                    .build()
-            )
-        }
-
-        builder.inputOfResponse(inputItems)
-        options.safeOpenRouterFollowUpMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
-        OpenRouterRequestMapper.applyRoutingDefaults(builder, routing)
-        return builder.build()
-    }
 
     override suspend fun executePrompt(
         prompt: String,
@@ -166,40 +34,6 @@ class OpenRouterInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            try {
-                executeToolingPrompt(prompt, options, requestHistory, emitEvent)
-                return
-            } catch (e: BadRequestException) {
-                loggingPort.warning(
-                    tag,
-                    "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
-                )
-                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
-                return
-            } catch (e: NotFoundException) {
-                loggingPort.warning(
-                    tag,
-                    "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
-                )
-                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
-                return
-            } catch (e: Exception) {
-                if (isClientErrorMessage(e.message)) {
-                    loggingPort.warning(
-                        tag,
-                        @Suppress("MaxLineLength")
-                        "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
-                    )
-                } else {
-                    throw e
-                }
-
-                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
-                return
-            }
-        }
-
         logImagePayloads(options)
 
         val responseParams = OpenRouterRequestMapper.mapToResponseParams(
@@ -266,15 +100,4 @@ class OpenRouterInferenceServiceImpl(
         }
     }
 
-    private fun GenerationOptions.safeOpenRouterFollowUpMaxTokens(): Int? {
-        val configuredMaxTokens = maxTokens ?: return null
-        val configuredContextWindow = contextWindow
-        if (configuredContextWindow != null && configuredMaxTokens >= configuredContextWindow) {
-            return null
-        }
-        return configuredMaxTokens
-    }
-
-    private fun String.sanitizeForOpenRouterId(): String =
-        replace(Regex("[^A-Za-z0-9_-]"), "_")
 }
