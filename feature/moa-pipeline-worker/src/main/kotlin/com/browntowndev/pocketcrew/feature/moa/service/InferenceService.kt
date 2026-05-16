@@ -392,6 +392,8 @@ class InferenceService : Service() {
                     is InferenceEvent.WebSearchResults -> Unit
                     is InferenceEvent.Artifacts -> Unit
                     is InferenceEvent.Media -> Unit
+                    is InferenceEvent.CompactionApplied -> Unit
+                    is InferenceEvent.ToolRepaired -> Unit
                     is InferenceEvent.Finished -> {
                         // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }

@@ -85,52 +85,6 @@ object AnthropicRequestMapper {
         return builder.build()
     }
 
-    private fun ToolDefinition.toAnthropicTool(): Tool =
-        Tool.builder()
-            .name(name)
-            .description(description)
-            .inputSchema(
-                Tool.InputSchema.builder()
-                    .type(JsonValue.from("object"))
-                    .properties(toolProperties())
-                    .required(schema.required)
-                    .build()
-            )
-            .strict(true)
-            .build()
-
-    private fun ToolDefinition.toolProperties(): Tool.InputSchema.Properties {
-        val builder = Tool.InputSchema.Properties.builder()
-        schema.properties.forEach { (key, value) ->
-            builder.putAdditionalProperty(key, value.toAnthropicJsonValue())
-        }
-        return builder.build()
-    }
-
-    private fun kotlinx.serialization.json.JsonElement.toAnthropicJsonValue(): JsonValue {
-        return when (this) {
-            is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) JsonValue.from(content)
-                else {
-                    content.toBooleanStrictOrNull()?.let { JsonValue.from(it) }
-                        ?: content.toLongOrNull()?.let { JsonValue.from(it) }
-                        ?: content.toDoubleOrNull()?.let { JsonValue.from(it) }
-                        ?: JsonValue.from(content)
-                }
-            }
-            is kotlinx.serialization.json.JsonObject -> {
-                val map = mutableMapOf<String, JsonValue>()
-                forEach { (k, v) -> map[k] = v.toAnthropicJsonValue() }
-                JsonValue.from(map)
-            }
-            is kotlinx.serialization.json.JsonArray -> {
-                val list = map { it.toAnthropicJsonValue() }
-                JsonValue.from(list)
-            }
-            else -> JsonValue.from(null as String?)
-        }
-    }
-
     private fun buildSystemPrompt(
         history: List<ChatMessage>,
         systemPrompt: String?
@@ -209,3 +163,46 @@ object AnthropicRequestMapper {
             else -> Base64ImageSource.MediaType.IMAGE_JPEG
         }
 }
+
+internal fun ToolDefinition.toAnthropicTool(): Tool =
+    Tool.builder()
+        .name(name)
+        .description(description)
+        .inputSchema(
+            Tool.InputSchema.builder()
+                .type(JsonValue.from("object"))
+                .properties(anthropicToolProperties())
+                .required(schema.required)
+                .build()
+        )
+        .strict(true)
+        .build()
+
+private fun ToolDefinition.anthropicToolProperties(): Tool.InputSchema.Properties {
+    val builder = Tool.InputSchema.Properties.builder()
+    schema.properties.forEach { (key, value) ->
+        builder.putAdditionalProperty(key, value.toAnthropicJsonValueExt())
+    }
+    return builder.build()
+}
+
+private fun kotlinx.serialization.json.JsonElement.toAnthropicJsonValueExt(): JsonValue =
+    when (this) {
+        is kotlinx.serialization.json.JsonPrimitive -> {
+            if (isString) JsonValue.from(content)
+            else content.toBooleanStrictOrNull()?.let { JsonValue.from(it) }
+                ?: content.toLongOrNull()?.let { JsonValue.from(it) }
+                ?: content.toDoubleOrNull()?.let { JsonValue.from(it) }
+                ?: JsonValue.from(content)
+        }
+        is kotlinx.serialization.json.JsonObject -> {
+            val map = mutableMapOf<String, JsonValue>()
+            forEach { (k, v) -> map[k] = v.toAnthropicJsonValueExt() }
+            JsonValue.from(map)
+        }
+        is kotlinx.serialization.json.JsonArray -> {
+            val list = map { it.toAnthropicJsonValueExt() }
+            JsonValue.from(list)
+        }
+        else -> JsonValue.from(null as String?)
+    }

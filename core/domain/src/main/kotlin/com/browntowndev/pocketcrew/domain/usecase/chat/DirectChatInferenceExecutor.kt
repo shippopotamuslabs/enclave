@@ -120,7 +120,6 @@ class DirectChatInferenceExecutor
             modelType: ModelType,
         ): Flow<MessageGenerationState> =
             flow {
-                val config = activeModelProvider.getActiveConfiguration(modelType)
                 val preparedRequest =
                     inferenceRequestPreparer(
                         prompt = prompt,
@@ -136,10 +135,6 @@ class DirectChatInferenceExecutor
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
                         service = service,
-                        contextWindowTokens = config?.contextWindow ?: 4096,
-                        shouldSummarize = config?.isLocal != true,
-                        currentPrompt = preparedRequest.prompt,
-                        options = preparedRequest.options,
                     )
                 } catch (e: Exception) {
                     loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
@@ -187,6 +182,10 @@ class DirectChatInferenceExecutor
                                     ),
                                 )
                             }
+
+                            is InferenceEvent.CompactionApplied -> Unit
+
+                            is InferenceEvent.ToolRepaired -> Unit
 
                             is InferenceEvent.Finished -> {
                                 emit(MessageGenerationState.Finished(event.modelType))

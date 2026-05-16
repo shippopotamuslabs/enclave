@@ -4,8 +4,6 @@ import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
-import com.browntowndev.pocketcrew.domain.model.inference.SamplerConfig
-import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -30,7 +28,7 @@ class ConversationManagerImplRegressionTest {
     private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
 
     @Test
-    fun `executeToolSafely returns stop-tools payload after LiteRT context warning`() = runTest {
+    fun `executeToolSafely always delegates to tool executor for LITERT provider`() = runTest {
         val manager = ConversationManagerImpl(
             context = context,
             localModelRepository = localModelRepository,
@@ -38,9 +36,12 @@ class ConversationManagerImplRegressionTest {
             loggingPort = loggingPort,
             toolExecutor = toolExecutor,
         )
-        manager.forceContextFullWarnedForTest(true)
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "web_search",
+            resultJson = """{"results":[]}""",
+        )
 
-        val result = manager.executeToolSafelyForTest(
+        manager.executeToolSafelyForTest(
             ToolCallRequest(
                 toolName = "web_search",
                 argumentsJson = """{"query":"latest android tool calling"}""",
@@ -49,9 +50,7 @@ class ConversationManagerImplRegressionTest {
             )
         )
 
-        assertTrue(result.contains("tool_execution_failed"))
-        assertTrue(result.contains("Context window exceeded"))
-        coVerify(exactly = 0) { toolExecutor.execute(any()) }
+        coVerify(exactly = 1) { toolExecutor.execute(any()) }
     }
 
     @Test

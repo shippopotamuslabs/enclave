@@ -9,7 +9,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
@@ -120,7 +119,7 @@ class ChatHistoryRehydratorTest {
     }
 
     @Test
-    fun `rehydrator replaces stale service history when local summarization is disabled`() = runTest {
+    fun `rehydrator replaces stale service history`() = runTest {
         val priorUser = Message(
             id = MessageId("prior-user"),
             chatId = ChatId("chat"),
@@ -144,8 +143,6 @@ class ChatHistoryRehydratorTest {
             userMessageId = MessageId("current-user"),
             assistantMessageId = MessageId("active-assistant"),
             service = service,
-            contextWindowTokens = 128,
-            shouldSummarize = false,
         )
 
         assertFalse(service.getHistory().any { it.content == "stale history" })

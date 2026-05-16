@@ -99,6 +99,20 @@ sealed interface InferenceEvent {
         val modelType: ModelType
     ) : InferenceEvent
 
+    data class CompactionApplied(
+        val tier: String,
+        val tokensBefore: Int,
+        val tokensAfter: Int,
+        val modelType: ModelType
+    ) : InferenceEvent
+
+    data class ToolRepaired(
+        val originalName: String,
+        val resolvedName: String,
+        val confidence: Float,
+        val modelType: ModelType
+    ) : InferenceEvent
+
     /**
      * Emitted when the generation is complete.
      * @param modelType The type of model used to generate this chunk.

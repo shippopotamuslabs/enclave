@@ -13,6 +13,8 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.error.InferenceIOException
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopPort
+import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -55,6 +57,7 @@ class InferenceFactoryImplTest {
     private val googleGenAiClientProvider = mockk<GoogleGenAiClientProviderPort>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
+    private val agentLoopPort = mockk<AgentLoopPort>(relaxed = true)
     private val toolExecutor = mockk<ToolExecutorPort>()
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
     private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
@@ -95,6 +98,8 @@ class InferenceFactoryImplTest {
                 orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
                 inferenceLockManager = inferenceLockManager,
                 toolExecutionEventPort = mockk(relaxed = true),
+                agentLoopPort = agentLoopPort,
+                toolExecutorPort = toolExecutor,
             )
     }
 
@@ -417,7 +422,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
         }
 
     @Test
@@ -444,7 +449,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("AnthropicInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("AnthropicInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
         }
 
     @Test
@@ -471,7 +476,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("GoogleInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("GoogleInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
         }
 
     @Test
@@ -493,7 +498,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
             // Verify the client provider was called with the resolved base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -523,7 +528,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("XaiInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("XaiInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
             // Verify the client provider was called with the resolved base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -554,7 +559,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
             // Verify the client provider was called with the custom base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -575,7 +580,7 @@ class InferenceFactoryImplTest {
                     apiConfigId = ApiModelConfigurationId("21"),
                     apiCredentialsId = ApiCredentialsId("31"),
                     modelId = "gpt-4o",
-                ) as ApiInferenceServiceImpl
+                ).let(::unwrapRustLoop) as ApiInferenceServiceImpl
             val openRouterService =
                 resolveApiService(
                     provider = ApiProvider.OPENROUTER,
@@ -583,7 +588,7 @@ class InferenceFactoryImplTest {
                     apiConfigId = ApiModelConfigurationId("22"),
                     apiCredentialsId = ApiCredentialsId("32"),
                     modelId = "openai/gpt-5.2:nitro",
-                ) as OpenRouterInferenceServiceImpl
+                ).let(::unwrapRustLoop) as OpenRouterInferenceServiceImpl
             val xaiService =
                 resolveApiService(
                     provider = ApiProvider.XAI,
@@ -591,7 +596,7 @@ class InferenceFactoryImplTest {
                     apiConfigId = ApiModelConfigurationId("23"),
                     apiCredentialsId = ApiCredentialsId("33"),
                     modelId = "grok-2",
-                ) as XaiInferenceServiceImpl
+                ).let(::unwrapRustLoop) as XaiInferenceServiceImpl
             val anthropicService =
                 resolveApiService(
                     provider = ApiProvider.ANTHROPIC,
@@ -599,13 +604,13 @@ class InferenceFactoryImplTest {
                     apiConfigId = ApiModelConfigurationId("24"),
                     apiCredentialsId = ApiCredentialsId("34"),
                     modelId = "claude-sonnet-4-20250514",
-                ) as AnthropicInferenceServiceImpl
+                ).let(::unwrapRustLoop) as AnthropicInferenceServiceImpl
 
             val openAiExecutor = openAiService.orchestrator.toolExecutor
+            assertEquals(toolExecutor, openAiExecutor)
             assertEquals(openAiExecutor, openRouterService.orchestrator.toolExecutor)
             assertEquals(openAiExecutor, xaiService.orchestrator.toolExecutor)
             assertEquals(openAiExecutor, anthropicService.orchestrator.toolExecutor)
-            assertTrue(openAiExecutor is ToolExecutorPort)
         }
 
     @Test
@@ -630,9 +635,9 @@ class InferenceFactoryImplTest {
             coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns assignment
             coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-41")) } returns asset
 
-            val service = factory.withInferenceService(ModelType.FAST) { it } as LlamaInferenceServiceImpl
+            val service = unwrapRustLoop(factory.withInferenceService(ModelType.FAST) { it }) as LlamaInferenceServiceImpl
 
-            assertTrue(service.orchestrator.toolExecutor is ToolExecutorPort)
+            assertEquals(toolExecutor, service.orchestrator.toolExecutor)
         }
 
     @Test
@@ -658,7 +663,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.VISION) { it }
 
-            assertTrue(service is ApiInferenceServiceImpl)
+            assertTrue(unwrapRustLoop(service) is ApiInferenceServiceImpl)
             verify { inferenceLockManager.acquireLock(com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType.BYOK) }
             verify(
                 exactly = 0,
@@ -680,6 +685,28 @@ class InferenceFactoryImplTest {
             assertTrue((thrown as InferenceIOException).cause is java.io.IOException)
         }
 
+    @Test
+    fun `withInferenceService wraps RustCompatibleInferenceService in RustLoopInferenceService`() =
+        runTest {
+            val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("10"))
+            val config =
+                ApiModelConfiguration(
+                    id = ApiModelConfigurationId("10"),
+                    apiCredentialsId = ApiCredentialsId("12"),
+                    displayName = "Anthropic preset",
+                )
+            val credentials = apiCredentials(modelId = "claude-sonnet-4-20250514", provider = ApiProvider.ANTHROPIC, baseUrl = null)
+
+            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("10")) } returns config
+            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+            val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+            assertEquals("RustLoopInferenceService", service.javaClass.simpleName)
+        }
+
     private fun apiCredentials(
         modelId: String,
         provider: ApiProvider = ApiProvider.OPENAI,
@@ -694,6 +721,13 @@ class InferenceFactoryImplTest {
             baseUrl = baseUrl,
             credentialAlias = "alias",
         )
+
+    private fun unwrapRustLoop(service: LlmInferencePort): Any {
+        assertEquals("RustLoopInferenceService", service.javaClass.simpleName)
+        val inner = service.javaClass.getDeclaredField("inner")
+        inner.isAccessible = true
+        return requireNotNull(inner.get(service))
+    }
 
     private suspend fun resolveApiService(
         provider: ApiProvider,

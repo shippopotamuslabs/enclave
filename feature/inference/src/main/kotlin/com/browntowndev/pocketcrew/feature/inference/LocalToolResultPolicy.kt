@@ -30,6 +30,7 @@ internal object LocalToolResultPolicy {
         history: List<ChatMessage>,
         transientToolResultTokens: Int,
         modelId: String?,
+        resultJsonLooksSoftFailure: (String) -> Boolean = { it.hasTopLevelErrorField() },
     ): LocalToolResultDecision {
         val tokenCounter = JTokkitTokenCounter
         val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
@@ -44,7 +45,7 @@ internal object LocalToolResultPolicy {
             tokenCounter = tokenCounter,
             modelId = modelId,
         )
-        val hasErrorPayload = resultJson.hasTopLevelErrorField()
+        val hasErrorPayload = resultJsonLooksSoftFailure(resultJson)
 
         val evaluation = ToolContextBudget.evaluate(
             contextWindowTokens = contextWindowTokens,

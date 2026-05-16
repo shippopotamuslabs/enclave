@@ -4,6 +4,8 @@
 **Approver:** @sheen.brown  
 **Date:** 2026-05-15
 
+**Status amendment (2026-05-15):** AGENT-030/AGENT-036 feature-flag rollout was cut; this is a single-shot migration. The Summary tier is executed through Kotlin `RollingSummarizer` on the FAST model via `RustLoopInferenceService.summarize`. LiteRT keeps the native SDK loop and uses the Rust policy bridge through the domain `AgentPolicyPort`, preserving AGENT-026 layering while sharing repair/truncation/guardrail policy.
+
 ---
 
 ## Context
