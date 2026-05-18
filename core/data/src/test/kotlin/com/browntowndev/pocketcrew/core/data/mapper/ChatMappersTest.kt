@@ -1,8 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -246,6 +250,78 @@ class ChatMappersTest {
     }
 
     @Test
+    fun `MessageEntity toDomain exposes updatedAt`() {
+        val entity =
+            MessageEntity(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content = "Hello",
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                updatedAt = 1234L,
+            )
+
+        val domain = entity.toDomain()
+
+        assertEquals(1234L, domain.updatedAt)
+    }
+
+    @Test
+    fun `MessageWithFiles toDomain uses child updatedAt for display aggregate`() {
+        val messageId = MessageId("msg-1")
+        val entity =
+            MessageEntity(
+                id = messageId,
+                chatId = ChatId("chat-1"),
+                content = "Hello",
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                updatedAt = 10L,
+            )
+        val row =
+            MessageWithFiles(
+                message = entity,
+                files =
+                    listOf(
+                        MessageFileEntity(
+                            id = "file-1",
+                            messageId = messageId.value,
+                            name = "file.txt",
+                            content = "file",
+                            mimeType = MimeType.PLAIN_TEXT,
+                            updatedAt = 20L,
+                        ),
+                    ),
+            )
+        val sources =
+            listOf(
+                WebSearchSourceEntity(
+                    id = "source-1",
+                    messageId = messageId,
+                    title = "Title",
+                    url = "https://example.com",
+                    content = "Snippet",
+                    score = 1.0,
+                    updatedAt = 30L,
+                ),
+            )
+        val documents =
+            listOf(
+                DocumentEntity(
+                    id = "doc-1",
+                    messageId = messageId,
+                    json = "{}",
+                    title = "Doc",
+                    updatedAt = 40L,
+                ),
+            )
+
+        val domain = row.toDomain(webSearchSources = sources, documents = documents)
+
+        assertEquals(40L, domain.updatedAt)
+    }
+
+    @Test
     fun `Message toEntity correctly encodes media metadata lists`() {
         val uris = listOf("uri1")
         val assetIds = listOf("id1")
@@ -275,6 +351,23 @@ class ChatMappersTest {
         assertEquals(Json.encodeToString(assetIds), entity.generatedMediaAssetIdsJson)
         assertEquals(Json.encodeToString(types), entity.generatedMediaTypesJson)
         assertEquals(Json.encodeToString(prompts), entity.generatedMediaPromptsJson)
+    }
+
+    @Test
+    fun `Message toEntity preserves updatedAt when provided`() {
+        val domain =
+            Message(
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
+                content = Content(text = "Hello"),
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                updatedAt = 4567L,
+            )
+
+        val entity = domain.toEntity()
+
+        assertEquals(4567L, entity.updatedAt)
     }
 
     @Test

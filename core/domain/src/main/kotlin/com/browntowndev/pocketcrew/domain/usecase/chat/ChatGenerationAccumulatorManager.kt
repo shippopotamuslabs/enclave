@@ -1,15 +1,16 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
-import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
-import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -93,8 +94,7 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.Blocked -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    content.clear()
-                    content.append("[Blocked: ${state.reason}]")
+                    replaceContent("[Blocked: ${state.reason}]")
                     isComplete = true
                     currentState = MessageState.COMPLETE
                 }
@@ -102,8 +102,7 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.Failed -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    content.clear()
-                    content.append(
+                    replaceContent(
                         if (state.error is InferenceBusyException) {
                             state.error.message
                                 ?: "Another message is in progress. Please wait until it completes."
@@ -132,7 +131,7 @@ internal class ChatGenerationAccumulatorManager(
                 MessageAccumulator(
                     messageId = messageId,
                     modelType = messageSnapshot.modelType,
-                    pipelineStep = messageSnapshot.pipelineStep
+                    pipelineStep = messageSnapshot.pipelineStep,
                 ).apply {
                     content.append(messageSnapshot.content)
                     thinkingRaw.append(messageSnapshot.thinkingRaw)
@@ -243,24 +242,94 @@ internal class MessageAccumulator(
     val modelType: ModelType,
     val content: StringBuilder = StringBuilder(),
     val thinkingRaw: StringBuilder = StringBuilder(),
-    var thinkingStartTime: Long? = null,
-    var thinkingEndTime: Long? = null,
-    var isComplete: Boolean = false,
-    var currentState: MessageState = MessageState.GENERATING,
-    var pipelineStep: PipelineStep? = null,
-    val webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
-    val artifacts: MutableList<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = mutableListOf(),
-    val generatedMediaUris: MutableList<String> = mutableListOf(),
-    val generatedMediaAssetIds: MutableList<String> = mutableListOf(),
-    val generatedMediaTypes: MutableList<String> = mutableListOf(),
-    val generatedMediaPrompts: MutableList<String> = mutableListOf(),
+    thinkingStartTime: Long? = null,
+    thinkingEndTime: Long? = null,
+    isComplete: Boolean = false,
+    currentState: MessageState = MessageState.GENERATING,
+    pipelineStep: PipelineStep? = null,
+    webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
+    artifacts: MutableList<ArtifactGenerationRequest> = mutableListOf(),
+    generatedMediaUris: MutableList<String> = mutableListOf(),
+    generatedMediaAssetIds: MutableList<String> = mutableListOf(),
+    generatedMediaTypes: MutableList<String> = mutableListOf(),
+    generatedMediaPrompts: MutableList<String> = mutableListOf(),
     private val transcriptSegmentsMutable: MutableList<MutableTranscriptSegment> = mutableListOf(),
 ) {
+    private val webSearchSourcesList = SnapshotMutableList(webSearchSources)
+    private val artifactsList = SnapshotMutableList(artifacts)
+    private val generatedMediaUrisList = SnapshotMutableList(generatedMediaUris)
+    private val generatedMediaAssetIdsList = SnapshotMutableList(generatedMediaAssetIds)
+    private val generatedMediaTypesList = SnapshotMutableList(generatedMediaTypes)
+    private val generatedMediaPromptsList = SnapshotMutableList(generatedMediaPrompts)
+    private val webSearchSourcesSnapshot = CachedListSnapshot(webSearchSourcesList)
+    private val artifactsSnapshot = CachedListSnapshot(artifactsList)
+    private val generatedMediaUrisSnapshot = CachedListSnapshot(generatedMediaUrisList)
+    private val generatedMediaAssetIdsSnapshot = CachedListSnapshot(generatedMediaAssetIdsList)
+    private val generatedMediaTypesSnapshot = CachedListSnapshot(generatedMediaTypesList)
+    private val generatedMediaPromptsSnapshot = CachedListSnapshot(generatedMediaPromptsList)
+    private var transcriptSegmentsVersion = 0
+    private var cachedTranscriptSegmentsVersion = -1
+    private var cachedTranscriptSegments: List<MessageTranscriptSegment> = emptyList()
+    private var scalarVersion = 0
+    private var cachedSnapshotVersion = -1L
+    private var cachedSnapshot: MessageSnapshot? = null
+
+    val webSearchSources: MutableList<WebSearchSource> = webSearchSourcesList
+    val artifacts: MutableList<ArtifactGenerationRequest> = artifactsList
+    val generatedMediaUris: MutableList<String> = generatedMediaUrisList
+    val generatedMediaAssetIds: MutableList<String> = generatedMediaAssetIdsList
+    val generatedMediaTypes: MutableList<String> = generatedMediaTypesList
+    val generatedMediaPrompts: MutableList<String> = generatedMediaPromptsList
+
+    var thinkingStartTime: Long? = thinkingStartTime
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
+    var thinkingEndTime: Long? = thinkingEndTime
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
+    var isComplete: Boolean = isComplete
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
+    var currentState: MessageState = currentState
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
+    var pipelineStep: PipelineStep? = pipelineStep
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
     val thinkingDurationSeconds: Long
-        get() = if (thinkingStartTime != null && thinkingEndTime != null) {
-            (thinkingEndTime!! - thinkingStartTime!!) / 1000
-        } else {
-            0
+        get() {
+            val start = thinkingStartTime
+            val end = thinkingEndTime
+            return if (start != null && end != null) {
+                (end - start) / 1000
+            } else {
+                0
+            }
         }
 
     fun restoreTranscriptSegments(segments: List<MessageTranscriptSegment>) {
@@ -284,6 +353,7 @@ internal class MessageAccumulator(
                 )
             }
         }
+        markTranscriptSegmentsDirty()
     }
 
     fun appendThinking(chunk: String) {
@@ -317,6 +387,8 @@ internal class MessageAccumulator(
             }
             else -> transcriptSegmentsMutable.last().text.append(chunk)
         }
+        markTranscriptSegmentsDirty()
+        markScalarDirty()
     }
 
     fun appendContent(chunk: String) {
@@ -345,12 +417,21 @@ internal class MessageAccumulator(
             }
             else -> transcriptSegmentsMutable.last().text.append(chunk)
         }
+        markTranscriptSegmentsDirty()
+        markScalarDirty()
+    }
+
+    fun replaceContent(value: String) {
+        content.clear()
+        content.append(value)
+        markScalarDirty()
     }
 
     private fun finalizeOpenThinkingSegment(now: Long = System.currentTimeMillis()) {
         val last = transcriptSegmentsMutable.lastOrNull() ?: return
         if (last.kind == TranscriptSegmentKind.THINKING && last.thinkingEndMs == null && last.thinkingStartMs != null) {
             last.thinkingEndMs = now
+            markTranscriptSegmentsDirty()
         }
     }
 
@@ -358,6 +439,7 @@ internal class MessageAccumulator(
         val last = transcriptSegmentsMutable.lastOrNull() ?: return
         if (last.kind == TranscriptSegmentKind.THINKING && last.thinkingEndMs == null && last.thinkingStartMs != null) {
             last.thinkingEndMs = System.currentTimeMillis()
+            markTranscriptSegmentsDirty()
         }
     }
 
@@ -365,6 +447,15 @@ internal class MessageAccumulator(
         if (finalizeOpenThinking) {
             finalizeOpenThinkingSegmentIfAny()
         }
+        if (cachedTranscriptSegmentsVersion == transcriptSegmentsVersion) {
+            return cachedTranscriptSegments
+        }
+        cachedTranscriptSegments = buildTranscriptSegments()
+        cachedTranscriptSegmentsVersion = transcriptSegmentsVersion
+        return cachedTranscriptSegments
+    }
+
+    private fun buildTranscriptSegments(): List<MessageTranscriptSegment> {
         return transcriptSegmentsMutable.mapIndexed { index, seg ->
             when (seg.kind) {
                 TranscriptSegmentKind.THINKING -> {
@@ -401,6 +492,12 @@ internal class MessageAccumulator(
         if (shouldFinalizeOpenThinking) {
             finalizeOpenThinkingSegmentIfAny()
         }
+        val snapshotVersion = snapshotVersion()
+        val existingSnapshot = cachedSnapshot
+        if (existingSnapshot != null && cachedSnapshotVersion == snapshotVersion) {
+            return existingSnapshot
+        }
+
         return MessageSnapshot(
             messageId = messageId,
             modelType = modelType,
@@ -412,14 +509,36 @@ internal class MessageAccumulator(
             isComplete = isComplete,
             messageState = currentState,
             pipelineStep = pipelineStep,
-            webSearchSources = webSearchSources.toList(),
-            artifacts = artifacts.toList(),
-            generatedMediaUris = generatedMediaUris.toList(),
-            generatedMediaAssetIds = generatedMediaAssetIds.toList(),
-            generatedMediaTypes = generatedMediaTypes.toList(),
-            generatedMediaPrompts = generatedMediaPrompts.toList(),
+            webSearchSources = webSearchSourcesSnapshot.value(),
+            artifacts = artifactsSnapshot.value(),
+            generatedMediaUris = generatedMediaUrisSnapshot.value(),
+            generatedMediaAssetIds = generatedMediaAssetIdsSnapshot.value(),
+            generatedMediaTypes = generatedMediaTypesSnapshot.value(),
+            generatedMediaPrompts = generatedMediaPromptsSnapshot.value(),
             transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
-        )
+        ).also { snapshot ->
+            cachedSnapshot = snapshot
+            cachedSnapshotVersion = snapshotVersion
+        }
+    }
+
+    private fun markTranscriptSegmentsDirty() {
+        transcriptSegmentsVersion += 1
+    }
+
+    private fun markScalarDirty() {
+        scalarVersion += 1
+    }
+
+    private fun snapshotVersion(): Long {
+        return scalarVersion.toLong() +
+            webSearchSourcesList.version +
+            artifactsList.version +
+            generatedMediaUrisList.version +
+            generatedMediaAssetIdsList.version +
+            generatedMediaTypesList.version +
+            generatedMediaPromptsList.version +
+            transcriptSegmentsVersion
     }
 }
 
@@ -436,6 +555,67 @@ internal data class MutableTranscriptSegment(
     /** From DB restore when wall-clock bounds are missing but denormalized seconds were stored. */
     var restoredDurationSeconds: Long? = null,
 )
+
+private class SnapshotMutableList<T>(
+    initialValues: Collection<T>,
+) : AbstractMutableList<T>() {
+    private val values = initialValues.toMutableList()
+
+    var version: Int = 0
+        private set
+
+    override val size: Int
+        get() = values.size
+
+    override fun get(index: Int): T {
+        return values[index]
+    }
+
+    override fun add(
+        index: Int,
+        element: T,
+    ) {
+        values.add(index, element)
+        version += 1
+    }
+
+    override fun removeAt(index: Int): T {
+        val removed = values.removeAt(index)
+        version += 1
+        return removed
+    }
+
+    override fun set(
+        index: Int,
+        element: T,
+    ): T {
+        val previous = values.set(index, element)
+        version += 1
+        return previous
+    }
+
+    override fun clear() {
+        if (values.isNotEmpty()) {
+            values.clear()
+            version += 1
+        }
+    }
+}
+
+private class CachedListSnapshot<T>(
+    private val source: SnapshotMutableList<T>,
+) {
+    private var cachedVersion = -1
+    private var cachedValue: List<T> = emptyList()
+
+    fun value(): List<T> {
+        if (cachedVersion != source.version) {
+            cachedValue = source.toList()
+            cachedVersion = source.version
+        }
+        return cachedValue
+    }
+}
 
 internal fun getPipelineStepForModelType(modelType: ModelType): PipelineStep =
     when (modelType) {

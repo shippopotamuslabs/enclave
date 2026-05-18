@@ -43,6 +43,8 @@ fun StreamableMarkdownText(
     enableScroll: Boolean = true,
     onLinkClick: ((String) -> Unit)? = null,
     isPreview: Boolean = false, // Default to false for production; pass true for previews
+    // Allows tests to inject a tracked factory and assert it is called only once per lifetime.
+    themeFactory: MarkdownThemeFactory = MarkdownThemeFactory { darkMarkdownTheme() },
 ) {
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
@@ -53,13 +55,14 @@ fun StreamableMarkdownText(
             modifier = modifier,
         )
     } else {
+        val theme = remember { themeFactory.create() }
         // Do not key the subtree on streaming vs complete: that disposal remeasures the
         // LazyColumn parent row and snaps scroll when streaming finishes.
         SelectionContainer(modifier = modifier) {
             Markdown(
                 markdown = markdown,
                 isStreaming = isStreaming,
-                theme = darkMarkdownTheme(),
+                theme = theme,
                 enableScroll = enableScroll,
                 onLinkClick = onLinkClick,
             )

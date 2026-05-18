@@ -18,53 +18,109 @@ internal data class ChatMessageProjectionResult(
     val handoffReady: Boolean,
 )
 
+/**
+ * Stateful projection cache.
+ *
+ * Full-result memo: when all three inputs are reference-equal to the prior call, returns
+ * the same [ChatMessageProjectionResult] reference with no allocations.
+ *
+ * Per-message cache: keyed on (dbMessage, snapshot) structural equality. Messages whose
+ * inputs haven't changed reuse the previously projected [Message] instance, so downstream
+ * structural-equality checks (e.g., Compose diffing) see stable references.
+ *
+ * Not thread-safe — must be created and used on a single coroutine (the combine lambda).
+ */
+internal class ChatMessageProjector {
+    private data class MessageInputKey(val dbMessage: Message, val snapshot: MessageSnapshot?)
+
+    private val messageCache = HashMap<MessageId, Pair<MessageInputKey, Message>>()
+
+    private var memoDbMessages: List<Message>? = null
+    private var memoSnapshot: AccumulatedMessages? = null
+    private var memoKey: ActiveChatTurnKey? = null
+    private var memoResult: ChatMessageProjectionResult? = null
+
+    fun project(
+        dbMessages: List<Message>,
+        activeSnapshot: AccumulatedMessages?,
+        activeKey: ActiveChatTurnKey?,
+    ): ChatMessageProjectionResult {
+        val memo = memoResult
+        if (memo != null &&
+            dbMessages === memoDbMessages &&
+            activeSnapshot === memoSnapshot &&
+            activeKey == memoKey
+        ) {
+            return memo
+        }
+
+        val result = buildResult(dbMessages, activeSnapshot, activeKey)
+        memoDbMessages = dbMessages
+        memoSnapshot = activeSnapshot
+        memoKey = activeKey
+        memoResult = result
+        return result
+    }
+
+    private fun buildResult(
+        dbMessages: List<Message>,
+        activeSnapshot: AccumulatedMessages?,
+        activeKey: ActiveChatTurnKey?,
+    ): ChatMessageProjectionResult {
+        val activeMessagesMap: Map<MessageId, MessageSnapshot> = activeSnapshot?.messages.orEmpty()
+        val chatId: ChatId? = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId
+        val dbMessagesMap: Map<MessageId, Message> = dbMessages.associateBy { it.id }
+
+        val projectedMap = LinkedHashMap<MessageId, Message>(dbMessages.size + activeMessagesMap.size)
+
+        dbMessages.forEach { dbMessage ->
+            val snapshot = activeMessagesMap[dbMessage.id]
+            val inputKey = MessageInputKey(dbMessage, snapshot)
+            val cached = messageCache[dbMessage.id]
+            projectedMap[dbMessage.id] = if (cached != null && cached.first == inputKey) {
+                cached.second
+            } else {
+                val projected = resolveMessage(chatId, dbMessage, snapshot)
+                messageCache[dbMessage.id] = inputKey to projected
+                projected
+            }
+        }
+
+        activeMessagesMap.forEach { (messageId, snapshot) ->
+            if (messageId !in projectedMap) {
+                projectedMap[messageId] = snapshot.toMessage(chatId = chatId)
+            }
+        }
+
+        val sorted = projectedMap.values.sortedBy { it.createdAt ?: Long.MAX_VALUE }
+
+        return ChatMessageProjectionResult(
+            messages = sorted,
+            handoffReady = activeSnapshot != null &&
+                activeKey != null &&
+                activeMessagesMap.isNotEmpty() &&
+                activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
+                activeMessagesMap.keys.all { messageId ->
+                    dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
+                },
+        )
+    }
+
+    private fun resolveMessage(chatId: ChatId?, dbMessage: Message, snapshot: MessageSnapshot?): Message =
+        when {
+            snapshot != null && snapshot.messageState != MessageState.COMPLETE ->
+                snapshot.toMessage(chatId = chatId, createdAt = dbMessage.createdAt)
+            snapshot != null && dbMessage.messageState != MessageState.COMPLETE ->
+                snapshot.toMessage(chatId = chatId, createdAt = dbMessage.createdAt)
+            else -> dbMessage
+        }
+}
+
 internal fun projectChatMessages(
     dbMessages: List<Message>,
     activeSnapshot: AccumulatedMessages?,
     activeKey: ActiveChatTurnKey?,
-): ChatMessageProjectionResult {
-    val dbMessagesMap: Map<MessageId, Message> = dbMessages.associateBy { message -> message.id }
-    val activeMessagesMap: Map<MessageId, MessageSnapshot> = activeSnapshot
-        ?.messages
-        .orEmpty()
-
-    val chatId: ChatId? = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId
-    val projectedMessages = LinkedHashMap<MessageId, Message>()
-    dbMessagesMap.forEach { (id, dbMessage) ->
-        val activeMessage = activeMessagesMap[id]
-        projectedMessages[id] = when {
-            activeMessage != null && activeMessage.messageState != MessageState.COMPLETE -> activeMessage.toMessage(
-                chatId = chatId,
-                createdAt = dbMessage.createdAt,
-            )
-            activeMessage != null && dbMessage.messageState != MessageState.COMPLETE -> activeMessage.toMessage(
-                chatId = chatId,
-                createdAt = dbMessage.createdAt,
-            )
-            else -> dbMessage
-        }
-    }
-
-    activeMessagesMap.forEach { (messageId, snapshot) ->
-        if (messageId !in projectedMessages) {
-            projectedMessages[messageId] = snapshot.toMessage(chatId = chatId)
-        }
-    }
-
-    val projected = projectedMessages.values
-        .sortedBy { message -> message.createdAt ?: Long.MAX_VALUE }
-
-    return ChatMessageProjectionResult(
-        messages = projected,
-        handoffReady = activeSnapshot != null &&
-            activeKey != null &&
-            activeMessagesMap.isNotEmpty() &&
-            activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
-            activeMessagesMap.keys.all { messageId ->
-                dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
-            },
-    )
-}
+): ChatMessageProjectionResult = ChatMessageProjector().project(dbMessages, activeSnapshot, activeKey)
 
 private fun MessageSnapshot.toMessage(
     chatId: ChatId?,

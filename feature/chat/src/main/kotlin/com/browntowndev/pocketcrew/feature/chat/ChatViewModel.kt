@@ -69,6 +69,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -78,6 +79,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.scan
+import com.browntowndev.pocketcrew.domain.util.throttleLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
@@ -292,6 +294,8 @@ class ChatViewModel @Inject constructor(
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
+    private val chatMessageProjector = ChatMessageProjector()
+
     private val _shareState = MutableStateFlow<ShareState>(ShareState.Idle)
     private val _isReadOnly = MutableStateFlow(false)
     private val _sharedMessages = MutableStateFlow<List<Message>>(emptyList())
@@ -367,7 +371,7 @@ class ChatViewModel @Inject constructor(
         } else {
             chatUseCases.getChat(id)
         }
-    }
+    }.distinctUntilChangedBy { messages -> messages.dbMessagesFingerprint() }
 
     private val activeTurnCandidateFlow = combine(
         activeChatIdFlow,
@@ -421,7 +425,7 @@ class ChatViewModel @Inject constructor(
         } else {
             activeChatTurnSnapshotPort.observe(key).map { snapshot ->
                 ActiveTurnSnapshotState(key = key, snapshot = snapshot)
-            }
+            }.throttleLatest(16L).distinctUntilChanged()
         }
     }
 
@@ -698,7 +702,7 @@ class ChatViewModel @Inject constructor(
         val selectedMode: ChatModeUi = inputs.selectedMode
         val speechState: SpeechState = inputs.speechState
 
-        val projectedMessages = projectChatMessages(
+        val projectedMessages = chatMessageProjector.project(
             dbMessages = messages,
             activeSnapshot = activeTurnSnapshotState.snapshot,
             activeKey = activeTurnSnapshotState.key,
@@ -1613,3 +1617,26 @@ class ChatViewModel @Inject constructor(
         stopListening()
     }
 }
+
+internal fun List<Message>.dbMessagesFingerprintForTesting(): Any = dbMessagesFingerprint()
+
+private data class DbMessagesFingerprint(
+    val messages: List<DbMessageFingerprint>,
+)
+
+private data class DbMessageFingerprint(
+    val id: MessageId,
+    val updatedAt: Long?,
+    val fallbackMessage: Message?,
+)
+
+private fun List<Message>.dbMessagesFingerprint(): DbMessagesFingerprint =
+    DbMessagesFingerprint(
+        messages = map { message ->
+            DbMessageFingerprint(
+                id = message.id,
+                updatedAt = message.updatedAt,
+                fallbackMessage = message.takeIf { it.updatedAt == null },
+            )
+        },
+    )
