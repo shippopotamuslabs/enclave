@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopCompactionTrigger
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
@@ -16,6 +17,10 @@ class RollingSummarizer(
     suspend fun summarize(
         messages: List<ChatMessage>,
         service: LlmInferencePort,
+        instruction: String = "Please provide a comprehensive but concise summary of the conversation history.",
+        focusInstruction: String? = null,
+        historyRef: String? = null,
+        stateLedgerSnapshotJson: String? = null,
     ): String? {
         if (messages.size < 4) return null // Need enough context to summarize
 
@@ -37,17 +42,70 @@ class RollingSummarizer(
         val sliceToSummarize = history.subList(0, splitIndex)
         if (sliceToSummarize.isEmpty()) return null
 
-        val prompt = """
-            Please provide a comprehensive but concise summary of the following conversation history.
+        val prompt = buildAgentSummaryPrompt(
+            messages = sliceToSummarize,
+            instruction = instruction,
+            focusInstruction = focusInstruction,
+            historyRef = historyRef,
+            stateLedgerSnapshotJson = stateLedgerSnapshotJson,
+            trigger = AgentLoopCompactionTrigger.PREFLIGHT,
+        )
+
+        return summarizePrompt(prompt, service)
+    }
+
+    suspend fun summarizeAgentRequest(
+        messages: List<ChatMessage>,
+        service: LlmInferencePort,
+        instruction: String,
+        focusInstruction: String?,
+        historyRef: String?,
+        stateLedgerSnapshotJson: String?,
+        trigger: AgentLoopCompactionTrigger,
+    ): String? {
+        if (messages.isEmpty()) return null
+        return summarizePrompt(
+            buildAgentSummaryPrompt(
+                messages = messages,
+                instruction = instruction,
+                focusInstruction = focusInstruction,
+                historyRef = historyRef,
+                stateLedgerSnapshotJson = stateLedgerSnapshotJson,
+                trigger = trigger,
+            ),
+            service,
+        )
+    }
+
+    fun buildAgentSummaryPrompt(
+        messages: List<ChatMessage>,
+        instruction: String,
+        focusInstruction: String?,
+        historyRef: String?,
+        stateLedgerSnapshotJson: String?,
+        trigger: AgentLoopCompactionTrigger,
+    ): String {
+        val summaryGuidance = buildString {
+            appendLine(instruction)
+            appendLine("Compaction trigger: ${trigger.name}")
+            focusInstruction?.let { appendLine("Focus instruction: $it") }
+            historyRef?.let { appendLine("History reference: $it") }
+            stateLedgerSnapshotJson?.let { appendLine("State ledger snapshot: $it") }
+        }.trim()
+
+        return """
+            $summaryGuidance
             This summary will be used as context for future turns.
-            
+
             History to summarize:
-            ${sliceToSummarize.joinToString("\n") { "${it.role.name}: ${it.content}" }}
-            
+            ${messages.joinToString("\n") { "${it.role.name}: ${it.content}" }}
+
             Summary:
         """.trimIndent()
+    }
 
-        return try {
+    suspend fun summarizePrompt(prompt: String, service: LlmInferencePort): String? =
+        try {
             val responseFlow = service.sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, maxTokens = 1024))
             val result = responseFlow.toList()
                 .filterIsInstance<com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent.PartialResponse>()
@@ -57,5 +115,4 @@ class RollingSummarizer(
             loggingPort.error("RollingSummarizer", "Failed to generate summary: ${e.message}")
             null
         }
-    }
 }

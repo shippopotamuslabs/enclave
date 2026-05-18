@@ -94,6 +94,7 @@ data class ChatUiState(
     val shieldReason: String? = null,
     val hapticResponse: Boolean = false,
     val responseHapticPhase: ResponseHapticPhase = ResponseHapticPhase.None,
+    val responseHapticPulseKey: Long = 0L,
     val chatId: ChatId? = null,
     val isGenerating: Boolean = false,
     val canStop: Boolean = true,

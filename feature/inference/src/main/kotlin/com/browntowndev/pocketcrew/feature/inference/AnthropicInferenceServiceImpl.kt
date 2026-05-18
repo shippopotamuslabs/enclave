@@ -262,13 +262,10 @@ class AnthropicInferenceServiceImpl(
             availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
         }
 
-        val accumulatedText = StringBuilder()
+        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
         val response = streamMessages(builder.build()) { event ->
             when (event) {
-                is InferenceEvent.PartialResponse -> {
-                    accumulatedText.append(event.chunk)
-                    onTextToken(event.chunk)
-                }
+                is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
                 is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
                 else -> {}
             }
@@ -277,11 +274,14 @@ class AnthropicInferenceServiceImpl(
         val toolCalls = response.toolUse?.let { tu ->
             listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
         } ?: emptyList()
+        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
+        val finalToolCalls = toolCalls + leakedToolCalls
+        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = accumulatedText.toString().takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = assistantText,
+            toolCalls = finalToolCalls,
+            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
         )
     }
 

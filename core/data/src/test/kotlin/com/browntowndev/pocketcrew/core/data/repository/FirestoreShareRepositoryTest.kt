@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import android.util.Base64
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -19,6 +18,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
@@ -43,10 +43,6 @@ class FirestoreShareRepositoryTest {
         every { Log.e(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
 
-        mockkStatic(Base64::class)
-        every { Base64.encodeToString(any<ByteArray>(), any<Int>()) } returns "mock-base64"
-        every { Base64.decode(any<String>(), any<Int>()) } returns ByteArray(32)
-
         mockkStatic(UUID::class)
         every { UUID.randomUUID().toString() } returns "mock-uuid"
 
@@ -64,7 +60,6 @@ class FirestoreShareRepositoryTest {
 
     @AfterEach
     fun tearDown() {
-        unmockkStatic(Base64::class)
         unmockkStatic(Log::class)
         unmockkStatic(UUID::class)
     }
@@ -89,7 +84,7 @@ class FirestoreShareRepositoryTest {
             val result = mockk<HttpsCallableResult>(relaxed = true)
             every { functions.getHttpsCallable("uploadSharedChat") } returns callable
             every { callable.call(any()) } returns Tasks.forResult(result)
-            every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+            every { result.getData() } returns serverResultData()
 
             val sharedChat = repository.shareChat(messages)
 
@@ -120,7 +115,7 @@ class FirestoreShareRepositoryTest {
             val result = mockk<HttpsCallableResult>(relaxed = true)
             every { functions.getHttpsCallable("uploadSharedChat") } returns callable
             every { callable.call(any()) } returns Tasks.forResult(result)
-            every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+            every { result.getData() } returns serverResultData()
 
             val sharedChat = repository.shareChat(messages)
 
@@ -155,6 +150,51 @@ class FirestoreShareRepositoryTest {
         }
 
     @Test
+    fun `shareChat encrypts payload with url safe one time key and getSharedChat decrypts it`() =
+        runTest {
+            val messages =
+                listOf(
+                    Message(
+                        id = MessageId("msg1"),
+                        chatId = ChatId("chat1"),
+                        content = Content(text = "Encrypted hello"),
+                        role = Role.USER,
+                        createdAt = 1000L,
+                    ),
+                )
+
+            val callable = mockk<HttpsCallableReference>(relaxed = true)
+            val result = mockk<HttpsCallableResult>(relaxed = true)
+            val uploadPayload = slot<Map<String, Any>>()
+            every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+            every { callable.call(capture(uploadPayload)) } returns Tasks.forResult(result)
+            every { result.getData() } returns serverResultData()
+
+            val sharedChat = repository.shareChat(messages)
+            val oneTimeKey = sharedChat.shareUrl.substringAfter("key=")
+
+            assertTrue(sharedChat.shareUrl.startsWith("https://pocketcrew.app/share/share123?key="))
+            assertTrue(oneTimeKey.isNotBlank())
+            assertEquals("aes-gcm-iv-prefixed-v1", uploadPayload.captured["encryptionVersion"])
+            assertNotNull(uploadPayload.captured["encryptedPayload"])
+
+            val mockDoc = mockk<com.google.firebase.firestore.DocumentSnapshot>(relaxed = true)
+            val docRef = mockk<com.google.firebase.firestore.DocumentReference>(relaxed = true)
+            val collection = mockk<com.google.firebase.firestore.CollectionReference>(relaxed = true)
+            every { firestore.collection("shared_chats") } returns collection
+            every { collection.document("share123") } returns docRef
+            every { docRef.get() } returns Tasks.forResult(mockDoc)
+            every { mockDoc.exists() } returns true
+            every { mockDoc.getString("encryptedPayload") } returns
+                uploadPayload.captured.getValue("encryptedPayload") as String
+
+            val decrypted = repository.getSharedChat("share123", oneTimeKey)
+
+            assertNotNull(decrypted)
+            assertEquals("Encrypted hello", decrypted?.messages?.single()?.content)
+        }
+
+    @Test
     fun `shareChat with generated media uploads to storage`() =
         runTest {
             val messages =
@@ -173,7 +213,7 @@ class FirestoreShareRepositoryTest {
             val result = mockk<HttpsCallableResult>(relaxed = true)
             every { functions.getHttpsCallable("uploadSharedChat") } returns callable
             every { callable.call(any()) } returns Tasks.forResult(result)
-            every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+            every { result.getData() } returns serverResultData()
 
             val sharedChat = repository.shareChat(messages)
 
@@ -213,7 +253,7 @@ class FirestoreShareRepositoryTest {
             val result = mockk<HttpsCallableResult>(relaxed = true)
             every { functions.getHttpsCallable("uploadSharedChat") } returns callable
             every { callable.call(any()) } returns Tasks.forResult(result)
-            every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+            every { result.getData() } returns serverResultData()
 
             val sharedChat = repository.shareChat(messages)
 
@@ -229,7 +269,13 @@ class FirestoreShareRepositoryTest {
                     .first()
                     .fileAttachments
                     .first()
-                    .name,
+                .name,
             )
         }
+
+    private fun serverResultData(): Map<String, String> =
+        mapOf(
+            "shareId" to "share123",
+            "shareUrl" to "https://pocketcrew.app/share/share123",
+        )
 }

@@ -4,6 +4,8 @@ import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.port.inference.AgentPolicyPort
+import com.browntowndev.pocketcrew.domain.port.inference.AgentPolicyRepairResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -28,20 +30,18 @@ class ConversationManagerImplRegressionTest {
     private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
 
     @Test
-    fun `executeToolSafely always delegates to tool executor for LITERT provider`() = runTest {
+    fun `executeToolSafely returns synthetic error when policy disallows tool dispatch`() = runTest {
+        val policy = FakeAgentPolicyPort(allowTools = false)
         val manager = ConversationManagerImpl(
             context = context,
             localModelRepository = localModelRepository,
             activeModelProvider = activeModelProvider,
             loggingPort = loggingPort,
             toolExecutor = toolExecutor,
-        )
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"results":[]}""",
+            agentPolicyPort = policy,
         )
 
-        manager.executeToolSafelyForTest(
+        val result = manager.executeToolSafelyForTest(
             ToolCallRequest(
                 toolName = "web_search",
                 argumentsJson = """{"query":"latest android tool calling"}""",
@@ -50,6 +50,38 @@ class ConversationManagerImplRegressionTest {
             )
         )
 
+        assertTrue(result.contains("Context window exceeded"))
+        coVerify(exactly = 0) { toolExecutor.execute(any()) }
+    }
+
+    @Test
+    fun `executeToolSafely feeds policy soft failure detection into later dispatch gate`() = runTest {
+        val policy = FakeAgentPolicyPort(maxAllowedStreak = 1u)
+        val manager = ConversationManagerImpl(
+            context = context,
+            localModelRepository = localModelRepository,
+            activeModelProvider = activeModelProvider,
+            loggingPort = loggingPort,
+            toolExecutor = toolExecutor,
+            agentPolicyPort = policy,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "web_search",
+            resultJson = """{"status":"error","message":"provider failed"}""",
+        )
+
+        val request = ToolCallRequest(
+            toolName = "web_search",
+            argumentsJson = """{"query":"latest android tool calling"}""",
+            provider = "LITERT",
+            modelType = ModelType.FAST,
+        )
+
+        val firstResult = manager.executeToolSafelyForTest(request)
+        val secondResult = manager.executeToolSafelyForTest(request)
+
+        assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
+        assertTrue(secondResult.contains("Context window exceeded"))
         coVerify(exactly = 1) { toolExecutor.execute(any()) }
     }
 
@@ -139,5 +171,22 @@ class ConversationManagerImplRegressionTest {
         val field = target.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         return field.get(target) as T
+    }
+
+    private class FakeAgentPolicyPort(
+        private val allowTools: Boolean = true,
+        private val maxAllowedStreak: UInt = UInt.MAX_VALUE,
+    ) : AgentPolicyPort {
+        override fun repairTool(name: String, argsJson: String): AgentPolicyRepairResult =
+            AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
+
+        override fun truncateResult(json: String, budgetBytes: ULong): String =
+            json.take(budgetBytes.toInt())
+
+        override fun shouldAllowTool(softFailureStreak: UInt, maxStreak: UInt): Boolean =
+            allowTools && softFailureStreak < maxAllowedStreak
+
+        override fun resultJsonLooksSoftFailure(json: String): Boolean =
+            json.contains("\"status\":\"error\"")
     }
 }

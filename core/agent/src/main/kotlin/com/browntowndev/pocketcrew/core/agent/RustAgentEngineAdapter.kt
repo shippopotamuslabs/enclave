@@ -5,7 +5,10 @@ package com.browntowndev.pocketcrew.core.agent
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentContextReference
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopConfig
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopCompactionTrigger
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
 import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
@@ -14,6 +17,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentSummaryRequest
 import com.browntowndev.pocketcrew.domain.model.inference.AgentSummaryResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.AgentToolResult
+import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactRequest
+import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactResult
 import com.browntowndev.pocketcrew.domain.model.inference.toAgentLoopMessages
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopEvent
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopPort
@@ -24,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -38,6 +44,10 @@ import kotlinx.serialization.json.put
 class RustAgentEngineAdapter
     @Inject
     constructor(private val loggingPort: LoggingPort) : AgentLoopPort {
+        private var activeEngine: FfiAgentEngine? = null
+        private var activeSession: FfiSession? = null
+        private var activeHost: AgentLoopHostCallbacks? = null
+
         override fun execute(
             initialMessages: List<ChatMessage>,
             config: AgentLoopConfig,
@@ -74,6 +84,9 @@ class RustAgentEngineAdapter
                         sessionContextJson = sessionContextJson(sessionContext),
                         io = config.io.toFfi(),
                     )
+                activeEngine = engine
+                activeSession = session
+                activeHost = host
 
                 while (true) {
                     for (ev in engine.drainEvents(session)) {
@@ -90,6 +103,11 @@ class RustAgentEngineAdapter
                                         systemPrompt = action.request.systemPrompt,
                                         toolsSchemaJson = action.request.toolsSchemaJson,
                                         allowToolCall = action.request.allowToolCall,
+                                        contextReferences = action.request.contextReferences.map { it.toDomain() },
+                                        stateLedgerJson = action.request.stateLedgerJson,
+                                        toolContextIndexJson = action.request.toolContextIndexJson,
+                                        fileContextIndexJson = action.request.fileContextIndexJson,
+                                        cacheHints = action.request.cacheHints,
                                         onTextToken = { text -> channel.send(AgentLoopEvent.TextToken(text)) },
                                         onThinkingToken = { text -> channel.send(AgentLoopEvent.ThinkingToken(text)) },
                                     )
@@ -129,6 +147,10 @@ class RustAgentEngineAdapter
                                                 action.request.messagesToSummarize.map { it.toDomain() },
                                             instruction = action.request.instruction,
                                             lastMessageId = action.request.lastMessageId,
+                                            trigger = action.request.trigger.toDomain(),
+                                            focusInstruction = action.request.focusInstruction,
+                                            historyRef = action.request.historyRef,
+                                            stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
                                         ),
                                     )
                                 }
@@ -136,30 +158,115 @@ class RustAgentEngineAdapter
                         }
                         is FfiAgentAction.Finished -> {
                             drainEvents(engine, session)
+                            activeEngine = null
+                            activeSession = null
+                            activeHost = null
                             send(AgentLoopEvent.Finished)
                             return@channelFlow
                         }
                         is FfiAgentAction.Failed -> {
                             drainEvents(engine, session)
+                            activeEngine = null
+                            activeSession = null
+                            activeHost = null
                             send(AgentLoopEvent.Failed(action.error.message ?: "agent failed"))
                             return@channelFlow
+                        }
+                        is FfiAgentAction.ManualCompactCompleted -> {
+                            drainEvents(engine, session)
                         }
                     }
                 }
             }
 
+        override suspend fun requestManualCompact(request: AgentManualCompactRequest): AgentManualCompactResult {
+            val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
+            val session = requireNotNull(activeSession) { "No active Rust agent session" }
+            val action = engine.requestManualCompact(
+                session,
+                FfiManualCompactRequest(
+                    focusInstruction = request.focusInstruction,
+                    forceSummary = request.forceSummary,
+                ),
+            )
+            val requestEvents = collectDomainEvents(engine, session)
+            return when (action) {
+                is FfiAgentAction.ManualCompactCompleted -> action.result.toDomain(requestEvents)
+                is FfiAgentAction.RequestSummary -> {
+                    val host = requireNotNull(activeHost) { "No active Rust agent host" }
+                    val summary = host.summarize(
+                        AgentSummaryRequest(
+                            messagesToSummarize = action.request.messagesToSummarize.map { it.toDomain() },
+                            instruction = action.request.instruction,
+                            lastMessageId = action.request.lastMessageId,
+                            trigger = action.request.trigger.toDomain(),
+                            focusInstruction = action.request.focusInstruction,
+                            historyRef = action.request.historyRef,
+                            stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
+                        ),
+                    )
+                    engine.submitSummary(session, summary.toFfi())
+                    val summaryEvents = collectDomainEvents(engine, session)
+                    val events = requestEvents + summaryEvents
+                    val compaction = events.filterIsInstance<AgentLoopEvent.CompactionApplied>().lastOrNull()
+                    val postCompact = events.filterIsInstance<AgentLoopEvent.PostCompact>().lastOrNull()
+                    requireNotNull(compaction) {
+                        "Manual compact summary completed without compaction metadata"
+                    }.let { applied ->
+                        AgentManualCompactResult(
+                            summaryRef = postCompact?.summaryRef,
+                            historyRef = postCompact?.historyRef ?: action.request.historyRef,
+                            tokensBefore = applied.tokensBefore,
+                            tokensAfter = applied.tokensAfter,
+                            events = events,
+                        )
+                    }
+                }
+                else -> error("Unexpected manual compact action: ${action::class.simpleName}")
+            }
+        }
+
+        override suspend fun readContextReference(referenceId: String): String {
+            val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
+            val session = requireNotNull(activeSession) { "No active Rust agent session" }
+            return engine.readContextReference(session, referenceId)
+        }
+
+        override suspend fun searchContextReferences(query: String, limit: Int): List<AgentContextReference> {
+            val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
+            val session = requireNotNull(activeSession) { "No active Rust agent session" }
+            return engine.searchContextReferences(session, query, limit.toUInt()).map { it.toDomain() }
+        }
+
         private suspend fun kotlinx.coroutines.channels.ProducerScope<AgentLoopEvent>.drainEvents(
             engine: FfiAgentEngine,
             session: FfiSession,
         ) {
-            for (ev in engine.drainEvents(session)) {
-                AgentEventMapper.log(ev, loggingPort)
-                AgentEventMapper.toDomain(ev)?.let { send(it) }
-            }
+            collectDomainEvents(engine, session).forEach { send(it) }
         }
 
+        private fun collectDomainEvents(
+            engine: FfiAgentEngine,
+            session: FfiSession,
+        ): List<AgentLoopEvent> =
+            engine.drainEvents(session).mapNotNull { event ->
+                AgentEventMapper.log(event, loggingPort)
+                AgentEventMapper.toDomain(event)
+            }
+
         private fun sessionContextJson(map: Map<String, String>): String {
-            val obj = buildJsonObject { map.forEach { (k, v) -> put(k, v) } }
+            val obj = buildJsonObject {
+                map.forEach { (key, value) ->
+                    if (key == "included_files") {
+                        runCatching { Json.parseToJsonElement(value) }
+                            .getOrNull()
+                            ?.let { put(key, it) }
+                            ?: put(key, value)
+                    } else {
+                        put(key, value)
+                    }
+                }
+            }
             return obj.toString()
         }
     }
@@ -197,6 +304,26 @@ private fun FfiAgentMessage.toDomain(): AgentLoopMessage =
         metadataJson = metadataJson,
     )
 
+private fun FfiContextReference.toDomain(): AgentContextReference =
+    AgentContextReference(
+        id = id,
+        kind = kind.name,
+        title = title,
+        byteLen = byteLen,
+        tokenEstimate = tokenEstimate,
+        preview = preview,
+        retrievalHint = retrievalHint,
+    )
+
+private fun FfiManualCompactResult.toDomain(events: List<AgentLoopEvent> = emptyList()): AgentManualCompactResult =
+    AgentManualCompactResult(
+        summaryRef = summaryRef,
+        historyRef = historyRef,
+        tokensBefore = tokensBefore.toInt(),
+        tokensAfter = tokensAfter.toInt(),
+        events = events,
+    )
+
 private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopAgentConfig.toFfi(): FfiAgentConfig =
     FfiAgentConfig(
         maxTurns = maxTurns,
@@ -205,6 +332,23 @@ private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopAgentCon
         toolRetryLimit = toolRetryLimit,
         greedyAppendBlocks = greedyAppendBlocks,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
+        midTurnThresholdRatio = midTurnThresholdRatio,
+        postToolResultThresholdRatio = postToolResultThresholdRatio,
+        manualCompactThresholdRatio = manualCompactThresholdRatio,
+        allowFifoOnPreflight = allowFifoOnPreflight,
+        allowFifoOnMidTurn = allowFifoOnMidTurn,
+        allowFifoOnPostToolResult = allowFifoOnPostToolResult,
+        requireSnapshotBeforeFifo = requireSnapshotBeforeFifo,
+        enableContextStore = enableContextStore,
+        enableStateLedger = enableStateLedger,
+        enableToolSchemaDeferral = enableToolSchemaDeferral,
+        enableFileCondensation = enableFileCondensation,
+        enableManualCompact = enableManualCompact,
+        toolSpillThresholdBytes = toolSpillThresholdBytes,
+        terminalSpillThresholdBytes = terminalSpillThresholdBytes,
+        historySnapshotThresholdTokens = historySnapshotThresholdTokens,
+        fileOutlineThresholdTokens = fileOutlineThresholdTokens,
+        promptCacheAnchorThresholdTokens = promptCacheAnchorThresholdTokens,
     )
 
 private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionCapabilities.toFfi(): FfiSessionCapabilities =
@@ -212,7 +356,30 @@ private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionC
         summarizationAllowed = summarizationAllowed,
         kvFixed = kvFixed,
         toolResultBudgetTokens = toolResultBudgetTokens,
+        contextPolicyTier = contextPolicyTier.toFfi(),
+        toolSchemaDeferralSupported = toolSchemaDeferralSupported,
+        fileBackedContextSupported = fileBackedContextSupported,
+        promptCacheSupported = promptCacheSupported,
+        historyRewriteSupported = historyRewriteSupported,
     )
+
+private fun AgentLoopContextPolicyTier.toFfi(): FfiContextPolicyTier =
+    when (this) {
+        AgentLoopContextPolicyTier.HOSTED_MUTABLE -> FfiContextPolicyTier.HOSTED_MUTABLE
+        AgentLoopContextPolicyTier.HOSTED_PROXY -> FfiContextPolicyTier.HOSTED_PROXY
+        AgentLoopContextPolicyTier.LOCAL_MUTABLE -> FfiContextPolicyTier.LOCAL_MUTABLE
+        AgentLoopContextPolicyTier.FIXED_KV -> FfiContextPolicyTier.FIXED_KV
+        AgentLoopContextPolicyTier.HIGH_CONTEXT -> FfiContextPolicyTier.HIGH_CONTEXT
+        AgentLoopContextPolicyTier.SMALL_CONTEXT -> FfiContextPolicyTier.SMALL_CONTEXT
+    }
+
+private fun FfiCompactionTrigger.toDomain(): AgentLoopCompactionTrigger =
+    when (this) {
+        FfiCompactionTrigger.PREFLIGHT -> AgentLoopCompactionTrigger.PREFLIGHT
+        FfiCompactionTrigger.MID_TURN -> AgentLoopCompactionTrigger.MID_TURN
+        FfiCompactionTrigger.POST_TOOL_RESULT -> AgentLoopCompactionTrigger.POST_TOOL_RESULT
+        FfiCompactionTrigger.MANUAL -> AgentLoopCompactionTrigger.MANUAL
+    }
 
 private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionIoParams.toFfi(): FfiSessionIoParams =
     FfiSessionIoParams(

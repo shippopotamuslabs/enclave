@@ -18,7 +18,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
+import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
+import com.openai.core.JsonValue
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -164,11 +166,12 @@ abstract class BaseOpenAiSdkInferenceService(
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
 
+        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
         val response = streamChatCompletions(
             params = builder.build(),
             emitEvent = { event ->
                 when (event) {
-                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                    is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
                     is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
                     else -> {}
                 }
@@ -182,11 +185,14 @@ abstract class BaseOpenAiSdkInferenceService(
                 argumentsJson = call.argumentsJson,
             )
         }
+        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
+        val finalToolCalls = toolCalls + leakedToolCalls
+        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = response.assistantMessageText.takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = assistantText,
+            toolCalls = finalToolCalls,
+            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
         )
     }
 
@@ -361,9 +367,7 @@ abstract class BaseOpenAiSdkInferenceService(
                     }
                 }
 
-                val reasoningText = delta._additionalProperties()["reasoning_content"]
-                    ?.convert(String::class.java)
-                    ?.takeIf { it.isNotEmpty() }
+                val reasoningText = openAiChatDeltaReasoningText(delta._additionalProperties())
                 if (reasoningText != null) {
                     emitEvent(InferenceEvent.Thinking(reasoningText, modelType))
                 }
@@ -543,4 +547,34 @@ abstract class BaseOpenAiSdkInferenceService(
         return listOf(ChatMessage(role = Role.SYSTEM, content = normalizedPrompt)) + history
     }
 
+}
+
+internal fun openAiChatDeltaReasoningText(additionalProperties: Map<String, JsonValue>): String? {
+    val directReasoning = listOf("reasoning_content", "reasoning")
+        .firstNotNullOfOrNull { key ->
+            additionalProperties[key]
+                ?.convert(String::class.java)
+                ?.takeIf { value -> value.isNotBlank() }
+        }
+    if (directReasoning != null) return directReasoning
+
+    return additionalProperties["reasoning_details"]
+        ?.let(::reasoningDetailsText)
+        ?.takeIf { text -> text.isNotBlank() }
+}
+
+private fun reasoningDetailsText(value: JsonValue): String {
+    val details = runCatching {
+        value.convert(
+            object : TypeReference<List<Map<String, Any?>>>() {}
+        )
+    }.getOrNull().orEmpty()
+
+    return details.joinToString(separator = "") { detail ->
+        when (detail["type"]) {
+            "reasoning.text" -> detail["text"] as? String
+            "reasoning.summary" -> detail["summary"] as? String
+            else -> null
+        }.orEmpty()
+    }
 }

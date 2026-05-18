@@ -345,6 +345,8 @@ class ChatViewModel @Inject constructor(
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
     private var speechJob: Job? = null
+    private var lastResponseHapticSignature: ResponseHapticSignature? = null
+    private var responseHapticPulseKey: Long = 0L
 
     // Tracks the current streaming TTS job for cancellation
     private var streamingTtsJob: Job? = null
@@ -380,10 +382,7 @@ class ChatViewModel @Inject constructor(
                 ?.let { message -> ActiveChatTurnKey(id, message.id) }
         }
         val requestedKey = requestedTurnKey?.takeIf { key ->
-            key.chatId == chatId &&
-                messages.none { message ->
-                    message.id == key.assistantMessageId && message.messageState == MessageState.COMPLETE
-                }
+            key.chatId == chatId
         }
         ActiveTurnCandidate(
             chatId = chatId,
@@ -729,7 +728,8 @@ class ChatViewModel @Inject constructor(
         var canStop = true
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
-        var responseHapticPhase = ResponseHapticPhase.None
+        var hasThinkingIndicator = false
+        val activeToolCallBanner = chatActionState.activeToolCallBanner
         val chatMessages: List<ChatMessage> = reconciledMessages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
@@ -747,15 +747,32 @@ class ChatViewModel @Inject constructor(
                             canStop = false
                         }
                     }
-                    responseHapticPhase =
-                        when (state) {
-                            is IndicatorState.Thinking -> ResponseHapticPhase.ThinkingPulse
-                            is IndicatorState.Generating -> ResponseHapticPhase.GeneratingBuzz
-                            else -> responseHapticPhase
-                        }
+                    if (state is IndicatorState.Thinking && chatMessage.visibleAnswerTextLength() == 0) {
+                        hasThinkingIndicator = true
+                    }
                 }
                 chatMessage
             }
+        val activeToolCallMessageId =
+            activeToolCallBanner?.let {
+                resolveActiveToolCallMessageId(
+                    activeIndicatorMessageId = activeIndicatorMessageId,
+                    activeTurnSnapshotState = activeTurnSnapshotState,
+                    chatMessages = chatMessages,
+                )
+            }
+        if (activeToolCallBanner != null) {
+            hasActiveIndicator = true
+            isGenerating = true
+            activeIndicatorMessageId = activeToolCallMessageId
+        }
+        val visibleTextHapticSignature = chatMessages.latestVisibleTextHapticSignature()
+        val responseHapticPhase =
+            resolveResponseHapticPhase(
+                activeToolCallBanner = activeToolCallBanner,
+                visibleTextHapticSignature = visibleTextHapticSignature,
+                hasThinkingIndicator = hasThinkingIndicator,
+            )
 
         ChatUiState(
             messages = chatMessages,
@@ -770,12 +787,13 @@ class ChatViewModel @Inject constructor(
             isGlobalInferenceBlocked = isBlocked,
             hapticResponse = settings.hapticResponse,
             responseHapticPhase = responseHapticPhase,
+            responseHapticPulseKey = responseHapticPulseKey,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
             canStop = canStop,
             hasActiveIndicator = hasActiveIndicator,
             activeIndicatorMessageId = activeIndicatorMessageId,
-            activeToolCallBanner = chatActionState.activeToolCallBanner,
+            activeToolCallBanner = activeToolCallBanner,
             backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
             hasTtsProviderAssigned = chatActionState.hasTtsProviderAssigned,
             isPlayingTts = isPlayingTts,
@@ -788,6 +806,65 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
         initialValue = ChatUiState()
     )
+
+    private fun resolveActiveToolCallMessageId(
+        activeIndicatorMessageId: MessageId?,
+        activeTurnSnapshotState: ActiveTurnSnapshotState,
+        chatMessages: List<ChatMessage>,
+    ): MessageId? =
+        activeIndicatorMessageId
+            ?: activeTurnSnapshotState.key?.assistantMessageId
+                ?.takeIf { assistantMessageId -> chatMessages.any { it.id == assistantMessageId } }
+            ?: chatMessages.lastOrNull { it.role == MessageRole.Assistant }?.id
+            ?: chatMessages.lastOrNull { it.role == MessageRole.User }?.id
+
+    private fun resolveResponseHapticPhase(
+        activeToolCallBanner: ToolCallBannerUi?,
+        visibleTextHapticSignature: ResponseHapticSignature?,
+        hasThinkingIndicator: Boolean,
+    ): ResponseHapticPhase {
+        if (activeToolCallBanner != null) {
+            lastResponseHapticSignature = visibleTextHapticSignature
+            return ResponseHapticPhase.None
+        }
+        if (visibleTextHapticSignature == null) {
+            lastResponseHapticSignature = null
+            return if (hasThinkingIndicator) {
+                ResponseHapticPhase.ThinkingPulse
+            } else {
+                ResponseHapticPhase.None
+            }
+        }
+
+        val previous = lastResponseHapticSignature
+        lastResponseHapticSignature = visibleTextHapticSignature
+        val visibleTextAdvanced = previous != null &&
+            previous.messageId == visibleTextHapticSignature.messageId &&
+            visibleTextHapticSignature.visibleTextLength > previous.visibleTextLength
+        if (!visibleTextAdvanced) return ResponseHapticPhase.None
+
+        responseHapticPulseKey += 1
+        return ResponseHapticPhase.GeneratingBuzz
+    }
+
+    private fun List<ChatMessage>.latestVisibleTextHapticSignature(): ResponseHapticSignature? =
+        lastOrNull { message ->
+            message.role == MessageRole.Assistant &&
+                message.indicatorState is IndicatorState.Generating &&
+                message.visibleAnswerTextLength() > 0
+        }?.let { message ->
+            ResponseHapticSignature(
+                messageId = message.id,
+                visibleTextLength = message.visibleAnswerTextLength(),
+            )
+        }
+
+    private fun ChatMessage.visibleAnswerTextLength(): Int {
+        val answerTextLength = transcriptSegments
+            .filterIsInstance<TranscriptSegmentUi.AnswerBlock>()
+            .sumOf { segment -> segment.text.length }
+        return answerTextLength.takeIf { it > 0 } ?: content.text.length
+    }
 
     private fun acknowledgeProjectedHandoffIfNeeded(
         activeKey: ActiveChatTurnKey?,
@@ -1343,9 +1420,12 @@ class ChatViewModel @Inject constructor(
         _shareState.value = ShareState.Idle
     }
 
-    fun onLoadSharedChat(shareId: String) {
+    fun onLoadSharedChat(
+        shareId: String,
+        decryptionKey: String? = null,
+    ) {
         viewModelScope.launch {
-            shareChatUseCase.getSharedChat(shareId)
+            shareChatUseCase.getSharedChat(shareId, decryptionKey)
                 .onSuccess { sharedChat ->
                     sharedChat?.let { chat ->
                         val mappedMessages = withContext(Dispatchers.Default) {
@@ -1460,6 +1540,11 @@ class ChatViewModel @Inject constructor(
     private data class ActiveTurnSnapshotState(
         val key: ActiveChatTurnKey?,
         val snapshot: AccumulatedMessages?,
+    )
+
+    private data class ResponseHapticSignature(
+        val messageId: MessageId,
+        val visibleTextLength: Int,
     )
 
     private suspend fun resolvePhotoAttachmentPolicy(

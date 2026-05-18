@@ -224,7 +224,7 @@ class GoogleInferenceServiceImpl(
             )
         }
 
-        val accumulatedText = StringBuilder()
+        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
         val result = sdkClient.generateContentStream(
             modelId = modelId,
             contents = contents,
@@ -232,10 +232,7 @@ class GoogleInferenceServiceImpl(
             allowToolCall = allowToolCall,
             emitEvent = { event ->
                 when (event) {
-                    is InferenceEvent.PartialResponse -> {
-                        accumulatedText.append(event.chunk)
-                        onTextToken(event.chunk)
-                    }
+                    is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
                     is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
                     else -> {}
                 }
@@ -250,11 +247,14 @@ class GoogleInferenceServiceImpl(
             )
             listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
         } ?: emptyList()
+        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
+        val finalToolCalls = toolCalls + leakedToolCalls
+        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = accumulatedText.toString().takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = assistantText,
+            toolCalls = finalToolCalls,
+            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
         )
     }
 

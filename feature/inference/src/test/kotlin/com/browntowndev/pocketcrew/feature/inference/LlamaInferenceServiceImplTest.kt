@@ -3,10 +3,14 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -18,6 +22,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -199,6 +204,39 @@ class LlamaInferenceServiceImplTest {
         val error = events.filterIsInstance<InferenceEvent.Error>().single()
         assertTrue(error.cause is IllegalStateException)
         assertEquals("Vision-capable GGUF model requires an mmproj companion file.", error.cause.message)
+    }
+
+    @Test
+    fun `completeSingleTurn rebuilds session history from Rust messages`() = runTest {
+        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
+            GenerationEvent.Completed("Assistant text"),
+        )
+        val capturedHistories = mutableListOf<List<ChatMessage>>()
+        val service = createService(ModelType.FAST)
+
+        val result = service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(id = "u1", role = Role.USER, content = "Question", metadataJson = "null"),
+                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Prior answer", metadataJson = "null"),
+            ),
+            systemPrompt = "System",
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+        )
+
+        coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
+        assertEquals(
+            listOf(
+                ChatMessage(Role.USER, "Question"),
+                ChatMessage(Role.ASSISTANT, "Prior answer"),
+            ),
+            capturedHistories.last(),
+        )
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals("Assistant text", result.assistantText)
     }
 
     private fun createService(modelType: ModelType = ModelType.FAST): LlamaInferenceServiceImpl =

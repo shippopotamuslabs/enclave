@@ -1,8 +1,11 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.browntowndev.pocketcrew.app.tts
 
 import android.content.Intent
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -121,8 +124,8 @@ class TtsPlaybackService : MediaSessionService() {
                 .setAudioAttributes(
                     AudioAttributes
                         .Builder()
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
+                        .setUsage(C.USAGE_MEDIA)
                         .build(),
                     true,
                 ).setHandleAudioBecomingNoisy(true)

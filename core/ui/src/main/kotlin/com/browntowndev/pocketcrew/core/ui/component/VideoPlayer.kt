@@ -198,6 +198,7 @@ fun VideoPlayer(
     }
 }
 
+@AndroidXOptIn(UnstableApi::class)
 @Composable
 private fun DefaultVideoPlayerContent(
     player: Player,

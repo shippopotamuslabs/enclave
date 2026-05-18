@@ -14,7 +14,6 @@ import com.browntowndev.pocketcrew.domain.model.error.InferenceIOException
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopPort
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -420,7 +419,14 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
+            verify {
+                openAiClientProvider.getClient(
+                    apiKey = "secret",
+                    baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
+                    headers = any(),
+                )
+            }
         }
 
     @Test
@@ -447,7 +453,14 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("AnthropicInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
+            verify {
+                anthropicClientProvider.getClient(
+                    apiKey = "secret",
+                    baseUrl = null,
+                    headers = emptyMap(),
+                )
+            }
         }
 
     @Test
@@ -474,7 +487,14 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("GoogleInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
+            verify {
+                googleGenAiClientProvider.getClient(
+                    apiKey = "secret",
+                    baseUrl = ApiProvider.GOOGLE.defaultBaseUrl(),
+                    headers = emptyMap(),
+                )
+            }
         }
 
     @Test
@@ -496,7 +516,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the resolved base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -526,7 +546,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("XaiInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the resolved base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -557,7 +577,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
-            assertEquals("OpenRouterInferenceServiceImpl", unwrapRustLoop(service).javaClass.simpleName)
+            assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the custom base URL
             io.mockk.verify {
                 openAiClientProvider.getClient(
@@ -591,7 +611,7 @@ class InferenceFactoryImplTest {
 
             val service = factory.withInferenceService(ModelType.VISION) { it }
 
-            assertTrue(unwrapRustLoop(service) is ApiInferenceServiceImpl)
+            assertTrue(service is RustLoopInferenceService)
             verify { inferenceLockManager.acquireLock(com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType.BYOK) }
             verify(
                 exactly = 0,
@@ -613,28 +633,6 @@ class InferenceFactoryImplTest {
             assertTrue((thrown as InferenceIOException).cause is java.io.IOException)
         }
 
-    @Test
-    fun `withInferenceService wraps RustCompatibleInferenceService in RustLoopInferenceService`() =
-        runTest {
-            val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("10"))
-            val config =
-                ApiModelConfiguration(
-                    id = ApiModelConfigurationId("10"),
-                    apiCredentialsId = ApiCredentialsId("12"),
-                    displayName = "Anthropic preset",
-                )
-            val credentials = apiCredentials(modelId = "claude-sonnet-4-20250514", provider = ApiProvider.ANTHROPIC, baseUrl = null)
-
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("10")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
-
-            val service = factory.withInferenceService(ModelType.THINKING) { it }
-
-            assertEquals("RustLoopInferenceService", service.javaClass.simpleName)
-        }
-
     private fun apiCredentials(
         modelId: String,
         provider: ApiProvider = ApiProvider.OPENAI,
@@ -649,13 +647,6 @@ class InferenceFactoryImplTest {
             baseUrl = baseUrl,
             credentialAlias = "alias",
         )
-
-    private fun unwrapRustLoop(service: LlmInferencePort): Any {
-        assertEquals("RustLoopInferenceService", service.javaClass.simpleName)
-        val inner = service.javaClass.getDeclaredField("inner")
-        inner.isAccessible = true
-        return requireNotNull(inner.get(service))
-    }
 
     private suspend fun resolveApiService(
         provider: ApiProvider,

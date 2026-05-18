@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.browntowndev.pocketcrew.app.tts
 
 import android.net.Uri

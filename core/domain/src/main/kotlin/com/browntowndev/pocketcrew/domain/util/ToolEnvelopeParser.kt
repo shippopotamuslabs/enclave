@@ -30,7 +30,7 @@ import kotlinx.serialization.json.put
  * Generic tool envelope parser that supports both search and image-inspect tools.
  * Refactored from SearchToolSupport to handle multiple tool types.
  */
-@Suppress("TooManyFunctions")
+@Suppress("LargeClass", "TooManyFunctions")
 object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
     private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
@@ -39,6 +39,19 @@ object ToolEnvelopeParser {
     private val GLM_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*([a-zA-Z0-9_]+)\s*<arg_key>([^<]+)</arg_key>\s*<arg_value>(.*?)</arg_value>\s*</tool_call>""")
     @Suppress("MaxLineLength")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
+    @Suppress("MaxLineLength")
+    private val DSML_INVOKE_REGEX = Regex("""(?is)<\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?invoke\s+name\s*=\s*"([^"]+)"\s*>""")
+    @Suppress("MaxLineLength")
+    private val DSML_PARAMETER_REGEX = Regex("""(?is)<\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?parameter\s+name\s*=\s*"([^"]+)"(?:\s+string\s*=\s*"([^"]*)")?\s*>""")
+    @Suppress("MaxLineLength")
+    private val DSML_TAG_REGEX = Regex("""(?is)</?\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?[^>]*>""")
+    private val DSML_TOOL_CALLS_OPEN_REGEX = Regex("""(?is)<\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?tool_calls\s*>""")
+    private val DSML_TOOL_CALLS_CLOSE_REGEX = Regex("""(?is)</\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?tool_calls\s*>""")
+    private val DSML_INVOKE_CLOSE_REGEX = Regex("""(?is)</\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?invoke\s*>""")
+    private val DSML_PARAMETER_CLOSE_REGEX = Regex("""(?is)</\s*(?:\|+\s*)?DSML\s*(?:\|+\s*)?parameter\s*>""")
+    @Suppress("MaxLineLength")
+    private val MARKDOWN_FENCE_REGEX = Regex("""(?m)^[ \t]*```[a-zA-Z0-9_-]*[ \t]*\r?\n|\r?\n?[ \t]*```[ \t]*$""")
+    private val PARAMETERS_KEY_REGEX = Regex(""""parameters"\s*:""")
 
     data class LocalToolEnvelope(
         val toolName: String,
@@ -180,13 +193,24 @@ object ToolEnvelopeParser {
     fun extractRequiredUrls(argumentsJson: String): List<String> {
         try {
             val json = Json.parseToJsonElement(argumentsJson).jsonObject
-            val urlsArray = (json["urls"] ?: json["arguments"]?.jsonObject?.get("urls"))?.jsonArray
-            if (urlsArray != null && urlsArray.isNotEmpty()) {
-                return urlsArray.map { it.jsonPrimitive.content }
+            val urlsValue = (
+                json["urls"]
+                    ?: json["arguments"]?.jsonObject?.get("urls")
+                    ?: json["parameters"]?.jsonObject?.get("urls")
+            )
+            val urls = urlsValue?.toUrlList()
+            if (!urls.isNullOrEmpty()) {
+                return urls
             }
         } catch (_: Exception) {
-            // Fall through to throw
+            // Fall through to tolerant extraction for malformed provider text.
         }
+        extractJsonLikeField(argumentsJson, "urls")
+            ?.let(::parseJsonLikeValue)
+            ?.let(::normalizeUrlValue)
+            ?.takeIf(List<String>::isNotEmpty)
+            ?.let { return it }
+
         throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
@@ -225,6 +249,61 @@ object ToolEnvelopeParser {
         return null
     }
 
+    /**
+     * Finds the index of the matching closing bracket `]` for the `[` at [openBracketIndex].
+     * Uses a bracket-depth scan that respects string literals and escape sequences.
+     */
+    private fun indexOfMatchingClosingBracket(text: String, openBracketIndex: Int): Int? {
+        var depth = 0
+        var inString = false
+        var stringDelim: Char? = null
+        var escape = false
+        var i = openBracketIndex
+        while (i < text.length) {
+            val c = text[i]
+            if (inString) {
+                if (escape) {
+                    escape = false
+                } else when (c) {
+                    '\\' -> escape = true
+                    stringDelim -> inString = false
+                }
+            } else {
+                when (c) {
+                    '"', '\'' -> {
+                        inString = true
+                        stringDelim = c
+                    }
+                    '[' -> depth++
+                    ']' -> {
+                        depth--
+                        if (depth == 0) return i
+                    }
+                }
+            }
+            i++
+        }
+        return null
+    }
+
+    /**
+     * Splits a JSON array body (the text between the outer `[` and `]`) into individual `{...}` object strings.
+     */
+    private fun splitJsonObjects(arrayBody: String): List<String> {
+        val objects = mutableListOf<String>()
+        var i = 0
+        while (i < arrayBody.length) {
+            if (arrayBody[i] == '{') {
+                val closeIndex = indexOfMatchingClosingBrace(arrayBody, i) ?: break
+                objects.add(arrayBody.substring(i, closeIndex + 1))
+                i = closeIndex + 1
+            } else {
+                i++
+            }
+        }
+        return objects
+    }
+
     private fun normalizeSingleQuotedToolCallPayload(payload: String): String {
         val t = payload.trim()
         return if (t.startsWith("{") && payload.contains("'name'")) {
@@ -235,73 +314,24 @@ object ToolEnvelopeParser {
     }
 
     private fun normalizeTypographyQuotesInExtractedField(value: String): String =
-        value.replace('\u201c', '"').replace('\u201d', '"')
+        value.replace('“', '"').replace('”', '"')
 
-    private fun parseWrappedToolCall(text: String): WrappedToolCallParse? {
-        val tagOpen = "<tool_call>"
-        val start = text.indexOf(tagOpen, ignoreCase = true)
-        if (start < 0) return null
-        val jsonStart = text.indexOf('{', start + tagOpen.length)
-        if (jsonStart < 0) return null
-        val jsonEnd = indexOfMatchingClosingBrace(text, jsonStart) ?: return null
-        val rawPayload = text.substring(jsonStart, jsonEnd + 1)
-        val payload = normalizeSingleQuotedToolCallPayload(rawPayload)
-        val close = text.indexOf("</tool_call>", jsonEnd + 1, ignoreCase = true)
-        if (close < 0) return null
-        val exclusiveEnd = close + "</tool_call>".length
-        return WrappedToolCallParse(payload, start until exclusiveEnd)
+    /**
+     * If [payload] contains `"parameters":` as a top-level key but not `"arguments":`,
+     * replaces `"parameters":` with `"arguments":` so all downstream field-extraction
+     * functions work without modification.
+     */
+    private fun normalizeParametersKey(payload: String): String {
+        return if (PARAMETERS_KEY_REGEX.containsMatchIn(payload) && !payload.contains("\"arguments\":")) {
+            PARAMETERS_KEY_REGEX.replace(payload, "\"arguments\":")
+        } else {
+            payload
+        }
     }
 
-    @Suppress("ThrowsCount", "CyclomaticComplexMethod")
-    fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
-        val glmMatch = GLM_TOOL_CALL_REGEX.find(text)
-        if (glmMatch != null) {
-            val toolName = glmMatch.groupValues[1]
-            val argKey = glmMatch.groupValues[2]
-            val argVal = glmMatch.groupValues[3].trim('"') // Handle potential quotes
-            val argumentsJson = buildSingleFieldArgumentsJson(argKey, argVal)
-            return LocalToolEnvelope(
-                toolName = toolName,
-                argumentsJson = argumentsJson,
-                visiblePrefix = text.substring(0, glmMatch.range.first),
-                visibleSuffix = text.substring(glmMatch.range.last + 1),
-            )
-        }
-
-        val cdataMatch = if (text.contains("<![CDATA[<tool")) {
-            CDATA_TOOL_CALL_REGEX.find(text)
-                ?: throw IllegalStateException("Malformed tool_call envelope")
-        } else {
-            null
-        }
-
-        val wrapped =
-            parseWrappedToolCall(text)
-                ?: WRAPPED_TOOL_CALL_REGEX.find(text)?.let {
-                    WrappedToolCallParse(
-                        normalizeSingleQuotedToolCallPayload(it.groupValues[1]),
-                        it.range,
-                    )
-                }
-
-        if (text.contains("<tool_call", ignoreCase = true) && wrapped == null) {
-            throw IllegalStateException("Malformed tool_call envelope")
-        }
-
-        val payload = when {
-            cdataMatch != null -> normalizeSingleQuotedToolCallPayload(cdataMatch.groupValues[1])
-            wrapped != null -> wrapped.payload
-            else ->
-                RAW_TOOL_CALL_REGEX.matchEntire(text)?.groupValues?.get(2)?.let(::normalizeSingleQuotedToolCallPayload)
-        } ?: run {
-            if (text.contains("{\"name\"") || text.contains(""""name":""")) {
-                throw IllegalStateException("Malformed tool_call envelope")
-            }
-            return null
-        }
-        val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
-            ?: throw IllegalStateException("Malformed tool_call envelope")
-        val argumentsJson = when (toolName) {
+    @Suppress("CyclomaticComplexMethod")
+    private fun resolveArgumentsJson(toolName: String, payload: String): String =
+        when (toolName) {
             ToolDefinition.WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
             ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> buildImageInspectArgumentsJson(extractRequiredQuestion(payload))
             ToolDefinition.WEB_EXTRACT.name -> {
@@ -343,37 +373,606 @@ object ToolEnvelopeParser {
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 
-        if (cdataMatch != null) {
-            return LocalToolEnvelope(
-                toolName = toolName,
-                argumentsJson = argumentsJson,
-                visiblePrefix = text.substring(0, cdataMatch.range.first),
-                visibleSuffix = text.substring(cdataMatch.range.last + 1),
-            )
-        }
-
-        if (wrapped != null) {
-            return LocalToolEnvelope(
-                toolName = toolName,
-                argumentsJson = argumentsJson,
-                visiblePrefix = text.substring(0, wrapped.envelopeRange.first),
-                visibleSuffix = text.substring(wrapped.envelopeRange.last + 1),
-            )
-        }
-
-        val rawMatch = RAW_TOOL_CALL_REGEX.matchEntire(text)
-            ?: throw IllegalStateException("Malformed tool_call envelope")
-        return LocalToolEnvelope(
-            toolName = toolName,
-            argumentsJson = argumentsJson,
-            visiblePrefix = rawMatch.groupValues[1].trimEnd(',', ' '),
-            visibleSuffix = rawMatch.groupValues[3].trimStart(',', ' '),
-        )
+    private fun parseWrappedToolCall(text: String): WrappedToolCallParse? {
+        val tagOpen = "<tool_call>"
+        val start = text.indexOf(tagOpen, ignoreCase = true)
+        if (start < 0) return null
+        val jsonStart = text.indexOf('{', start + tagOpen.length)
+        if (jsonStart < 0) return null
+        val jsonEnd = indexOfMatchingClosingBrace(text, jsonStart) ?: return null
+        val rawPayload = text.substring(jsonStart, jsonEnd + 1)
+        val payload = normalizeSingleQuotedToolCallPayload(rawPayload)
+        val close = text.indexOf("</tool_call>", jsonEnd + 1, ignoreCase = true)
+        if (close < 0) return null
+        val exclusiveEnd = close + "</tool_call>".length
+        return WrappedToolCallParse(payload, start until exclusiveEnd)
     }
+
+    /**
+     * Parses a `<tool_call>` tag that wraps a JSON array `[{...},{...}]`.
+     * Returns null if the tag is absent or the payload starts with `{` (object, not array).
+     */
+    @Suppress("ThrowsCount")
+    private fun parseWrappedToolCallArray(text: String): List<LocalToolEnvelope>? {
+        val tagOpen = "<tool_call>"
+        val start = text.indexOf(tagOpen, ignoreCase = true)
+        if (start < 0) return null
+
+        val contentStart = start + tagOpen.length
+        val arrayStart = run {
+            var idx = contentStart
+            while (idx < text.length && text[idx].isWhitespace()) idx++
+            idx
+        }
+        if (arrayStart >= text.length || text[arrayStart] != '[') return null
+
+        val arrayEnd = indexOfMatchingClosingBracket(text, arrayStart)
+            ?: throw IllegalStateException("Malformed tool_call envelope")
+
+        val close = text.indexOf("</tool_call>", arrayEnd + 1, ignoreCase = true)
+        if (close < 0) throw IllegalStateException("Malformed tool_call envelope")
+        val exclusiveEnd = close + "</tool_call>".length
+
+        val arrayBody = text.substring(arrayStart + 1, arrayEnd)
+        val objects = splitJsonObjects(arrayBody)
+        if (objects.isEmpty()) throw IllegalStateException("Malformed tool_call envelope")
+
+        val visiblePrefix = text.substring(0, start)
+        val visibleSuffix = text.substring(exclusiveEnd)
+
+        return objects.map { rawObj ->
+            val obj = normalizeParametersKey(normalizeSingleQuotedToolCallPayload(rawObj))
+            val toolName = TOOL_NAME_REGEX.find(obj)?.groupValues?.get(1)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val argumentsJson = resolveArgumentsJson(toolName, obj)
+            LocalToolEnvelope(
+                toolName = toolName,
+                argumentsJson = argumentsJson,
+                visiblePrefix = visiblePrefix,
+                visibleSuffix = visibleSuffix,
+            )
+        }
+    }
+
+    /**
+     * Detects and parses the Mistral [TOOL_CALLS] prefix format.
+     *
+     * Returns a non-empty list when text.contains("[TOOL_CALLS]") and the JSON array
+     * following the sentinel can be parsed.
+     * Returns an empty list when the sentinel is absent.
+     * Throws IllegalStateException("Malformed tool_call envelope") when the sentinel is present
+     * but no valid JSON array follows.
+     */
+    @Suppress("ThrowsCount")
+    private fun parseMistralToolCalls(text: String): List<LocalToolEnvelope> {
+        val sentinel = "[TOOL_CALLS]"
+        if (!text.contains(sentinel)) return emptyList()
+
+        val sentinelEnd = text.indexOf(sentinel) + sentinel.length
+        val arrayStart = text.indexOf('[', sentinelEnd)
+        if (arrayStart < 0) throw IllegalStateException("Malformed tool_call envelope")
+
+        val arrayEnd = indexOfMatchingClosingBracket(text, arrayStart)
+            ?: throw IllegalStateException("Malformed tool_call envelope")
+
+        val arrayBody = text.substring(arrayStart + 1, arrayEnd)
+        val objects = splitJsonObjects(arrayBody)
+        if (objects.isEmpty()) throw IllegalStateException("Malformed tool_call envelope")
+
+        val visiblePrefix = text.substringBefore(sentinel).trim()
+        return objects.map { rawObj ->
+            val obj = normalizeParametersKey(normalizeSingleQuotedToolCallPayload(rawObj))
+            val toolName = TOOL_NAME_REGEX.find(obj)?.groupValues?.get(1)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val argumentsJson = resolveArgumentsJson(toolName, obj)
+            LocalToolEnvelope(
+                toolName = toolName,
+                argumentsJson = argumentsJson,
+                visiblePrefix = visiblePrefix,
+                visibleSuffix = "",
+            )
+        }
+    }
+
+    private data class DsmlBlock(
+        val content: String,
+        val range: IntRange,
+    )
+
+    private data class DsmlParameter(
+        val name: String,
+        val stringAttribute: Boolean,
+        val body: String,
+    )
+
+    private fun normalizeToolText(text: String): String =
+        text
+            .replace('｜', '|')
+            .replace(MARKDOWN_FENCE_REGEX, "")
+
+    private fun parseDsmlToolCalls(text: String): List<LocalToolEnvelope> {
+        val blocks = extractDsmlBlocks(text)
+        if (blocks.isEmpty()) {
+            if (text.contains("DSML", ignoreCase = true)) {
+                throw IllegalStateException("Malformed DSML tool envelope")
+            }
+            return emptyList()
+        }
+
+        return blocks.flatMap { block ->
+            val invokes = extractDsmlInvokes(block.content)
+            if (invokes.isEmpty()) {
+                throw IllegalStateException("Malformed DSML tool envelope")
+            }
+            invokes.map { invoke ->
+                val visiblePrefix = text.substring(0, block.range.first)
+                val visibleSuffix = text.substring(block.range.last + 1)
+                invoke.copy(
+                    visiblePrefix = visiblePrefix,
+                    visibleSuffix = visibleSuffix,
+                )
+            }
+        }
+    }
+
+    private fun extractDsmlBlocks(text: String): List<DsmlBlock> {
+        val starts = DSML_TOOL_CALLS_OPEN_REGEX.findAll(text).toList()
+        if (starts.isEmpty()) return emptyList()
+
+        return starts.map { start ->
+            val close = DSML_TOOL_CALLS_CLOSE_REGEX.find(text, start.range.last + 1)
+                ?: throw IllegalStateException("Malformed DSML tool envelope")
+            DsmlBlock(
+                content = text.substring(start.range.last + 1, close.range.first),
+                range = start.range.first..close.range.last,
+            )
+        }
+    }
+
+    private fun extractDsmlInvokes(block: String): List<LocalToolEnvelope> {
+        val invokes = DSML_INVOKE_REGEX.findAll(block).toList()
+        return invokes.map { invoke ->
+            val close = DSML_INVOKE_CLOSE_REGEX.find(block, invoke.range.last + 1)
+                ?: throw IllegalStateException("Malformed DSML tool envelope")
+            val betweenInvokes = block.substring(invoke.range.last + 1, close.range.first)
+            val toolName = invoke.groupValues[1].trim()
+            requireSupportedTool(toolName)
+            val params = extractDsmlParameters(toolName, betweenInvokes)
+            LocalToolEnvelope(
+                toolName = toolName,
+                argumentsJson = buildArgumentsJson(toolName, params),
+                visiblePrefix = "",
+                visibleSuffix = "",
+            )
+        }
+    }
+
+    @Suppress("ThrowsCount")
+    private fun extractDsmlParameters(toolName: String, invokeBody: String): Map<String, Any?> {
+        val matches = DSML_PARAMETER_REGEX.findAll(invokeBody).toList()
+        if (matches.isEmpty()) {
+            throw IllegalStateException("Malformed DSML tool envelope")
+        }
+
+        val allowedParameters = expectedParameterNames(toolName)
+        val parameters = linkedMapOf<String, Any?>()
+        matches.forEach { open ->
+            val name = open.groupValues[1].trim()
+            require(name !in parameters) {
+                "Duplicate parameter '$name' for tool '$toolName'"
+            }
+            require(name in allowedParameters) {
+                "Unknown parameter '$name' for tool '$toolName'"
+            }
+
+            val close = DSML_PARAMETER_CLOSE_REGEX.find(invokeBody, open.range.last + 1)
+                ?: throw IllegalStateException("Malformed DSML tool envelope")
+            val body = invokeBody.substring(open.range.last + 1, close.range.first)
+            val parameter = DsmlParameter(
+                name = name,
+                stringAttribute = open.groupValues.getOrNull(2)?.equals("true", ignoreCase = true) == true,
+                body = body,
+            )
+            parameters[name] = parseDsmlParameterValue(toolName, parameter)
+        }
+        validateRequiredDsmlParameters(toolName, parameters)
+        return parameters
+    }
+
+    private fun expectedParameterNames(toolName: String): Set<String> =
+        ToolDefinition.fromName(toolName)
+            ?.schema
+            ?.properties
+            ?.keys
+            ?.toSet()
+            ?: emptySet()
+
+    private fun validateRequiredDsmlParameters(toolName: String, parameters: Map<String, Any?>) {
+        val required = essentialRequiredParameterNames(toolName)
+        required.forEach { name ->
+            val value = parameters[name]
+            val missing = when (value) {
+                null -> true
+                is String -> value.isBlank()
+                is List<*> -> value.isEmpty()
+                else -> false
+            }
+            if (missing) {
+                require(false) {
+                    "Tool argument '$name' is required"
+                }
+            }
+        }
+    }
+
+    private fun essentialRequiredParameterNames(toolName: String): Set<String> =
+        when (toolName) {
+            ToolDefinition.WEB_SEARCH.name -> setOf("query")
+            ToolDefinition.WEB_EXTRACT.name -> setOf("urls")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> setOf("question")
+            ToolDefinition.SEARCH_CHAT_HISTORY.name -> setOf("queries")
+            ToolDefinition.SEARCH_CHAT.name -> setOf("chat_id", "query")
+            ToolDefinition.GET_MESSAGE_CONTEXT.name -> setOf("message_id")
+            ToolDefinition.X_SEARCH.name -> setOf("query")
+            ToolDefinition.GENERATE_IMAGE.name,
+            ToolDefinition.GENERATE_VIDEO.name,
+            ToolDefinition.GENERATE_MUSIC.name,
+            -> setOf("prompt")
+            else -> ToolDefinition.fromName(toolName)?.schema?.required.orEmpty().toSet()
+        }
+
+    private fun parseDsmlParameterValue(toolName: String, parameter: DsmlParameter): Any? {
+        val value = parameter.body
+            .replace(DSML_TAG_REGEX, "")
+            .trim()
+        if (value.isEmpty()) {
+            return ""
+        }
+
+        val expectsStructured = parameterExpectsStructuredValue(toolName, parameter.name)
+        if (parameter.stringAttribute && !expectsStructured) {
+            return unescapeJson(value)
+        }
+
+        return parseJsonLikeValue(value)
+            ?.let { normalizeDsmlPlainValue(parameter.name, it) }
+            ?: unescapeJson(value)
+    }
+
+    private fun parameterExpectsStructuredValue(toolName: String, parameterName: String): Boolean {
+        val type = ToolDefinition.fromName(toolName)
+            ?.schema
+            ?.properties
+            ?.get(parameterName)
+            ?.jsonObject
+            ?.get("type")
+            ?.jsonPrimitive
+            ?.content
+        return type == "array" || type == "object" || type == "boolean" || type == "integer" || type == "number"
+    }
+
+    private fun parseJsonLikeValue(value: String): Any? =
+        parseJsonValue(value)
+            ?: repairJsonLikeValue(value)?.let(::parseJsonValue)
+
+    private fun extractJsonLikeField(payload: String, fieldName: String): String? {
+        val fieldMatch = Regex(""""$fieldName"\s*:""").find(payload) ?: return null
+        var valueStart = fieldMatch.range.last + 1
+        while (valueStart < payload.length && payload[valueStart].isWhitespace()) {
+            valueStart += 1
+        }
+        if (valueStart >= payload.length) return null
+
+        return when (payload[valueStart]) {
+            '[' -> extractBalancedOrTrailingValue(payload, valueStart, '[', ']')
+            '{' -> extractBalancedOrTrailingValue(payload, valueStart, '{', '}')
+            '"' -> extractJsonStringLiteral(payload, valueStart)
+            else -> payload.substring(valueStart)
+                .substringBefore(',')
+                .substringBefore('}')
+                .trim()
+        }
+    }
+
+    private fun extractBalancedOrTrailingValue(
+        payload: String,
+        start: Int,
+        open: Char,
+        close: Char,
+    ): String {
+        var depth = 0
+        var inString = false
+        var escape = false
+        var index = start
+        while (index < payload.length) {
+            val char = payload[index]
+            if (inString) {
+                if (escape) {
+                    escape = false
+                } else when (char) {
+                    '\\' -> escape = true
+                    '"' -> inString = false
+                }
+            } else {
+                when (char) {
+                    '"' -> inString = true
+                    open -> depth += 1
+                    close -> {
+                        depth -= 1
+                        if (depth == 0) return payload.substring(start, index + 1)
+                    }
+                }
+            }
+            index += 1
+        }
+        return closeJsonBrackets(payload.substring(start).trimEnd('}', ']'))
+    }
+
+    private fun extractJsonStringLiteral(payload: String, start: Int): String {
+        var escape = false
+        var index = start + 1
+        while (index < payload.length) {
+            val char = payload[index]
+            if (escape) {
+                escape = false
+            } else when (char) {
+                '\\' -> escape = true
+                '"' -> return payload.substring(start, index + 1)
+            }
+            index += 1
+        }
+        return payload.substring(start)
+    }
+
+    private fun parseJsonValue(value: String): Any? =
+        runCatching {
+            when (val element = Json.parseToJsonElement(value)) {
+                is JsonObject -> element.toPlainMap()
+                is kotlinx.serialization.json.JsonArray -> element.map { it.toPlainValue() }
+                else -> element.toPlainValue()
+            }
+        }.getOrNull()
+
+    private fun repairJsonLikeValue(value: String): String? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        val withoutTrailingCommas = trimmed.replace(Regex(""",\s*([}\]])"""), "$1")
+        val closed = closeJsonBrackets(withoutTrailingCommas)
+        val quotedBareUrls = quoteBareUrlArrayItems(closed)
+        return quotedBareUrls.takeIf { it != trimmed }
+    }
+
+    private fun closeJsonBrackets(value: String): String {
+        val stack = mutableListOf<Char>()
+        var inString = false
+        var escape = false
+        value.forEach { char ->
+            if (inString) {
+                if (escape) {
+                    escape = false
+                } else when (char) {
+                    '\\' -> escape = true
+                    '"' -> inString = false
+                }
+            } else {
+                when (char) {
+                    '"' -> inString = true
+                    '[' -> stack.add(']')
+                    '{' -> stack.add('}')
+                    ']', '}' -> if (stack.lastOrNull() == char) stack.removeAt(stack.lastIndex)
+                }
+            }
+        }
+        return buildString {
+            append(value)
+            stack.asReversed().forEach(::append)
+        }
+    }
+
+    private fun quoteBareUrlArrayItems(value: String): String {
+        if (!value.trimStart().startsWith("[")) return value
+        val withoutWrappedBrackets = value.replace(Regex(""""[\[]+(https?://[^",\]]+)"""")) {
+            """"${it.groupValues[1]}""""
+        }
+        return withoutWrappedBrackets.replace(Regex("""(?<=\[|,)\s*(https?://[^",\]\s]+)""")) {
+            """"${it.groupValues[1]}""""
+        }
+    }
+
+    private fun normalizeDsmlPlainValue(name: String, value: Any?): Any? =
+        if (name == "urls" && value is List<*>) {
+            value.map { item ->
+                when (item) {
+                    is String -> item.trim().trimStart('[')
+                    else -> item
+                }
+            }
+        } else {
+            value
+        }
+
+    private fun JsonObject.toPlainMap(): Map<String, Any?> =
+        entries.associate { (key, value) -> key to value.toPlainValue() }
+
+    private fun JsonElement.toPlainValue(): Any? =
+        when (this) {
+            is JsonObject -> toPlainMap()
+            is kotlinx.serialization.json.JsonArray -> map { it.toPlainValue() }
+            is JsonPrimitive -> when {
+                isString -> content
+                content == "true" -> true
+                content == "false" -> false
+                else -> content.toLongOrNull() ?: content.toDoubleOrNull() ?: content
+            }
+            JsonNull -> null
+        }
+
+    private fun JsonElement.toUrlList(): List<String>? =
+        normalizeUrlValue(toPlainValue())
+
+    private fun normalizeUrlValue(value: Any?): List<String>? =
+        when (value) {
+            is List<*> -> value
+                .mapNotNull { item ->
+                    (item as? String)
+                        ?.trim()
+                        ?.trimStart('[')
+                        ?.takeIf(String::isNotEmpty)
+                }
+                .takeIf(List<String>::isNotEmpty)
+            is String -> {
+                val trimmed = value.trim()
+                when {
+                    trimmed.startsWith("[") ->
+                        parseJsonLikeValue(trimmed)
+                            ?.let(::normalizeUrlValue)
+                    trimmed.startsWith("http://") || trimmed.startsWith("https://") ->
+                        listOf(trimmed.trimStart('['))
+                    else -> null
+                }
+            }
+            else -> null
+        }
+
+    /**
+     * Parses all tool-call envelopes from [text].
+     *
+     * Supports the following formats in priority order:
+     *   1. Mistral [TOOL_CALLS] followed by a JSON array
+     *   2. DSML  (<|DSML| invoke name="...">)
+     *   3. GLM   (<tool_call> name <arg_key>...</arg_key> <arg_value>...</arg_value> </tool_call>)
+     *   4. CDATA (<![CDATA[<tool>...</tool>]]>)
+     *   5. <tool_call> wrapping either a JSON array or a JSON object
+     *   6. Raw JSON object matching {"name":..., "arguments":...} or {"name":..., "parameters":...}
+     *
+     * Returns an empty list when no envelope is present.
+     * Throws IllegalStateException("Malformed tool_call envelope") when an envelope marker is
+     * detected but the payload cannot be parsed.
+     * Throws IllegalArgumentException when the payload is valid but a required field is absent.
+     *
+     * The "parameters" key in any format is normalized to "arguments" before field extraction.
+     */
+    @Suppress("ThrowsCount", "ReturnCount")
+    fun extractLocalToolEnvelopes(text: String): List<LocalToolEnvelope> {
+        val normalizedText = normalizeToolText(text)
+
+        // Priority 1: Mistral [TOOL_CALLS] format
+        val mistral = parseMistralToolCalls(normalizedText)
+        if (mistral.isNotEmpty()) return mistral
+
+        // Priority 2: DSML format
+        val dsml = parseDsmlToolCalls(normalizedText)
+        if (dsml.isNotEmpty()) return dsml
+
+        // Priority 3: GLM format
+        val glmMatch = GLM_TOOL_CALL_REGEX.find(normalizedText)
+        if (glmMatch != null) {
+            val toolName = glmMatch.groupValues[1]
+            val argKey = glmMatch.groupValues[2]
+            val argVal = glmMatch.groupValues[3].trim('"')
+            val argumentsJson = buildSingleFieldArgumentsJson(argKey, argVal)
+            return listOf(
+                LocalToolEnvelope(
+                    toolName = toolName,
+                    argumentsJson = argumentsJson,
+                    visiblePrefix = normalizedText.substring(0, glmMatch.range.first),
+                    visibleSuffix = normalizedText.substring(glmMatch.range.last + 1),
+                )
+            )
+        }
+
+        // Priority 4: CDATA format
+        if (normalizedText.contains("<![CDATA[<tool")) {
+            val cdataMatch = CDATA_TOOL_CALL_REGEX.find(normalizedText)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val rawPayload = normalizeSingleQuotedToolCallPayload(cdataMatch.groupValues[1])
+            val payload = normalizeParametersKey(rawPayload)
+            val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val argumentsJson = resolveArgumentsJson(toolName, payload)
+            return listOf(
+                LocalToolEnvelope(
+                    toolName = toolName,
+                    argumentsJson = argumentsJson,
+                    visiblePrefix = normalizedText.substring(0, cdataMatch.range.first),
+                    visibleSuffix = normalizedText.substring(cdataMatch.range.last + 1),
+                )
+            )
+        }
+
+        // Priority 5: <tool_call> tag — array or object payload
+        if (normalizedText.contains("<tool_call", ignoreCase = true)) {
+            // 5a: Array payload
+            val arrayResult = parseWrappedToolCallArray(normalizedText)
+            if (arrayResult != null) return arrayResult
+
+            // 5b: Object payload
+            val wrapped = parseWrappedToolCall(normalizedText)
+                ?: WRAPPED_TOOL_CALL_REGEX.find(normalizedText)?.let {
+                    WrappedToolCallParse(
+                        normalizeSingleQuotedToolCallPayload(it.groupValues[1]),
+                        it.range,
+                    )
+                }
+
+            if (wrapped == null) throw IllegalStateException("Malformed tool_call envelope")
+
+            val payload = normalizeParametersKey(wrapped.payload)
+            val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val argumentsJson = resolveArgumentsJson(toolName, payload)
+            return listOf(
+                LocalToolEnvelope(
+                    toolName = toolName,
+                    argumentsJson = argumentsJson,
+                    visiblePrefix = normalizedText.substring(0, wrapped.envelopeRange.first),
+                    visibleSuffix = normalizedText.substring(wrapped.envelopeRange.last + 1),
+                )
+            )
+        }
+
+        // Priority 6: Raw JSON object — try original text first, then normalized (handles "parameters" key)
+        val normalizedJsonText = normalizeParametersKey(normalizedText)
+        val rawMatch = RAW_TOOL_CALL_REGEX.matchEntire(normalizedJsonText)
+        if (rawMatch != null) {
+            val rawPayload = normalizeSingleQuotedToolCallPayload(rawMatch.groupValues[2])
+            val payload = normalizeParametersKey(rawPayload)
+            val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+            val argumentsJson = resolveArgumentsJson(toolName, payload)
+            return listOf(
+                LocalToolEnvelope(
+                    toolName = toolName,
+                    argumentsJson = argumentsJson,
+                    visiblePrefix = rawMatch.groupValues[1].trimEnd(',', ' '),
+                    visibleSuffix = rawMatch.groupValues[3].trimStart(',', ' '),
+                )
+            )
+        }
+
+        if (normalizedText.contains("{\"name\"") || normalizedText.contains(""""name":""")) {
+            throw IllegalStateException("Malformed tool_call envelope")
+        }
+
+        return emptyList()
+    }
+
+    /**
+     * Returns the first envelope from extractLocalToolEnvelopes, or null if the list is empty.
+     * Preserves the exact existing error-propagation contract.
+     */
+    fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? =
+        extractLocalToolEnvelopes(text).firstOrNull()
 
     fun hasLocalToolContract(systemPrompt: String?): Boolean =
         systemPrompt != null &&
-            (systemPrompt.contains("<tool_call>") || systemPrompt.contains("{\"name\"") || systemPrompt.contains("<![CDATA[<tool")) &&
+            (
+                systemPrompt.contains("<tool_call>") ||
+                    systemPrompt.contains("{\"name\"") ||
+                    systemPrompt.contains("<![CDATA[<tool") ||
+                    systemPrompt.contains("DSML") ||
+                    systemPrompt.contains("invoke name=")
+            ) &&
             ToolDefinition.ALL_TOOLS.any { systemPrompt.contains(it.name) }
 
     fun buildLocalToolResultMessage(resultJson: String): String =

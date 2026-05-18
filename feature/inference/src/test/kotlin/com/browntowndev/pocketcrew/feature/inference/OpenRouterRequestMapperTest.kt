@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -46,6 +47,24 @@ class OpenRouterRequestMapperTest {
         assertTrue(params._additionalBodyProperties().containsKey("provider"))
         assertTrue(params._additionalBodyProperties()["provider"].toString().contains("allow_fallbacks"))
         assertEquals(128L, params.maxCompletionTokens().get())
+    }
+
+    @Test
+    fun `mapToChatCompletionParams adds openrouter unified reasoning body`() {
+        val params = OpenRouterRequestMapper.mapToChatCompletionParams(
+            modelId = "deepseek/deepseek-v3.2",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 2_000,
+                reasoningEffort = ApiReasoningEffort.HIGH,
+            ),
+        )
+
+        val reasoningBody = params._additionalBodyProperties()["reasoning"].toString()
+        assertTrue(reasoningBody.contains("high"), reasoningBody)
+        assertTrue(reasoningBody.contains("2000"), reasoningBody)
+        assertTrue(reasoningBody.contains("false"), reasoningBody)
     }
 
     @Test

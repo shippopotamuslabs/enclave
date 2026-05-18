@@ -1,9 +1,14 @@
 package com.browntowndev.pocketcrew.core.data.media
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import androidx.core.content.ContextCompat
 import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -77,7 +82,9 @@ interface AudioRecorder {
 @Singleton
 class AndroidAudioRecordFactory
     @Inject
-    constructor() : AudioRecordFactory {
+    constructor(
+        @param:ApplicationContext private val context: Context,
+    ) : AudioRecordFactory {
         override fun getMinBufferSize(): Int =
             AudioRecord.getMinBufferSize(
                 SAMPLE_RATE_HZ,
@@ -94,13 +101,27 @@ class AndroidAudioRecordFactory
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                     .build()
 
+            require(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                    PackageManager.PERMISSION_GRANTED,
+            ) {
+                "RECORD_AUDIO permission is required to capture microphone input"
+            }
+
             val audioRecord =
-                AudioRecord
-                    .Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.MIC)
-                    .setAudioFormat(audioFormat)
-                    .setBufferSizeInBytes(bufferSizeInBytes)
-                    .build()
+                try {
+                    AudioRecord
+                        .Builder()
+                        .setAudioSource(MediaRecorder.AudioSource.MIC)
+                        .setAudioFormat(audioFormat)
+                        .setBufferSizeInBytes(bufferSizeInBytes)
+                        .build()
+                } catch (exception: SecurityException) {
+                    throw IllegalStateException(
+                        "RECORD_AUDIO permission is required to capture microphone input",
+                        exception,
+                    )
+                }
 
             return AndroidAudioRecorder(audioRecord)
         }

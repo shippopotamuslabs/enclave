@@ -337,6 +337,8 @@ class ChatInferenceService : Service() {
                     modelType = event.modelType
                 )
                 is InferenceEvent.CompactionApplied -> null
+                is InferenceEvent.PreCompact -> null
+                is InferenceEvent.PostCompact -> null
                 is InferenceEvent.ToolRepaired -> null
                 is InferenceEvent.Finished -> {
                     maybeShowCompletionNotification(chatId)

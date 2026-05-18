@@ -63,6 +63,52 @@ class ChatMessageProjectionTest {
     }
 
     @Test
+    fun `projectChatMessages prefers active thinking snapshot when db row is complete`() {
+        val result = projectChatMessages(
+            dbMessages = listOf(
+                assistantMessage(
+                    content = "first answer chunk",
+                    state = MessageState.COMPLETE,
+                ),
+            ),
+            activeSnapshot = snapshot(
+                assistantMessageId = assistantMessageId,
+                content = "first answer chunk",
+                state = MessageState.THINKING,
+            ),
+            activeKey = ActiveChatTurnKey(chatId, assistantMessageId),
+        )
+
+        val projected = result.messages.single()
+        assertEquals("first answer chunk", projected.content.text)
+        assertEquals(MessageState.THINKING, projected.messageState)
+        assertFalse(result.handoffReady)
+    }
+
+    @Test
+    fun `projectChatMessages prefers active generating snapshot when db row is complete`() {
+        val result = projectChatMessages(
+            dbMessages = listOf(
+                assistantMessage(
+                    content = "first answer chunk",
+                    state = MessageState.COMPLETE,
+                ),
+            ),
+            activeSnapshot = snapshot(
+                assistantMessageId = assistantMessageId,
+                content = "first answer chunk and more",
+                state = MessageState.GENERATING,
+            ),
+            activeKey = ActiveChatTurnKey(chatId, assistantMessageId),
+        )
+
+        val projected = result.messages.single()
+        assertEquals("first answer chunk and more", projected.content.text)
+        assertEquals(MessageState.GENERATING, projected.messageState)
+        assertFalse(result.handoffReady)
+    }
+
+    @Test
     fun `projectChatMessages prefers Room when db row matches snapshot content`() {
         val result = projectChatMessages(
             dbMessages = listOf(

@@ -7,10 +7,11 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.share.ShareOption
 import com.browntowndev.pocketcrew.domain.model.share.SharedChat
+import com.browntowndev.pocketcrew.domain.model.share.SharedMessage
 import com.browntowndev.pocketcrew.domain.port.repository.ShareRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
-import com.browntowndev.pocketcrew.domain.model.share.SharedMessage
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -71,7 +72,13 @@ class ShareChatUseCaseTest {
         
         coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
         
-        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
+        val sharedChat = SharedChat(
+            "share-1",
+            messages.map(::mapToShared),
+            createdAt = 0,
+            expiresAt = 0,
+            shareUrl = "url",
+        )
         coEvery { shareRepository.shareChat(messages) } returns sharedChat
 
         // When
@@ -113,7 +120,13 @@ class ShareChatUseCaseTest {
             emit(messages)
         }
         
-        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
+        val sharedChat = SharedChat(
+            "share-1",
+            messages.map(::mapToShared),
+            createdAt = 0,
+            expiresAt = 0,
+            shareUrl = "url",
+        )
         coEvery { shareRepository.shareChat(messages) } returns sharedChat
 
         // When
@@ -122,6 +135,30 @@ class ShareChatUseCaseTest {
         // Then
         assertTrue(result.isSuccess, "Should succeed even if first emission was empty")
         assertEquals(sharedChat, result.getOrNull())
+    }
+
+    @Test
+    fun `getSharedChat should pass explicit decryption key to repository`() = runTest {
+        val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "")
+        coEvery { shareRepository.getSharedChat("share-1", "one-time-key") } returns sharedChat
+
+        val result = shareChatUseCase.getSharedChat("share-1", "one-time-key")
+
+        assertTrue(result.isSuccess)
+        assertEquals(sharedChat, result.getOrNull())
+        coVerify { shareRepository.getSharedChat("share-1", "one-time-key") }
+    }
+
+    @Test
+    fun `getSharedChat should parse decryption key from shared url`() = runTest {
+        val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "")
+        coEvery { shareRepository.getSharedChat("share-1", "abc-123") } returns sharedChat
+
+        val result = shareChatUseCase.getSharedChat("https://pocketcrew.app/share/share-1?key=abc-123")
+
+        assertTrue(result.isSuccess)
+        assertEquals(sharedChat, result.getOrNull())
+        coVerify { shareRepository.getSharedChat("share-1", "abc-123") }
     }
 
     private fun createMessage(id: String, chatId: ChatId, role: Role, text: String): Message {

@@ -171,7 +171,7 @@ class ChatViewModelShareTest {
             shareUrl = ""
         )
         
-        coEvery { shareChatUseCase.getSharedChat("123") } returns Result.success(sharedChat)
+        coEvery { shareChatUseCase.getSharedChat("123", null) } returns Result.success(sharedChat)
         
         viewModel.uiState.test {
             assertEquals(false, awaitItem().isReadOnly)
