@@ -89,8 +89,8 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 ## 5. Executable Validation (Agent MUST run before TASK_STATUS: COMPLETE)
 
-1. **Compile UI App:** Run `gradlew.bat :app:assembleDebug`.
-2. **Verify Compose Constraints:** Run `gradlew.bat ktlintCheck` to ensure Compose formatting and modifier ordering rules are respected.
+1. **Compile UI App:** Run `./gradlew :app:assembleDebug`.
+2. **Verify Compose Constraints:** Run `./gradlew ktlintCheck` or the affected module's ktlint task to ensure Compose formatting and modifier ordering rules are respected.
 3. **Verify Previews:** Render previews via `@compose-preview` tool if instructed, otherwise ensure all files have valid Light/Dark preview annotations.
 
 ## 6. System UI Integration (2026)
