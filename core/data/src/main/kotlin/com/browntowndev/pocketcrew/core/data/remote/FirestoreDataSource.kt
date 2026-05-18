@@ -353,7 +353,7 @@ class FirestoreDataSource
                     overwrite: Boolean,
                 ) {
                     val existing = messageDao.getMessageById(entity.id)?.message
-                    if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                    if (existing == null || entity.updatedAt > existing.updatedAt) {
                         ensurePlaceholderMessage(entity.id, entity.chatId)
 
                         // Preserve local artifacts_json until Task 4 migration is complete
@@ -368,6 +368,15 @@ class FirestoreDataSource
                         val existingMeta = embeddingDao.getEmbeddingMetadata(entity.id.value)
                         if (existingMeta?.contentHash != hash) {
                             embeddingCoordinator.enqueueMessage(entity.id.value)
+                        }
+                    } else if (entity.updatedAt == existing.updatedAt) {
+                        val merged =
+                            entity.copy(
+                                artifactsJson = if (entity.artifactsJson.isNullOrBlank()) existing.artifactsJson else entity.artifactsJson,
+                                pendingSync = 0,
+                            )
+                        if (merged != existing.copy(pendingSync = 0)) {
+                            messageDao.upsert(merged)
                         }
                     } else {
                         loggingPort.debug(TAG, "Message ${entity.id.value} local is newer or same age, skipping remote update")
@@ -721,8 +730,13 @@ class FirestoreDataSource
                         ensurePlaceholderMessage(entity.messageId, chatId)
                     }
                     val existing = webSearchSourceDao.getById(entity.id)
-                    if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                    if (existing == null || entity.updatedAt > existing.updatedAt) {
                         webSearchSourceDao.upsert(entity.copy(pendingSync = 0))
+                    } else if (entity.updatedAt == existing.updatedAt) {
+                        val merged = entity.copy(pendingSync = 0)
+                        if (merged != existing.copy(pendingSync = 0)) {
+                            webSearchSourceDao.upsert(merged)
+                        }
                     } else {
                         loggingPort.debug(TAG, "WebSearchSource ${entity.id} local is newer or same age, skipping remote update")
                     }
@@ -769,8 +783,13 @@ class FirestoreDataSource
                         ensurePlaceholderMessage(entity.messageId, chatId)
                     }
                     val existing = messageTranscriptSegmentDao.getById(entity.id)
-                    if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                    if (existing == null || entity.updatedAt > existing.updatedAt) {
                         messageTranscriptSegmentDao.upsert(entity.copy(pendingSync = 0))
+                    } else if (entity.updatedAt == existing.updatedAt) {
+                        val merged = entity.copy(pendingSync = 0)
+                        if (merged != existing.copy(pendingSync = 0)) {
+                            messageTranscriptSegmentDao.upsert(merged)
+                        }
                     } else {
                         loggingPort.debug(
                             TAG,
@@ -1357,7 +1376,7 @@ class FirestoreDataSource
                     overwrite: Boolean,
                 ) {
                     val existing = studioMediaDao.getMediaById(entity.id)
-                    if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                    if (existing == null || entity.updatedAt > existing.updatedAt) {
                         // Preserve local path if remote doesn't have a URL yet
                         val merged =
                             if (existing != null) {
@@ -1369,6 +1388,15 @@ class FirestoreDataSource
                                 entity.copy(pendingSync = 0)
                             }
                         studioMediaDao.insertMedia(merged)
+                    } else if (entity.updatedAt == existing.updatedAt) {
+                        val merged =
+                            entity.copy(
+                                mediaUri = if (entity.mediaUri.isBlank()) existing.mediaUri else entity.mediaUri,
+                                pendingSync = 0,
+                            )
+                        if (merged != existing.copy(pendingSync = 0)) {
+                            studioMediaDao.insertMedia(merged)
+                        }
                     } else {
                         loggingPort.debug(TAG, "StudioMedia ${entity.id} local is newer or same age, skipping remote update")
                     }
@@ -1968,12 +1996,20 @@ class FirestoreDataSource
                         ensurePlaceholderMessage(entity.messageId, chatId)
                     }
                     val existing = documentDao.getDocumentById(entity.id)
-                    if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                    if (existing == null || entity.updatedAt > existing.updatedAt) {
                         documentDao.insertDocument(entity.copy(pendingSync = 0))
 
                         // Enqueue re-embedding for all blocks if content changed
                         if (existing?.json != entity.json) {
                             embeddingCoordinator.enqueueDocument(entity.id)
+                        }
+                    } else if (entity.updatedAt == existing.updatedAt) {
+                        val merged = entity.copy(pendingSync = 0)
+                        if (merged != existing.copy(pendingSync = 0)) {
+                            documentDao.insertDocument(merged)
+                            if (existing.json != entity.json) {
+                                embeddingCoordinator.enqueueDocument(entity.id)
+                            }
                         }
                     } else {
                         loggingPort.debug(TAG, "Document ${entity.id} local is newer or same age, skipping remote update")

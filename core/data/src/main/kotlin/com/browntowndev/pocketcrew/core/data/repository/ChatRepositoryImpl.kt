@@ -86,9 +86,9 @@ class ChatRepositoryImpl
                 val repairs = mutableListOf<SensitiveRoomReadRepair>()
                 val sourcesByMessageId = frame.webSearchSources.groupBy { it.messageId }
                 val documentsByMessageId = frame.documents.groupBy { it.messageId }
+                val segmentRowsByMessageId = frame.segmentRows.groupBy { it.messageId }
                 val segmentsByMessageId =
-                    frame.segmentRows
-                        .groupBy { it.messageId }
+                    segmentRowsByMessageId
                         .mapValues { (_, rows) ->
                             rows.sortedBy { it.ordinal }.map { seg ->
                                 SensitiveEntityFieldEncryptors.decrypt(seg, healer, repairs).toDomain()
@@ -111,6 +111,17 @@ class ChatRepositoryImpl
                                     ?.map { document -> SensitiveEntityFieldEncryptors.decrypt(document, healer, repairs) }
                                     ?: emptyList(),
                             transcriptSegments = segmentsByMessageId[msgWithFiles.message.id] ?: emptyList(),
+                            displayUpdatedAt =
+                                maxOf(
+                                    decryptedMsg.updatedAt,
+                                    decryptedFiles.maxOfOrNull { file -> file.updatedAt } ?: decryptedMsg.updatedAt,
+                                    sourcesByMessageId[msgWithFiles.message.id]
+                                        ?.maxOfOrNull { source -> source.updatedAt } ?: decryptedMsg.updatedAt,
+                                    documentsByMessageId[msgWithFiles.message.id]
+                                        ?.maxOfOrNull { document -> document.updatedAt } ?: decryptedMsg.updatedAt,
+                                    segmentRowsByMessageId[msgWithFiles.message.id]
+                                        ?.maxOfOrNull { segment -> segment.updatedAt } ?: decryptedMsg.updatedAt,
+                                ),
                         )
                     }
                 readRepairApplier.apply(repairs)

@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -208,19 +209,21 @@ fun MessageList(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             for (i in latestUserMessageIndex until messages.size) {
-                                MessageItem(
-                                    message = messages[i],
-                                    activeIndicatorMessageId = activeIndicatorMessageId,
-                                    activeToolCallBanner = activeToolCallBanner,
-                                    hasTtsProviderAssigned = hasTtsProviderAssigned,
-                                    chatMode = chatMode,
-                                    onEditMessage = onEditMessage,
-                                    onPlayAudio = onPlayAudio,
-                                    onArtifactCardClick = onArtifactCardClick,
-                                    onNavigateToStudio = onNavigateToStudio,
-                                    onShareClick = onShareClick,
-                                    isPreview = isPreview
-                                )
+                                key(messages[i].id) {
+                                    MessageItem(
+                                        message = messages[i],
+                                        activeIndicatorMessageId = activeIndicatorMessageId,
+                                        activeToolCallBanner = activeToolCallBanner,
+                                        hasTtsProviderAssigned = hasTtsProviderAssigned,
+                                        chatMode = chatMode,
+                                        onEditMessage = onEditMessage,
+                                        onPlayAudio = onPlayAudio,
+                                        onArtifactCardClick = onArtifactCardClick,
+                                        onNavigateToStudio = onNavigateToStudio,
+                                        onShareClick = onShareClick,
+                                        isPreview = isPreview
+                                    )
+                                }
                             }
                         }
                     }

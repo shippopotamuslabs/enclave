@@ -477,6 +477,63 @@ class FirestoreDataSourceTest {
             }
 
         @Test
+        @DisplayName("ADDED skips no-op message write when remote equals local clean row")
+        fun addedSkipsNoOpMessageWriteWhenRemoteEqualsLocal() =
+            testScope.runTest {
+                val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+                every { mockDoc.id } returns "msg-1"
+                every { mockDoc.getString("chat_id") } returns "chat-1"
+                every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
+                every { mockDoc.getString("role") } returns "USER"
+                every { mockDoc.getString("message_state") } returns "COMPLETE"
+                every { mockDoc.getLong("created_at") } returns 1000L
+                every { mockDoc.getString("model_type") } returns null
+                every { mockDoc.getString("user_message_id") } returns null
+                every { mockDoc.getString("image_uris_json") } returns null
+                every { mockDoc.getBlob("image_uris_json") } returns null
+                every { mockDoc.getLong("thinking_duration_seconds") } returns null
+                every { mockDoc.getString("thinking_raw") } returns null
+                every { mockDoc.getBlob("thinking_raw") } returns null
+                every { mockDoc.getLong("thinking_start_time") } returns null
+                every { mockDoc.getLong("thinking_end_time") } returns null
+                every { mockDoc.getString("pipeline_step") } returns null
+                every { mockDoc.getString("artifacts_json") } returns null
+                every { mockDoc.getBlob("artifacts_json") } returns null
+                every { mockDoc.getString("generated_media_uris_json") } returns null
+                every { mockDoc.getBlob("generated_media_uris_json") } returns null
+                every { mockDoc.getString("generated_media_asset_ids_json") } returns null
+                every { mockDoc.getBlob("generated_media_asset_ids_json") } returns null
+                every { mockDoc.getString("generated_media_types_json") } returns null
+                every { mockDoc.getString("generated_media_prompts_json") } returns null
+                every { mockDoc.getBlob("generated_media_prompts_json") } returns null
+                every { mockDoc.getLong("updated_at") } returns 2000L
+                every { mockDoc.getBoolean("deleted") } returns false
+
+                val existing =
+                    MessageEntity(
+                        id = MessageId("msg-1"),
+                        chatId = ChatId("chat-1"),
+                        content = "encrypted",
+                        role = Role.USER,
+                        messageState = com.browntowndev.pocketcrew.domain.model.chat.MessageState.COMPLETE,
+                        createdAt = 1000L,
+                        pendingSync = 0,
+                        updatedAt = 2000L,
+                    )
+                coEvery { messageDao.getMessageById(MessageId("msg-1")) } returns
+                    MessageWithFiles(
+                        message = existing,
+                        files = emptyList(),
+                    )
+
+                val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+                messagesListenerSlot.captured.onEvent(snapshot, null)
+                advanceUntilIdle()
+
+                coVerify(exactly = 0) { messageDao.upsert(any<MessageEntity>()) }
+            }
+
+        @Test
         @DisplayName("MODIFIED upserts message into local database")
         fun modifiedUpsertsMessage() =
             testScope.runTest {

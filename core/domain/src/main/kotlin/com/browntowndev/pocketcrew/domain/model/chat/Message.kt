@@ -36,6 +36,7 @@ data class Message(
     val modelType: ModelType? = null,
     val webSearchSources: List<WebSearchSource> = emptyList(),
     val transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
+    val updatedAt: Long? = null,
 ) {
     /**
      * Computed duration in seconds from timestamps.

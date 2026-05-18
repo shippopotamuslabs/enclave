@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -178,6 +179,39 @@ class ChatGenerationAccumulatorManagerTest {
     }
 
     @Test
+    fun `toMessagesState reuses unchanged message snapshot when another crew message updates`() = runTest {
+        val chatRepository = mockk<ChatRepository>()
+        coEvery {
+            chatRepository.createAssistantMessage(
+                chatId = ChatId("chat"),
+                userMessageId = MessageId("user"),
+                modelType = ModelType.MAIN,
+                pipelineStep = PipelineStep.SYNTHESIS,
+            )
+        } returns MessageId("main-assistant")
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.CREW,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("draft-assistant"),
+            chatRepository = chatRepository,
+        )
+
+        val afterDraftToken = manager.reduce(
+            MessageGenerationState.GeneratingText("draft", ModelType.DRAFT_ONE),
+        ).messages.getValue(MessageId("draft-assistant"))
+        val afterMainFirstToken = manager.reduce(
+            MessageGenerationState.GeneratingText("main", ModelType.MAIN),
+        ).messages.getValue(MessageId("draft-assistant"))
+        val afterMainSecondToken = manager.reduce(
+            MessageGenerationState.GeneratingText(" update", ModelType.MAIN),
+        ).messages.getValue(MessageId("draft-assistant"))
+
+        assertSame(afterDraftToken, afterMainFirstToken)
+        assertSame(afterMainFirstToken, afterMainSecondToken)
+    }
+
+    @Test
     fun `failed busy state writes user facing lock message`() = runTest {
         val manager = ChatGenerationAccumulatorManager(
             mode = Mode.FAST,
@@ -191,7 +225,7 @@ class ChatGenerationAccumulatorManagerTest {
             MessageGenerationState.Failed(
                 error = InferenceBusyException(),
                 modelType = ModelType.FAST,
-            )
+            ),
         )
 
         val snapshot = result.messages.getValue(MessageId("assistant"))

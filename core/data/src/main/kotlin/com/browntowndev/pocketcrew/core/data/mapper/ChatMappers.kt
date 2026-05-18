@@ -70,12 +70,14 @@ fun MessageWithFiles.toDomain(
     webSearchSources: List<WebSearchSourceEntity> = emptyList(),
     documents: List<DocumentEntity> = emptyList(),
     transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
+    displayUpdatedAt: Long? = null,
 ): Message =
     message.toDomain(
         webSearchSources = webSearchSources,
         files = files,
         documents = documents,
         transcriptSegments = transcriptSegments,
+        displayUpdatedAt = displayUpdatedAt,
     )
 
 fun MessageEntity.toDomain(
@@ -83,6 +85,7 @@ fun MessageEntity.toDomain(
     files: List<MessageFileEntity> = emptyList(),
     documents: List<DocumentEntity> = emptyList(),
     transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
+    displayUpdatedAt: Long? = null,
 ): Message {
     val mediaUris =
         try {
@@ -153,7 +156,28 @@ fun MessageEntity.toDomain(
         modelType = modelType,
         webSearchSources = webSearchSources.map { it.toDomain() },
         transcriptSegments = transcriptSegments,
+        updatedAt = displayUpdatedAt ?: maxDisplayUpdatedAt(
+            messageUpdatedAt = updatedAt,
+            webSearchSources = webSearchSources,
+            files = files,
+            documents = documents,
+        ),
     )
+}
+
+private fun MessageEntity.maxDisplayUpdatedAt(
+    messageUpdatedAt: Long,
+    webSearchSources: List<WebSearchSourceEntity>,
+    files: List<MessageFileEntity>,
+    documents: List<DocumentEntity>,
+): Long {
+    val childUpdatedAt =
+        sequenceOf(
+            webSearchSources.asSequence().map { it.updatedAt },
+            files.asSequence().map { it.updatedAt },
+            documents.asSequence().map { it.updatedAt },
+        ).flatten()
+    return childUpdatedAt.fold(messageUpdatedAt) { max, updatedAt -> maxOf(max, updatedAt) }
 }
 
 fun MessageTranscriptSegmentEntity.toDomain(): MessageTranscriptSegment =
@@ -263,6 +287,7 @@ fun Message.toEntity(): MessageEntity {
         generatedMediaTypesJson = mediaTypesJson,
         generatedMediaPromptsJson = mediaPromptsJson,
         pendingSync = SYNC_STATE_PENDING,
+        updatedAt = updatedAt ?: System.currentTimeMillis(),
     )
 }
 
