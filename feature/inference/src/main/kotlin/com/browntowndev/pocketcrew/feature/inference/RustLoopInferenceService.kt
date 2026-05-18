@@ -3,7 +3,9 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AgentContextReference
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopConfig
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionCapabilities
@@ -40,6 +42,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -47,6 +50,7 @@ import javax.inject.Provider
 
 private const val TAG = "RustLoopInferenceService"
 private const val DEFAULT_CONTEXT_WINDOW = 128_000
+private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
 
 /**
  * Wraps a [RustCompatibleInferenceService] (provider model turn) and [AgentLoopPort]
@@ -64,7 +68,7 @@ class RustLoopInferenceService(
     private val modelType: ModelType,
     private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val rollingSummarizer: RollingSummarizer,
-) : LlmInferencePort {
+) : RustCompatibleInferenceService {
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
@@ -87,13 +91,29 @@ class RustLoopInferenceService(
                     systemPrompt: String,
                     toolsSchemaJson: String,
                     allowToolCall: Boolean,
+                    contextReferences: List<AgentContextReference>,
+                    stateLedgerJson: String?,
+                    toolContextIndexJson: String?,
+                    fileContextIndexJson: String?,
+                    cacheHints: List<String>,
                     onTextToken: suspend (String) -> Unit,
                     onThinkingToken: suspend (String) -> Unit,
                 ): AgentModelTurnResult =
                     inner.completeSingleTurn(
                         sessionMessages = sessionMessages,
-                        systemPrompt = systemPrompt,
-                        availableTools = if (allowToolCall) options.availableTools else emptyList(),
+                        systemPrompt = systemPrompt.withContextSidecars(
+                            contextReferences = contextReferences,
+                            stateLedgerJson = stateLedgerJson,
+                            toolContextIndexJson = toolContextIndexJson,
+                            fileContextIndexJson = fileContextIndexJson,
+                            cacheHints = cacheHints,
+                        ),
+                        availableTools = toolsForRequest(
+                            toolsSchemaJson = toolsSchemaJson,
+                            toolContextIndexJson = toolContextIndexJson,
+                            availableTools = options.availableTools,
+                            allowToolCall = allowToolCall,
+                        ),
                         allowToolCall = allowToolCall,
                         onTextToken = onTextToken,
                         onThinkingToken = onThinkingToken,
@@ -117,10 +137,36 @@ class RustLoopInferenceService(
 
                 override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
                     val summaryText = inferenceFactoryProvider.get().withInferenceService(ModelType.FAST) { fastService ->
-                        rollingSummarizer.summarize(
-                            messages = request.messagesToSummarize.map { it.toChatMessage() },
-                            service = fastService,
-                        )
+                        val messages = request.messagesToSummarize.map { it.toChatMessage() }
+                        if (fastService is RustCompatibleInferenceService) {
+                            val prompt = rollingSummarizer.buildAgentSummaryPrompt(
+                                messages = messages,
+                                instruction = request.instruction,
+                                focusInstruction = request.focusInstruction,
+                                historyRef = request.historyRef,
+                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                trigger = request.trigger,
+                            )
+                            fastService.completeSingleTurn(
+                                sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
+                                systemPrompt = "",
+                                availableTools = emptyList(),
+                                allowToolCall = false,
+                                onTextToken = {},
+                                onThinkingToken = {},
+                                options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
+                            ).assistantText
+                        } else {
+                            rollingSummarizer.summarizeAgentRequest(
+                                messages = messages,
+                                service = fastService,
+                                instruction = request.instruction,
+                                focusInstruction = request.focusInstruction,
+                                historyRef = request.historyRef,
+                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                trigger = request.trigger,
+                            )
+                        }
                     }
                     return AgentSummaryResult(
                         summaryText = summaryText ?: "Summary unavailable.",
@@ -143,11 +189,34 @@ class RustLoopInferenceService(
                     is AgentLoopEvent.TurnStarted -> {}
                     is AgentLoopEvent.TurnCompleted -> {}
                     is AgentLoopEvent.CompactionApplied ->
-                        send(InferenceEvent.CompactionApplied(event.tier, event.tokensBefore, event.tokensAfter, modelType))
+                        send(
+                            InferenceEvent.CompactionApplied(
+                                tier = event.tier,
+                                tokensBefore = event.tokensBefore,
+                                tokensAfter = event.tokensAfter,
+                                modelType = modelType,
+                                trigger = event.trigger,
+                            ),
+                        )
                     is AgentLoopEvent.ToolRepaired ->
                         send(InferenceEvent.ToolRepaired(event.originalName, event.resolvedName, event.confidence, modelType))
                     is AgentLoopEvent.KvCacheInvalidated ->
                         loggingPort.info(TAG, "KV cache invalidated reason=${event.reason}")
+                    is AgentLoopEvent.PreCompact ->
+                        send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
+                            loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
+                        }
+                    is AgentLoopEvent.PostCompact ->
+                        send(
+                            InferenceEvent.PostCompact(
+                                trigger = event.trigger,
+                                summaryRef = event.summaryRef,
+                                historyRef = event.historyRef,
+                                modelType = modelType,
+                            ),
+                        ).also {
+                            loggingPort.debug(TAG, "post_compact trigger=${event.trigger} historyRef=${event.historyRef}")
+                        }
                     is AgentLoopEvent.Finished -> {
                         conversationHistory.add(ChatMessage(Role.USER, prompt))
                         if (closeConversation) closeSession()
@@ -166,6 +235,25 @@ class RustLoopInferenceService(
             send(InferenceEvent.Error(e, modelType))
         }
     }.flowOn(Dispatchers.IO)
+
+    override suspend fun completeSingleTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+        onTextToken: suspend (String) -> Unit,
+        onThinkingToken: suspend (String) -> Unit,
+        options: GenerationOptions,
+    ): AgentModelTurnResult =
+        inner.completeSingleTurn(
+            sessionMessages = sessionMessages,
+            systemPrompt = systemPrompt,
+            availableTools = availableTools,
+            allowToolCall = allowToolCall,
+            onTextToken = onTextToken,
+            onThinkingToken = onThinkingToken,
+            options = options,
+        )
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
@@ -186,8 +274,19 @@ class RustLoopInferenceService(
                 "LLAMA" -> AgentLoopSessionCapabilities(
                     summarizationAllowed = false,
                     kvFixed = true,
+                    contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
+                    historyRewriteSupported = true,
                 )
-                else -> AgentLoopSessionCapabilities()
+                else -> AgentLoopSessionCapabilities(
+                    contextPolicyTier = if ((options.contextWindow ?: DEFAULT_CONTEXT_WINDOW) >= HIGH_CONTEXT_WINDOW_THRESHOLD) {
+                        AgentLoopContextPolicyTier.HIGH_CONTEXT
+                    } else {
+                        AgentLoopContextPolicyTier.HOSTED_MUTABLE
+                    },
+                    toolSchemaDeferralSupported = true,
+                    fileBackedContextSupported = true,
+                    promptCacheSupported = true,
+                )
             },
             io = AgentLoopSessionIoParams(
                 provider = provider,
@@ -209,6 +308,42 @@ class RustLoopInferenceService(
         }
         return Json.encodeToString(kotlinx.serialization.json.JsonArray.serializer(), array)
     }
+
+    private fun toolsForRequest(
+        toolsSchemaJson: String,
+        toolContextIndexJson: String?,
+        availableTools: List<ToolDefinition>,
+        allowToolCall: Boolean,
+    ): List<ToolDefinition> {
+        if (!allowToolCall) return emptyList()
+        val allowedNames =
+            toolContextIndexJson?.let(::toolNamesFromContextIndex)
+                ?: toolNamesFromSchema(toolsSchemaJson)
+        return when {
+            allowedNames == null -> availableTools
+            allowedNames.isEmpty() -> emptyList()
+            else -> availableTools.filter { it.name in allowedNames }
+        }
+    }
+
+    private fun toolNamesFromSchema(toolsSchemaJson: String): Set<String>? {
+        if (toolsSchemaJson.isBlank()) return null
+        return runCatching {
+            Json.parseToJsonElement(toolsSchemaJson)
+                .jsonArray
+                .mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
+                .toSet()
+        }.getOrNull()
+    }
+
+    private fun toolNamesFromContextIndex(toolContextIndexJson: String): Set<String>? =
+        runCatching {
+            Json.parseToJsonElement(toolContextIndexJson)
+                .jsonObject["advertised_tools"]
+                ?.jsonArray
+                ?.mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
+                ?.toSet()
+        }.getOrNull()
 
     private suspend fun executeOneTool(call: AgentToolCall, options: GenerationOptions): AgentToolResult =
         try {
@@ -245,7 +380,54 @@ class RustLoopInferenceService(
             options.chatId?.value?.let { put("chat_id", it) }
             options.userMessageId?.value?.let { put("user_message_id", it) }
             options.assistantMessageId?.value?.let { put("assistant_message_id", it) }
+            if (options.includedFiles.isNotEmpty()) {
+                put(
+                    "included_files",
+                    buildJsonArray {
+                        options.includedFiles.forEach { file ->
+                            add(buildJsonObject {
+                                put("path", file.path)
+                                put("token_estimate", file.tokenEstimate.toInt())
+                                put("content", file.content)
+                            })
+                        }
+                    }.toString(),
+                )
+            }
         }
+
+    private fun String.withContextSidecars(
+        contextReferences: List<AgentContextReference>,
+        stateLedgerJson: String?,
+        toolContextIndexJson: String?,
+        fileContextIndexJson: String?,
+        cacheHints: List<String>,
+    ): String {
+        val jsonSidecars = listOfNotNull(stateLedgerJson, toolContextIndexJson, fileContextIndexJson)
+        if (contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()) {
+            return this
+        }
+
+        val contextBlock = buildString {
+            appendLine(this@withContextSidecars)
+            appendLine()
+            appendLine("Context management sidecars:")
+            if (contextReferences.isNotEmpty()) {
+                appendLine("References:")
+                contextReferences.forEach { reference ->
+                    appendLine(
+                        "- ${reference.kind} ${reference.id}: " +
+                            "${reference.title}. ${reference.retrievalHint}",
+                    )
+                }
+            }
+            stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
+            toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
+            fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
+            if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
+        }
+        return contextBlock.trimEnd()
+    }
 
     private fun AgentLoopMessage.toChatMessage(): ChatMessage =
         ChatMessage(role = role, content = content)

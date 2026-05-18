@@ -103,7 +103,20 @@ sealed interface InferenceEvent {
         val tier: String,
         val tokensBefore: Int,
         val tokensAfter: Int,
-        val modelType: ModelType
+        val modelType: ModelType,
+        val trigger: String,
+    ) : InferenceEvent
+
+    data class PreCompact(
+        val trigger: String,
+        val modelType: ModelType,
+    ) : InferenceEvent
+
+    data class PostCompact(
+        val trigger: String,
+        val summaryRef: String?,
+        val historyRef: String?,
+        val modelType: ModelType,
     ) : InferenceEvent
 
     data class ToolRepaired(

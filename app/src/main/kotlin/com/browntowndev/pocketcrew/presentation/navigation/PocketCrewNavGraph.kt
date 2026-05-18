@@ -691,20 +691,26 @@ fun PocketCrewNavGraph(
         composable(
             route = Routes.SHARED_CHAT,
             arguments = listOf(
-                navArgument("shareId") { type = NavType.StringType }
+                navArgument("shareId") { type = NavType.StringType },
+                navArgument("key") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
             deepLinks = listOf(
                 navDeepLink {
                     uriPattern = Routes.SHARED_CHAT_DEEP_LINK_PATTERN
-                }
+                },
             )
         ) { backStackEntry ->
             val shareId = backStackEntry.arguments?.getString("shareId")
+            val decryptionKey = backStackEntry.arguments?.getString("key")
             val chatViewModel = hiltViewModel<ChatViewModel>()
 
-            LaunchedEffect(shareId) {
+            LaunchedEffect(shareId, decryptionKey) {
                 if (shareId != null) {
-                    chatViewModel.onLoadSharedChat(shareId)
+                    chatViewModel.onLoadSharedChat(shareId, decryptionKey)
                 }
             }
 

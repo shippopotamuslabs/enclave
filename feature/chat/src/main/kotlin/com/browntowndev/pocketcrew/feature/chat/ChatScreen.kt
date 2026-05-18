@@ -60,6 +60,7 @@ fun ChatScreen(
     StreamingResponseHapticEffect(
         hapticsEnabled = uiState.hapticResponse,
         phase = uiState.responseHapticPhase,
+        pulseKey = uiState.responseHapticPulseKey,
     )
 
     val singleImagePickerLauncher = rememberLauncherForActivityResult(

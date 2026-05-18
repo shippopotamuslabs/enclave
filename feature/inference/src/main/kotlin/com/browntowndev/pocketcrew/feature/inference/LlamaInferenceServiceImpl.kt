@@ -289,12 +289,19 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 }
             },
         )
-        val envelope = if (allowToolCall) {
-            ToolEnvelopeParser.extractLocalToolEnvelope(buffered.fullText)
+        val envelopes = if (allowToolCall) {
+            ToolEnvelopeParser.extractLocalToolEnvelopes(buffered.fullText)
         } else {
-            null
+            emptyList()
         }
-        if (envelope == null) {
+        val toolCalls = envelopes.mapIndexed { index, envelope ->
+            AgentRawToolCall(
+                id = "llama-tool-${System.nanoTime()}-$index",
+                name = envelope.toolName,
+                argumentsJson = envelope.argumentsJson,
+            )
+        }
+        if (toolCalls.isEmpty()) {
             emitProcessedText(buffered.fullText, targetModelType) { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
@@ -304,17 +311,9 @@ class LlamaInferenceServiceImpl @Inject constructor(
             }
         }
         return AgentModelTurnResult(
-            assistantText = buffered.fullText.takeIf { it.isNotBlank() && envelope == null },
-            toolCalls = envelope?.let {
-                listOf(
-                    AgentRawToolCall(
-                        id = "llama-tool-${System.nanoTime()}",
-                        name = it.toolName,
-                        argumentsJson = it.argumentsJson,
-                    ),
-                )
-            } ?: emptyList(),
-            finishReason = if (envelope != null) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = buffered.fullText.takeIf { it.isNotBlank() && toolCalls.isEmpty() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
         )
     }
 

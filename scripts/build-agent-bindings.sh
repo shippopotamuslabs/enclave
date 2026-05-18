@@ -21,6 +21,7 @@ TOOLCHAIN="$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64"
 export PATH="$TOOLCHAIN/bin:$PATH"
 
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/${TARGET_ARCH}${ANDROID_API}-clang"
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384 ${CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS:-}"
 export AR="$TOOLCHAIN/bin/llvm-ar"
 
 echo "Building agent_core for $TARGET_ARCH from $RUST_ROOT..."

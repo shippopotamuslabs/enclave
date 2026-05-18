@@ -21,8 +21,8 @@ object Routes {
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"
     const val BYOK_CONFIGURE = "byok_configure"
-    const val SHARED_CHAT = "shared?shareId={shareId}"
-    const val SHARED_CHAT_DEEP_LINK_PATTERN = "pocketcrew://shared/{shareId}"
+    const val SHARED_CHAT = "shared?shareId={shareId}&key={key}"
+    const val SHARED_CHAT_DEEP_LINK_PATTERN = "pocketcrew://shared/{shareId}?key={key}"
 
     fun studioWithEditAsset(assetId: String): String = "$STUDIO?editAssetId=$assetId"
 

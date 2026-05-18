@@ -803,6 +803,14 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -834,7 +842,15 @@ fun uniffi_agent_core_checksum_method_ffiagentengine_create_session(
 ): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_drain_events(
 ): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_insert_terminal_output(
+): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_next_action(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_read_context_reference(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_request_manual_compact(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_search_context_references(
 ): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response(
 ): Short
@@ -910,7 +926,15 @@ fun uniffi_agent_core_fn_method_ffiagentengine_create_session(`ptr`: Pointer,`in
 ): Pointer
 fun uniffi_agent_core_fn_method_ffiagentengine_drain_events(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(`ptr`: Pointer,`session`: Pointer,`id`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_agent_core_fn_method_ffiagentengine_next_action(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(`ptr`: Pointer,`session`: Pointer,`referenceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(`ptr`: Pointer,`session`: Pointer,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(`ptr`: Pointer,`session`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(`ptr`: Pointer,`session`: Pointer,`response`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -1088,7 +1112,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_drain_events() != 32438.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_insert_terminal_output() != 5674.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_next_action() != 19798.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_read_context_reference() != 10624.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_request_manual_compact() != 16340.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_search_context_references() != 16040.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response() != 16488.toShort()) {
@@ -1539,7 +1575,15 @@ public interface FfiAgentEngineInterface {
     
     fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent>
     
+    fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference
+    
     fun `nextAction`(`session`: FfiSession): FfiAgentAction
+    
+    fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String
+    
+    fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction
+    
+    fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference>
     
     fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
     
@@ -1667,12 +1711,61 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     
 
+    override fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference {
+            return FfiConverterTypeFfiContextReference.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`id`),FfiConverterString.lower(`title`),FfiConverterString.lower(`content`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `nextAction`(`session`: FfiSession): FfiAgentAction {
             return FfiConverterTypeFfiAgentAction.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_next_action(
         it, FfiConverterTypeFfiSession.lower(`session`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(AgentException::class)override fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AgentException) { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`referenceId`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction {
+            return FfiConverterTypeFfiAgentAction.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiManualCompactRequest.lower(`request`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference> {
+            return FfiConverterSequenceTypeFfiContextReference.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_search_context_references(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`query`),FfiConverterUInt.lower(`limit`),_status)
 }
     }
     )
@@ -1978,7 +2071,24 @@ data class FfiAgentConfig (
     var `microKeepRecent`: kotlin.UInt, 
     var `toolRetryLimit`: kotlin.UInt, 
     var `greedyAppendBlocks`: kotlin.Boolean, 
-    var `toolResultBudgetCloudBytes`: kotlin.ULong
+    var `toolResultBudgetCloudBytes`: kotlin.ULong, 
+    var `midTurnThresholdRatio`: kotlin.Float, 
+    var `postToolResultThresholdRatio`: kotlin.Float, 
+    var `manualCompactThresholdRatio`: kotlin.Float, 
+    var `allowFifoOnPreflight`: kotlin.Boolean, 
+    var `allowFifoOnMidTurn`: kotlin.Boolean, 
+    var `allowFifoOnPostToolResult`: kotlin.Boolean, 
+    var `requireSnapshotBeforeFifo`: kotlin.Boolean, 
+    var `enableContextStore`: kotlin.Boolean, 
+    var `enableStateLedger`: kotlin.Boolean, 
+    var `enableToolSchemaDeferral`: kotlin.Boolean, 
+    var `enableFileCondensation`: kotlin.Boolean, 
+    var `enableManualCompact`: kotlin.Boolean, 
+    var `toolSpillThresholdBytes`: kotlin.ULong, 
+    var `terminalSpillThresholdBytes`: kotlin.ULong, 
+    var `historySnapshotThresholdTokens`: kotlin.UInt, 
+    var `fileOutlineThresholdTokens`: kotlin.UInt, 
+    var `promptCacheAnchorThresholdTokens`: kotlin.UInt
 ) {
     
     companion object
@@ -1996,6 +2106,23 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterULong.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
         )
     }
 
@@ -2005,7 +2132,24 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterUInt.allocationSize(value.`microKeepRecent`) +
             FfiConverterUInt.allocationSize(value.`toolRetryLimit`) +
             FfiConverterBoolean.allocationSize(value.`greedyAppendBlocks`) +
-            FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`)
+            FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`) +
+            FfiConverterFloat.allocationSize(value.`midTurnThresholdRatio`) +
+            FfiConverterFloat.allocationSize(value.`postToolResultThresholdRatio`) +
+            FfiConverterFloat.allocationSize(value.`manualCompactThresholdRatio`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnPreflight`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnMidTurn`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnPostToolResult`) +
+            FfiConverterBoolean.allocationSize(value.`requireSnapshotBeforeFifo`) +
+            FfiConverterBoolean.allocationSize(value.`enableContextStore`) +
+            FfiConverterBoolean.allocationSize(value.`enableStateLedger`) +
+            FfiConverterBoolean.allocationSize(value.`enableToolSchemaDeferral`) +
+            FfiConverterBoolean.allocationSize(value.`enableFileCondensation`) +
+            FfiConverterBoolean.allocationSize(value.`enableManualCompact`) +
+            FfiConverterULong.allocationSize(value.`toolSpillThresholdBytes`) +
+            FfiConverterULong.allocationSize(value.`terminalSpillThresholdBytes`) +
+            FfiConverterUInt.allocationSize(value.`historySnapshotThresholdTokens`) +
+            FfiConverterUInt.allocationSize(value.`fileOutlineThresholdTokens`) +
+            FfiConverterUInt.allocationSize(value.`promptCacheAnchorThresholdTokens`)
     )
 
     override fun write(value: FfiAgentConfig, buf: ByteBuffer) {
@@ -2015,6 +2159,23 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterUInt.write(value.`toolRetryLimit`, buf)
             FfiConverterBoolean.write(value.`greedyAppendBlocks`, buf)
             FfiConverterULong.write(value.`toolResultBudgetCloudBytes`, buf)
+            FfiConverterFloat.write(value.`midTurnThresholdRatio`, buf)
+            FfiConverterFloat.write(value.`postToolResultThresholdRatio`, buf)
+            FfiConverterFloat.write(value.`manualCompactThresholdRatio`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnPreflight`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnMidTurn`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnPostToolResult`, buf)
+            FfiConverterBoolean.write(value.`requireSnapshotBeforeFifo`, buf)
+            FfiConverterBoolean.write(value.`enableContextStore`, buf)
+            FfiConverterBoolean.write(value.`enableStateLedger`, buf)
+            FfiConverterBoolean.write(value.`enableToolSchemaDeferral`, buf)
+            FfiConverterBoolean.write(value.`enableFileCondensation`, buf)
+            FfiConverterBoolean.write(value.`enableManualCompact`, buf)
+            FfiConverterULong.write(value.`toolSpillThresholdBytes`, buf)
+            FfiConverterULong.write(value.`terminalSpillThresholdBytes`, buf)
+            FfiConverterUInt.write(value.`historySnapshotThresholdTokens`, buf)
+            FfiConverterUInt.write(value.`fileOutlineThresholdTokens`, buf)
+            FfiConverterUInt.write(value.`promptCacheAnchorThresholdTokens`, buf)
     }
 }
 
@@ -2103,11 +2264,140 @@ public object FfiConverterTypeFfiCompactionEvent: FfiConverterRustBuffer<FfiComp
 
 
 
+data class FfiContextReference (
+    var `id`: kotlin.String, 
+    var `kind`: FfiContextReferenceKind, 
+    var `title`: kotlin.String, 
+    var `byteLen`: kotlin.ULong, 
+    var `tokenEstimate`: kotlin.UInt, 
+    var `preview`: kotlin.String, 
+    var `retrievalHint`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiContextReference: FfiConverterRustBuffer<FfiContextReference> {
+    override fun read(buf: ByteBuffer): FfiContextReference {
+        return FfiContextReference(
+            FfiConverterString.read(buf),
+            FfiConverterTypeFfiContextReferenceKind.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiContextReference) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterTypeFfiContextReferenceKind.allocationSize(value.`kind`) +
+            FfiConverterString.allocationSize(value.`title`) +
+            FfiConverterULong.allocationSize(value.`byteLen`) +
+            FfiConverterUInt.allocationSize(value.`tokenEstimate`) +
+            FfiConverterString.allocationSize(value.`preview`) +
+            FfiConverterString.allocationSize(value.`retrievalHint`)
+    )
+
+    override fun write(value: FfiContextReference, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterTypeFfiContextReferenceKind.write(value.`kind`, buf)
+            FfiConverterString.write(value.`title`, buf)
+            FfiConverterULong.write(value.`byteLen`, buf)
+            FfiConverterUInt.write(value.`tokenEstimate`, buf)
+            FfiConverterString.write(value.`preview`, buf)
+            FfiConverterString.write(value.`retrievalHint`, buf)
+    }
+}
+
+
+
+data class FfiManualCompactRequest (
+    var `focusInstruction`: kotlin.String?, 
+    var `forceSummary`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiManualCompactRequest: FfiConverterRustBuffer<FfiManualCompactRequest> {
+    override fun read(buf: ByteBuffer): FfiManualCompactRequest {
+        return FfiManualCompactRequest(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiManualCompactRequest) = (
+            FfiConverterOptionalString.allocationSize(value.`focusInstruction`) +
+            FfiConverterBoolean.allocationSize(value.`forceSummary`)
+    )
+
+    override fun write(value: FfiManualCompactRequest, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`focusInstruction`, buf)
+            FfiConverterBoolean.write(value.`forceSummary`, buf)
+    }
+}
+
+
+
+data class FfiManualCompactResult (
+    var `summaryRef`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
+    var `tokensBefore`: kotlin.UInt, 
+    var `tokensAfter`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiManualCompactResult: FfiConverterRustBuffer<FfiManualCompactResult> {
+    override fun read(buf: ByteBuffer): FfiManualCompactResult {
+        return FfiManualCompactResult(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiManualCompactResult) = (
+            FfiConverterOptionalString.allocationSize(value.`summaryRef`) +
+            FfiConverterOptionalString.allocationSize(value.`historyRef`) +
+            FfiConverterUInt.allocationSize(value.`tokensBefore`) +
+            FfiConverterUInt.allocationSize(value.`tokensAfter`)
+    )
+
+    override fun write(value: FfiManualCompactResult, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`summaryRef`, buf)
+            FfiConverterOptionalString.write(value.`historyRef`, buf)
+            FfiConverterUInt.write(value.`tokensBefore`, buf)
+            FfiConverterUInt.write(value.`tokensAfter`, buf)
+    }
+}
+
+
+
 data class FfiModelRequest (
     var `sessionMessages`: List<FfiAgentMessage>, 
     var `systemPrompt`: kotlin.String, 
     var `toolsSchemaJson`: kotlin.String, 
-    var `allowToolCall`: kotlin.Boolean
+    var `allowToolCall`: kotlin.Boolean, 
+    var `contextReferences`: List<FfiContextReference>, 
+    var `stateLedgerJson`: kotlin.String?, 
+    var `toolContextIndexJson`: kotlin.String?, 
+    var `fileContextIndexJson`: kotlin.String?, 
+    var `cacheHints`: List<kotlin.String>
 ) {
     
     companion object
@@ -2123,6 +2413,11 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeFfiContextReference.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
     }
 
@@ -2130,7 +2425,12 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterSequenceTypeFfiAgentMessage.allocationSize(value.`sessionMessages`) +
             FfiConverterString.allocationSize(value.`systemPrompt`) +
             FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
-            FfiConverterBoolean.allocationSize(value.`allowToolCall`)
+            FfiConverterBoolean.allocationSize(value.`allowToolCall`) +
+            FfiConverterSequenceTypeFfiContextReference.allocationSize(value.`contextReferences`) +
+            FfiConverterOptionalString.allocationSize(value.`stateLedgerJson`) +
+            FfiConverterOptionalString.allocationSize(value.`toolContextIndexJson`) +
+            FfiConverterOptionalString.allocationSize(value.`fileContextIndexJson`) +
+            FfiConverterSequenceString.allocationSize(value.`cacheHints`)
     )
 
     override fun write(value: FfiModelRequest, buf: ByteBuffer) {
@@ -2138,6 +2438,11 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterString.write(value.`systemPrompt`, buf)
             FfiConverterString.write(value.`toolsSchemaJson`, buf)
             FfiConverterBoolean.write(value.`allowToolCall`, buf)
+            FfiConverterSequenceTypeFfiContextReference.write(value.`contextReferences`, buf)
+            FfiConverterOptionalString.write(value.`stateLedgerJson`, buf)
+            FfiConverterOptionalString.write(value.`toolContextIndexJson`, buf)
+            FfiConverterOptionalString.write(value.`fileContextIndexJson`, buf)
+            FfiConverterSequenceString.write(value.`cacheHints`, buf)
     }
 }
 
@@ -2254,7 +2559,12 @@ public object FfiConverterTypeFfiRepairRecord: FfiConverterRustBuffer<FfiRepairR
 data class FfiSessionCapabilities (
     var `summarizationAllowed`: kotlin.Boolean, 
     var `kvFixed`: kotlin.Boolean, 
-    var `toolResultBudgetTokens`: kotlin.UInt?
+    var `toolResultBudgetTokens`: kotlin.UInt?, 
+    var `contextPolicyTier`: FfiContextPolicyTier, 
+    var `toolSchemaDeferralSupported`: kotlin.Boolean, 
+    var `fileBackedContextSupported`: kotlin.Boolean, 
+    var `promptCacheSupported`: kotlin.Boolean, 
+    var `historyRewriteSupported`: kotlin.Boolean
 ) {
     
     companion object
@@ -2269,19 +2579,34 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalUInt.read(buf),
+            FfiConverterTypeFfiContextPolicyTier.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
     override fun allocationSize(value: FfiSessionCapabilities) = (
             FfiConverterBoolean.allocationSize(value.`summarizationAllowed`) +
             FfiConverterBoolean.allocationSize(value.`kvFixed`) +
-            FfiConverterOptionalUInt.allocationSize(value.`toolResultBudgetTokens`)
+            FfiConverterOptionalUInt.allocationSize(value.`toolResultBudgetTokens`) +
+            FfiConverterTypeFfiContextPolicyTier.allocationSize(value.`contextPolicyTier`) +
+            FfiConverterBoolean.allocationSize(value.`toolSchemaDeferralSupported`) +
+            FfiConverterBoolean.allocationSize(value.`fileBackedContextSupported`) +
+            FfiConverterBoolean.allocationSize(value.`promptCacheSupported`) +
+            FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`)
     )
 
     override fun write(value: FfiSessionCapabilities, buf: ByteBuffer) {
             FfiConverterBoolean.write(value.`summarizationAllowed`, buf)
             FfiConverterBoolean.write(value.`kvFixed`, buf)
             FfiConverterOptionalUInt.write(value.`toolResultBudgetTokens`, buf)
+            FfiConverterTypeFfiContextPolicyTier.write(value.`contextPolicyTier`, buf)
+            FfiConverterBoolean.write(value.`toolSchemaDeferralSupported`, buf)
+            FfiConverterBoolean.write(value.`fileBackedContextSupported`, buf)
+            FfiConverterBoolean.write(value.`promptCacheSupported`, buf)
+            FfiConverterBoolean.write(value.`historyRewriteSupported`, buf)
     }
 }
 
@@ -2330,7 +2655,11 @@ public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSess
 data class FfiSummaryRequest (
     var `messagesToSummarize`: List<FfiAgentMessage>, 
     var `instruction`: kotlin.String, 
-    var `lastMessageId`: kotlin.String
+    var `lastMessageId`: kotlin.String, 
+    var `trigger`: FfiCompactionTrigger, 
+    var `focusInstruction`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
+    var `stateLedgerSnapshotJson`: kotlin.String?
 ) {
     
     companion object
@@ -2345,19 +2674,31 @@ public object FfiConverterTypeFfiSummaryRequest: FfiConverterRustBuffer<FfiSumma
             FfiConverterSequenceTypeFfiAgentMessage.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterTypeFfiCompactionTrigger.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
     override fun allocationSize(value: FfiSummaryRequest) = (
             FfiConverterSequenceTypeFfiAgentMessage.allocationSize(value.`messagesToSummarize`) +
             FfiConverterString.allocationSize(value.`instruction`) +
-            FfiConverterString.allocationSize(value.`lastMessageId`)
+            FfiConverterString.allocationSize(value.`lastMessageId`) +
+            FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
+            FfiConverterOptionalString.allocationSize(value.`focusInstruction`) +
+            FfiConverterOptionalString.allocationSize(value.`historyRef`) +
+            FfiConverterOptionalString.allocationSize(value.`stateLedgerSnapshotJson`)
     )
 
     override fun write(value: FfiSummaryRequest, buf: ByteBuffer) {
             FfiConverterSequenceTypeFfiAgentMessage.write(value.`messagesToSummarize`, buf)
             FfiConverterString.write(value.`instruction`, buf)
             FfiConverterString.write(value.`lastMessageId`, buf)
+            FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+            FfiConverterOptionalString.write(value.`focusInstruction`, buf)
+            FfiConverterOptionalString.write(value.`historyRef`, buf)
+            FfiConverterOptionalString.write(value.`stateLedgerSnapshotJson`, buf)
     }
 }
 
@@ -2570,6 +2911,14 @@ sealed class AgentException: kotlin.Exception() {
             get() = "detail=${ `detail` }"
     }
     
+    class ContextReferenceNotFound(
+        
+        val `referenceId`: kotlin.String
+        ) : AgentException() {
+        override val message
+            get() = "referenceId=${ `referenceId` }"
+    }
+    
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AgentException> {
         override fun lift(error_buf: RustBuffer.ByValue): AgentException = FfiConverterTypeAgentException.lift(error_buf)
@@ -2602,6 +2951,9 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 FfiConverterString.read(buf),
                 )
             5 -> AgentException.Internal(
+                FfiConverterString.read(buf),
+                )
+            6 -> AgentException.ContextReferenceNotFound(
                 FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
@@ -2638,6 +2990,11 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 4UL
                 + FfiConverterString.allocationSize(value.`detail`)
             )
+            is AgentException.ContextReferenceNotFound -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`referenceId`)
+            )
         }
     }
 
@@ -2669,6 +3026,11 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
             is AgentException.Internal -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`detail`, buf)
+                Unit
+            }
+            is AgentException.ContextReferenceNotFound -> {
+                buf.putInt(6)
+                FfiConverterString.write(value.`referenceId`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -2703,6 +3065,11 @@ sealed class FfiAgentAction {
         companion object
     }
     
+    data class ManualCompactCompleted(
+        val `result`: FfiManualCompactResult) : FfiAgentAction() {
+        companion object
+    }
+    
 
     
     companion object
@@ -2726,6 +3093,9 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
             4 -> FfiAgentAction.Finished
             5 -> FfiAgentAction.Failed(
                 FfiConverterTypeAgentException.read(buf),
+                )
+            6 -> FfiAgentAction.ManualCompactCompleted(
+                FfiConverterTypeFfiManualCompactResult.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -2766,6 +3136,13 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
                 + FfiConverterTypeAgentException.allocationSize(value.`error`)
             )
         }
+        is FfiAgentAction.ManualCompactCompleted -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiManualCompactResult.allocationSize(value.`result`)
+            )
+        }
     }
 
     override fun write(value: FfiAgentAction, buf: ByteBuffer) {
@@ -2792,6 +3169,11 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
             is FfiAgentAction.Failed -> {
                 buf.putInt(5)
                 FfiConverterTypeAgentException.write(value.`error`, buf)
+                Unit
+            }
+            is FfiAgentAction.ManualCompactCompleted -> {
+                buf.putInt(6)
+                FfiConverterTypeFfiManualCompactResult.write(value.`result`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -2845,6 +3227,18 @@ sealed class FfiAgentEvent {
         companion object
     }
     
+    data class PreCompact(
+        val `trigger`: FfiCompactionTrigger) : FfiAgentEvent() {
+        companion object
+    }
+    
+    data class PostCompact(
+        val `trigger`: FfiCompactionTrigger, 
+        val `summaryRef`: kotlin.String?, 
+        val `historyRef`: kotlin.String?) : FfiAgentEvent() {
+        companion object
+    }
+    
 
     
     companion object
@@ -2882,6 +3276,14 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 )
             7 -> FfiAgentEvent.KvCacheInvalidated(
                 FfiConverterString.read(buf),
+                )
+            8 -> FfiAgentEvent.PreCompact(
+                FfiConverterTypeFfiCompactionTrigger.read(buf),
+                )
+            9 -> FfiAgentEvent.PostCompact(
+                FfiConverterTypeFfiCompactionTrigger.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -2943,6 +3345,22 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 + FfiConverterString.allocationSize(value.`reason`)
             )
         }
+        is FfiAgentEvent.PreCompact -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
+            )
+        }
+        is FfiAgentEvent.PostCompact -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
+                + FfiConverterOptionalString.allocationSize(value.`summaryRef`)
+                + FfiConverterOptionalString.allocationSize(value.`historyRef`)
+            )
+        }
     }
 
     override fun write(value: FfiAgentEvent, buf: ByteBuffer) {
@@ -2986,6 +3404,18 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
             is FfiAgentEvent.KvCacheInvalidated -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`reason`, buf)
+                Unit
+            }
+            is FfiAgentEvent.PreCompact -> {
+                buf.putInt(8)
+                FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+                Unit
+            }
+            is FfiAgentEvent.PostCompact -> {
+                buf.putInt(9)
+                FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+                FfiConverterOptionalString.write(value.`summaryRef`, buf)
+                FfiConverterOptionalString.write(value.`historyRef`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -3035,7 +3465,9 @@ enum class FfiCompactionTier {
     MICRO,
     FIFO,
     ARTIFACT_SQUASH,
-    SUMMARY;
+    SUMMARY,
+    TOOL_SPILL,
+    HISTORY_SNAPSHOT;
     companion object
 }
 
@@ -3066,7 +3498,8 @@ enum class FfiCompactionTrigger {
     
     PREFLIGHT,
     MID_TURN,
-    POST_TOOL_RESULT;
+    POST_TOOL_RESULT,
+    MANUAL;
     companion object
 }
 
@@ -3084,6 +3517,76 @@ public object FfiConverterTypeFfiCompactionTrigger: FfiConverterRustBuffer<FfiCo
     override fun allocationSize(value: FfiCompactionTrigger) = 4UL
 
     override fun write(value: FfiCompactionTrigger, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class FfiContextPolicyTier {
+    
+    HOSTED_MUTABLE,
+    HOSTED_PROXY,
+    LOCAL_MUTABLE,
+    FIXED_KV,
+    HIGH_CONTEXT,
+    SMALL_CONTEXT;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiContextPolicyTier: FfiConverterRustBuffer<FfiContextPolicyTier> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiContextPolicyTier.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiContextPolicyTier) = 4UL
+
+    override fun write(value: FfiContextPolicyTier, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class FfiContextReferenceKind {
+    
+    TOOL_OUTPUT,
+    TERMINAL_OUTPUT,
+    HISTORY_SNAPSHOT,
+    ARTIFACT_SNAPSHOT,
+    FILE_OUTLINE,
+    FILE_CHUNK,
+    TOOL_SCHEMA,
+    TOOL_CATALOG_INDEX;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiContextReferenceKind: FfiConverterRustBuffer<FfiContextReferenceKind> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiContextReferenceKind.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiContextReferenceKind) = 4UL
+
+    override fun write(value: FfiContextReferenceKind, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -3524,6 +4027,34 @@ public object FfiConverterSequenceTypeFfiAgentMessage: FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiAgentMessage.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeFfiContextReference: FfiConverterRustBuffer<List<FfiContextReference>> {
+    override fun read(buf: ByteBuffer): List<FfiContextReference> {
+        val len = buf.getInt()
+        return List<FfiContextReference>(len) {
+            FfiConverterTypeFfiContextReference.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FfiContextReference>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFfiContextReference.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FfiContextReference>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFfiContextReference.write(it, buf)
         }
     }
 }

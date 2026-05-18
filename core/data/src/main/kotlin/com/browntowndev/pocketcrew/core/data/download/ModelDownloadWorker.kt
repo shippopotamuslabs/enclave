@@ -144,12 +144,8 @@ class ModelDownloadWorker
                             .map { spec ->
                                 async {
                                     try {
-                                        val downloadResult = downloadSpec(spec, progressChannel)
-                                        if (downloadResult is Result.Success) {
-                                            spec.sha256
-                                        } else {
-                                            null
-                                        }
+                                        downloadSpec(spec, progressChannel)
+                                        spec.sha256
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: SocketTimeoutException) {
@@ -257,7 +253,7 @@ class ModelDownloadWorker
         private suspend fun downloadSpec(
             spec: DownloadFileSpec,
             progressChannel: Channel<Unit>,
-        ): Result {
+        ) {
             val targetDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
             if (!targetDir.exists()) targetDir.mkdirs()
 
@@ -288,11 +284,7 @@ class ModelDownloadWorker
                 // Trigger final progress update for this spec
                 progressChannel.trySend(Unit)
 
-                val sessionId =
-                    requireNotNull(inputData.getString(DownloadWorkKeys.KEY_SESSION_ID)) {
-                        "sessionId was null. This should be set when download begins."
-                    }
-                return Result.success(workDataOf(DownloadWorkKeys.KEY_SESSION_ID to sessionId))
+                return
             }
 
             progressTracker.updateFileState(trackingKey) {
@@ -378,11 +370,7 @@ class ModelDownloadWorker
                 }
                 progressChannel.trySend(Unit)
 
-                val sessionId =
-                    requireNotNull(inputData.getString(DownloadWorkKeys.KEY_SESSION_ID)) {
-                        "sessionId was null. This should be set when download begins."
-                    }
-                return Result.success(workDataOf(DownloadWorkKeys.KEY_SESSION_ID to sessionId))
+                return
             } catch (e: Exception) {
                 logger.error(TAG, "Download failed for spec ${spec.localFileName}: ${e.message}")
                 throw e

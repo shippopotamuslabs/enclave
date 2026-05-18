@@ -185,6 +185,10 @@ class DirectChatInferenceExecutor
 
                             is InferenceEvent.CompactionApplied -> Unit
 
+                            is InferenceEvent.PreCompact -> Unit
+
+                            is InferenceEvent.PostCompact -> Unit
+
                             is InferenceEvent.ToolRepaired -> Unit
 
                             is InferenceEvent.Finished -> {

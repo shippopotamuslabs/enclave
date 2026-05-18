@@ -11,7 +11,6 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class StreamingResponseHapticEffectTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -40,7 +39,60 @@ class StreamingResponseHapticEffectTest {
     }
 
     @Test
-    fun generatingPhase_switchesFromHeartbeatToRapidBuzz() {
+    fun generatingPhase_withPulseKey_startsRapidBuzz() {
+        val controller = FakeStreamingResponseHapticController()
+        val pulseKey = mutableStateOf(0L)
+
+        composeTestRule.setContent {
+            StreamingResponseHapticEffect(
+                hapticsEnabled = true,
+                phase = ResponseHapticPhase.GeneratingBuzz,
+                pulseKey = pulseKey.value,
+                controller = controller,
+            )
+        }
+
+        composeTestRule.runOnIdle {
+            pulseKey.value = 1L
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(0, controller.startThinkingPulseCount)
+        assertEquals(1, controller.startGeneratingBuzzCount)
+        assertEquals(0, controller.stopCount)
+        assertEquals("generating-buzz", controller.activePattern)
+    }
+
+    @Test
+    fun generatingPhase_afterThinkingPulse_stopsHeartbeatBeforeBuzz() {
+        val controller = FakeStreamingResponseHapticController()
+        val phase = mutableStateOf(ResponseHapticPhase.ThinkingPulse)
+        val pulseKey = mutableStateOf(0L)
+
+        composeTestRule.setContent {
+            StreamingResponseHapticEffect(
+                hapticsEnabled = true,
+                phase = phase.value,
+                pulseKey = pulseKey.value,
+                controller = controller,
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            phase.value = ResponseHapticPhase.GeneratingBuzz
+            pulseKey.value = 1L
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(1, controller.startThinkingPulseCount)
+        assertEquals(1, controller.stopCount)
+        assertEquals(1, controller.startGeneratingBuzzCount)
+        assertEquals("generating-buzz", controller.activePattern)
+    }
+
+    @Test
+    fun nonePhase_afterThinkingPulse_stopsHeartbeat() {
         val controller = FakeStreamingResponseHapticController()
         val phase = mutableStateOf(ResponseHapticPhase.ThinkingPulse)
 
@@ -51,16 +103,16 @@ class StreamingResponseHapticEffectTest {
                 controller = controller,
             )
         }
+        composeTestRule.waitForIdle()
 
         composeTestRule.runOnIdle {
-            phase.value = ResponseHapticPhase.GeneratingBuzz
+            phase.value = ResponseHapticPhase.None
         }
         composeTestRule.waitForIdle()
 
         assertEquals(1, controller.startThinkingPulseCount)
-        assertEquals(1, controller.startGeneratingBuzzCount)
-        assertEquals(0, controller.stopCount)
-        assertEquals("generating-buzz", controller.activePattern)
+        assertEquals(1, controller.stopCount)
+        assertEquals("none", controller.activePattern)
     }
 
     @Test
@@ -72,6 +124,7 @@ class StreamingResponseHapticEffectTest {
             StreamingResponseHapticEffect(
                 hapticsEnabled = true,
                 phase = phase.value,
+                pulseKey = 1L,
                 controller = controller,
             )
         }
@@ -95,6 +148,7 @@ class StreamingResponseHapticEffectTest {
             StreamingResponseHapticEffect(
                 hapticsEnabled = false,
                 phase = ResponseHapticPhase.GeneratingBuzz,
+                pulseKey = 1L,
                 controller = controller,
             )
         }
@@ -114,7 +168,8 @@ class StreamingResponseHapticEffectTest {
             if (showEffect.value) {
                 StreamingResponseHapticEffect(
                     hapticsEnabled = true,
-                    phase = ResponseHapticPhase.ThinkingPulse,
+                    phase = ResponseHapticPhase.GeneratingBuzz,
+                    pulseKey = 1L,
                     controller = controller,
                 )
             }
@@ -139,6 +194,7 @@ class StreamingResponseHapticEffectTest {
             StreamingResponseHapticEffect(
                 hapticsEnabled = true,
                 phase = ResponseHapticPhase.GeneratingBuzz,
+                pulseKey = 1L,
                 controller = controller,
             )
         }
@@ -151,6 +207,30 @@ class StreamingResponseHapticEffectTest {
         assertEquals(0, controller.startThinkingPulseCount)
         assertEquals(1, controller.startGeneratingBuzzCount)
         assertEquals(0, controller.stopCount)
+        assertEquals("generating-buzz", controller.activePattern)
+    }
+
+    @Test
+    fun pulseKeyChange_restartsActiveBuzz() {
+        val controller = FakeStreamingResponseHapticController()
+        val pulseKey = mutableStateOf(1L)
+
+        composeTestRule.setContent {
+            StreamingResponseHapticEffect(
+                hapticsEnabled = true,
+                phase = ResponseHapticPhase.GeneratingBuzz,
+                pulseKey = pulseKey.value,
+                controller = controller,
+            )
+        }
+
+        composeTestRule.runOnIdle {
+            pulseKey.value = 2L
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(0, controller.startThinkingPulseCount)
+        assertEquals(2, controller.startGeneratingBuzzCount)
         assertEquals("generating-buzz", controller.activePattern)
     }
 
@@ -172,10 +252,8 @@ class StreamingResponseHapticEffectTest {
         }
 
         override fun startGeneratingBuzz() {
-            if (activePattern != "generating-buzz") {
-                startGeneratingBuzzCount += 1
-                activePattern = "generating-buzz"
-            }
+            startGeneratingBuzzCount += 1
+            activePattern = "generating-buzz"
         }
 
         override fun stop() {

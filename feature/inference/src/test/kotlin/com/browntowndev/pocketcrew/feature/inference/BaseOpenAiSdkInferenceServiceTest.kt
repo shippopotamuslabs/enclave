@@ -332,6 +332,68 @@ class BaseOpenAiSdkInferenceServiceTest {
         assertEquals(null, result.assistantText)
     }
 
+    @Test
+    fun `completeSingleTurn converts leaked DSML text into tool call without emitting visible text`() = runTest {
+        val leakedText =
+            """
+            < | DSML | tool_calls>< | DSML | invoke name="web_search">
+            < | DSML | parameter name="query" string="true">digg.com xAI completes training Grok V9</ | DSML | parameter>
+            </ | DSML | invoke></ | DSML | tool_calls>
+            """.trimIndent()
+        val emittedText = StringBuilder()
+        val service = createSingleTurnService(
+            response = emptyTextResponse(leakedText),
+        )
+
+        val result = service.completeSingleTurn(
+            sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "search", metadataJson = "null")),
+            systemPrompt = "",
+            availableTools = listOf(ToolDefinition.WEB_SEARCH),
+            allowToolCall = true,
+            onTextToken = { emittedText.append(it) },
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0),
+        )
+
+        assertEquals(AgentFinishReason.ToolUse, result.finishReason)
+        assertEquals("", emittedText.toString())
+        assertEquals(null, result.assistantText)
+        assertEquals(1, result.toolCalls.size)
+        assertEquals("web_search", result.toolCalls[0].name)
+        assertEquals("""{"query":"digg.com xAI completes training Grok V9"}""", result.toolCalls[0].argumentsJson)
+    }
+
+    @Test
+    fun `openAiChatDeltaReasoningText reads OpenRouter reasoning field`() {
+        val reasoningText = openAiChatDeltaReasoningText(
+            mapOf("reasoning" to JsonValue.from("deepseek thought")),
+        )
+
+        assertEquals("deepseek thought", reasoningText)
+    }
+
+    @Test
+    fun `openAiChatDeltaReasoningText reads OpenRouter reasoning details`() {
+        val reasoningText = openAiChatDeltaReasoningText(
+            mapOf(
+                "reasoning_details" to JsonValue.from(
+                    listOf(
+                        mapOf(
+                            "type" to "reasoning.summary",
+                            "summary" to "summary thought",
+                        ),
+                        mapOf(
+                            "type" to "reasoning.text",
+                            "text" to "raw thought",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("summary thoughtraw thought", reasoningText)
+    }
+
     // ── Helper ──────────────────────────────────────────────────────────────────
 
     private fun createSingleTurnService(

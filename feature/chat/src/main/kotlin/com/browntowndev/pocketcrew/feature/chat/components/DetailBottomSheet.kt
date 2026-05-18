@@ -146,7 +146,6 @@ fun DetailBottomSheet(
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 64.dp) // Capped below TopAppBar
         ) {
             Column(
                 modifier = Modifier

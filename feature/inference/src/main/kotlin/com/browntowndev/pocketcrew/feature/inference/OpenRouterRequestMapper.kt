@@ -94,6 +94,7 @@ object OpenRouterRequestMapper {
         }
 
         applyOpenRouterRoutingDefaults(builder, routing)
+        applyOpenRouterReasoning(builder, options)
         builder.messages(messages)
         return builder.build()
     }
@@ -152,6 +153,7 @@ object OpenRouterRequestMapper {
         }
 
         applyOpenRouterRoutingDefaults(builder, routing)
+        applyOpenRouterReasoning(builder, options)
         return builder.build()
     }
 
@@ -179,6 +181,31 @@ object OpenRouterRequestMapper {
                 )
             )
         )
+    }
+
+    private fun applyOpenRouterReasoning(
+        builder: ChatCompletionCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val reasoning = openRouterReasoningBody(options) ?: return
+        builder.putAdditionalBodyProperty("reasoning", JsonValue.from(reasoning))
+    }
+
+    private fun applyOpenRouterReasoning(
+        builder: ResponseCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val reasoning = openRouterReasoningBody(options) ?: return
+        builder.putAdditionalBodyProperty("reasoning", JsonValue.from(reasoning))
+    }
+
+    private fun openRouterReasoningBody(options: GenerationOptions): Map<String, Any>? {
+        val body = mutableMapOf<String, Any>("exclude" to false)
+        options.reasoningEffort?.let { body["effort"] = it.wireValue }
+        if (options.reasoningBudget > 0) {
+            body["max_tokens"] = options.reasoningBudget
+        }
+        return body.takeIf { it.size > 1 }
     }
 
     private fun applyOpenRouterRoutingDefaults(
@@ -370,4 +397,3 @@ object OpenRouterRequestMapper {
     }
 
 }
-

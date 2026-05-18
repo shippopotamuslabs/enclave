@@ -43,6 +43,26 @@ class XaiInferenceServiceImpl(
             options = options
         )
 
+        suspend fun fallbackToChatCompletions() {
+            if (!XaiRequestMapper.shouldAllowChatCompletionsFallback(modelId)) {
+                throw IllegalStateException("xAI Responses API is required for model=$modelId")
+            }
+            val chatParams = XaiRequestMapper.mapToChatCompletionParams(
+                modelId = modelId,
+                prompt = prompt,
+                history = requestHistory,
+                options = options
+            )
+            streamChatCompletions(
+                params = chatParams,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+                assistantMessageId = options.assistantMessageId,
+                emitEvent = emitEvent,
+            )
+            emitEvent(InferenceEvent.Finished(modelType))
+        }
+
         try {
             loggingPort.info(
                 tag,
@@ -58,14 +78,16 @@ class XaiInferenceServiceImpl(
             loggingPort.warning(
                 tag,
                 @Suppress("MaxLineLength")
-                "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+                "xAI Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
             )
+            fallbackToChatCompletions()
         } catch (e: NotFoundException) {
             loggingPort.warning(
                 tag,
                 @Suppress("MaxLineLength")
-                "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+                "xAI Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
             )
+            fallbackToChatCompletions()
         } catch (e: Exception) {
             val isClientError = (e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) ||
                 (e.message?.contains("404") == true || e.message?.contains("Not Found") == true)
@@ -73,26 +95,13 @@ class XaiInferenceServiceImpl(
                 loggingPort.warning(
                     tag,
                     @Suppress("MaxLineLength")
-                    "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+                    "xAI Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
                 )
             } else {
                 throw e
             }
 
-            val chatParams = OpenAiRequestMapper.mapToChatCompletionParams(
-                modelId = modelId,
-                prompt = prompt,
-                history = requestHistory,
-                options = options
-            )
-            streamChatCompletions(
-                params = chatParams,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-                assistantMessageId = options.assistantMessageId,
-                emitEvent = emitEvent,
-            )
-            emitEvent(InferenceEvent.Finished(modelType))
+            fallbackToChatCompletions()
         }
     }
 }

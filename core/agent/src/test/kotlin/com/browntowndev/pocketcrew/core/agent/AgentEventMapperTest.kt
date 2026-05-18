@@ -24,6 +24,26 @@ class AgentEventMapperTest {
         assertEquals("ARTIFACT_SQUASH", mapped.tier)
         assertEquals(100, mapped.tokensBefore)
         assertEquals(40, mapped.tokensAfter)
+        assertEquals("MID_TURN", mapped.trigger)
+    }
+
+    @Test
+    fun toDomain_lifecycleEvents_mapToDomainEvents() {
+        val pre = assertIs<AgentLoopEvent.PreCompact>(
+            AgentEventMapper.toDomain(FfiAgentEvent.PreCompact(FfiCompactionTrigger.PREFLIGHT)),
+        )
+        val post = assertIs<AgentLoopEvent.PostCompact>(
+            AgentEventMapper.toDomain(
+                FfiAgentEvent.PostCompact(
+                    trigger = FfiCompactionTrigger.PREFLIGHT,
+                    summaryRef = null,
+                    historyRef = "history-u0-a0",
+                ),
+            ),
+        )
+
+        assertEquals("PREFLIGHT", pre.trigger)
+        assertEquals("history-u0-a0", post.historyRef)
     }
 
     @Test

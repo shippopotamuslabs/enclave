@@ -33,6 +33,10 @@ internal fun projectChatMessages(
     dbMessagesMap.forEach { (id, dbMessage) ->
         val activeMessage = activeMessagesMap[id]
         projectedMessages[id] = when {
+            activeMessage != null && activeMessage.messageState != MessageState.COMPLETE -> activeMessage.toMessage(
+                chatId = chatId,
+                createdAt = dbMessage.createdAt,
+            )
             activeMessage != null && dbMessage.messageState != MessageState.COMPLETE -> activeMessage.toMessage(
                 chatId = chatId,
                 createdAt = dbMessage.createdAt,
@@ -55,6 +59,7 @@ internal fun projectChatMessages(
         handoffReady = activeSnapshot != null &&
             activeKey != null &&
             activeMessagesMap.isNotEmpty() &&
+            activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
             activeMessagesMap.keys.all { messageId ->
                 dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
             },

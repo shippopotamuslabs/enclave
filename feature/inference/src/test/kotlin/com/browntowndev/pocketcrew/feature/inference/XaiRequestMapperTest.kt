@@ -254,6 +254,7 @@ class XaiRequestMapperTest {
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent"))
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent-0309"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-reasoning"))
+        assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.3"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-code-fast-1"))
     }
 

@@ -39,4 +39,11 @@ data class GenerationOptions(
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
     val assistantMessageId: MessageId? = null,
+    val includedFiles: List<AgentIncludedFile> = emptyList(),
+)
+
+data class AgentIncludedFile(
+    val path: String,
+    val tokenEstimate: UInt,
+    val content: String,
 )

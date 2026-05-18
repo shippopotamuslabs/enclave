@@ -19,13 +19,20 @@ object AgentEventMapper {
                 tier = event.event.tier.name,
                 tokensBefore = event.event.tokensBefore.toInt(),
                 tokensAfter = event.event.tokensAfter.toInt(),
+                trigger = event.event.trigger.name,
             )
             is FfiAgentEvent.ToolRepaired -> AgentLoopEvent.ToolRepaired(
                 originalName = event.originalName,
                 resolvedName = event.resolvedName,
                 confidence = event.confidence,
             )
-            is FfiAgentEvent.KvCacheInvalidated -> null
+            is FfiAgentEvent.KvCacheInvalidated -> AgentLoopEvent.KvCacheInvalidated(event.reason)
+            is FfiAgentEvent.PreCompact -> AgentLoopEvent.PreCompact(event.trigger.name)
+            is FfiAgentEvent.PostCompact -> AgentLoopEvent.PostCompact(
+                trigger = event.trigger.name,
+                summaryRef = event.summaryRef,
+                historyRef = event.historyRef,
+            )
             is FfiAgentEvent.ContextPressure,
             is FfiAgentEvent.ToolSoftFailure,
             -> null
@@ -51,6 +58,14 @@ object AgentEventMapper {
             is FfiAgentEvent.ContextPressure -> loggingPort.debug(
                 TAG,
                 "context_pressure ratio=${event.ratio}",
+            )
+            is FfiAgentEvent.PreCompact -> loggingPort.debug(
+                TAG,
+                "pre_compact trigger=${event.trigger.name}",
+            )
+            is FfiAgentEvent.PostCompact -> loggingPort.debug(
+                TAG,
+                "post_compact trigger=${event.trigger.name} historyRef=${event.historyRef}",
             )
             is FfiAgentEvent.ToolSoftFailure -> loggingPort.warning(
                 TAG,
