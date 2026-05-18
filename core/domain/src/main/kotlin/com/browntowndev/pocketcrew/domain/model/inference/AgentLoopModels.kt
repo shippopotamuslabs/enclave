@@ -13,7 +13,7 @@ data class AgentLoopConfig(
 )
 
 data class AgentLoopAgentConfig(
-    val maxTurns: UInt = 20u,
+    val maxTurns: UInt = 50u,
     val thresholdRatio: Float = 0.80f,
     val microKeepRecent: UInt = 2u,
     val toolRetryLimit: UInt = 3u,
@@ -36,6 +36,9 @@ data class AgentLoopAgentConfig(
     val historySnapshotThresholdTokens: UInt = 1024u,
     val fileOutlineThresholdTokens: UInt = 2048u,
     val promptCacheAnchorThresholdTokens: UInt = 4096u,
+    val maxModelRequestsPerTurn: UInt = 1u,
+    val enableLoopHooks: Boolean = false,
+    val enablePendingWorkGuard: Boolean = false,
 )
 
 data class AgentLoopSessionCapabilities(
@@ -47,6 +50,7 @@ data class AgentLoopSessionCapabilities(
     val fileBackedContextSupported: Boolean = false,
     val promptCacheSupported: Boolean = false,
     val historyRewriteSupported: Boolean = true,
+    val lifecycleHooksSupported: Boolean = false,
 )
 
 enum class AgentLoopContextPolicyTier {
