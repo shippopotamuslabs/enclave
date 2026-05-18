@@ -42,4 +42,5 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testRuntimeOnly("net.java.dev.jna:jna:${libs.versions.jna.get()}")
 }

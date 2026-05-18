@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -54,6 +55,7 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val modelType: ModelType,
     protected val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
+    private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
 
     companion object {
@@ -92,7 +94,25 @@ abstract class BaseOpenAiSdkInferenceService(
                 @Suppress("MaxLineLength")
                 "sendPrompt start provider=$provider model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
             )
-            executePrompt(prompt, options, requestHistory) { emit(it) }
+            val allowToolCall = options.toolingEnabled && options.availableTools.isNotEmpty()
+            val textGate = ToolStreamGateSession(
+                port = toolStreamGatePort,
+                allowToolCall = allowToolCall,
+            )
+            executePrompt(prompt, options, requestHistory) { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse ->
+                        textGate.onTextToken(event.chunk) { filtered ->
+                            emit(InferenceEvent.PartialResponse(filtered, event.modelType))
+                        }
+                    else -> emit(event)
+                }
+            }
+            if (allowToolCall) {
+                textGate.finish(hasNativeToolCalls = false) { filtered ->
+                    emit(InferenceEvent.PartialResponse(filtered, modelType))
+                }
+            }
 
             conversationHistory.add(ChatMessage(Role.USER, prompt))
             if (closeConversation) {
@@ -166,7 +186,10 @@ abstract class BaseOpenAiSdkInferenceService(
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
 
-        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
+        val textGate = ToolStreamGateSession(
+            port = toolStreamGatePort,
+            allowToolCall = allowToolCall,
+        )
         val response = streamChatCompletions(
             params = builder.build(),
             emitEvent = { event ->
@@ -185,14 +208,18 @@ abstract class BaseOpenAiSdkInferenceService(
                 argumentsJson = call.argumentsJson,
             )
         }
-        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
-        val finalToolCalls = toolCalls + leakedToolCalls
-        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
+        val bufferedText = textGate.finish(hasNativeToolCalls = toolCalls.isNotEmpty(), onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = assistantText,
-            toolCalls = finalToolCalls,
-            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = bufferedText.takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) {
+                AgentFinishReason.ToolUse
+            } else {
+                response.finishReason
+                    ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
+                    ?: AgentFinishReason.Stop
+            },
         )
     }
 
@@ -326,6 +353,7 @@ abstract class BaseOpenAiSdkInferenceService(
         logChatRequest(params)
         val accumulatedText = StringBuilder()
         var responseId: String? = null
+        var finishReason: String? = null
         val trackedToolCalls = mutableMapOf<Long, TrackedToolCall>()
 
         client.chat().completions().createStreaming(params).use { streamResponse ->
@@ -373,10 +401,11 @@ abstract class BaseOpenAiSdkInferenceService(
                 }
 
                 if (choice.finishReason().isPresent) {
+                    finishReason = choice.finishReason().get().toString()
                     loggingPort.debug(
                         tag,
                         @Suppress("MaxLineLength")
-                        "Chat stream finished model=$modelId finishReason=${choice.finishReason().get()} outputTextDeltas=$outputTextDeltaCount"
+                        "Chat stream finished model=$modelId finishReason=$finishReason outputTextDeltas=$outputTextDeltaCount"
                     )
                     finishedEmitted = true
                 }
@@ -419,6 +448,7 @@ abstract class BaseOpenAiSdkInferenceService(
             providerToolCallIds = providerToolCallIds,
             providerToolItemIds = providerToolItemIds,
             assistantMessageText = accumulatedText.toString(),
+            finishReason = finishReason,
         )
     }
 

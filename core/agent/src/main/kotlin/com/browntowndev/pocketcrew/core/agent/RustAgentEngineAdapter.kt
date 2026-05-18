@@ -349,6 +349,9 @@ private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopAgentCon
         historySnapshotThresholdTokens = historySnapshotThresholdTokens,
         fileOutlineThresholdTokens = fileOutlineThresholdTokens,
         promptCacheAnchorThresholdTokens = promptCacheAnchorThresholdTokens,
+        maxModelRequestsPerTurn = maxModelRequestsPerTurn,
+        enableLoopHooks = enableLoopHooks,
+        enablePendingWorkGuard = enablePendingWorkGuard,
     )
 
 private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionCapabilities.toFfi(): FfiSessionCapabilities =
@@ -361,6 +364,7 @@ private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionC
         fileBackedContextSupported = fileBackedContextSupported,
         promptCacheSupported = promptCacheSupported,
         historyRewriteSupported = historyRewriteSupported,
+        lifecycleHooksSupported = lifecycleHooksSupported,
     )
 
 private fun AgentLoopContextPolicyTier.toFfi(): FfiContextPolicyTier =

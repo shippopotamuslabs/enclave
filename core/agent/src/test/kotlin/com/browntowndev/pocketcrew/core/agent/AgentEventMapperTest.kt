@@ -47,6 +47,32 @@ class AgentEventMapperTest {
     }
 
     @Test
+    fun `FB-K-001 maps terminal turn completed flag`() {
+        val mapped = assertIs<AgentLoopEvent.TurnCompleted>(
+            AgentEventMapper.toDomain(
+                FfiAgentEvent.TurnCompleted(turnIndex = 7u, toolCallCount = 0u, terminal = true),
+            ),
+        )
+
+        assertEquals(7, mapped.index)
+        assertEquals(0, mapped.toolCallCount)
+        assertEquals(true, mapped.terminal)
+    }
+
+    @Test
+    fun `FB-K-002 maps non-terminal turn completed flag`() {
+        val mapped = assertIs<AgentLoopEvent.TurnCompleted>(
+            AgentEventMapper.toDomain(
+                FfiAgentEvent.TurnCompleted(turnIndex = 3u, toolCallCount = 2u, terminal = false),
+            ),
+        )
+
+        assertEquals(3, mapped.index)
+        assertEquals(2, mapped.toolCallCount)
+        assertEquals(false, mapped.terminal)
+    }
+
+    @Test
     fun log_toolRepaired_omitsArguments() {
         val logger = RecordingLogger()
 

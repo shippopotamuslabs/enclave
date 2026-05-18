@@ -16,6 +16,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -25,6 +27,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
+import com.browntowndev.pocketcrew.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +45,7 @@ import javax.inject.Provider
  * Resolves the correct inference service (Llama, LiteRT) dynamically
  * based on the active model's file extension at inference time.
  */
+@Suppress("LongParameterList")
 class InferenceFactoryImpl
     @Inject
     constructor(
@@ -62,6 +66,8 @@ class InferenceFactoryImpl
         private val toolExecutionEventPort: ToolExecutionEventPort,
         private val agentLoopPort: AgentLoopPort,
         private val toolExecutorPort: ToolExecutorPort,
+        private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+        private val toolStreamGatePort: ToolStreamGatePort,
         private val inferenceFactoryProvider: Provider<InferenceFactoryPort>? = null,
     ) : InferenceFactoryPort {
         companion object {
@@ -214,6 +220,8 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
+                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 )
                             ApiProvider.GOOGLE -> {
                                 val client =
@@ -234,6 +242,8 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
+                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 )
                             }
                             ApiProvider.OPENROUTER ->
@@ -249,6 +259,7 @@ class InferenceFactoryImpl
                                     routing = apiConfig.openRouterRouting,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 )
                             ApiProvider.XAI ->
                                 XaiInferenceServiceImpl(
@@ -262,6 +273,7 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 )
                             else ->
                                 ApiInferenceServiceImpl(
@@ -276,6 +288,7 @@ class InferenceFactoryImpl
                                     modelType = modelType,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 )
                         }
 
@@ -333,6 +346,8 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
+                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                     )
                                 ApiProvider.GOOGLE -> {
                                     val client =
@@ -353,6 +368,8 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
+                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                     )
                                 }
                                 ApiProvider.OPENROUTER ->
@@ -368,6 +385,7 @@ class InferenceFactoryImpl
                                         routing = apiConfig.openRouterRouting,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
+                                        toolStreamGatePort = toolStreamGatePort,
                                     )
                                 ApiProvider.XAI ->
                                     XaiInferenceServiceImpl(
@@ -381,6 +399,7 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
+                                        toolStreamGatePort = toolStreamGatePort,
                                     )
                                 else ->
                                     ApiInferenceServiceImpl(
@@ -395,6 +414,7 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
+                                        toolStreamGatePort = toolStreamGatePort,
                                     )
                             }
 
@@ -465,13 +485,15 @@ class InferenceFactoryImpl
                         "gguf" -> {
                             wrapWithRustLoop(
                                 service = LlamaInferenceServiceImpl(
-                                sessionManager = llamaChatSessionManagerProvider.get(),
-                                processThinkingTokens = processThinkingTokens,
-                                loggingPort = loggingPort,
-                                localModelRepository = localModelRepository,
-                                activeModelProvider = activeModelProvider,
-                                context = context,
-                                modelType = modelType,
+                                    sessionManager = llamaChatSessionManagerProvider.get(),
+                                    processThinkingTokens = processThinkingTokens,
+                                    loggingPort = loggingPort,
+                                    localModelRepository = localModelRepository,
+                                    activeModelProvider = activeModelProvider,
+                                    context = context,
+                                    modelType = modelType,
+                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                    toolStreamGatePort = toolStreamGatePort,
                                 ),
                                 provider = "LLAMA",
                                 modelType = modelType,
@@ -516,6 +538,8 @@ class InferenceFactoryImpl
                     modelType = modelType,
                     inferenceFactoryProvider = inferenceFactoryProvider ?: Provider { this },
                     rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
+                    resolveCompactionSummaryModel =
+                        ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter),
                 )
             } else {
                 service

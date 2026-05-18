@@ -20,6 +20,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -248,5 +250,7 @@ class LlamaInferenceServiceImplTest {
             activeModelProvider = activeModelProvider,
             context = context,
             modelType = modelType,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 }

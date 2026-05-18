@@ -41,11 +41,15 @@ class PocketCrewApplication :
     @Inject
     lateinit var imageLoader: ImageLoader
 
+    @Inject
+    lateinit var toolEnvelopeParserFacadeInstaller: ToolEnvelopeParserFacadeInstaller
+
     override fun newImageLoader(context: android.content.Context): ImageLoader = imageLoader
 
     override fun onCreate() {
         super.onCreate()
 
+        toolEnvelopeParserFacadeInstaller.install()
         ToolDefinition.schemaProvider = RustDocGenSchemaProvider()
 
         applicationScope.launch {

@@ -17,6 +17,7 @@ data class GoogleSdkResult(
     val emittedAny: Boolean,
     val functionCall: FunctionCall?,
     val assistantContent: Content?,
+    val finishReason: String?,
 )
 
 interface GoogleGenAiSdkClient {
@@ -54,6 +55,7 @@ internal class GoogleGenAiSdkClientImpl(
         var emittedAny = false
         var lastFunctionCall: FunctionCall? = null
         var assistantContent: Content? = null
+        var finishReason: String? = null
 
         try {
             runInterruptible(Dispatchers.IO) {
@@ -64,6 +66,7 @@ internal class GoogleGenAiSdkClientImpl(
                     val response = runInterruptible(Dispatchers.IO) { iterator.next() }
 
                     response.candidates().orElse(emptyList()).forEach { candidate ->
+                        finishReason = candidate.finishReason().map { it.toString() }.orElse(finishReason)
                         val content = candidate.content().orElse(null)
                         if (content != null) {
                             assistantContent = content
@@ -98,6 +101,7 @@ internal class GoogleGenAiSdkClientImpl(
             emittedAny = emittedAny,
             functionCall = lastFunctionCall,
             assistantContent = assistantContent,
+            finishReason = finishReason,
         )
     }
 

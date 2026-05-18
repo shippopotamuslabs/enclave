@@ -12,7 +12,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.ContentBlockParam
@@ -46,11 +47,14 @@ class AnthropicInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
+    private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+    private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
 
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
         val toolUse: CapturedToolUse?,
+        val stopReason: String?,
     )
 
     private data class CapturedToolUse(
@@ -262,7 +266,10 @@ class AnthropicInferenceServiceImpl(
             availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
         }
 
-        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
+        val textGate = ToolStreamGateSession(
+            port = toolStreamGatePort,
+            allowToolCall = allowToolCall,
+        )
         val response = streamMessages(builder.build()) { event ->
             when (event) {
                 is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
@@ -274,14 +281,18 @@ class AnthropicInferenceServiceImpl(
         val toolCalls = response.toolUse?.let { tu ->
             listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
         } ?: emptyList()
-        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
-        val finalToolCalls = toolCalls + leakedToolCalls
-        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
+        val bufferedText = textGate.finish(hasNativeToolCalls = toolCalls.isNotEmpty(), onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = assistantText,
-            toolCalls = finalToolCalls,
-            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = bufferedText.takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = if (toolCalls.isNotEmpty()) {
+                AgentFinishReason.ToolUse
+            } else {
+                response.stopReason
+                    ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
+                    ?: AgentFinishReason.Stop
+            },
         )
     }
 
@@ -395,6 +406,7 @@ class AnthropicInferenceServiceImpl(
             var emittedAny = false
             var outputTextDeltaCount = 0
             var thinkingTextDeltaCount = 0
+            var stopReason: String? = null
             var toolUseIndex: Long? = null
             val pendingToolUses = mutableMapOf<Long, PendingToolUse>()
 
@@ -465,6 +477,7 @@ class AnthropicInferenceServiceImpl(
                     )
                 }
                 if (event.messageDelta().isPresent) {
+                    stopReason = event.messageDelta().get().delta().stopReason().map { it.toString() }.orElse(stopReason)
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
                 if (event.contentBlockStart().isPresent) {
@@ -489,6 +502,7 @@ class AnthropicInferenceServiceImpl(
             return StreamedAnthropicResponse(
                 emittedAny = emittedAny,
                 toolUse = capturedToolUse,
+                stopReason = stopReason,
             )
         }
     }
@@ -513,8 +527,10 @@ class AnthropicInferenceServiceImpl(
         canonicalToolArgumentsJson(toolName, parseToolInputJson(inputJson))
 
     private fun canonicalToolArgumentsJson(toolName: String, properties: Map<*, *>): String {
-        @Suppress("UNCHECKED_CAST")
-        return ToolEnvelopeParser.buildArgumentsJson(toolName, properties as Map<String, *>)
+        return toolEnvelopeParserPort.coerceProviderArguments(
+            toolName = toolName,
+            argsJson = TOOL_INPUT_JSON_MAPPER.writeValueAsString(properties),
+        ).argumentsJson
     }
 
     private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =

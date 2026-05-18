@@ -27,9 +27,16 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.RollingSummarizer
+import com.browntowndev.pocketcrew.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import io.mockk.coEvery
+import io.mockk.mockk
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Provider
 import kotlinx.coroutines.CompletableDeferred
@@ -69,8 +76,12 @@ class RustLoopInferenceServiceTest {
         val config = requireNotNull(port.capturedConfig)
         assertEquals(4096u, config.io.contextWindowTokens)
         assertEquals("system once", config.io.systemPrompt)
+        assertEquals(2u, config.agent.maxModelRequestsPerTurn)
+        assertTrue(config.agent.enableLoopHooks)
+        assertTrue(config.agent.enablePendingWorkGuard)
         assertFalse(config.capabilities.summarizationAllowed)
         assertTrue(config.capabilities.kvFixed)
+        assertTrue(config.capabilities.lifecycleHooksSupported)
         assertEquals(
             mapOf(
                 "chat_id" to "chat-1",
@@ -104,6 +115,7 @@ class RustLoopInferenceServiceTest {
         assertTrue(config.capabilities.toolSchemaDeferralSupported)
         assertTrue(config.capabilities.fileBackedContextSupported)
         assertTrue(config.capabilities.promptCacheSupported)
+        assertTrue(config.capabilities.lifecycleHooksSupported)
         assertTrue(requireNotNull(port.capturedSessionContext["included_files"]).contains("src/Main.kt"))
     }
 
@@ -264,7 +276,7 @@ class RustLoopInferenceServiceTest {
     }
 
     @Test
-    fun summarize_usesRollingSummarizerWithFastModel() = runTest {
+    fun summarize_usesHostedFastWhenContextWindowFits() = runTest {
         val summaryService = RecordingInferenceService(
             events = listOf(InferenceEvent.PartialResponse("summary text", ModelType.FAST)),
         )
@@ -291,6 +303,9 @@ class RustLoopInferenceServiceTest {
         val service = createService(
             agentLoopPort = port,
             inferenceFactoryProvider = Provider { factory },
+            resolveCompactionSummaryModel = resolveCompactionSummaryModel(
+                fastConfig = hostedFastConfig(contextWindow = 200_000),
+            ),
         )
 
         service.sendPrompt("summarize").toList()
@@ -303,6 +318,44 @@ class RustLoopInferenceServiceTest {
         assertTrue(summaryService.prompts.single().contains("focus on tools"))
         assertTrue(summaryService.prompts.single().contains("history-u1-a2"))
         assertTrue(summaryService.prompts.single().contains("ship"))
+    }
+
+    @Test
+    fun summarize_usesActiveTurnWhenFastIsLocal() = runTest {
+        val summaryService = RecordingInferenceService(
+            events = listOf(InferenceEvent.PartialResponse("summary text", ModelType.THINKING)),
+        )
+        val factory = RecordingInferenceFactory(summaryService)
+        lateinit var summary: AgentSummaryResult
+        val port = CapturingAgentLoopPort { host ->
+            summary = host.summarize(
+                AgentSummaryRequest(
+                    messagesToSummarize = listOf(
+                        AgentLoopMessage("u1", Role.USER, "Question one"),
+                        AgentLoopMessage("a1", Role.ASSISTANT, "Answer one"),
+                    ),
+                    instruction = "summarize",
+                    lastMessageId = "a1",
+                ),
+            )
+            send(AgentLoopEvent.Finished)
+        }
+        val service = createService(
+            agentLoopPort = port,
+            inferenceFactoryProvider = Provider { factory },
+            resolveCompactionSummaryModel = resolveCompactionSummaryModel(
+                fastConfig =
+                    hostedFastConfig(contextWindow = 200_000).copy(
+                        id = LocalModelConfigurationId("local-fast"),
+                        isLocal = true,
+                    ),
+            ),
+        )
+
+        service.sendPrompt("summarize").toList()
+
+        assertEquals(ModelType.THINKING, factory.requestedModelType)
+        assertEquals("summary text", summary.summaryText)
     }
 
     @Test
@@ -339,6 +392,75 @@ class RustLoopInferenceServiceTest {
         assertEquals("web_search", events.filterIsInstance<InferenceEvent.ToolRepaired>().single().resolvedName)
     }
 
+    @Test
+    fun `FB-K-007 RustLoop supports multiple complete model callbacks`() = runTest {
+        val inner = RecordingRustCompatibleService(
+            responses = listOf(
+                AgentModelTurnResult("first", emptyList(), AgentFinishReason.Stop),
+                AgentModelTurnResult("second", emptyList(), AgentFinishReason.Stop),
+            ),
+        )
+        val port = CapturingAgentLoopPort { host ->
+            host.completeModelTurn(
+                sessionMessages = emptyList(),
+                systemPrompt = "system",
+                toolsSchemaJson = "[]",
+                allowToolCall = true,
+            )
+            host.completeModelTurn(
+                sessionMessages = emptyList(),
+                systemPrompt = "system",
+                toolsSchemaJson = "[]",
+                allowToolCall = true,
+            )
+            send(AgentLoopEvent.Finished)
+        }
+        val service = createService(agentLoopPort = port, inner = inner)
+
+        service.sendPrompt("continue").toList()
+
+        assertEquals(2, inner.completeSingleTurnCallCount)
+        assertEquals("continue", requireNotNull(port.capturedInitialMessages).last().content)
+    }
+
+    @Test
+    fun `FB-K-008 multi callback text tokens emit partial responses before finished`() = runTest {
+        val port = CapturingAgentLoopPort { _ ->
+            send(AgentLoopEvent.TextToken("first"))
+            send(AgentLoopEvent.TextToken("second"))
+            send(AgentLoopEvent.Finished)
+        }
+        val service = createService(agentLoopPort = port)
+
+        val events = service.sendPrompt("stream").toList()
+
+        val chunks = events.filterIsInstance<InferenceEvent.PartialResponse>().map { it.chunk }
+        assertEquals(listOf("first", "second"), chunks)
+        assertEquals(1, events.count { it is InferenceEvent.Finished })
+        assertTrue(events.last() is InferenceEvent.Finished)
+    }
+
+    @Test
+    fun sendPrompt_retainsAssistantTextInSessionHistoryForFollowupTurns() = runTest {
+        val port = CapturingAgentLoopPort { _ ->
+            send(AgentLoopEvent.TextToken("remembered answer"))
+            send(AgentLoopEvent.Finished)
+        }
+        val service = createService(agentLoopPort = port)
+
+        service.sendPrompt("first").toList()
+        service.sendPrompt("follow up").toList()
+
+        val messages = requireNotNull(port.capturedInitialMessages)
+        assertEquals(
+            listOf(Role.USER, Role.ASSISTANT, Role.USER),
+            messages.map { it.role },
+        )
+        assertEquals("first", messages[0].content)
+        assertEquals("remembered answer", messages[1].content)
+        assertEquals("follow up", messages[2].content)
+    }
+
     private fun createService(
         agentLoopPort: AgentLoopPort,
         inner: RustCompatibleInferenceService = RecordingRustCompatibleService(),
@@ -350,6 +472,8 @@ class RustLoopInferenceServiceTest {
         inferenceFactoryProvider: Provider<InferenceFactoryPort> = Provider {
             RecordingInferenceFactory(RecordingInferenceService())
         },
+        resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase =
+            resolveCompactionSummaryModel(fastConfig = null),
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -360,6 +484,32 @@ class RustLoopInferenceServiceTest {
             modelType = ModelType.THINKING,
             inferenceFactoryProvider = inferenceFactoryProvider,
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
+            resolveCompactionSummaryModel = resolveCompactionSummaryModel,
+        )
+
+    private fun resolveCompactionSummaryModel(
+        fastConfig: ActiveModelConfiguration?,
+    ): ResolveCompactionSummaryModelUseCase {
+        val activeModelProvider = mockk<ActiveModelProviderPort>()
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastConfig
+        return ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter)
+    }
+
+    private fun hostedFastConfig(contextWindow: Int): ActiveModelConfiguration =
+        ActiveModelConfiguration(
+            id = ApiModelConfigurationId("fast-api"),
+            isLocal = false,
+            name = "Fast API",
+            modelId = "fast-model",
+            systemPrompt = null,
+            contextWindow = contextWindow,
+            thinkingEnabled = false,
+            temperature = null,
+            topK = null,
+            topP = null,
+            maxTokens = null,
+            minP = null,
+            repetitionPenalty = null,
         )
 
     private class CapturingAgentLoopPort(
@@ -367,6 +517,7 @@ class RustLoopInferenceServiceTest {
     ) : AgentLoopPort {
         var capturedConfig: AgentLoopConfig? = null
         var capturedSessionContext: Map<String, String> = emptyMap()
+        var capturedInitialMessages: List<ChatMessage>? = null
 
         override fun execute(
             initialMessages: List<ChatMessage>,
@@ -374,15 +525,19 @@ class RustLoopInferenceServiceTest {
             sessionContext: Map<String, String>,
             host: AgentLoopHostCallbacks,
         ): Flow<AgentLoopEvent> = channelFlow {
+            capturedInitialMessages = initialMessages
             capturedConfig = config
             capturedSessionContext = sessionContext
             behavior(host)
         }
     }
 
-    private class RecordingRustCompatibleService : RustCompatibleInferenceService {
+    private class RecordingRustCompatibleService(
+        private val responses: List<AgentModelTurnResult> = emptyList(),
+    ) : RustCompatibleInferenceService {
         var lastSystemPrompt: String? = null
         var lastAvailableTools: List<ToolDefinition> = emptyList()
+        var completeSingleTurnCallCount = 0
 
         override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> =
             flowOf(InferenceEvent.Finished(ModelType.THINKING))
@@ -406,8 +561,10 @@ class RustLoopInferenceServiceTest {
             onThinkingToken: suspend (String) -> Unit,
             options: GenerationOptions,
         ): AgentModelTurnResult {
+            completeSingleTurnCallCount += 1
             lastSystemPrompt = systemPrompt
             lastAvailableTools = availableTools
+            responses.getOrNull(completeSingleTurnCallCount - 1)?.let { return it }
             return AgentModelTurnResult(
                 assistantText = "done",
                 toolCalls = emptyList(),

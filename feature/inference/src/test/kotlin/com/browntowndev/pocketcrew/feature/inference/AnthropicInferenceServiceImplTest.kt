@@ -24,6 +24,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -81,6 +83,8 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -130,6 +134,8 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -164,6 +170,8 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = true).toList()
