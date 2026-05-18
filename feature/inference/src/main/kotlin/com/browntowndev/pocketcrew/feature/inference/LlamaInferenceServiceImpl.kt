@@ -10,7 +10,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
@@ -20,6 +19,8 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -59,6 +60,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     @param:ApplicationContext private val context: Context,
     private val modelType: ModelType,
+    private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+    private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
 
     companion object {
@@ -277,43 +280,32 @@ class LlamaInferenceServiceImpl @Inject constructor(
         ensureModelLoaded(targetModelType, turnOptions)
         sessionManager.setHistory(domainHistory)
 
+        val textGate = ToolStreamGateSession(
+            port = toolStreamGatePort,
+            allowToolCall = allowToolCall,
+        )
         val buffered = streamBufferedGeneration(
             events = sessionManager.streamAssistantResponseWithOptions(turnOptions),
             targetModelType = targetModelType,
             emitVisible = false,
             emitEvent = { event ->
-                when (event) {
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                    else -> Unit
+                if (event is InferenceEvent.Thinking) {
+                    onThinkingToken(event.chunk)
                 }
             },
         )
-        val envelopes = if (allowToolCall) {
-            ToolEnvelopeParser.extractLocalToolEnvelopes(buffered.fullText)
-        } else {
-            emptyList()
-        }
-        val toolCalls = envelopes.mapIndexed { index, envelope ->
-            AgentRawToolCall(
-                id = "llama-tool-${System.nanoTime()}-$index",
-                name = envelope.toolName,
-                argumentsJson = envelope.argumentsJson,
-            )
-        }
-        if (toolCalls.isEmpty()) {
-            emitProcessedText(buffered.fullText, targetModelType) { event ->
-                when (event) {
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                    else -> Unit
-                }
+        emitProcessedText(buffered.fullText, targetModelType) { event ->
+            when (event) {
+                is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
+                else -> Unit
             }
         }
+        val rawText = textGate.finish(hasNativeToolCalls = false, onTextToken)
         return AgentModelTurnResult(
-            assistantText = buffered.fullText.takeIf { it.isNotBlank() && toolCalls.isEmpty() },
-            toolCalls = toolCalls,
-            finishReason = if (toolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = rawText.takeIf { it.isNotBlank() },
+            toolCalls = emptyList(),
+            finishReason = AgentFinishReason.Stop,
         )
     }
 
@@ -514,7 +506,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
         return if (callId != null) {
             DomainChatMessage(
                 role = Role.USER,
-                content = ToolEnvelopeParser.buildLocalToolResultMessage(message.content),
+                content = toolEnvelopeParserPort.buildToolResultMessage(message.content),
             )
         } else {
             DomainChatMessage(role = message.role, content = message.content)

@@ -17,6 +17,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -45,6 +47,8 @@ class AnthropicInferenceServiceImplExtendedTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
     }
 
@@ -221,6 +225,8 @@ class AnthropicInferenceServiceImplExtendedTest {
             modelId = "claude-haiku-4-20250514",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val textDelta = mockk<TextDelta>()

@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.errors.NotFoundException
@@ -17,6 +18,7 @@ class OpenRouterInferenceServiceImpl(
     private val routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     baseUrl: String? = null,
     loggingPort: LoggingPort,
+    toolStreamGatePort: ToolStreamGatePort,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
@@ -24,6 +26,7 @@ class OpenRouterInferenceServiceImpl(
     modelType = modelType,
     baseUrl = baseUrl,
     loggingPort = loggingPort,
+    toolStreamGatePort = toolStreamGatePort,
 ) {
 
     override val tag: String = "OpenRouterInferenceService"

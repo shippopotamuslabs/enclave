@@ -23,6 +23,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.google.genai.Client
 import com.openai.client.OpenAIClient
@@ -97,6 +99,8 @@ class InferenceFactoryImplTest {
                 toolExecutionEventPort = mockk(relaxed = true),
                 agentLoopPort = agentLoopPort,
                 toolExecutorPort = toolExecutor,
+                toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                toolStreamGatePort = FakeToolStreamGatePort(),
             )
     }
 

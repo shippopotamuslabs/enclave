@@ -162,6 +162,41 @@ class ActiveChatTurnStoreTest {
     }
 
     @Test
+    fun `attachArtifact before first publish creates snapshot and is preserved by publish`() = runTest {
+        val store = ActiveChatTurnStore()
+        val artifact = artifact("prepublish artifact")
+
+        store.attachArtifact(key, key.assistantMessageId, artifact)
+        store.publish(key, accumulated("streamed answer"))
+
+        val message = store.snapshotValue(key)?.messages?.get(key.assistantMessageId)
+
+        assertEquals("streamed answer", message?.content)
+        assertEquals(listOf(artifact), message?.artifacts)
+    }
+
+    @Test
+    fun `attachMedia before first publish creates snapshot and is preserved by publish`() = runTest {
+        val store = ActiveChatTurnStore()
+
+        store.attachMedia(
+            key = key,
+            assistantMessageId = key.assistantMessageId,
+            mediaUris = listOf("content://media/1"),
+            mediaIds = listOf("media-1"),
+            mediaTypes = listOf("image"),
+            prompts = listOf("draw it"),
+        )
+        store.publish(key, accumulated("streamed answer"))
+
+        val message = store.snapshotValue(key)?.messages?.get(key.assistantMessageId)
+
+        assertEquals("streamed answer", message?.content)
+        assertEquals(listOf("content://media/1"), message?.generatedMediaUris)
+        assertEquals(listOf("media-1"), message?.generatedMediaAssetIds)
+    }
+
+    @Test
     fun `publish preserves existing artifacts during snapshot merge`() = runTest {
         val store = ActiveChatTurnStore()
         val artifact = artifact("persisted artifact")

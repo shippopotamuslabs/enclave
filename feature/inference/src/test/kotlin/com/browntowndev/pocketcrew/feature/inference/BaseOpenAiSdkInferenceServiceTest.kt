@@ -10,8 +10,14 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeBatch
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeField
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -333,14 +339,13 @@ class BaseOpenAiSdkInferenceServiceTest {
     }
 
     @Test
-    fun `completeSingleTurn converts leaked DSML text into tool call without emitting visible text`() = runTest {
+    fun `completeSingleTurn submits leaked DSML raw without Kotlin tool reification`() = runTest {
         val leakedText =
             """
             < | DSML | tool_calls>< | DSML | invoke name="web_search">
             < | DSML | parameter name="query" string="true">digg.com xAI completes training Grok V9</ | DSML | parameter>
             </ | DSML | invoke></ | DSML | tool_calls>
             """.trimIndent()
-        val emittedText = StringBuilder()
         val service = createSingleTurnService(
             response = emptyTextResponse(leakedText),
         )
@@ -350,17 +355,14 @@ class BaseOpenAiSdkInferenceServiceTest {
             systemPrompt = "",
             availableTools = listOf(ToolDefinition.WEB_SEARCH),
             allowToolCall = true,
-            onTextToken = { emittedText.append(it) },
+            onTextToken = {},
             onThinkingToken = {},
             options = GenerationOptions(reasoningBudget = 0),
         )
 
-        assertEquals(AgentFinishReason.ToolUse, result.finishReason)
-        assertEquals("", emittedText.toString())
-        assertEquals(null, result.assistantText)
-        assertEquals(1, result.toolCalls.size)
-        assertEquals("web_search", result.toolCalls[0].name)
-        assertEquals("""{"query":"digg.com xAI completes training Grok V9"}""", result.toolCalls[0].argumentsJson)
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals(leakedText, result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
     }
 
     @Test
@@ -399,12 +401,14 @@ class BaseOpenAiSdkInferenceServiceTest {
     private fun createSingleTurnService(
         response: StreamedOpenAiResponse,
         onParams: (ChatCompletionCreateParams) -> Unit = {},
+        toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
     ): TestableSingleTurnService {
         return TestableSingleTurnService(
             client = client,
             loggingPort = loggingPort,
             stubResponse = response,
             onParams = onParams,
+            toolStreamGatePort = toolStreamGatePort,
         )
     }
 
@@ -433,6 +437,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         loggingPort: LoggingPort,
         private val stubResponse: StreamedOpenAiResponse,
         private val onParams: (ChatCompletionCreateParams) -> Unit,
+        toolStreamGatePort: ToolStreamGatePort,
     ) : TestableBaseOpenAiSdkInferenceService(
         client = client,
         modelId = "openai/gpt-5.2",
@@ -440,6 +445,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         modelType = ModelType.FAST,
         baseUrl = null,
         loggingPort = loggingPort,
+        toolStreamGatePort = toolStreamGatePort,
     ) {
         override suspend fun streamChatCompletions(
             params: ChatCompletionCreateParams,
@@ -463,6 +469,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         modelType: ModelType,
         baseUrl: String?,
         loggingPort: LoggingPort,
+        toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
     ) : BaseOpenAiSdkInferenceService(
         client = client,
         modelId = modelId,
@@ -470,6 +477,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         modelType = modelType,
         baseUrl = baseUrl,
         loggingPort = loggingPort,
+        toolStreamGatePort = toolStreamGatePort,
     ) {
         override val tag: String = "BaseOpenAiSdkInferenceServiceTest"
 

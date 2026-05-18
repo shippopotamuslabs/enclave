@@ -121,6 +121,7 @@ dependencies {
     implementation(project(":whisper-android"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
+    implementation(project(":core:agent"))
     implementation(project(":core:ui"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:history"))

@@ -14,6 +14,7 @@ object AgentEventMapper {
             is FfiAgentEvent.TurnCompleted -> AgentLoopEvent.TurnCompleted(
                 index = event.turnIndex.toInt(),
                 toolCallCount = event.toolCallCount.toInt(),
+                terminal = event.terminal,
             )
             is FfiAgentEvent.CompactionApplied -> AgentLoopEvent.CompactionApplied(
                 tier = event.event.tier.name,
@@ -35,6 +36,9 @@ object AgentEventMapper {
             )
             is FfiAgentEvent.ContextPressure,
             is FfiAgentEvent.ToolSoftFailure,
+            is FfiAgentEvent.HookInvoked,
+            is FfiAgentEvent.ToolPolicyDenied,
+            is FfiAgentEvent.ToolTimedOut,
             -> null
         }
 
@@ -70,6 +74,18 @@ object AgentEventMapper {
             is FfiAgentEvent.ToolSoftFailure -> loggingPort.warning(
                 TAG,
                 "tool_soft_failure tool=${event.toolName} turn=${event.turnIndex}",
+            )
+            is FfiAgentEvent.HookInvoked -> loggingPort.debug(
+                TAG,
+                "hook_invoked checkpoint=${event.checkpoint}",
+            )
+            is FfiAgentEvent.ToolPolicyDenied -> loggingPort.warning(
+                TAG,
+                "tool_policy_denied tool=${event.toolName}",
+            )
+            is FfiAgentEvent.ToolTimedOut -> loggingPort.warning(
+                TAG,
+                "tool_timed_out tool=${event.toolName} timeoutMs=${event.timeoutMs}",
             )
             is FfiAgentEvent.TurnStarted,
             is FfiAgentEvent.TurnCompleted,

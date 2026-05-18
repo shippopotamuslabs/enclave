@@ -811,6 +811,24 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -826,7 +844,15 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 // when the library is loaded.
 internal interface IntegrityCheckingUniffiLib : Library {
     // Integrity check functions only
-    fun uniffi_agent_core_checksum_func_create_agent_engine(
+    fun uniffi_agent_core_checksum_func_coerce_provider_arguments(
+): Short
+fun uniffi_agent_core_checksum_func_create_agent_engine(
+): Short
+fun uniffi_agent_core_checksum_func_create_tool_stream_gate(
+): Short
+fun uniffi_agent_core_checksum_func_has_local_tool_contract(
+): Short
+fun uniffi_agent_core_checksum_func_parse_tool_calls(
 ): Short
 fun uniffi_agent_core_checksum_func_repair_tool(
 ): Short
@@ -857,6 +883,14 @@ fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response(
 fun uniffi_agent_core_checksum_method_ffiagentengine_submit_summary(
 ): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_submit_tool_results(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_buffered_text(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_finish(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_push(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_reset(
 ): Short
 fun uniffi_agent_core_checksum_method_agentsummarizercallback_summarize(
 ): Short
@@ -946,14 +980,34 @@ fun uniffi_agent_core_fn_clone_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiR
 ): Pointer
 fun uniffi_agent_core_fn_free_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_agent_core_fn_clone_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_free_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(`ptr`: Pointer,`hasNativeToolCalls`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(`ptr`: Pointer,`chunk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agentsummarizercallback(`vtable`: UniffiVTableCallbackInterfaceAgentSummarizerCallback,
 ): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agenttoolexecutorcallback(`vtable`: UniffiVTableCallbackInterfaceAgentToolExecutorCallback,
 ): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agenttransportcallback(`vtable`: UniffiVTableCallbackInterfaceAgentTransportCallback,
 ): Unit
+fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_agent_core_fn_func_create_agent_engine(`transport`: Long,`executor`: Long,`summarizer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
+fun uniffi_agent_core_fn_func_create_tool_stream_gate(`allowToolCall`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1088,7 +1142,19 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if (lib.uniffi_agent_core_checksum_func_coerce_provider_arguments() != 63759.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_agent_core_checksum_func_create_agent_engine() != 26990.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_func_create_tool_stream_gate() != 53237.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_func_has_local_tool_contract() != 30560.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_func_parse_tool_calls() != 55217.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_func_repair_tool() != 55043.toShort()) {
@@ -1134,6 +1200,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_tool_results() != 31281.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_buffered_text() != 30609.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_finish() != 41900.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_push() != 30234.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_reset() != 49024.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_agentsummarizercallback_summarize() != 31835.toShort()) {
@@ -2064,6 +2142,283 @@ public object FfiConverterTypeFfiSession: FfiConverter<FfiSession, Pointer> {
 }
 
 
+// This template implements a class for working with a Rust struct via a Pointer/Arc<T>
+// to the live Rust struct on the other side of the FFI.
+//
+// Each instance implements core operations for working with the Rust `Arc<T>` and the
+// Kotlin Pointer to work with the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque pointer to the underlying Rust struct.
+//     Method calls need to read this pointer from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its pointer should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the pointer, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the pointer, but is interrupted
+//      before it can pass the pointer over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read pointer value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+
+public interface FfiToolStreamGateInterface {
+    
+    fun `bufferedText`(): kotlin.String
+    
+    fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish
+    
+    fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult
+    
+    fun `reset`()
+    
+    companion object
+}
+
+open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterface
+{
+
+    constructor(pointer: Pointer) {
+        this.pointer = pointer
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
+    }
+
+    /**
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noPointer: NoPointer) {
+        this.pointer = null
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
+    }
+
+    protected val pointer: Pointer?
+    protected val cleanable: UniffiCleaner.Cleanable
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithPointer(block: (ptr: Pointer) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the pointer being freed concurrently.
+        try {
+            return block(this.uniffiClonePointer())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
+        override fun run() {
+            pointer?.let { ptr ->
+                uniffiRustCall { status ->
+                    UniffiLib.INSTANCE.uniffi_agent_core_fn_free_ffitoolstreamgate(ptr, status)
+                }
+            }
+        }
+    }
+
+    fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
+            UniffiLib.INSTANCE.uniffi_agent_core_fn_clone_ffitoolstreamgate(pointer!!, status)
+        }
+    }
+
+    override fun `bufferedText`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    override fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish {
+            return FfiConverterTypeFfiStreamGateFinish.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_finish(
+        it, FfiConverterBoolean.lower(`hasNativeToolCalls`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult {
+            return FfiConverterTypeFfiStreamGatePushResult.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_push(
+        it, FfiConverterString.lower(`chunk`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `reset`()
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_reset(
+        it, _status)
+}
+    }
+    
+    
+
+    
+
+    
+    
+    companion object
+    
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiToolStreamGate: FfiConverter<FfiToolStreamGate, Pointer> {
+
+    override fun lower(value: FfiToolStreamGate): Pointer {
+        return value.uniffiClonePointer()
+    }
+
+    override fun lift(value: Pointer): FfiToolStreamGate {
+        return FfiToolStreamGate(value)
+    }
+
+    override fun read(buf: ByteBuffer): FfiToolStreamGate {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: FfiToolStreamGate) = 8UL
+
+    override fun write(value: FfiToolStreamGate, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
 
 data class FfiAgentConfig (
     var `maxTurns`: kotlin.UInt, 
@@ -2088,7 +2443,10 @@ data class FfiAgentConfig (
     var `terminalSpillThresholdBytes`: kotlin.ULong, 
     var `historySnapshotThresholdTokens`: kotlin.UInt, 
     var `fileOutlineThresholdTokens`: kotlin.UInt, 
-    var `promptCacheAnchorThresholdTokens`: kotlin.UInt
+    var `promptCacheAnchorThresholdTokens`: kotlin.UInt, 
+    var `maxModelRequestsPerTurn`: kotlin.UInt, 
+    var `enableLoopHooks`: kotlin.Boolean, 
+    var `enablePendingWorkGuard`: kotlin.Boolean
 ) {
     
     companion object
@@ -2123,6 +2481,9 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -2149,7 +2510,10 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterULong.allocationSize(value.`terminalSpillThresholdBytes`) +
             FfiConverterUInt.allocationSize(value.`historySnapshotThresholdTokens`) +
             FfiConverterUInt.allocationSize(value.`fileOutlineThresholdTokens`) +
-            FfiConverterUInt.allocationSize(value.`promptCacheAnchorThresholdTokens`)
+            FfiConverterUInt.allocationSize(value.`promptCacheAnchorThresholdTokens`) +
+            FfiConverterUInt.allocationSize(value.`maxModelRequestsPerTurn`) +
+            FfiConverterBoolean.allocationSize(value.`enableLoopHooks`) +
+            FfiConverterBoolean.allocationSize(value.`enablePendingWorkGuard`)
     )
 
     override fun write(value: FfiAgentConfig, buf: ByteBuffer) {
@@ -2176,6 +2540,9 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterUInt.write(value.`historySnapshotThresholdTokens`, buf)
             FfiConverterUInt.write(value.`fileOutlineThresholdTokens`, buf)
             FfiConverterUInt.write(value.`promptCacheAnchorThresholdTokens`, buf)
+            FfiConverterUInt.write(value.`maxModelRequestsPerTurn`, buf)
+            FfiConverterBoolean.write(value.`enableLoopHooks`, buf)
+            FfiConverterBoolean.write(value.`enablePendingWorkGuard`, buf)
     }
 }
 
@@ -2564,7 +2931,8 @@ data class FfiSessionCapabilities (
     var `toolSchemaDeferralSupported`: kotlin.Boolean, 
     var `fileBackedContextSupported`: kotlin.Boolean, 
     var `promptCacheSupported`: kotlin.Boolean, 
-    var `historyRewriteSupported`: kotlin.Boolean
+    var `historyRewriteSupported`: kotlin.Boolean, 
+    var `lifecycleHooksSupported`: kotlin.Boolean
 ) {
     
     companion object
@@ -2584,6 +2952,7 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -2595,7 +2964,8 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterBoolean.allocationSize(value.`toolSchemaDeferralSupported`) +
             FfiConverterBoolean.allocationSize(value.`fileBackedContextSupported`) +
             FfiConverterBoolean.allocationSize(value.`promptCacheSupported`) +
-            FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`)
+            FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`) +
+            FfiConverterBoolean.allocationSize(value.`lifecycleHooksSupported`)
     )
 
     override fun write(value: FfiSessionCapabilities, buf: ByteBuffer) {
@@ -2607,6 +2977,7 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterBoolean.write(value.`fileBackedContextSupported`, buf)
             FfiConverterBoolean.write(value.`promptCacheSupported`, buf)
             FfiConverterBoolean.write(value.`historyRewriteSupported`, buf)
+            FfiConverterBoolean.write(value.`lifecycleHooksSupported`, buf)
     }
 }
 
@@ -2647,6 +3018,66 @@ public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSess
             FfiConverterUInt.write(value.`contextWindowTokens`, buf)
             FfiConverterString.write(value.`toolsSchemaJson`, buf)
             FfiConverterString.write(value.`systemPrompt`, buf)
+    }
+}
+
+
+
+data class FfiStreamGateFinish (
+    var `trailingFlush`: kotlin.String, 
+    var `hasToolMarker`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiStreamGateFinish: FfiConverterRustBuffer<FfiStreamGateFinish> {
+    override fun read(buf: ByteBuffer): FfiStreamGateFinish {
+        return FfiStreamGateFinish(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiStreamGateFinish) = (
+            FfiConverterString.allocationSize(value.`trailingFlush`) +
+            FfiConverterBoolean.allocationSize(value.`hasToolMarker`)
+    )
+
+    override fun write(value: FfiStreamGateFinish, buf: ByteBuffer) {
+            FfiConverterString.write(value.`trailingFlush`, buf)
+            FfiConverterBoolean.write(value.`hasToolMarker`, buf)
+    }
+}
+
+
+
+data class FfiStreamGatePushResult (
+    var `emittedPrefix`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiStreamGatePushResult: FfiConverterRustBuffer<FfiStreamGatePushResult> {
+    override fun read(buf: ByteBuffer): FfiStreamGatePushResult {
+        return FfiStreamGatePushResult(
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiStreamGatePushResult) = (
+            FfiConverterString.allocationSize(value.`emittedPrefix`)
+    )
+
+    override fun write(value: FfiStreamGatePushResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`emittedPrefix`, buf)
     }
 }
 
@@ -2776,6 +3207,122 @@ public object FfiConverterTypeFfiToolCallRecord: FfiConverterRustBuffer<FfiToolC
 
 
 
+data class FfiToolParseBatch (
+    var `successes`: List<FfiToolParseField>, 
+    var `failures`: List<FfiToolParseFailure>, 
+    var `visiblePrefix`: kotlin.String, 
+    var `visibleSuffix`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiToolParseBatch: FfiConverterRustBuffer<FfiToolParseBatch> {
+    override fun read(buf: ByteBuffer): FfiToolParseBatch {
+        return FfiToolParseBatch(
+            FfiConverterSequenceTypeFfiToolParseField.read(buf),
+            FfiConverterSequenceTypeFfiToolParseFailure.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiToolParseBatch) = (
+            FfiConverterSequenceTypeFfiToolParseField.allocationSize(value.`successes`) +
+            FfiConverterSequenceTypeFfiToolParseFailure.allocationSize(value.`failures`) +
+            FfiConverterString.allocationSize(value.`visiblePrefix`) +
+            FfiConverterString.allocationSize(value.`visibleSuffix`)
+    )
+
+    override fun write(value: FfiToolParseBatch, buf: ByteBuffer) {
+            FfiConverterSequenceTypeFfiToolParseField.write(value.`successes`, buf)
+            FfiConverterSequenceTypeFfiToolParseFailure.write(value.`failures`, buf)
+            FfiConverterString.write(value.`visiblePrefix`, buf)
+            FfiConverterString.write(value.`visibleSuffix`, buf)
+    }
+}
+
+
+
+data class FfiToolParseFailure (
+    var `reason`: FfiToolParseFailureReason, 
+    var `original`: kotlin.String, 
+    var `formatHint`: kotlin.String?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiToolParseFailure: FfiConverterRustBuffer<FfiToolParseFailure> {
+    override fun read(buf: ByteBuffer): FfiToolParseFailure {
+        return FfiToolParseFailure(
+            FfiConverterTypeFfiToolParseFailureReason.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiToolParseFailure) = (
+            FfiConverterTypeFfiToolParseFailureReason.allocationSize(value.`reason`) +
+            FfiConverterString.allocationSize(value.`original`) +
+            FfiConverterOptionalString.allocationSize(value.`formatHint`)
+    )
+
+    override fun write(value: FfiToolParseFailure, buf: ByteBuffer) {
+            FfiConverterTypeFfiToolParseFailureReason.write(value.`reason`, buf)
+            FfiConverterString.write(value.`original`, buf)
+            FfiConverterOptionalString.write(value.`formatHint`, buf)
+    }
+}
+
+
+
+data class FfiToolParseField (
+    var `toolName`: kotlin.String, 
+    var `argumentsJson`: kotlin.String, 
+    var `repaired`: kotlin.Boolean, 
+    var `repairs`: List<kotlin.String>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiToolParseField: FfiConverterRustBuffer<FfiToolParseField> {
+    override fun read(buf: ByteBuffer): FfiToolParseField {
+        return FfiToolParseField(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiToolParseField) = (
+            FfiConverterString.allocationSize(value.`toolName`) +
+            FfiConverterString.allocationSize(value.`argumentsJson`) +
+            FfiConverterBoolean.allocationSize(value.`repaired`) +
+            FfiConverterSequenceString.allocationSize(value.`repairs`)
+    )
+
+    override fun write(value: FfiToolParseField, buf: ByteBuffer) {
+            FfiConverterString.write(value.`toolName`, buf)
+            FfiConverterString.write(value.`argumentsJson`, buf)
+            FfiConverterBoolean.write(value.`repaired`, buf)
+            FfiConverterSequenceString.write(value.`repairs`, buf)
+    }
+}
+
+
+
 data class FfiToolResultRecord (
     var `callId`: kotlin.String, 
     var `resultJson`: kotlin.String, 
@@ -2883,6 +3430,14 @@ sealed class AgentException: kotlin.Exception() {
             get() = "kind=${ `kind` }"
     }
     
+    class ModelStopped(
+        
+        val `reason`: kotlin.String
+        ) : AgentException() {
+        override val message
+            get() = "reason=${ `reason` }"
+    }
+    
     class CompactionFailed(
         
         val `tier`: kotlin.String, 
@@ -2942,18 +3497,21 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
             2 -> AgentException.GuardrailExceeded(
                 FfiConverterString.read(buf),
                 )
-            3 -> AgentException.CompactionFailed(
+            3 -> AgentException.ModelStopped(
+                FfiConverterString.read(buf),
+                )
+            4 -> AgentException.CompactionFailed(
                 FfiConverterString.read(buf),
                 FfiConverterString.read(buf),
                 )
-            4 -> AgentException.InvalidTransition(
+            5 -> AgentException.InvalidTransition(
                 FfiConverterString.read(buf),
                 FfiConverterString.read(buf),
                 )
-            5 -> AgentException.Internal(
+            6 -> AgentException.Internal(
                 FfiConverterString.read(buf),
                 )
-            6 -> AgentException.ContextReferenceNotFound(
+            7 -> AgentException.ContextReferenceNotFound(
                 FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
@@ -2972,6 +3530,11 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
                 + FfiConverterString.allocationSize(value.`kind`)
+            )
+            is AgentException.ModelStopped -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AgentException.CompactionFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
@@ -3011,25 +3574,30 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 FfiConverterString.write(value.`kind`, buf)
                 Unit
             }
-            is AgentException.CompactionFailed -> {
+            is AgentException.ModelStopped -> {
                 buf.putInt(3)
+                FfiConverterString.write(value.`reason`, buf)
+                Unit
+            }
+            is AgentException.CompactionFailed -> {
+                buf.putInt(4)
                 FfiConverterString.write(value.`tier`, buf)
                 FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is AgentException.InvalidTransition -> {
-                buf.putInt(4)
+                buf.putInt(5)
                 FfiConverterString.write(value.`from`, buf)
                 FfiConverterString.write(value.`to`, buf)
                 Unit
             }
             is AgentException.Internal -> {
-                buf.putInt(5)
+                buf.putInt(6)
                 FfiConverterString.write(value.`detail`, buf)
                 Unit
             }
             is AgentException.ContextReferenceNotFound -> {
-                buf.putInt(6)
+                buf.putInt(7)
                 FfiConverterString.write(value.`referenceId`, buf)
                 Unit
             }
@@ -3186,6 +3754,11 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
 
 sealed class FfiAgentEvent {
     
+    data class HookInvoked(
+        val `checkpoint`: kotlin.String) : FfiAgentEvent() {
+        companion object
+    }
+    
     data class TurnStarted(
         val `turnIndex`: kotlin.UInt, 
         val `allowToolCall`: kotlin.Boolean) : FfiAgentEvent() {
@@ -3239,6 +3812,17 @@ sealed class FfiAgentEvent {
         companion object
     }
     
+    data class ToolPolicyDenied(
+        val `toolName`: kotlin.String) : FfiAgentEvent() {
+        companion object
+    }
+    
+    data class ToolTimedOut(
+        val `toolName`: kotlin.String, 
+        val `timeoutMs`: kotlin.ULong) : FfiAgentEvent() {
+        companion object
+    }
+    
 
     
     companion object
@@ -3250,46 +3834,63 @@ sealed class FfiAgentEvent {
 public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEvent>{
     override fun read(buf: ByteBuffer): FfiAgentEvent {
         return when(buf.getInt()) {
-            1 -> FfiAgentEvent.TurnStarted(
+            1 -> FfiAgentEvent.HookInvoked(
+                FfiConverterString.read(buf),
+                )
+            2 -> FfiAgentEvent.TurnStarted(
                 FfiConverterUInt.read(buf),
                 FfiConverterBoolean.read(buf),
                 )
-            2 -> FfiAgentEvent.TurnCompleted(
+            3 -> FfiAgentEvent.TurnCompleted(
                 FfiConverterUInt.read(buf),
                 FfiConverterUInt.read(buf),
                 FfiConverterBoolean.read(buf),
                 )
-            3 -> FfiAgentEvent.CompactionApplied(
+            4 -> FfiAgentEvent.CompactionApplied(
                 FfiConverterTypeFfiCompactionEvent.read(buf),
                 )
-            4 -> FfiAgentEvent.ContextPressure(
+            5 -> FfiAgentEvent.ContextPressure(
                 FfiConverterFloat.read(buf),
                 )
-            5 -> FfiAgentEvent.ToolRepaired(
+            6 -> FfiAgentEvent.ToolRepaired(
                 FfiConverterString.read(buf),
                 FfiConverterString.read(buf),
                 FfiConverterFloat.read(buf),
                 )
-            6 -> FfiAgentEvent.ToolSoftFailure(
+            7 -> FfiAgentEvent.ToolSoftFailure(
                 FfiConverterString.read(buf),
                 FfiConverterUInt.read(buf),
                 )
-            7 -> FfiAgentEvent.KvCacheInvalidated(
+            8 -> FfiAgentEvent.KvCacheInvalidated(
                 FfiConverterString.read(buf),
                 )
-            8 -> FfiAgentEvent.PreCompact(
+            9 -> FfiAgentEvent.PreCompact(
                 FfiConverterTypeFfiCompactionTrigger.read(buf),
                 )
-            9 -> FfiAgentEvent.PostCompact(
+            10 -> FfiAgentEvent.PostCompact(
                 FfiConverterTypeFfiCompactionTrigger.read(buf),
                 FfiConverterOptionalString.read(buf),
                 FfiConverterOptionalString.read(buf),
+                )
+            11 -> FfiAgentEvent.ToolPolicyDenied(
+                FfiConverterString.read(buf),
+                )
+            12 -> FfiAgentEvent.ToolTimedOut(
+                FfiConverterString.read(buf),
+                FfiConverterULong.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
 
     override fun allocationSize(value: FfiAgentEvent) = when(value) {
+        is FfiAgentEvent.HookInvoked -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`checkpoint`)
+            )
+        }
         is FfiAgentEvent.TurnStarted -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
@@ -3361,61 +3962,92 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 + FfiConverterOptionalString.allocationSize(value.`historyRef`)
             )
         }
+        is FfiAgentEvent.ToolPolicyDenied -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`toolName`)
+            )
+        }
+        is FfiAgentEvent.ToolTimedOut -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`toolName`)
+                + FfiConverterULong.allocationSize(value.`timeoutMs`)
+            )
+        }
     }
 
     override fun write(value: FfiAgentEvent, buf: ByteBuffer) {
         when(value) {
-            is FfiAgentEvent.TurnStarted -> {
+            is FfiAgentEvent.HookInvoked -> {
                 buf.putInt(1)
+                FfiConverterString.write(value.`checkpoint`, buf)
+                Unit
+            }
+            is FfiAgentEvent.TurnStarted -> {
+                buf.putInt(2)
                 FfiConverterUInt.write(value.`turnIndex`, buf)
                 FfiConverterBoolean.write(value.`allowToolCall`, buf)
                 Unit
             }
             is FfiAgentEvent.TurnCompleted -> {
-                buf.putInt(2)
+                buf.putInt(3)
                 FfiConverterUInt.write(value.`turnIndex`, buf)
                 FfiConverterUInt.write(value.`toolCallCount`, buf)
                 FfiConverterBoolean.write(value.`terminal`, buf)
                 Unit
             }
             is FfiAgentEvent.CompactionApplied -> {
-                buf.putInt(3)
+                buf.putInt(4)
                 FfiConverterTypeFfiCompactionEvent.write(value.`event`, buf)
                 Unit
             }
             is FfiAgentEvent.ContextPressure -> {
-                buf.putInt(4)
+                buf.putInt(5)
                 FfiConverterFloat.write(value.`ratio`, buf)
                 Unit
             }
             is FfiAgentEvent.ToolRepaired -> {
-                buf.putInt(5)
+                buf.putInt(6)
                 FfiConverterString.write(value.`originalName`, buf)
                 FfiConverterString.write(value.`resolvedName`, buf)
                 FfiConverterFloat.write(value.`confidence`, buf)
                 Unit
             }
             is FfiAgentEvent.ToolSoftFailure -> {
-                buf.putInt(6)
+                buf.putInt(7)
                 FfiConverterString.write(value.`toolName`, buf)
                 FfiConverterUInt.write(value.`turnIndex`, buf)
                 Unit
             }
             is FfiAgentEvent.KvCacheInvalidated -> {
-                buf.putInt(7)
+                buf.putInt(8)
                 FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
             is FfiAgentEvent.PreCompact -> {
-                buf.putInt(8)
+                buf.putInt(9)
                 FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
                 Unit
             }
             is FfiAgentEvent.PostCompact -> {
-                buf.putInt(9)
+                buf.putInt(10)
                 FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
                 FfiConverterOptionalString.write(value.`summaryRef`, buf)
                 FfiConverterOptionalString.write(value.`historyRef`, buf)
+                Unit
+            }
+            is FfiAgentEvent.ToolPolicyDenied -> {
+                buf.putInt(11)
+                FfiConverterString.write(value.`toolName`, buf)
+                Unit
+            }
+            is FfiAgentEvent.ToolTimedOut -> {
+                buf.putInt(12)
+                FfiConverterString.write(value.`toolName`, buf)
+                FfiConverterULong.write(value.`timeoutMs`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -3677,6 +4309,190 @@ public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinish
             is FfiFinishReason.Other -> {
                 buf.putInt(4)
                 FfiConverterString.write(value.`reason`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+sealed class FfiToolParseFailureReason {
+    
+    object MalformedEnvelope : FfiToolParseFailureReason()
+    
+    
+    data class InvalidJson(
+        val `detail`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+    data class UnknownTool(
+        val `name`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+    data class UnknownParameter(
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+    data class DuplicateParameter(
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+    data class MissingRequiredParameter(
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+    data class SchemaCoercionFailed(
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String, 
+        val `expected`: kotlin.String) : FfiToolParseFailureReason() {
+        companion object
+    }
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiToolParseFailureReason : FfiConverterRustBuffer<FfiToolParseFailureReason>{
+    override fun read(buf: ByteBuffer): FfiToolParseFailureReason {
+        return when(buf.getInt()) {
+            1 -> FfiToolParseFailureReason.MalformedEnvelope
+            2 -> FfiToolParseFailureReason.InvalidJson(
+                FfiConverterString.read(buf),
+                )
+            3 -> FfiToolParseFailureReason.UnknownTool(
+                FfiConverterString.read(buf),
+                )
+            4 -> FfiToolParseFailureReason.UnknownParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            5 -> FfiToolParseFailureReason.DuplicateParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            6 -> FfiToolParseFailureReason.MissingRequiredParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            7 -> FfiToolParseFailureReason.SchemaCoercionFailed(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: FfiToolParseFailureReason) = when(value) {
+        is FfiToolParseFailureReason.MalformedEnvelope -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is FfiToolParseFailureReason.InvalidJson -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`detail`)
+            )
+        }
+        is FfiToolParseFailureReason.UnknownTool -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`name`)
+            )
+        }
+        is FfiToolParseFailureReason.UnknownParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.DuplicateParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.MissingRequiredParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.SchemaCoercionFailed -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+                + FfiConverterString.allocationSize(value.`expected`)
+            )
+        }
+    }
+
+    override fun write(value: FfiToolParseFailureReason, buf: ByteBuffer) {
+        when(value) {
+            is FfiToolParseFailureReason.MalformedEnvelope -> {
+                buf.putInt(1)
+                Unit
+            }
+            is FfiToolParseFailureReason.InvalidJson -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`detail`, buf)
+                Unit
+            }
+            is FfiToolParseFailureReason.UnknownTool -> {
+                buf.putInt(3)
+                FfiConverterString.write(value.`name`, buf)
+                Unit
+            }
+            is FfiToolParseFailureReason.UnknownParameter -> {
+                buf.putInt(4)
+                FfiConverterString.write(value.`tool`, buf)
+                FfiConverterString.write(value.`param`, buf)
+                Unit
+            }
+            is FfiToolParseFailureReason.DuplicateParameter -> {
+                buf.putInt(5)
+                FfiConverterString.write(value.`tool`, buf)
+                FfiConverterString.write(value.`param`, buf)
+                Unit
+            }
+            is FfiToolParseFailureReason.MissingRequiredParameter -> {
+                buf.putInt(6)
+                FfiConverterString.write(value.`tool`, buf)
+                FfiConverterString.write(value.`param`, buf)
+                Unit
+            }
+            is FfiToolParseFailureReason.SchemaCoercionFailed -> {
+                buf.putInt(7)
+                FfiConverterString.write(value.`tool`, buf)
+                FfiConverterString.write(value.`param`, buf)
+                FfiConverterString.write(value.`expected`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -4121,6 +4937,62 @@ public object FfiConverterSequenceTypeFfiToolCallRecord: FfiConverterRustBuffer<
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeFfiToolParseFailure: FfiConverterRustBuffer<List<FfiToolParseFailure>> {
+    override fun read(buf: ByteBuffer): List<FfiToolParseFailure> {
+        val len = buf.getInt()
+        return List<FfiToolParseFailure>(len) {
+            FfiConverterTypeFfiToolParseFailure.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FfiToolParseFailure>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFfiToolParseFailure.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FfiToolParseFailure>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFfiToolParseFailure.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeFfiToolParseField: FfiConverterRustBuffer<List<FfiToolParseField>> {
+    override fun read(buf: ByteBuffer): List<FfiToolParseField> {
+        val len = buf.getInt()
+        return List<FfiToolParseField>(len) {
+            FfiConverterTypeFfiToolParseField.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FfiToolParseField>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFfiToolParseField.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FfiToolParseField>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFfiToolParseField.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeFfiToolResultRecord: FfiConverterRustBuffer<List<FfiToolResultRecord>> {
     override fun read(buf: ByteBuffer): List<FfiToolResultRecord> {
         val len = buf.getInt()
@@ -4169,7 +5041,16 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
             FfiConverterTypeFfiAgentEvent.write(it, buf)
         }
     }
+} fun `coerceProviderArguments`(`toolName`: kotlin.String, `argsJson`: kotlin.String): FfiToolParseField {
+            return FfiConverterTypeFfiToolParseField.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_coerce_provider_arguments(
+        FfiConverterString.lower(`toolName`),FfiConverterString.lower(`argsJson`),_status)
 }
+    )
+    }
+    
+
         /**
          * Construct an [`AgentEngine`] wired to Kotlin callback implementations.
          *
@@ -4180,6 +5061,33 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_agent_engine(
         FfiConverterTypeAgentTransportCallback.lower(`transport`),FfiConverterTypeAgentToolExecutorCallback.lower(`executor`),FfiConverterOptionalTypeAgentSummarizerCallback.lower(`summarizer`),_status)
+}
+    )
+    }
+    
+ fun `createToolStreamGate`(`allowToolCall`: kotlin.Boolean): FfiToolStreamGate {
+            return FfiConverterTypeFfiToolStreamGate.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_tool_stream_gate(
+        FfiConverterBoolean.lower(`allowToolCall`),_status)
+}
+    )
+    }
+    
+ fun `hasLocalToolContract`(`systemPrompt`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_has_local_tool_contract(
+        FfiConverterString.lower(`systemPrompt`),_status)
+}
+    )
+    }
+    
+ fun `parseToolCalls`(`raw`: kotlin.String): FfiToolParseBatch {
+            return FfiConverterTypeFfiToolParseBatch.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_parse_tool_calls(
+        FfiConverterString.lower(`raw`),_status)
 }
     )
     }

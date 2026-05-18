@@ -1,8 +1,11 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.mergeArtifactGenerationRequests
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import java.util.concurrent.ConcurrentHashMap
@@ -37,20 +40,14 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         val entry = entryFor(key)
         entry.mutex.withLock {
             entry.flow.update { current ->
-                // Merge current artifacts and media into the new snapshot if they exist
-                val mergedMessages = snapshot.messages.mapValues { (id, newSnapshot) ->
-                    val existingArtifacts = current?.messages?.get(id)?.artifacts ?: emptyList()
-                    val existingMediaUris = current?.messages?.get(id)?.generatedMediaUris ?: emptyList()
-                    val existingMediaIds = current?.messages?.get(id)?.generatedMediaAssetIds ?: emptyList()
-                    val existingMediaTypes = current?.messages?.get(id)?.generatedMediaTypes ?: emptyList()
-                    val existingMediaPrompts = current?.messages?.get(id)?.generatedMediaPrompts ?: emptyList()
-                    newSnapshot.copy(
-                        artifacts = mergeArtifactGenerationRequests(newSnapshot.artifacts, existingArtifacts),
-                        generatedMediaUris = (newSnapshot.generatedMediaUris + existingMediaUris).distinct(),
-                        generatedMediaAssetIds = (newSnapshot.generatedMediaAssetIds + existingMediaIds).distinct(),
-                        generatedMediaTypes = (newSnapshot.generatedMediaTypes + existingMediaTypes).distinct(),
-                        generatedMediaPrompts = (newSnapshot.generatedMediaPrompts + existingMediaPrompts).distinct(),
-                    )
+                val mergedMessages = current?.messages?.toMutableMap() ?: mutableMapOf()
+                snapshot.messages.forEach { (id, newSnapshot) ->
+                    val existingSnapshot = current?.messages?.get(id)
+                    mergedMessages[id] = if (existingSnapshot == null) {
+                        newSnapshot
+                    } else {
+                        existingSnapshot.mergeWith(newSnapshot)
+                    }
                 }
                 snapshot.copy(messages = mergedMessages)
             }
@@ -93,11 +90,12 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         assistantMessageId: com.browntowndev.pocketcrew.domain.model.chat.MessageId,
         artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
     ) {
-        val entry = entries[key] ?: return
+        val entry = entryFor(key)
         entry.mutex.withLock {
             entry.flow.update { current ->
-                current?.copy(
-                    messages = current.messages.mapValues { (id, snapshot) ->
+                val activeSnapshot = current ?: emptySnapshot(assistantMessageId)
+                activeSnapshot.copy(
+                    messages = activeSnapshot.messages.mapValues { (id, snapshot) ->
                         if (id == assistantMessageId) {
                             snapshot.copy(artifacts = snapshot.artifacts + artifact)
                         } else {
@@ -117,11 +115,12 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         mediaTypes: List<String>,
         prompts: List<String>,
     ) {
-        val entry = entries[key] ?: return
+        val entry = entryFor(key)
         entry.mutex.withLock {
             entry.flow.update { current ->
-                current?.copy(
-                    messages = current.messages.mapValues { (id, snapshot) ->
+                val activeSnapshot = current ?: emptySnapshot(assistantMessageId)
+                activeSnapshot.copy(
+                    messages = activeSnapshot.messages.mapValues { (id, snapshot) ->
                         if (id == assistantMessageId) {
                             snapshot.copy(
                                 generatedMediaUris = (snapshot.generatedMediaUris + mediaUris).distinct(),
@@ -157,6 +156,20 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
     private fun entryFor(key: ActiveChatTurnKey): Entry {
         return entries.computeIfAbsent(key) { Entry() }
     }
+
+    private fun emptySnapshot(
+        assistantMessageId: com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+    ): AccumulatedMessages =
+        AccumulatedMessages(
+            messages = mapOf(
+                assistantMessageId to MessageSnapshot(
+                    messageId = assistantMessageId,
+                    modelType = ModelType.FAST,
+                    content = "",
+                    thinkingRaw = "",
+                ),
+            ),
+        )
 
     private suspend fun retire(key: ActiveChatTurnKey) {
         cleanupJobs.remove(key)?.cancel()
@@ -198,4 +211,101 @@ private fun AccumulatedMessages?.isTerminalSnapshot(): Boolean {
     return this != null && messages.isNotEmpty() && messages.values.all { snapshot ->
         snapshot.messageState == MessageState.COMPLETE
     }
+}
+
+private fun MessageSnapshot.mergeWith(incoming: MessageSnapshot): MessageSnapshot {
+    val mergedArtifacts = artifacts.mergeArtifacts(incoming.artifacts)
+    val mergedMediaUris = generatedMediaUris.mergeDistinct(incoming.generatedMediaUris)
+    val mergedMediaAssetIds = generatedMediaAssetIds.mergeDistinct(incoming.generatedMediaAssetIds)
+    val mergedMediaTypes = generatedMediaTypes.mergeDistinct(incoming.generatedMediaTypes)
+    val mergedMediaPrompts = generatedMediaPrompts.mergeDistinct(incoming.generatedMediaPrompts)
+
+    return when {
+        incoming.matchesWith(
+            other = this,
+            artifacts = mergedArtifacts,
+            generatedMediaUris = mergedMediaUris,
+            generatedMediaAssetIds = mergedMediaAssetIds,
+            generatedMediaTypes = mergedMediaTypes,
+            generatedMediaPrompts = mergedMediaPrompts,
+        ) -> this
+        incoming.hasSameListReferences(
+            artifacts = mergedArtifacts,
+            generatedMediaUris = mergedMediaUris,
+            generatedMediaAssetIds = mergedMediaAssetIds,
+            generatedMediaTypes = mergedMediaTypes,
+            generatedMediaPrompts = mergedMediaPrompts,
+        ) -> incoming
+        else -> incoming.copy(
+            artifacts = mergedArtifacts,
+            generatedMediaUris = mergedMediaUris,
+            generatedMediaAssetIds = mergedMediaAssetIds,
+            generatedMediaTypes = mergedMediaTypes,
+            generatedMediaPrompts = mergedMediaPrompts,
+        )
+    }
+}
+
+private fun List<ArtifactGenerationRequest>.mergeArtifacts(
+    incoming: List<ArtifactGenerationRequest>,
+): List<ArtifactGenerationRequest> {
+    if (incoming.isEmpty()) return this
+    val merged = mergeArtifactGenerationRequests(this, incoming)
+    return when {
+        merged == this -> this
+        merged == incoming -> incoming
+        else -> merged
+    }
+}
+
+private fun List<String>.mergeDistinct(incoming: List<String>): List<String> {
+    if (incoming.isEmpty()) return this
+    if (isEmpty()) {
+        val distinctIncoming = incoming.distinct()
+        return if (distinctIncoming == incoming) incoming else distinctIncoming
+    }
+
+    val additions = incoming.filterNot { value -> value in this }
+    return if (additions.isEmpty()) this else this + additions
+}
+
+private fun MessageSnapshot.matchesWith(
+    other: MessageSnapshot,
+    artifacts: List<ArtifactGenerationRequest>,
+    generatedMediaUris: List<String>,
+    generatedMediaAssetIds: List<String>,
+    generatedMediaTypes: List<String>,
+    generatedMediaPrompts: List<String>,
+): Boolean {
+    return messageId == other.messageId &&
+        modelType == other.modelType &&
+        content == other.content &&
+        thinkingRaw == other.thinkingRaw &&
+        thinkingDurationSeconds == other.thinkingDurationSeconds &&
+        thinkingStartTime == other.thinkingStartTime &&
+        thinkingEndTime == other.thinkingEndTime &&
+        isComplete == other.isComplete &&
+        messageState == other.messageState &&
+        pipelineStep == other.pipelineStep &&
+        webSearchSources == other.webSearchSources &&
+        artifacts == other.artifacts &&
+        generatedMediaUris == other.generatedMediaUris &&
+        generatedMediaAssetIds == other.generatedMediaAssetIds &&
+        generatedMediaTypes == other.generatedMediaTypes &&
+        generatedMediaPrompts == other.generatedMediaPrompts &&
+        transcriptSegments == other.transcriptSegments
+}
+
+private fun MessageSnapshot.hasSameListReferences(
+    artifacts: List<ArtifactGenerationRequest>,
+    generatedMediaUris: List<String>,
+    generatedMediaAssetIds: List<String>,
+    generatedMediaTypes: List<String>,
+    generatedMediaPrompts: List<String>,
+): Boolean {
+    return this.artifacts === artifacts &&
+        this.generatedMediaUris === generatedMediaUris &&
+        this.generatedMediaAssetIds === generatedMediaAssetIds &&
+        this.generatedMediaTypes === generatedMediaTypes &&
+        this.generatedMediaPrompts === generatedMediaPrompts
 }

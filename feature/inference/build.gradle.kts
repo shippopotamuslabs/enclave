@@ -29,7 +29,6 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(project(":core:agent"))
     implementation(libs.kotlin.reflect)
 
     // AndroidX Core
@@ -67,6 +66,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
+    testImplementation(testFixtures(project(":core:domain")))
     testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

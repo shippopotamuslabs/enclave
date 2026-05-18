@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationReque
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.AgentContextReference
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopAgentConfig
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopConfig
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopHostCallbacks
@@ -27,6 +28,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.RollingSummarizer
+import com.browntowndev.pocketcrew.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.pocketcrew.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.pocketcrew.domain.util.MediaResultParser
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
@@ -68,6 +70,7 @@ class RustLoopInferenceService(
     private val modelType: ModelType,
     private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val rollingSummarizer: RollingSummarizer,
+    private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
 ) : RustCompatibleInferenceService {
 
     private val conversationHistory = mutableListOf<ChatMessage>()
@@ -84,6 +87,7 @@ class RustLoopInferenceService(
             val history = buildHistory()
             val initialMessages = history + listOf(ChatMessage(Role.USER, prompt))
             val config = buildAgentLoopConfig(options)
+            val assistantText = StringBuilder()
 
             val host = object : AgentLoopHostCallbacks {
                 override suspend fun completeModelTurn(
@@ -136,38 +140,49 @@ class RustLoopInferenceService(
                 }
 
                 override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
-                    val summaryText = inferenceFactoryProvider.get().withInferenceService(ModelType.FAST) { fastService ->
-                        val messages = request.messagesToSummarize.map { it.toChatMessage() }
-                        if (fastService is RustCompatibleInferenceService) {
-                            val prompt = rollingSummarizer.buildAgentSummaryPrompt(
-                                messages = messages,
-                                instruction = request.instruction,
-                                focusInstruction = request.focusInstruction,
-                                historyRef = request.historyRef,
-                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                trigger = request.trigger,
-                            )
-                            fastService.completeSingleTurn(
-                                sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
-                                systemPrompt = "",
-                                availableTools = emptyList(),
-                                allowToolCall = false,
-                                onTextToken = {},
-                                onThinkingToken = {},
-                                options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
-                            ).assistantText
-                        } else {
-                            rollingSummarizer.summarizeAgentRequest(
-                                messages = messages,
-                                service = fastService,
-                                instruction = request.instruction,
-                                focusInstruction = request.focusInstruction,
-                                historyRef = request.historyRef,
-                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                trigger = request.trigger,
-                            )
+                    val messages = request.messagesToSummarize.map { it.toChatMessage() }
+                    val summaryModelType = resolveCompactionSummaryModel.invoke(
+                        activeTurnModelType = modelType,
+                        messagesToSummarize = messages,
+                    )
+                    loggingPort.debug(
+                        TAG,
+                        "compaction_summary provider=$provider activeTurn=$modelType " +
+                            "selectedModel=$summaryModelType messageCount=${messages.size} " +
+                            "trigger=${request.trigger.name}",
+                    )
+                    val summaryText =
+                        inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
+                            if (summaryService is RustCompatibleInferenceService) {
+                                val prompt = rollingSummarizer.buildAgentSummaryPrompt(
+                                    messages = messages,
+                                    instruction = request.instruction,
+                                    focusInstruction = request.focusInstruction,
+                                    historyRef = request.historyRef,
+                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                    trigger = request.trigger,
+                                )
+                                summaryService.completeSingleTurn(
+                                    sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
+                                    systemPrompt = "",
+                                    availableTools = emptyList(),
+                                    allowToolCall = false,
+                                    onTextToken = {},
+                                    onThinkingToken = {},
+                                    options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
+                                ).assistantText
+                            } else {
+                                rollingSummarizer.summarizeAgentRequest(
+                                    messages = messages,
+                                    service = summaryService,
+                                    instruction = request.instruction,
+                                    focusInstruction = request.focusInstruction,
+                                    historyRef = request.historyRef,
+                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                    trigger = request.trigger,
+                                )
+                            }
                         }
-                    }
                     return AgentSummaryResult(
                         summaryText = summaryText ?: "Summary unavailable.",
                         lastMessageId = request.lastMessageId,
@@ -183,7 +198,10 @@ class RustLoopInferenceService(
                 host = host,
             ).collect { event ->
                 when (event) {
-                    is AgentLoopEvent.TextToken -> send(InferenceEvent.PartialResponse(event.text, modelType))
+                    is AgentLoopEvent.TextToken -> {
+                        assistantText.append(event.text)
+                        send(InferenceEvent.PartialResponse(event.text, modelType))
+                    }
                     is AgentLoopEvent.ThinkingToken -> send(InferenceEvent.Thinking(event.text, modelType))
                     is AgentLoopEvent.ToolCallExecuted -> {}
                     is AgentLoopEvent.TurnStarted -> {}
@@ -219,6 +237,9 @@ class RustLoopInferenceService(
                         }
                     is AgentLoopEvent.Finished -> {
                         conversationHistory.add(ChatMessage(Role.USER, prompt))
+                        assistantText.toString().takeIf { it.isNotBlank() }?.let { text ->
+                            conversationHistory.add(ChatMessage(Role.ASSISTANT, text))
+                        }
                         if (closeConversation) closeSession()
                         send(InferenceEvent.Finished(modelType))
                     }
@@ -270,12 +291,18 @@ class RustLoopInferenceService(
 
     private fun buildAgentLoopConfig(options: GenerationOptions): AgentLoopConfig =
         AgentLoopConfig(
+            agent = AgentLoopAgentConfig(
+                maxModelRequestsPerTurn = 2u,
+                enableLoopHooks = true,
+                enablePendingWorkGuard = true,
+            ),
             capabilities = when (provider) {
                 "LLAMA" -> AgentLoopSessionCapabilities(
                     summarizationAllowed = false,
                     kvFixed = true,
                     contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
                     historyRewriteSupported = true,
+                    lifecycleHooksSupported = true,
                 )
                 else -> AgentLoopSessionCapabilities(
                     contextPolicyTier = if ((options.contextWindow ?: DEFAULT_CONTEXT_WINDOW) >= HIGH_CONTEXT_WINDOW_THRESHOLD) {
@@ -286,6 +313,7 @@ class RustLoopInferenceService(
                     toolSchemaDeferralSupported = true,
                     fileBackedContextSupported = true,
                     promptCacheSupported = true,
+                    lifecycleHooksSupported = true,
                 )
             },
             io = AgentLoopSessionIoParams(

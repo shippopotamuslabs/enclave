@@ -11,7 +11,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCallingConfig
 import com.google.genai.types.FunctionCallingConfigMode
@@ -36,12 +38,15 @@ class GoogleInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
+    private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+    private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "GoogleInferenceService"
         private const val PROVIDER = "GOOGLE"
+        private val TOOL_ARGUMENT_JSON_MAPPER = ObjectMapper()
     }
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
@@ -224,7 +229,10 @@ class GoogleInferenceServiceImpl(
             )
         }
 
-        val textGate = AgentTurnTextGate(allowToolCall = allowToolCall)
+        val textGate = ToolStreamGateSession(
+            port = toolStreamGatePort,
+            allowToolCall = allowToolCall,
+        )
         val result = sdkClient.generateContentStream(
             modelId = modelId,
             contents = contents,
@@ -241,21 +249,32 @@ class GoogleInferenceServiceImpl(
 
         val toolCalls = result.functionCall?.let { fc ->
             val name = fc.name().orElse(null) ?: return@let null
-            val argsJson = ToolEnvelopeParser.buildArgumentsJson(
+            val argsJson = toolEnvelopeParserPort.coerceProviderArguments(
                 toolName = name,
-                arguments = fc.args().orElse(emptyMap()),
-            )
+                argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
+            ).argumentsJson
             listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
         } ?: emptyList()
-        val leakedToolCalls = textGate.leakedToolCalls(toolCalls)
-        val finalToolCalls = toolCalls + leakedToolCalls
-        val assistantText = textGate.visibleAssistantText(finalToolCalls, onTextToken)
+        val bufferedText = textGate.finish(hasNativeToolCalls = toolCalls.isNotEmpty(), onTextToken)
 
         return AgentModelTurnResult(
-            assistantText = assistantText,
-            toolCalls = finalToolCalls,
-            finishReason = if (finalToolCalls.isNotEmpty()) AgentFinishReason.ToolUse else AgentFinishReason.Stop,
+            assistantText = bufferedText.takeIf { it.isNotBlank() },
+            toolCalls = toolCalls,
+            finishReason = googleFinishReason(toolCalls, result.finishReason, bufferedText),
         )
+    }
+
+    private fun googleFinishReason(
+        toolCalls: List<AgentRawToolCall>,
+        finishReason: String?,
+        assistantText: String?,
+    ): AgentFinishReason {
+        if (toolCalls.isNotEmpty()) {
+            return AgentFinishReason.ToolUse
+        }
+        return finishReason
+            ?.let { ProviderFinishReasonMapper.fromGoogle(it, assistantText.orEmpty()).finishReason }
+            ?: AgentFinishReason.Stop
     }
 
     private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {

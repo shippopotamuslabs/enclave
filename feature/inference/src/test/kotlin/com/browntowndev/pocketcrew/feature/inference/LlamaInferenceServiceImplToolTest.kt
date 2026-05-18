@@ -15,10 +15,16 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeBatch
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeFailure
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeFailureReason
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeField
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
 import io.mockk.every
@@ -32,8 +38,10 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.File
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * TDD Red tests for TOOL-PARSE-001 LI scenarios.
@@ -51,6 +59,7 @@ class LlamaInferenceServiceImplToolTest {
     private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var context: Context
+    private lateinit var fakePort: FakeToolEnvelopeParserPort
 
     @BeforeEach
     fun setup() {
@@ -66,6 +75,7 @@ class LlamaInferenceServiceImplToolTest {
         localModelRepository = mockk()
         activeModelProvider = mockk()
         context = mockk(relaxed = true)
+        fakePort = FakeToolEnvelopeParserPort()
 
         every { context.getExternalFilesDir(null) } returns File("/tmp")
 
@@ -117,13 +127,48 @@ class LlamaInferenceServiceImplToolTest {
             activeModelProvider = activeModelProvider,
             context = context,
             modelType = ModelType.FAST,
+            toolEnvelopeParserPort = fakePort,
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
     private fun stubGeneration(fullText: String) {
         every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
             GenerationEvent.Completed(fullText),
         )
+        fakePort.parseResponses[fullText] = knownToolBatch(fullText)
     }
+
+    private fun knownToolBatch(fullText: String): ToolEnvelopeBatch =
+        when {
+            fullText.contains(""""query":"test"""") -> toolBatch(
+                ToolEnvelopeField("web_search", """{"query":"test"}""", false, emptyList()),
+            )
+            fullText.contains(""""query":"q1"""") && fullText.contains("web_extract") -> toolBatch(
+                ToolEnvelopeField("web_search", """{"query":"q1"}""", false, emptyList()),
+                ToolEnvelopeField("web_extract", """{"urls":["https://a.com"]}""", false, emptyList()),
+            )
+            fullText.contains(""""query":"a"""") && fullText.contains(""""query":"b"""") -> toolBatch(
+                ToolEnvelopeField("web_search", """{"query":"a"}""", false, emptyList()),
+                ToolEnvelopeField("web_search", """{"query":"b"}""", false, emptyList()),
+            )
+            else -> toolBatch()
+        }
+
+    private fun toolBatch(vararg fields: ToolEnvelopeField): ToolEnvelopeBatch =
+        ToolEnvelopeBatch(
+            successes = fields.toList(),
+            failures = emptyList(),
+            visiblePrefix = "",
+            visibleSuffix = "",
+        )
+
+    private fun failureBatch(failure: ToolEnvelopeFailure): ToolEnvelopeBatch =
+        ToolEnvelopeBatch(
+            successes = emptyList(),
+            failures = listOf(failure),
+            visiblePrefix = "",
+            visibleSuffix = "",
+        )
 
     private fun completeTurn(service: LlamaInferenceServiceImpl, text: String) = runTest {
         service.completeSingleTurn(
@@ -164,10 +209,10 @@ class LlamaInferenceServiceImplToolTest {
             options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
         )
 
-        assertEquals(1, result.toolCalls.size)
-        assertEquals("web_search", result.toolCalls[0].name)
-        assertEquals("""{"query":"test"}""", result.toolCalls[0].argumentsJson)
-        assertNull(result.assistantText)
+        assertEquals(toolText, result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals(0, fakePort.parseCalls.size)
     }
 
     /**
@@ -195,9 +240,9 @@ class LlamaInferenceServiceImplToolTest {
             options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
         )
 
-        assertEquals(2, result.toolCalls.size)
-        assertEquals("web_search", result.toolCalls[0].name)
-        assertEquals("web_extract", result.toolCalls[1].name)
+        assertEquals(toolText, result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
     }
 
     /**
@@ -223,7 +268,9 @@ class LlamaInferenceServiceImplToolTest {
             options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
         )
 
-        assertEquals(AgentFinishReason.ToolUse, result.finishReason)
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals(toolText, result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
     }
 
     /**
@@ -252,12 +299,8 @@ class LlamaInferenceServiceImplToolTest {
             options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
         )
 
-        assertEquals(2, result.toolCalls.size)
-        assertNotNull(result.toolCalls[0].id)
-        assertNotNull(result.toolCalls[1].id)
-        assert(result.toolCalls[0].id != result.toolCalls[1].id) {
-            "Expected distinct ids but got: ${result.toolCalls[0].id} and ${result.toolCalls[1].id}"
-        }
+        assertEquals(toolText, result.assistantText)
+        assertTrue(result.toolCalls.isEmpty())
     }
 
     /**
@@ -287,5 +330,35 @@ class LlamaInferenceServiceImplToolTest {
         assertEquals(emptyList<AgentRawToolCall>(), result.toolCalls)
         assertEquals(AgentFinishReason.Stop, result.finishReason)
         assertEquals("The answer is 42.", result.assistantText)
+    }
+
+    @Test
+    fun `completeSingleTurn submits raw tool envelope text without Kotlin parse`() = runTest {
+        val toolText = """<tool_call>{"name":"web_search","arguments":{}}</tool_call>"""
+        stubGeneration(toolText)
+        fakePort.parseResponses[toolText] = failureBatch(
+            ToolEnvelopeFailure(
+                reason = ToolEnvelopeFailureReason.MissingRequiredParameter("web_search", "query"),
+                original = toolText,
+            ),
+        )
+        val service = createService()
+
+        val result = service.completeSingleTurn(
+            sessionMessages = listOf(
+                AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello", metadataJson = "null"),
+            ),
+            systemPrompt = "System",
+            availableTools = emptyList(),
+            allowToolCall = true,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+        )
+
+        assertEquals(emptyList<AgentRawToolCall>(), result.toolCalls)
+        assertEquals(AgentFinishReason.Stop, result.finishReason)
+        assertEquals(toolText, result.assistantText)
+        assertEquals(0, fakePort.parseCalls.size)
     }
 }

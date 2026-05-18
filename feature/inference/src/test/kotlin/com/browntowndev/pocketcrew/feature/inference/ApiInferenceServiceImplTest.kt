@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.util.FakeToolEnvelopeParserPort
+import com.browntowndev.pocketcrew.domain.util.FakeToolStreamGatePort
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -52,6 +54,7 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val messages = listOf(ChatMessage(Role.USER, "Hello"))
@@ -72,6 +75,7 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val merged = service.mergeSystemPrompt(
@@ -97,6 +101,7 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val history = listOf(ChatMessage(Role.USER, "hello"))
@@ -134,6 +139,7 @@ class ApiInferenceServiceImplTest {
             provider = "OPENAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
+            toolStreamGatePort = FakeToolStreamGatePort(),
         )
 
         val events = service.sendPrompt(
