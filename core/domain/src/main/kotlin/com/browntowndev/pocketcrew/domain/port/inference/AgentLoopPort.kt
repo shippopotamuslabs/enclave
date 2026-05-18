@@ -43,7 +43,7 @@ data class AgentManualCompactResult(
 sealed interface AgentLoopEvent {
     data class TurnStarted(val index: Int) : AgentLoopEvent
 
-    data class TurnCompleted(val index: Int, val toolCallCount: Int) : AgentLoopEvent
+    data class TurnCompleted(val index: Int, val toolCallCount: Int, val terminal: Boolean = false) : AgentLoopEvent
 
     data class TextToken(val text: String) : AgentLoopEvent
 
