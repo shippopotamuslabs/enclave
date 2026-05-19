@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 
 class JniLlamaEngineGenerateWithOptionsTest {
@@ -26,14 +25,8 @@ class JniLlamaEngineGenerateWithOptionsTest {
         private fun setupEngineWithMocks(): JniLlamaEngine {
             val engine = spyk(JniLlamaEngine(mockk(relaxed = true)))
 
-            val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
-            loadedField.isAccessible = true
-            (loadedField.get(engine) as AtomicBoolean).set(true)
-
-            val configField = JniLlamaEngine::class.java.getDeclaredField("currentConfig")
-            configField.isAccessible = true
-            configField.set(
-                engine,
+            engine.modelLifecycle.loaded.set(true)
+            engine.modelLifecycle.currentConfig =
                 LlamaModelConfig(
                     modelPath = "test",
                     systemPrompt = "test",
@@ -50,8 +43,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
                             gpuLayers = 0,
                             repeatPenalty = 1.0f,
                         ),
-                ),
-            )
+                )
 
             every {
                 engine.startCompletion(

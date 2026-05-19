@@ -49,8 +49,9 @@ class ConversationManagerImplLifecycleTest {
                 ),
             )
 
+        manager.engineCreatorHolder.override = { _, _, _, _, _ -> mockEngine }
+
         // Default mock behaviors
-        every { manager.createEngine(any(), any(), any(), any(), any()) } returns mockEngine
         every { manager.getModelPath(any()) } returns "/mock/path"
         every { mockEngine.createConversation(any()) } returns mockConversation
         every { mockEngine.initialize() } just Runs
@@ -85,7 +86,7 @@ class ConversationManagerImplLifecycleTest {
 
             // Then
             assertSame(conv1, conv2)
-            verify(exactly = 1) { manager.createEngine(any(), any(), any(), any(), any()) }
+            verify(exactly = 1) { mockEngine.initialize() }
             verify(exactly = 1) { mockEngine.createConversation(any()) }
         }
 
@@ -115,7 +116,7 @@ class ConversationManagerImplLifecycleTest {
 
             // Then
             // Conversation should be recreated, but Engine should be reused
-            verify(exactly = 1) { manager.createEngine(any(), any(), any(), any(), any()) }
+            verify(exactly = 1) { mockEngine.initialize() }
             verify(exactly = 2) { mockEngine.createConversation(any()) }
             verify(exactly = 1) { mockConversation.close() }
         }
@@ -160,7 +161,7 @@ class ConversationManagerImplLifecycleTest {
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
 
             // Then
-            verify(exactly = 2) { manager.createEngine(any(), any(), any(), any(), any()) }
+            verify(exactly = 2) { mockEngine.initialize() }
             verify(exactly = 1) { mockEngine.close() }
         }
 }

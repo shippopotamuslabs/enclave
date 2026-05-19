@@ -55,14 +55,10 @@ class ConversationManagerImplHistoryTest {
     @Test
     fun `setHistory identifies turn 2 as a continuation when starting from empty history`() =
         runTest {
-            // Given
             val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
-            setPrivateField(manager, "conversation", mockLiteRtConversation)
+            manager.conversation = mockLiteRtConversation
+            manager.history = emptyList()
 
-            // Initial state is empty history
-            setPrivateField(manager, "history", emptyList<ChatMessage>())
-
-            // When turn 2 history is set (initial user message + assistant response)
             val turn2History =
                 listOf(
                     ChatMessage(Role.USER, "Hello"),
@@ -70,7 +66,6 @@ class ConversationManagerImplHistoryTest {
                 )
             manager.setHistory(turn2History)
 
-            // Then
             verify(exactly = 1) {
                 Log.d("ConversationManager", match { it.contains("History is a continuation. Reusing conversation.") })
             }
@@ -83,8 +78,8 @@ class ConversationManagerImplHistoryTest {
     fun `setHistory closes native conversation when rehydrated history is still empty`() =
         runTest {
             val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
-            setPrivateField(manager, "conversation", mockLiteRtConversation)
-            setPrivateField(manager, "history", emptyList<ChatMessage>())
+            manager.conversation = mockLiteRtConversation
+            manager.history = emptyList()
 
             manager.setHistory(emptyList())
 
@@ -92,25 +87,6 @@ class ConversationManagerImplHistoryTest {
                 Log.d("ConversationManager", match { it.contains("Empty rehydrated history requires native conversation reset") })
             }
             verify(exactly = 1) { mockLiteRtConversation.close() }
-            assertNull(getPrivateField(manager, "conversation"))
+            assertNull(manager.conversation)
         }
-
-    private fun setPrivateField(
-        obj: Any,
-        fieldName: String,
-        value: Any?,
-    ) {
-        val field = obj.javaClass.getDeclaredField(fieldName)
-        field.isAccessible = true
-        field.set(obj, value)
-    }
-
-    private fun getPrivateField(
-        obj: Any,
-        fieldName: String,
-    ): Any? {
-        val field = obj.javaClass.getDeclaredField(fieldName)
-        field.isAccessible = true
-        return field.get(obj)
-    }
 }

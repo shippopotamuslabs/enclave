@@ -59,7 +59,8 @@ class ConversationManagerImplSpeculativeDecodingTest {
                 ),
             )
 
-        every { manager.createEngine(any(), any(), any(), any(), any()) } returns mockEngine
+        manager.engineCreatorHolder.override = { _, _, _, _, _ -> mockEngine }
+
         every { manager.getModelPath(any()) } returns "/mock/path"
         every { mockEngine.createConversation(any()) } returns mockConversation
         every { mockEngine.initialize() } just Runs
@@ -92,6 +93,6 @@ class ConversationManagerImplSpeculativeDecodingTest {
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
 
             assertFalse(ExperimentalFlags.enableSpeculativeDecoding ?: false)
-            verify(exactly = 1) { manager.createEngine(any(), any(), any(), any(), any()) }
+            verify(exactly = 1) { mockEngine.initialize() }
         }
 }
