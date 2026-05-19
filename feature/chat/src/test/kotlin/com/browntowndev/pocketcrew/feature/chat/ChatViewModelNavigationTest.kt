@@ -18,11 +18,9 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -31,7 +29,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
 class ChatViewModelNavigationTest {
-
     private lateinit var settingsUseCases: SettingsUseCases
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
@@ -73,9 +70,10 @@ class ChatViewModelNavigationTest {
     }
 
     private fun createViewModel(chatId: String?): ChatViewModel {
-        val savedStateHandle = SavedStateHandle().apply {
-            if (chatId != null) set("chatId", chatId)
-        }
+        val savedStateHandle =
+            SavedStateHandle().apply {
+                if (chatId != null) set("chatId", chatId)
+            }
         return ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,

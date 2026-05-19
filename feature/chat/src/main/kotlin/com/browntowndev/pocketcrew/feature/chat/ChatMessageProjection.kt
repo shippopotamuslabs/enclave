@@ -1,14 +1,34 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.chat
 
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import java.util.LinkedHashMap
@@ -31,7 +51,10 @@ internal data class ChatMessageProjectionResult(
  * Not thread-safe — must be created and used on a single coroutine (the combine lambda).
  */
 internal class ChatMessageProjector {
-    private data class MessageInputKey(val dbMessage: Message, val snapshot: MessageSnapshot?)
+    private data class MessageInputKey(
+        val dbMessage: Message,
+        val snapshot: MessageSnapshot?,
+    )
 
     private val messageCache = HashMap<MessageId, Pair<MessageInputKey, Message>>()
 
@@ -77,13 +100,14 @@ internal class ChatMessageProjector {
             val snapshot = activeMessagesMap[dbMessage.id]
             val inputKey = MessageInputKey(dbMessage, snapshot)
             val cached = messageCache[dbMessage.id]
-            projectedMap[dbMessage.id] = if (cached != null && cached.first == inputKey) {
-                cached.second
-            } else {
-                val projected = resolveMessage(chatId, dbMessage, snapshot)
-                messageCache[dbMessage.id] = inputKey to projected
-                projected
-            }
+            projectedMap[dbMessage.id] =
+                if (cached != null && cached.first == inputKey) {
+                    cached.second
+                } else {
+                    val projected = resolveMessage(chatId, dbMessage, snapshot)
+                    messageCache[dbMessage.id] = inputKey to projected
+                    projected
+                }
         }
 
         activeMessagesMap.forEach { (messageId, snapshot) ->
@@ -96,17 +120,22 @@ internal class ChatMessageProjector {
 
         return ChatMessageProjectionResult(
             messages = sorted,
-            handoffReady = activeSnapshot != null &&
-                activeKey != null &&
-                activeMessagesMap.isNotEmpty() &&
-                activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
-                activeMessagesMap.keys.all { messageId ->
-                    dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
-                },
+            handoffReady =
+                activeSnapshot != null &&
+                    activeKey != null &&
+                    activeMessagesMap.isNotEmpty() &&
+                    activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
+                    activeMessagesMap.keys.all { messageId ->
+                        dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
+                    },
         )
     }
 
-    private fun resolveMessage(chatId: ChatId?, dbMessage: Message, snapshot: MessageSnapshot?): Message =
+    private fun resolveMessage(
+        chatId: ChatId?,
+        dbMessage: Message,
+        snapshot: MessageSnapshot?,
+    ): Message =
         when {
             snapshot != null && snapshot.messageState != MessageState.COMPLETE ->
                 snapshot.toMessage(chatId = chatId, createdAt = dbMessage.createdAt)
@@ -125,16 +154,17 @@ internal fun projectChatMessages(
 private fun MessageSnapshot.toMessage(
     chatId: ChatId?,
     createdAt: Long? = null,
-): Message {
-    return Message(
+): Message =
+    Message(
         id = messageId,
         chatId = chatId,
         role = Role.ASSISTANT,
-        content = Content(
-            text = content, 
-            pipelineStep = pipelineStep, 
-            artifacts = if (messageState == MessageState.COMPLETE) artifacts else emptyList()
-        ),
+        content =
+            Content(
+                text = content,
+                pipelineStep = pipelineStep,
+                artifacts = if (messageState == MessageState.COMPLETE) artifacts else emptyList(),
+            ),
         thinkingRaw = thinkingRaw.ifBlank { null },
         thinkingDurationSeconds = thinkingDurationSeconds,
         thinkingStartTime = thinkingStartTime.takeIf { startTime -> startTime != 0L },
@@ -145,4 +175,3 @@ private fun MessageSnapshot.toMessage(
         webSearchSources = webSearchSources,
         transcriptSegments = transcriptSegments,
     )
-}

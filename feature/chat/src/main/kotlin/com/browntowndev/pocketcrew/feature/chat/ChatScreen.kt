@@ -16,13 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.components.InputBar
 import com.browntowndev.pocketcrew.feature.chat.components.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShareBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
 import com.browntowndev.pocketcrew.feature.chat.components.StreamingResponseHapticEffect
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
 @Suppress("LongParameterList")
 @Composable
@@ -44,13 +44,13 @@ fun ChatScreen(
     onMicClick: () -> Unit,
     onArtifactCardClick: (
         com.browntowndev.pocketcrew.domain.model.chat.MessageId,
-        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
+        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel,
     ) -> Unit = { _, _ -> },
     onNavigateToStudio: (
         ids: List<String>,
         uris: List<String>,
         types: List<String>,
-        prompts: List<String>
+        prompts: List<String>,
     ) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
     onShareTurn: () -> Unit = {},
@@ -63,25 +63,29 @@ fun ChatScreen(
         pulseKey = uiState.responseHapticPulseKey,
     )
 
-    val singleImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        onImagesSelected(listOfNotNull(uri?.toString()))
-    }
+    val singleImagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickVisualMedia(),
+        ) { uri ->
+            onImagesSelected(listOfNotNull(uri?.toString()))
+        }
 
-    val multipleImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(
-            maxItems = uiState.photoAttachmentMaxItems.coerceAtLeast(2)
-        )
-    ) { uris ->
-        onImagesSelected(uris.map { it.toString() })
-    }
+    val multipleImagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract =
+                ActivityResultContracts.PickMultipleVisualMedia(
+                    maxItems = uiState.photoAttachmentMaxItems.coerceAtLeast(2),
+                ),
+        ) { uris ->
+            onImagesSelected(uris.map { it.toString() })
+        }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        onFileSelected(uri?.toString())
-    }
+    val filePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            onFileSelected(uri?.toString())
+        }
 
     Scaffold(
         topBar = {
@@ -100,10 +104,11 @@ fun ChatScreen(
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-                .imePadding(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .imePadding(),
         ) {
             // Message area — shrinks via weight(1f) when keyboard opens
             Box(modifier = Modifier.weight(1f)) {
@@ -124,9 +129,10 @@ fun ChatScreen(
 
                 if (uiState.shieldReason != null) {
                     ShieldOverlay(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp),
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(16.dp),
                         reason = uiState.shieldReason ?: "",
                         onTap = onShieldTap,
                     )
@@ -170,8 +176,8 @@ fun ChatScreen(
                                 "application/xml",
                                 "application/javascript",
                                 "application/x-yaml",
-                                "application/toml"
-                            )
+                                "application/toml",
+                            ),
                         )
                     },
                     onClearImage = onRemoveImage,

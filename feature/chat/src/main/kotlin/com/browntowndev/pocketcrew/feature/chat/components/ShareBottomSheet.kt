@@ -27,22 +27,24 @@ fun ShareBottomSheet(
             sheetState = rememberModalBottomSheetState(),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 32.dp),
             ) {
                 Text(
                     text = "Share Conversation",
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(16.dp),
                 )
 
                 if (shareState is ShareState.Loading) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator()
                     }
@@ -51,14 +53,14 @@ fun ShareBottomSheet(
                         icon = Icons.Default.Share,
                         title = "Share this message pair",
                         description = "Shares only the selected user message and assistant response.",
-                        onClick = onShareTurn
+                        onClick = onShareTurn,
                     )
 
                     ShareOptionRow(
                         icon = Icons.Default.Chat,
                         title = "Share full conversation",
                         description = "Shares the entire chat history.",
-                        onClick = onShareFullChat
+                        onClick = onShareFullChat,
                     )
 
                     if (shareState is ShareState.Error) {
@@ -66,7 +68,7 @@ fun ShareBottomSheet(
                             text = shareState.message,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp)
+                            modifier = Modifier.padding(16.dp),
                         )
                     }
                 }
@@ -83,17 +85,18 @@ private fun ShareOptionRow(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(24.dp),
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column {
@@ -101,7 +104,7 @@ private fun ShareOptionRow(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

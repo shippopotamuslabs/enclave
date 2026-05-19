@@ -7,6 +7,10 @@ import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
@@ -22,10 +26,6 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
-import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -51,7 +51,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModelActionsTest {
-
     private val settingsUseCases: SettingsUseCases = mockk()
     private val chatUseCases: ChatUseCases = mockk()
     private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
@@ -73,23 +72,24 @@ class ChatViewModelActionsTest {
 
     @BeforeEach
     fun setUp() {
-        val visionConfig = ActiveModelConfiguration(
-            modelId = "test-model",
-            id = ApiModelConfigurationId("vision-api-config"),
-            isLocal = false,
-            name = "Vision API",
-            systemPrompt = "Describe images briefly.",
-            reasoningEffort = null,
-            temperature = 0.7,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 512,
-            minP = 0.0,
-            repetitionPenalty = 1.1,
-            contextWindow = 4096,
-            thinkingEnabled = false,
-            isMultimodal = true,
-        )
+        val visionConfig =
+            ActiveModelConfiguration(
+                modelId = "test-model",
+                id = ApiModelConfigurationId("vision-api-config"),
+                isLocal = false,
+                name = "Vision API",
+                systemPrompt = "Describe images briefly.",
+                reasoningEffort = null,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                minP = 0.0,
+                repetitionPenalty = 1.1,
+                contextWindow = 4096,
+                thinkingEnabled = false,
+                isMultimodal = true,
+            )
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns visionConfig
 
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
@@ -114,313 +114,352 @@ class ChatViewModelActionsTest {
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
 
-        chatViewModel = ChatViewModel(
-            settingsUseCases = settingsUseCases,
-            chatUseCases = chatUseCases,
-            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-            savedStateHandle = SavedStateHandle(),
-            cancelInferenceUseCase = cancelInferenceUseCase,
-            inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-            activeModelProvider = activeModelProvider,
-            toolExecutionEventPort = toolExecutionEventPort,
-            errorHandler = errorHandler,
-            loggingPort = loggingPort,
-            activeChatTurnSnapshotPort = activeChatTurnStore,
-            playbackController = playbackController,
-            studioRepository = studioRepository,
-            shareChatUseCase = shareChatUseCase,
-            chatRepository = mockk(relaxed = true),
-            exportArtifactDocumentsUseCase = mockk(relaxed = true),
-        )
+        chatViewModel =
+            ChatViewModel(
+                settingsUseCases = settingsUseCases,
+                chatUseCases = chatUseCases,
+                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                savedStateHandle = SavedStateHandle(),
+                cancelInferenceUseCase = cancelInferenceUseCase,
+                inferenceLockManager = inferenceLockManager,
+                modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                activeModelProvider = activeModelProvider,
+                toolExecutionEventPort = toolExecutionEventPort,
+                errorHandler = errorHandler,
+                loggingPort = loggingPort,
+                activeChatTurnSnapshotPort = activeChatTurnStore,
+                playbackController = playbackController,
+                studioRepository = studioRepository,
+                shareChatUseCase = shareChatUseCase,
+                chatRepository = mockk(relaxed = true),
+                exportArtifactDocumentsUseCase = mockk(relaxed = true),
+            )
     }
 
     @Test
-    fun `onInputChange updates inputText in uiState`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onInputChange updates inputText in uiState`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        chatViewModel.onInputChange("Hello world")
-        runCurrent()
+            chatViewModel.onInputChange("Hello world")
+            runCurrent()
 
-        assertEquals("Hello world", chatViewModel.uiState.value.inputText)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onEditMessage updates inputText`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onEditMessage("Edited message")
-        runCurrent()
-
-        assertEquals("Edited message", chatViewModel.uiState.value.inputText)
-        collectJob.cancel()
-    }
+            assertEquals("Hello world", chatViewModel.uiState.value.inputText)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `onModeChange updates selectedMode`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onEditMessage updates inputText`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        assertEquals(ChatModeUi.FAST, chatViewModel.uiState.value.selectedMode)
+            chatViewModel.onEditMessage("Edited message")
+            runCurrent()
 
-        chatViewModel.onModeChange(ChatModeUi.THINKING)
-        runCurrent()
-
-        assertEquals(ChatModeUi.THINKING, chatViewModel.uiState.value.selectedMode)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onModeChange to CREW clears selected image when photo not enabled for crew`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        // First, set an image
-        coEvery { stageImageAttachmentUseCase("test-uri") } returns "test-uri"
-        chatViewModel.onImagesSelected(listOf("test-uri"))
-        runCurrent()
-
-        // Switch to CREW mode - photo attachment should be disabled for crew without API vision
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
-        chatViewModel.onModeChange(ChatModeUi.CREW)
-        advanceUntilIdle()
-
-        // Photo attachment should be disabled, so images should be cleared
-        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
-        collectJob.cancel()
-    }
+            assertEquals("Edited message", chatViewModel.uiState.value.inputText)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `onImagesSelected updates selectedImageUris when photo attachment enabled`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onModeChange updates selectedMode`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
+            assertEquals(ChatModeUi.FAST, chatViewModel.uiState.value.selectedMode)
 
-        chatViewModel.onImagesSelected(listOf("content://image"))
-        advanceUntilIdle()
+            chatViewModel.onModeChange(ChatModeUi.THINKING)
+            runCurrent()
 
-        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onImagesSelected with empty list does not clear selectedImageUris`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
-        chatViewModel.onImagesSelected(listOf("content://image"))
-        advanceUntilIdle()
-        
-        chatViewModel.onImagesSelected(emptyList())
-        runCurrent()
-
-        assertFalse(chatViewModel.uiState.value.selectedImageUris.isEmpty())
-        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
-        collectJob.cancel()
-    }
+            assertEquals(ChatModeUi.THINKING, chatViewModel.uiState.value.selectedMode)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `clearSelectedImages clears selectedImageUris`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onModeChange to CREW clears selected image when photo not enabled for crew`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
-        chatViewModel.onImagesSelected(listOf("content://image"))
-        advanceUntilIdle()
-        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
+            // First, set an image
+            coEvery { stageImageAttachmentUseCase("test-uri") } returns "test-uri"
+            chatViewModel.onImagesSelected(listOf("test-uri"))
+            runCurrent()
 
-        chatViewModel.clearSelectedImages()
-        runCurrent()
-        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
-        collectJob.cancel()
-    }
+            // Switch to CREW mode - photo attachment should be disabled for crew without API vision
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+            chatViewModel.onModeChange(ChatModeUi.CREW)
+            advanceUntilIdle()
 
-    @Test
-    fun `clearSelectedFile clears fileName and fileText`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        val metadata = com.browntowndev.pocketcrew.domain.port.media.FileAttachmentMetadata("test.txt", "text/plain", "content")
-        coEvery { processFileAttachmentUseCase("content://file") } returns metadata
-        chatViewModel.onFileSelected("content://file")
-        advanceUntilIdle()
-        assertEquals("test.txt", chatViewModel.uiState.value.selectedFileName)
-
-        chatViewModel.clearSelectedFile()
-        runCurrent()
-        assertNull(chatViewModel.uiState.value.selectedFileName)
-        collectJob.cancel()
-    }
+            // Photo attachment should be disabled, so images should be cleared
+            assertTrue(
+                chatViewModel.uiState.value.selectedImageUris
+                    .isEmpty(),
+            )
+            collectJob.cancel()
+        }
 
     @Test
-    fun `stopGeneration does not cancel when not generating`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onImagesSelected updates selectedImageUris when photo attachment enabled`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        // Not in generating state, so stopGeneration should be a no-op
-        assertFalse(chatViewModel.uiState.value.isGenerating)
-        chatViewModel.stopGeneration()
-        runCurrent()
+            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
 
-        // cancelInferenceUseCase should NOT be called since we're not generating
-        verify(exactly = 0) { cancelInferenceUseCase() }
-        collectJob.cancel()
-    }
+            chatViewModel.onImagesSelected(listOf("content://image"))
+            advanceUntilIdle()
 
-    @Test
-    fun `createNewChat resets state`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onInputChange("Some text")
-        runCurrent()
-        assertEquals("Some text", chatViewModel.uiState.value.inputText)
-
-        chatViewModel.createNewChat()
-        runCurrent()
-
-        assertEquals("", chatViewModel.uiState.value.inputText)
-        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
-        assertNull(chatViewModel.uiState.value.chatId)
-        collectJob.cancel()
-    }
+            assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `getShieldReason returns null when inference not blocked`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `onImagesSelected with empty list does not clear selectedImageUris`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        assertNull(chatViewModel.getShieldReason())
-        collectJob.cancel()
-    }
+            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
+            chatViewModel.onImagesSelected(listOf("content://image"))
+            advanceUntilIdle()
 
-    @Test
-    fun `getShieldReason returns message when inference is blocked`() = runTest {
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(true)
+            chatViewModel.onImagesSelected(emptyList())
+            runCurrent()
 
-        // Recreate VM with blocked inference
-        chatViewModel = ChatViewModel(
-            settingsUseCases = settingsUseCases,
-            chatUseCases = chatUseCases,
-            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-            savedStateHandle = SavedStateHandle(),
-            cancelInferenceUseCase = cancelInferenceUseCase,
-            inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-            activeModelProvider = activeModelProvider,
-            toolExecutionEventPort = toolExecutionEventPort,
-            errorHandler = errorHandler,
-            loggingPort = loggingPort,
-            activeChatTurnSnapshotPort = activeChatTurnStore,
-            playbackController = playbackController,
-            studioRepository = studioRepository,
-            shareChatUseCase = shareChatUseCase,
-            chatRepository = mockk(relaxed = true),
-            exportArtifactDocumentsUseCase = mockk(relaxed = true),
-        )
-
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        assertEquals("Inference is currently blocked", chatViewModel.getShieldReason())
-        collectJob.cancel()
-    }
+            assertFalse(
+                chatViewModel.uiState.value.selectedImageUris
+                    .isEmpty(),
+            )
+            assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `initial state has FAST mode selected`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `clearSelectedImages clears selectedImageUris`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        assertEquals(ChatModeUi.FAST, chatViewModel.uiState.value.selectedMode)
-        collectJob.cancel()
-    }
+            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
+            chatViewModel.onImagesSelected(listOf("content://image"))
+            advanceUntilIdle()
+            assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
 
-    @Test
-    fun `onFileSelected with null clears file state`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onFileSelected(null)
-        runCurrent()
-
-        assertNull(chatViewModel.uiState.value.selectedFileName)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onInputChange with empty string clears input`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onInputChange("Hello")
-        runCurrent()
-        assertEquals("Hello", chatViewModel.uiState.value.inputText)
-
-        chatViewModel.onInputChange("")
-        runCurrent()
-        assertEquals("", chatViewModel.uiState.value.inputText)
-        collectJob.cancel()
-    }
+            chatViewModel.clearSelectedImages()
+            runCurrent()
+            assertTrue(
+                chatViewModel.uiState.value.selectedImageUris
+                    .isEmpty(),
+            )
+            collectJob.cancel()
+        }
 
     @Test
-    fun `onModeChange from FAST to THINKING preserves photo attachment`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+    fun `clearSelectedFile clears fileName and fileText`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        // Both FAST and THINKING should allow photos when vision is available
-        chatViewModel.onModeChange(ChatModeUi.THINKING)
-        advanceUntilIdle()
+            val metadata =
+                com.browntowndev.pocketcrew.domain.port.media
+                    .FileAttachmentMetadata("test.txt", "text/plain", "content")
+            coEvery { processFileAttachmentUseCase("content://file") } returns metadata
+            chatViewModel.onFileSelected("content://file")
+            advanceUntilIdle()
+            assertEquals("test.txt", chatViewModel.uiState.value.selectedFileName)
 
-        // Photo attachment should still be enabled since activeModelProvider returns multimodal config
-        assertTrue(chatViewModel.uiState.value.isPhotoAttachmentEnabled)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onModeChange to CREW disables photo when no API vision model`() = runTest {
-        // No vision API model configured
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
-
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onModeChange(ChatModeUi.CREW)
-        advanceUntilIdle()
-
-        assertFalse(chatViewModel.uiState.value.isPhotoAttachmentEnabled)
-        collectJob.cancel()
-    }
+            chatViewModel.clearSelectedFile()
+            runCurrent()
+            assertNull(chatViewModel.uiState.value.selectedFileName)
+            collectJob.cancel()
+        }
 
     @Test
-    fun `onImagesSelected clears images when photo attachment is disabled`() = runTest {
-        // No vision model configured
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+    fun `stopGeneration does not cancel when not generating`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
 
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
+            // Not in generating state, so stopGeneration should be a no-op
+            assertFalse(chatViewModel.uiState.value.isGenerating)
+            chatViewModel.stopGeneration()
+            runCurrent()
 
-        chatViewModel.onImagesSelected(listOf("content://image"))
-        advanceUntilIdle()
-
-        // Images should be cleared since photo attachment is disabled
-        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `onShieldTap does not crash`() = runTest {
-        // onShieldTap is a no-op stub, just verify it doesn't throw
-        chatViewModel.onShieldTap()
-    }
+            // cancelInferenceUseCase should NOT be called since we're not generating
+            verify(exactly = 0) { cancelInferenceUseCase() }
+            collectJob.cancel()
+        }
 
     @Test
-    fun `onAttach does not crash`() = runTest {
-        // onAttach is a no-op stub, just verify it doesn't throw
-        chatViewModel.onAttach()
-    }
+    fun `createNewChat resets state`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            chatViewModel.onInputChange("Some text")
+            runCurrent()
+            assertEquals("Some text", chatViewModel.uiState.value.inputText)
+
+            chatViewModel.createNewChat()
+            runCurrent()
+
+            assertEquals("", chatViewModel.uiState.value.inputText)
+            assertTrue(
+                chatViewModel.uiState.value.selectedImageUris
+                    .isEmpty(),
+            )
+            assertNull(chatViewModel.uiState.value.chatId)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `getShieldReason returns null when inference not blocked`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            assertNull(chatViewModel.getShieldReason())
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `getShieldReason returns message when inference is blocked`() =
+        runTest {
+            every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(true)
+
+            // Recreate VM with blocked inference
+            chatViewModel =
+                ChatViewModel(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                )
+
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            assertEquals("Inference is currently blocked", chatViewModel.getShieldReason())
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `initial state has FAST mode selected`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            assertEquals(ChatModeUi.FAST, chatViewModel.uiState.value.selectedMode)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onFileSelected with null clears file state`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            chatViewModel.onFileSelected(null)
+            runCurrent()
+
+            assertNull(chatViewModel.uiState.value.selectedFileName)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onInputChange with empty string clears input`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            chatViewModel.onInputChange("Hello")
+            runCurrent()
+            assertEquals("Hello", chatViewModel.uiState.value.inputText)
+
+            chatViewModel.onInputChange("")
+            runCurrent()
+            assertEquals("", chatViewModel.uiState.value.inputText)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onModeChange from FAST to THINKING preserves photo attachment`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            // Both FAST and THINKING should allow photos when vision is available
+            chatViewModel.onModeChange(ChatModeUi.THINKING)
+            advanceUntilIdle()
+
+            // Photo attachment should still be enabled since activeModelProvider returns multimodal config
+            assertTrue(chatViewModel.uiState.value.isPhotoAttachmentEnabled)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onModeChange to CREW disables photo when no API vision model`() =
+        runTest {
+            // No vision API model configured
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            chatViewModel.onModeChange(ChatModeUi.CREW)
+            advanceUntilIdle()
+
+            assertFalse(chatViewModel.uiState.value.isPhotoAttachmentEnabled)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onImagesSelected clears images when photo attachment is disabled`() =
+        runTest {
+            // No vision model configured
+            coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            chatViewModel.onImagesSelected(listOf("content://image"))
+            advanceUntilIdle()
+
+            // Images should be cleared since photo attachment is disabled
+            assertTrue(
+                chatViewModel.uiState.value.selectedImageUris
+                    .isEmpty(),
+            )
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onShieldTap does not crash`() =
+        runTest {
+            // onShieldTap is a no-op stub, just verify it doesn't throw
+            chatViewModel.onShieldTap()
+        }
+
+    @Test
+    fun `onAttach does not crash`() =
+        runTest {
+            // onAttach is a no-op stub, just verify it doesn't throw
+            chatViewModel.onAttach()
+        }
 }

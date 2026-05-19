@@ -22,7 +22,7 @@ class ChatInferenceExecutorRouterTest {
             chatId = ChatId("c1"),
             userHasImage = false,
             modelType = ModelType.FAST,
-            backgroundInferenceEnabled = true
+            backgroundInferenceEnabled = true,
         )
 
         verify { serviceExecutor.execute(any(), any(), any(), any(), any(), any(), any()) }
@@ -38,7 +38,7 @@ class ChatInferenceExecutorRouterTest {
             chatId = ChatId("c1"),
             userHasImage = false,
             modelType = ModelType.FAST,
-            backgroundInferenceEnabled = false
+            backgroundInferenceEnabled = false,
         )
 
         verify { directExecutor.execute(any(), any(), any(), any(), any(), any(), any()) }

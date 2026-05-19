@@ -31,7 +31,7 @@ fun ChatTopBar(
             IconButton(onClick = onMenuClick) {
                 Icon(
                     imageVector = Icons.Default.Menu,
-                    contentDescription = "Open history"
+                    contentDescription = "Open history",
                 )
             }
         },
@@ -49,13 +49,14 @@ fun ChatTopBar(
                 Icon(
                     painter = painterResource(R.drawable.edit_square),
                     contentDescription = "Start new chat",
-                    modifier = Modifier
-                        .size(40.dp)
-                        .padding(8.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+                    modifier =
+                        Modifier
+                            .size(40.dp)
+                            .padding(8.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
-        }
+        },
     )
 }
 
@@ -76,4 +77,3 @@ private fun PreviewChatTopBarDark() {
         ChatTopBar({}, {})
     }
 }
-

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test
  * GREEN after converting projectChatMessages to a stateful projector with per-message cache.
  */
 class ChatMessageProjectorTest {
-
     private val chatId = ChatId("chat")
     private val projector = ChatMessageProjector()
 
@@ -87,26 +86,31 @@ class ChatMessageProjectorTest {
     @Test
     fun `project reuses Message instances for unchanged db-message plus snapshot pairs`() {
         val msgIds = (1..50).map { i -> MessageId("msg-$i") }
-        val dbMessages = msgIds.mapIndexed { i, id ->
-            dbMessage(id, createdAt = i.toLong(), state = MessageState.PROCESSING)
-        }
+        val dbMessages =
+            msgIds.mapIndexed { i, id ->
+                dbMessage(id, createdAt = i.toLong(), state = MessageState.PROCESSING)
+            }
         val lastId = msgIds.last()
         val key = ActiveChatTurnKey(chatId, lastId)
 
         // All 50 messages have a GENERATING snapshot so toMessage() is called for each.
-        val snapshot1 = AccumulatedMessages(
-            messages = msgIds.associateWith { id ->
-                generatingSnapshot(id, content = "initial")
-            },
-        )
+        val snapshot1 =
+            AccumulatedMessages(
+                messages =
+                    msgIds.associateWith { id ->
+                        generatingSnapshot(id, content = "initial")
+                    },
+            )
         val first = projector.project(dbMessages, snapshot1, key)
 
         // Only change the last snapshot's content.
-        val snapshot2 = AccumulatedMessages(
-            messages = msgIds.associateWith { id ->
-                generatingSnapshot(id, content = if (id == lastId) "new token" else "initial")
-            },
-        )
+        val snapshot2 =
+            AccumulatedMessages(
+                messages =
+                    msgIds.associateWith { id ->
+                        generatingSnapshot(id, content = if (id == lastId) "new token" else "initial")
+                    },
+            )
         val second = projector.project(dbMessages, snapshot2, key)
 
         for (i in 0 until 49) {
@@ -133,11 +137,12 @@ class ChatMessageProjectorTest {
      */
     @Test
     fun `project produces chronologically sorted output for out-of-order db messages`() {
-        val messages = listOf(
-            dbMessage(MessageId("msg-c"), createdAt = 300L),
-            dbMessage(MessageId("msg-a"), createdAt = 100L),
-            dbMessage(MessageId("msg-b"), createdAt = 200L),
-        )
+        val messages =
+            listOf(
+                dbMessage(MessageId("msg-c"), createdAt = 300L),
+                dbMessage(MessageId("msg-a"), createdAt = 100L),
+                dbMessage(MessageId("msg-b"), createdAt = 200L),
+            )
 
         val result = projector.project(messages, null, null)
 
@@ -152,11 +157,12 @@ class ChatMessageProjectorTest {
      */
     @Test
     fun `project preserves sort order on cache-hit result`() {
-        val messages = listOf(
-            dbMessage(MessageId("msg-c"), createdAt = 300L),
-            dbMessage(MessageId("msg-a"), createdAt = 100L),
-            dbMessage(MessageId("msg-b"), createdAt = 200L),
-        )
+        val messages =
+            listOf(
+                dbMessage(MessageId("msg-c"), createdAt = 300L),
+                dbMessage(MessageId("msg-a"), createdAt = 100L),
+                dbMessage(MessageId("msg-b"), createdAt = 200L),
+            )
         projector.project(messages, null, null) // warm cache
         val result = projector.project(messages, null, null) // cache hit
 
@@ -183,10 +189,15 @@ class ChatMessageProjectorTest {
         createdAt = createdAt,
     )
 
-    private fun makeSnapshot(id: MessageId, content: String): AccumulatedMessages =
-        AccumulatedMessages(messages = mapOf(id to generatingSnapshot(id, content)))
+    private fun makeSnapshot(
+        id: MessageId,
+        content: String,
+    ): AccumulatedMessages = AccumulatedMessages(messages = mapOf(id to generatingSnapshot(id, content)))
 
-    private fun generatingSnapshot(id: MessageId, content: String): MessageSnapshot =
+    private fun generatingSnapshot(
+        id: MessageId,
+        content: String,
+    ): MessageSnapshot =
         MessageSnapshot(
             messageId = id,
             modelType = ModelType.MAIN,

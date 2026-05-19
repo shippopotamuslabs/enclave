@@ -10,15 +10,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,20 +23,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
-import com.browntowndev.pocketcrew.core.ui.component.XIcon
 
 @Composable
 fun ToolCallBanner(
     banner: ToolCallBannerUi?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize()
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .animateContentSize(),
     ) {
         AnimatedVisibility(
             visible = banner != null,
@@ -57,38 +54,41 @@ fun ToolCallBanner(
 @Composable
 private fun BannerContent(banner: ToolCallBannerUi) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Icon Box
         Box(
             modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             if (banner.kind == ToolCallBannerKind.X_SEARCH) {
                 Icon(
                     imageVector = XIcon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             } else {
                 Icon(
-                    painter = painterResource(
-                        id = when (banner.kind) {
-                            ToolCallBannerKind.SEARCH -> R.drawable.search
-                            ToolCallBannerKind.EXTRACT -> R.drawable.pageview
-                            ToolCallBannerKind.IMAGE -> R.drawable.image
-                            ToolCallBannerKind.MEMORY -> R.drawable.search
-                            ToolCallBannerKind.ARTIFACT -> R.drawable.document
-                            ToolCallBannerKind.X_SEARCH -> 0 // Handled above
-                            ToolCallBannerKind.MEDIA -> R.drawable.image // Reuse image icon for media
-                        }
-                    ),
+                    painter =
+                        painterResource(
+                            id =
+                                when (banner.kind) {
+                                    ToolCallBannerKind.SEARCH -> R.drawable.search
+                                    ToolCallBannerKind.EXTRACT -> R.drawable.pageview
+                                    ToolCallBannerKind.IMAGE -> R.drawable.image
+                                    ToolCallBannerKind.MEMORY -> R.drawable.search
+                                    ToolCallBannerKind.ARTIFACT -> R.drawable.document
+                                    ToolCallBannerKind.X_SEARCH -> 0 // Handled above
+                                    ToolCallBannerKind.MEDIA -> R.drawable.image // Reuse image icon for media
+                                },
+                        ),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -98,11 +98,12 @@ private fun BannerContent(banner: ToolCallBannerUi) {
         // Label
         Text(
             text = banner.label,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.2.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style =
+                MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.2.sp,
+                ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

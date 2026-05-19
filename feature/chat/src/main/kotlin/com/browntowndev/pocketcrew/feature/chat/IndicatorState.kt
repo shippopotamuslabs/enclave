@@ -20,7 +20,7 @@ sealed class IndicatorState {
 
     /** Generating state - shows generating indicator (with optional thinking data for "Thought For" header) */
     data class Generating(
-        val thinkingData: ThinkingDataUi?
+        val thinkingData: ThinkingDataUi?,
     ) : IndicatorState() {
         val hasThinkingData: Boolean
             get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()
@@ -28,7 +28,7 @@ sealed class IndicatorState {
 
     /** Complete state - shows final response (with optional thinking data for "Thought For" header) */
     data class Complete(
-        val thinkingData: ThinkingDataUi?
+        val thinkingData: ThinkingDataUi?,
     ) : IndicatorState() {
         val hasThinkingData: Boolean
             get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()

@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.feature.chat
 
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 /**
  * Presentation layer content model.

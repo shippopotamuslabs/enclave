@@ -18,19 +18,20 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 fun ShieldOverlay(
     reason: String,
     onTap: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     IconButton(
         onClick = onTap,
-        modifier = modifier.semantics {
-            contentDescription = "Shield active: $reason"
-        }
+        modifier =
+            modifier.semantics {
+                contentDescription = "Shield active: $reason"
+            },
     ) {
         Icon(
             imageVector = Icons.Default.Warning,
             contentDescription = "Procedural harm blocked",
             tint = Color.Red,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(28.dp),
         )
     }
 }
@@ -41,7 +42,7 @@ fun PreviewShieldOverlay() {
     PocketCrewTheme {
         ShieldOverlay(
             reason = "Potential harm detected",
-            onTap = {}
+            onTap = {},
         )
     }
 }

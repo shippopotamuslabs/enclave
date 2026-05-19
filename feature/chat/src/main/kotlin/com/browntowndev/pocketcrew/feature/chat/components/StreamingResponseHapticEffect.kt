@@ -18,7 +18,9 @@ private val GENERATING_BUZZ_AMPLITUDES = intArrayOf(0, 70, 0, 85, 0)
 
 interface StreamingResponseHapticController {
     fun startThinkingPulse()
+
     fun startGeneratingBuzz()
+
     fun stop()
 }
 

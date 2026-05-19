@@ -2,15 +2,14 @@ package com.browntowndev.pocketcrew.feature.chat.components
 
 import android.Manifest
 import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.assertIsDisplayed
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -23,7 +22,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(instrumentedPackages = ["androidx.loader.content"])
 class InputBarTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -50,7 +48,7 @@ class InputBarTest {
                 onFileAttach = {},
                 onClearImage = { _ -> },
                 onClearFile = {},
-                onMicClick = {}
+                onMicClick = {},
             )
         }
 
@@ -86,7 +84,7 @@ class InputBarTest {
                 onFileAttach = {},
                 onClearImage = { _ -> },
                 onClearFile = {},
-                onMicClick = {}
+                onMicClick = {},
             )
         }
 
@@ -119,7 +117,7 @@ class InputBarTest {
                 onFileAttach = {},
                 onClearImage = { _ -> },
                 onClearFile = {},
-                onMicClick = { onMicClickCalled = true }
+                onMicClick = { onMicClickCalled = true },
             )
         }
 
@@ -157,7 +155,7 @@ class InputBarTest {
                 onFileAttach = {},
                 onClearImage = { _ -> },
                 onClearFile = {},
-                onMicClick = { onMicClickCalled = true }
+                onMicClick = { onMicClickCalled = true },
             )
         }
 
@@ -169,9 +167,9 @@ class InputBarTest {
     @Test
     fun `InputBar should have navigationBarsPadding on its content to support bleeding`() {
         // This is a structural test to ensure the "bleed" pattern is followed.
-        // We expect the root Surface to NOT have navigationBarsPadding, 
+        // We expect the root Surface to NOT have navigationBarsPadding,
         // but its direct child Box SHOULD have it.
-        
+
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
@@ -193,12 +191,12 @@ class InputBarTest {
                 onFileAttach = {},
                 onClearImage = { _ -> },
                 onClearFile = {},
-                onMicClick = {}
+                onMicClick = {},
             )
         }
 
         // We can't easily check for specific modifiers in Compose UI tests without custom semantics.
-        // For now, this test serves as a placeholder for the "Red" state where we will 
+        // For now, this test serves as a placeholder for the "Red" state where we will
         // verify the visual "bleed" via Previews as requested by the user.
         assertTrue("InputBar should support bleeding", true)
     }

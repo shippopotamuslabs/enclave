@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("toolCallBannerInsertAfterSegmentIndex")
 class ToolCallBannerPlacementTest {
-
     @Test
     fun `insert after last leading streaming thinking block`() {
         val segments =

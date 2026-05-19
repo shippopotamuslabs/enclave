@@ -1,4 +1,24 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.chat.components
 
@@ -15,7 +35,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -34,10 +53,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -45,7 +64,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,24 +71,22 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.core.ui.component.markdown.SimpleMarkdownText
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
-import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
-import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
+import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 
 @Composable
 fun MessageList(
@@ -84,7 +100,10 @@ fun MessageList(
     chatMode: ChatModeUi = ChatModeUi.FAST,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
-    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit = { _, _ -> },
+    onArtifactCardClick: (
+        com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel,
+    ) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
 ) {
@@ -103,10 +122,11 @@ fun MessageList(
     LaunchedEffect(chatId, messages.isNotEmpty(), latestUserMessageId, latestUserMessageIndex) {
         if (messages.isEmpty()) return@LaunchedEffect
 
-        val targetLazyIndex = messageListScrollTargetLazyIndex(
-            messageCount = messages.size,
-            latestUserMessageIndex = latestUserMessageIndex,
-        )
+        val targetLazyIndex =
+            messageListScrollTargetLazyIndex(
+                messageCount = messages.size,
+                latestUserMessageIndex = latestUserMessageIndex,
+            )
 
         if (!initialScrollDone) {
             listState.scrollToItem(targetLazyIndex)
@@ -130,15 +150,19 @@ fun MessageList(
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
             val bottomContentPadding = 16.dp
-            val activeInteractionMinHeight = activeInteractionMinHeight(
-                viewportHeight = viewportHeight,
-                bottomContentPadding = bottomContentPadding,
-            )
+            val activeInteractionMinHeight =
+                activeInteractionMinHeight(
+                    viewportHeight = viewportHeight,
+                    bottomContentPadding = bottomContentPadding,
+                )
 
             // Total item count for scroll-to-bottom targeting
-            val totalItems = if (latestUserMessageIndex != -1)
-                (if (latestUserMessageIndex > 0) latestUserMessageIndex else 0) + 1
-            else messages.size
+            val totalItems =
+                if (latestUserMessageIndex != -1) {
+                    (if (latestUserMessageIndex > 0) latestUserMessageIndex else 0) + 1
+                } else {
+                    messages.size
+                }
 
             // The last LazyColumn item index (the active_interaction column or the last history item).
             // The FAB should only be visible when this last item is NOT yet the first visible item —
@@ -180,7 +204,7 @@ fun MessageList(
                 val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
                 items(
                     count = historyCount,
-                    key = { index -> "history_msg_${messages[index].id}" }
+                    key = { index -> "history_msg_${messages[index].id}" },
                 ) { index ->
                     MessageItem(
                         message = messages[index],
@@ -193,7 +217,7 @@ fun MessageList(
                         onArtifactCardClick = onArtifactCardClick,
                         onNavigateToStudio = onNavigateToStudio,
                         onShareClick = onShareClick,
-                        isPreview = isPreview
+                        isPreview = isPreview,
                     )
                 }
 
@@ -203,10 +227,11 @@ fun MessageList(
                 if (latestUserMessageIndex != -1) {
                     item(key = "active_interaction_$latestUserMessageId") {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = activeInteractionMinHeight),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = activeInteractionMinHeight),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             for (i in latestUserMessageIndex until messages.size) {
                                 key(messages[i].id) {
@@ -221,7 +246,7 @@ fun MessageList(
                                         onArtifactCardClick = onArtifactCardClick,
                                         onNavigateToStudio = onNavigateToStudio,
                                         onShareClick = onShareClick,
-                                        isPreview = isPreview
+                                        isPreview = isPreview,
                                     )
                                 }
                             }
@@ -240,9 +265,10 @@ fun MessageList(
                         coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
                     }
                 },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 12.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp),
             )
         }
     }
@@ -261,7 +287,7 @@ private fun ScrollToBottomFab(
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = 300),
-        label = "scrollToBottomAlpha"
+        label = "scrollToBottomAlpha",
     )
 
     // Keep the composable in the tree while fading out so the animation completes
@@ -293,15 +319,19 @@ private fun MessageItem(
     chatMode: ChatModeUi,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
-    onArtifactCardClick: (com.browntowndev.pocketcrew.domain.model.chat.MessageId, com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel) -> Unit,
+    onArtifactCardClick: (
+        com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel,
+    ) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
     isPreview: Boolean,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
     ) {
         // ============================================================
         // Indicator rendering - shows at TOP for Assistant messages
@@ -358,7 +388,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         Image(
             painter = painterResource(R.drawable.pocket_crew_icon),
             contentDescription = null,
-            modifier = Modifier.size(160.dp)
+            modifier = Modifier.size(160.dp),
         )
         Text(
             text = "Pocket Crew is ready",
@@ -378,8 +408,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 internal fun transcriptLayoutShowsTopThinkingIndicator(
     indicatorState: IndicatorState?,
     suppressDuplicateThoughtForHeader: Boolean,
-): Boolean =
-    indicatorState is IndicatorState.Thinking && !suppressDuplicateThoughtForHeader
+): Boolean = indicatorState is IndicatorState.Thinking && !suppressDuplicateThoughtForHeader
 
 /**
  * Aggregate "Thought for …" header above the assistant body is omitted when transcript segments
@@ -435,13 +464,15 @@ private fun Indicators(
 
         // Hoist elapsed time counter to share between Indicator and BottomSheet
         var elapsedSeconds by remember { mutableIntStateOf(0) }
-        val startTime = when (indicatorState) {
-            is IndicatorState.Thinking -> indicatorState.thinkingStartTime
-            is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
-            is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
-            else -> 0L
-        }
-        val isThinkingActive = indicatorState is IndicatorState.Thinking ||
+        val startTime =
+            when (indicatorState) {
+                is IndicatorState.Thinking -> indicatorState.thinkingStartTime
+                is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
+                is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
+                else -> 0L
+            }
+        val isThinkingActive =
+            indicatorState is IndicatorState.Thinking ||
                 indicatorState is IndicatorState.EngineLoading ||
                 (indicatorState is IndicatorState.Generating && indicatorState.thinkingData?.thinkingDurationSeconds == 0L)
 
@@ -456,13 +487,14 @@ private fun Indicators(
         // Sync the final duration after state settles — must not write state during composition.
         LaunchedEffect(indicatorState) {
             if (!isThinkingActive) {
-                elapsedSeconds = when (indicatorState) {
-                    is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
-                    is IndicatorState.EngineLoading -> 0
-                    is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                    is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                    else -> 0
-                }
+                elapsedSeconds =
+                    when (indicatorState) {
+                        is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
+                        is IndicatorState.EngineLoading -> 0
+                        is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                        is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                        else -> 0
+                    }
             }
         }
 
@@ -497,7 +529,7 @@ private fun Indicators(
                             isExpanded = isThinkingSheetVisible,
                             onViewFullThinking = {
                                 isThinkingSheetVisible = !isThinkingSheetVisible
-                            }
+                            },
                         )
                     }
 
@@ -518,7 +550,7 @@ private fun Indicators(
                         isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
                             isThinkingSheetVisible = !isThinkingSheetVisible
-                        }
+                        },
                     )
                 }
             }
@@ -528,30 +560,33 @@ private fun Indicators(
         }
 
         if (isThinkingSheetVisible) {
-            val isStreaming = indicatorState !is IndicatorState.Complete &&
-                             indicatorState !is IndicatorState.None
-            
+            val isStreaming =
+                indicatorState !is IndicatorState.Complete &&
+                    indicatorState !is IndicatorState.None
+
             ThinkingDetailsBottomSheet(
                 isVisible = isThinkingSheetVisible,
-                thinkingRaw = indicatorState.let {
-                    when (it) {
-                        is IndicatorState.Thinking -> it.thinkingRaw
-                        is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
-                        is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
-                        else -> ""
-                    }
-                },
-                thinkingDurationSeconds = indicatorState.let {
-                    when (it) {
-                        is IndicatorState.Thinking -> it.thinkingDurationSeconds
-                        is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                        is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                        else -> 0
-                    }
-                },
+                thinkingRaw =
+                    indicatorState.let {
+                        when (it) {
+                            is IndicatorState.Thinking -> it.thinkingRaw
+                            is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
+                            is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
+                            else -> ""
+                        }
+                    },
+                thinkingDurationSeconds =
+                    indicatorState.let {
+                        when (it) {
+                            is IndicatorState.Thinking -> it.thinkingDurationSeconds
+                            is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                            is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                            else -> 0
+                        }
+                    },
                 elapsedSeconds = elapsedSeconds,
                 isStreaming = isStreaming,
-                onDismiss = { isThinkingSheetVisible = false }
+                onDismiss = { isThinkingSheetVisible = false },
             )
         }
     }
@@ -567,21 +602,22 @@ internal fun ThoughtForHeader(
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 90f else 0f,
         animationSpec = tween(durationMillis = 200),
-        label = "chevronRotation"
+        label = "chevronRotation",
     )
 
     // Header row: lightbulb + "Thought for Xs" — clickable to open bottom sheet
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .padding(bottom = 8.dp)
-            .fillMaxWidth()
-            .offset(x = (-11).dp)
-            .clickable { onViewFullThinking() }
+        modifier =
+            modifier
+                .padding(bottom = 8.dp)
+                .fillMaxWidth()
+                .offset(x = (-11).dp)
+                .clickable { onViewFullThinking() },
     ) {
         Box(
             modifier = Modifier.size(46.dp),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = painterResource(R.drawable.lightbulb),
@@ -594,10 +630,11 @@ internal fun ThoughtForHeader(
 
         Text(
             text = "Thought for $durationText",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-            ),
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
@@ -606,19 +643,21 @@ internal fun ThoughtForHeader(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = if (isExpanded) "Collapse details" else "Expand details",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .size(24.dp)
-                .rotate(rotation),
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .rotate(rotation),
         )
     }
 }
 
 // ── "Thought for Xs" header that opens bottom sheet ──
 
-internal fun formatThinkingDuration(seconds: Int): String = when {
-    seconds < 60 -> "${seconds}s"
-    else -> "${seconds / 60}m ${seconds % 60}s"
-}
+internal fun formatThinkingDuration(seconds: Int): String =
+    when {
+        seconds < 60 -> "${seconds}s"
+        else -> "${seconds / 60}m ${seconds % 60}s"
+    }
 
 // ==================== PREVIEWS ====================
 
@@ -626,7 +665,7 @@ internal fun formatThinkingDuration(seconds: Int): String = when {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview =  true)
+        MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview = true)
     }
 }
 
@@ -634,7 +673,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
+        MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview = true)
     }
 }
 
@@ -643,41 +682,44 @@ private fun PreviewMessageListLong() {
 private fun PreviewMessageListThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.THINKING,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Explain quantum computing"),
-                    formattedTimestamp = "10:30 AM",
-                ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = ""),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Thinking(
-                        thinkingRaw = "# Quantum Computing Analysis\n\n" +
-                            "Let me break down quantum computing:\n\n" +
-                            "## Key Concepts\n\n" +
-                            "1. **Qubits** - Unlike bits, qubits can be 0, 1, or both\n" +
-                            "2. **Superposition** - Multiple states at once\n" +
-                            "3. **Entanglement** - Correlated qubit pairs\n\n" +
-                            "```python\n" +
-                            "# Example quantum circuit\n" +
-                            "circuit = QuantumCircuit(2)\n" +
-                            "circuit.h(0)  # Hadamard gate\n" +
-                            "circuit.cx(0, 1)  # CNOT\n" +
-                            "```",
-                        thinkingDurationSeconds = 23,
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Explain quantum computing"),
+                        formattedTimestamp = "10:30 AM",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = ""),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Thinking(
+                                thinkingRaw =
+                                    "# Quantum Computing Analysis\n\n" +
+                                        "Let me break down quantum computing:\n\n" +
+                                        "## Key Concepts\n\n" +
+                                        "1. **Qubits** - Unlike bits, qubits can be 0, 1, or both\n" +
+                                        "2. **Superposition** - Multiple states at once\n" +
+                                        "3. **Entanglement** - Correlated qubit pairs\n\n" +
+                                        "```python\n" +
+                                        "# Example quantum circuit\n" +
+                                        "circuit = QuantumCircuit(2)\n" +
+                                        "circuit.h(0)  # Hadamard gate\n" +
+                                        "circuit.cx(0, 1)  # CNOT\n" +
+                                        "```",
+                                thinkingDurationSeconds = 23,
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                ),
         )
     }
 }
@@ -687,26 +729,27 @@ private fun PreviewMessageListThinking() {
 private fun PreviewMessageListProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Hello?"),
-                    formattedTimestamp = "10:30 AM",
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Hello?"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = ""),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
                 ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = ""),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Processing,
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
         )
     }
 }
@@ -716,35 +759,39 @@ private fun PreviewMessageListProcessing() {
 private fun PreviewMessageListGenerating() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.FAST,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "What is Docker?"),
-                    formattedTimestamp = "10:30 AM",
-                ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = ""),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Generating(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 5,
-                            thinkingRaw = "Docker is a containerization platform. Let me explain:\n\n" +
-                                "- **Containers** vs VMs\n" +
-                                "- **Dockerfile** for images\n" +
-                                "- **docker-compose** for multi-container apps"
-                        )
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "What is Docker?"),
+                        formattedTimestamp = "10:30 AM",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = ""),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Generating(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 5,
+                                        thinkingRaw =
+                                            "Docker is a containerization platform. Let me explain:\n\n" +
+                                                "- **Containers** vs VMs\n" +
+                                                "- **Dockerfile** for images\n" +
+                                                "- **docker-compose** for multi-container apps",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                ),
         )
     }
 }
@@ -755,34 +802,38 @@ private fun PreviewMessageListGenerating() {
 private fun PreviewPipelineDraftOneGeneratingWithThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.CREW,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Write me a function to sort a list"),
-                    formattedTimestamp = "10:30 AM",
-                ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Generating(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 4,
-                            thinkingRaw = "Analyzing sorting algorithms...\n\n" +
-                                "- Quick sort seems optimal here\n" +
-                                "- Need to handle edge cases..."
-                        )
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Write me a function to sort a list"),
+                        formattedTimestamp = "10:30 AM",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Generating(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 4,
+                                        thinkingRaw =
+                                            "Analyzing sorting algorithms...\n\n" +
+                                                "- Quick sort seems optimal here\n" +
+                                                "- Need to handle edge cases...",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                ),
         )
     }
 }
@@ -793,35 +844,38 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
 private fun PreviewPipelineDraftOneThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Write me a function to sort a list"),
-                    formattedTimestamp = "10:30 AM",
-                ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Thinking(
-                        thinkingRaw = "# Draft 1 Analysis\n\n" +
-                            "Looking at the requirements:\n\n" +
-                            "1. Need efficient sorting\n" +
-                            "2. Should handle duplicates\n\n" +
-                            "```kotlin\n" +
-                            "fun sort(list: List<Int>): List<Int>\n" +
-                            "```",
-                        thinkingDurationSeconds = 12,
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Write me a function to sort a list"),
+                        formattedTimestamp = "10:30 AM",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Thinking(
+                                thinkingRaw =
+                                    "# Draft 1 Analysis\n\n" +
+                                        "Looking at the requirements:\n\n" +
+                                        "1. Need efficient sorting\n" +
+                                        "2. Should handle duplicates\n\n" +
+                                        "```kotlin\n" +
+                                        "fun sort(list: List<Int>): List<Int>\n" +
+                                        "```",
+                                thinkingDurationSeconds = 12,
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                ),
         )
     }
 }
@@ -832,26 +886,27 @@ private fun PreviewPipelineDraftOneThinking() {
 private fun PreviewPipelineDraftOneProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Write me a function to sort a list"),
-                    formattedTimestamp = "10:30 AM",
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Write me a function to sort a list"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
                 ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Processing,
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
         )
     }
 }
@@ -862,96 +917,110 @@ private fun PreviewPipelineDraftOneProcessing() {
 private fun PreviewPipelineFullChainWithFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Write me a function to sort a list"),
-                    formattedTimestamp = "10:30 AM",
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Write me a function to sort a list"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    // DRAFT_ONE - Complete with thinking
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Here's my first draft approach...",
+                                pipelineStep = PipelineStep.DRAFT_ONE,
+                            ),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 5,
+                                        thinkingRaw = "Brainstorming approaches...",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // DRAFT_TWO - Complete with thinking
+                    ChatMessage(
+                        id = MessageId("3"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Refining the approach for efficiency...",
+                                pipelineStep = PipelineStep.DRAFT_TWO,
+                            ),
+                        formattedTimestamp = "10:28 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 7,
+                                        thinkingRaw =
+                                            "Analyzing complexity...\n\n" +
+                                                "- QuickSort O(n log n) ✓\n" +
+                                                "- Handle edge cases ✓",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // SYNTHESIS - Complete without thinking
+                    ChatMessage(
+                        id = MessageId("4"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Combining the best ideas...",
+                                pipelineStep = PipelineStep.SYNTHESIS,
+                            ),
+                        formattedTimestamp = "10:27 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // FINAL - Complete WITH thinking data
+                    ChatMessage(
+                        id = MessageId("5"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text =
+                                    "# Sorted List Function\n\n" +
+                                        "Here's an efficient implementation:\n\n" +
+                                        "```kotlin\n" +
+                                        "fun <T> sort(list: List<T>): List<T> {\n" +
+                                        "    return list.sorted()\n" +
+                                        "}\n" +
+                                        "```\n\n" +
+                                        "This uses Kotlin's built-in `sorted()` which implements TimSort at O(n log n).",
+                                pipelineStep = PipelineStep.FINAL,
+                            ),
+                        formattedTimestamp = "10:26 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 3,
+                                        thinkingRaw =
+                                            "Final review:\n\n" +
+                                                "- Used built-in for simplicity\n" +
+                                                "- Generic type support ✓\n" +
+                                                "- Clear documentation ✓",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
                 ),
-                // DRAFT_ONE - Complete with thinking
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Here's my first draft approach...",
-                        pipelineStep = PipelineStep.DRAFT_ONE
-                    ),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Complete(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 5,
-                            thinkingRaw = "Brainstorming approaches..."
-                        )
-                    ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // DRAFT_TWO - Complete with thinking
-                ChatMessage(
-                    id = MessageId("3"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Refining the approach for efficiency...",
-                        pipelineStep = PipelineStep.DRAFT_TWO
-                    ),
-                    formattedTimestamp = "10:28 AM",
-                    indicatorState = IndicatorState.Complete(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 7,
-                            thinkingRaw = "Analyzing complexity...\n\n" +
-                                "- QuickSort O(n log n) ✓\n" +
-                                "- Handle edge cases ✓"
-                        )
-                    ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // SYNTHESIS - Complete without thinking
-                ChatMessage(
-                    id = MessageId("4"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Combining the best ideas...",
-                        pipelineStep = PipelineStep.SYNTHESIS
-                    ),
-                    formattedTimestamp = "10:27 AM",
-                    indicatorState = IndicatorState.Complete(thinkingData = null),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // FINAL - Complete WITH thinking data
-                ChatMessage(
-                    id = MessageId("5"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "# Sorted List Function\n\n" +
-                            "Here's an efficient implementation:\n\n" +
-                            "```kotlin\n" +
-                            "fun <T> sort(list: List<T>): List<T> {\n" +
-                            "    return list.sorted()\n" +
-                            "}\n" +
-                            "```\n\n" +
-                            "This uses Kotlin's built-in `sorted()` which implements TimSort at O(n log n).",
-                        pipelineStep = PipelineStep.FINAL
-                    ),
-                    formattedTimestamp = "10:26 AM",
-                    indicatorState = IndicatorState.Complete(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 3,
-                            thinkingRaw = "Final review:\n\n" +
-                                "- Used built-in for simplicity\n" +
-                                "- Generic type support ✓\n" +
-                                "- Clear documentation ✓"
-                        )
-                    ),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
         )
     }
 }
@@ -962,85 +1031,96 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
 private fun PreviewPipelineFullChainNoFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Write me a function to sort a list"),
-                    formattedTimestamp = "10:30 AM",
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Write me a function to sort a list"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    // DRAFT_ONE - Complete WITHOUT thinking
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "First draft approach ready.",
+                                pipelineStep = PipelineStep.DRAFT_ONE,
+                            ),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // DRAFT_TWO - Complete with thinking
+                    ChatMessage(
+                        id = MessageId("3"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Refined for efficiency.",
+                                pipelineStep = PipelineStep.DRAFT_TWO,
+                            ),
+                        formattedTimestamp = "10:28 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 6,
+                                        thinkingRaw =
+                                            "Analyzing performance...\n\n" +
+                                                "- O(n log n) achieved ✓",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // SYNTHESIS - Complete with thinking
+                    ChatMessage(
+                        id = MessageId("4"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Combined all approaches.",
+                                pipelineStep = PipelineStep.SYNTHESIS,
+                            ),
+                        formattedTimestamp = "10:27 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 4,
+                                        thinkingRaw = "Merging drafts...",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // FINAL - Complete WITHOUT thinking data
+                    ChatMessage(
+                        id = MessageId("5"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text =
+                                    "# Sorted List\n\n" +
+                                        "```kotlin\n" +
+                                        "fun <T> sort(list: List<T>): List<T> {\n" +
+                                        "    return list.sorted()\n" +
+                                        "}\n" +
+                                        "```",
+                                pipelineStep = PipelineStep.FINAL,
+                            ),
+                        formattedTimestamp = "10:26 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
                 ),
-                // DRAFT_ONE - Complete WITHOUT thinking
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "First draft approach ready.",
-                        pipelineStep = PipelineStep.DRAFT_ONE
-                    ),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Complete(thinkingData = null),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // DRAFT_TWO - Complete with thinking
-                ChatMessage(
-                    id = MessageId("3"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Refined for efficiency.",
-                        pipelineStep = PipelineStep.DRAFT_TWO
-                    ),
-                    formattedTimestamp = "10:28 AM",
-                    indicatorState = IndicatorState.Complete(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 6,
-                            thinkingRaw = "Analyzing performance...\n\n" +
-                                "- O(n log n) achieved ✓"
-                        )
-                    ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // SYNTHESIS - Complete with thinking
-                ChatMessage(
-                    id = MessageId("4"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Combined all approaches.",
-                        pipelineStep = PipelineStep.SYNTHESIS
-                    ),
-                    formattedTimestamp = "10:27 AM",
-                    indicatorState = IndicatorState.Complete(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 4,
-                            thinkingRaw = "Merging drafts..."
-                        )
-                    ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // FINAL - Complete WITHOUT thinking data
-                ChatMessage(
-                    id = MessageId("5"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "# Sorted List\n\n" +
-                            "```kotlin\n" +
-                            "fun <T> sort(list: List<T>): List<T> {\n" +
-                            "    return list.sorted()\n" +
-                            "}\n" +
-                            "```",
-                        pipelineStep = PipelineStep.FINAL
-                    ),
-                    formattedTimestamp = "10:26 AM",
-                    indicatorState = IndicatorState.Complete(thinkingData = null),
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
         )
     }
 }
@@ -1051,69 +1131,75 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
 private fun PreviewPipelineVariousStepsInProgress() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "Explain photosynthesis"),
-                    formattedTimestamp = "10:30 AM",
-                ),
-                // DRAFT_ONE - Thinking
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
-                    formattedTimestamp = "10:29 AM",
-                    indicatorState = IndicatorState.Thinking(
-                        thinkingRaw = "# Draft 1\n\n" +
-                            "Photosynthesis is the process...",
-                        thinkingDurationSeconds = 8,
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Explain photosynthesis"),
+                        formattedTimestamp = "10:30 AM",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // DRAFT_TWO - Generating
-                ChatMessage(
-                    id = MessageId("3"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_TWO),
-                    formattedTimestamp = "10:28 AM",
-                    indicatorState = IndicatorState.Generating(
-                        thinkingData = ThinkingDataUi(
-                            thinkingDurationSeconds = 5,
-                            thinkingRaw = "Analyzing chemical processes..."
-                        )
+                    // DRAFT_ONE - Thinking
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState =
+                            IndicatorState.Thinking(
+                                thinkingRaw =
+                                    "# Draft 1\n\n" +
+                                        "Photosynthesis is the process...",
+                                thinkingDurationSeconds = 8,
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
                     ),
-                    modelDisplayName = "Qwen 3 8B",
-                ),
-                // SYNTHESIS - Complete
-                ChatMessage(
-                    id = MessageId("4"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(
-                        text = "Synthesis complete.",
-                        pipelineStep = PipelineStep.SYNTHESIS
+                    // DRAFT_TWO - Generating
+                    ChatMessage(
+                        id = MessageId("3"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_TWO),
+                        formattedTimestamp = "10:28 AM",
+                        indicatorState =
+                            IndicatorState.Generating(
+                                thinkingData =
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = 5,
+                                        thinkingRaw = "Analyzing chemical processes...",
+                                    ),
+                            ),
+                        modelDisplayName = "Qwen 3 8B",
                     ),
-                    formattedTimestamp = "10:27 AM",
-                    indicatorState = IndicatorState.Complete(thinkingData = null),
-                    modelDisplayName = "Qwen 3 8B",
+                    // SYNTHESIS - Complete
+                    ChatMessage(
+                        id = MessageId("4"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content =
+                            ContentUi(
+                                text = "Synthesis complete.",
+                                pipelineStep = PipelineStep.SYNTHESIS,
+                            ),
+                        formattedTimestamp = "10:27 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                    // FINAL - Processing
+                    ChatMessage(
+                        id = MessageId("5"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:26 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
                 ),
-                // FINAL - Processing
-                ChatMessage(
-                    id = MessageId("5"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
-                    formattedTimestamp = "10:26 AM",
-                    indicatorState = IndicatorState.Processing,
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
         )
     }
 }
@@ -1124,20 +1210,97 @@ private fun PreviewPipelineVariousStepsInProgress() {
 private fun PreviewPipelineDraftOneAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 1"), formattedTimestamp = "10:30 AM"),
-                ChatMessage(id = MessageId("2"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Thinking...", thinkingDurationSeconds = 5), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("3"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 2"), formattedTimestamp = "10:28 AM"),
-                ChatMessage(id = MessageId("4"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("5"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 3"), formattedTimestamp = "10:26 AM"),
-                ChatMessage(id = MessageId("6"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 3, thinkingRaw = "Generating...")), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("7"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 4"), formattedTimestamp = "10:24 AM"),
-                ChatMessage(id = MessageId("8"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Draft with thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 4, thinkingRaw = "Thought...")), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("9"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 5"), formattedTimestamp = "10:22 AM"),
-                ChatMessage(id = MessageId("10"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Draft no thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
-            )
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Task 1"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState = IndicatorState.Thinking(thinkingRaw = "Thinking...", thinkingDurationSeconds = 5),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("3"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Task 2"),
+                        formattedTimestamp = "10:28 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("4"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:27 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("5"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Task 3"),
+                        formattedTimestamp = "10:26 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("6"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:25 AM",
+                        indicatorState =
+                            IndicatorState.Generating(
+                                thinkingData = ThinkingDataUi(thinkingDurationSeconds = 3, thinkingRaw = "Generating..."),
+                            ),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("7"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Task 4"),
+                        formattedTimestamp = "10:24 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("8"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "Draft with thinking.", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:23 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData = ThinkingDataUi(thinkingDurationSeconds = 4, thinkingRaw = "Thought..."),
+                            ),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("9"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Task 5"),
+                        formattedTimestamp = "10:22 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("10"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "Draft no thinking.", pipelineStep = PipelineStep.DRAFT_ONE),
+                        formattedTimestamp = "10:21 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Model",
+                    ),
+                ),
         )
     }
 }
@@ -1148,20 +1311,97 @@ private fun PreviewPipelineDraftOneAllStates() {
 private fun PreviewPipelineFinalAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
-            isPreview =  true,
+            isPreview = true,
             hasActiveIndicator = true,
-            messages = listOf(
-                ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q1"), formattedTimestamp = "10:30 AM"),
-                ChatMessage(id = MessageId("2"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Final thinking...", thinkingDurationSeconds = 10), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("3"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q2"), formattedTimestamp = "10:28 AM"),
-                ChatMessage(id = MessageId("4"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("5"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q3"), formattedTimestamp = "10:26 AM"),
-                ChatMessage(id = MessageId("6"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 5, thinkingRaw = "Final synthesis...")), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("7"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q4"), formattedTimestamp = "10:24 AM"),
-                ChatMessage(id = MessageId("8"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final WITH thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 6, thinkingRaw = "Final review...")), modelDisplayName = "Model"),
-                ChatMessage(id = MessageId("9"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q5"), formattedTimestamp = "10:22 AM"),
-                ChatMessage(id = MessageId("10"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final no thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
-            )
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Q1"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:29 AM",
+                        indicatorState = IndicatorState.Thinking(thinkingRaw = "Final thinking...", thinkingDurationSeconds = 10),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("3"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Q2"),
+                        formattedTimestamp = "10:28 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("4"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:27 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("5"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Q3"),
+                        formattedTimestamp = "10:26 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("6"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:25 AM",
+                        indicatorState =
+                            IndicatorState.Generating(
+                                thinkingData = ThinkingDataUi(thinkingDurationSeconds = 5, thinkingRaw = "Final synthesis..."),
+                            ),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("7"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Q4"),
+                        formattedTimestamp = "10:24 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("8"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "Final WITH thinking.", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:23 AM",
+                        indicatorState =
+                            IndicatorState.Complete(
+                                thinkingData = ThinkingDataUi(thinkingDurationSeconds = 6, thinkingRaw = "Final review..."),
+                            ),
+                        modelDisplayName = "Model",
+                    ),
+                    ChatMessage(
+                        id = MessageId("9"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "Q5"),
+                        formattedTimestamp = "10:22 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("10"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = "Final no thinking.", pipelineStep = PipelineStep.FINAL),
+                        formattedTimestamp = "10:21 AM",
+                        indicatorState = IndicatorState.Complete(thinkingData = null),
+                        modelDisplayName = "Model",
+                    ),
+                ),
         )
     }
 }
@@ -1175,28 +1415,30 @@ private fun PreviewMessageListWithToolCall() {
             isPreview = true,
             hasActiveIndicator = true,
             activeIndicatorMessageId = messageId,
-            activeToolCallBanner = ToolCallBannerUi(
-                kind = ToolCallBannerKind.SEARCH,
-                label = "Searching for quantum computing basics..."
-            ),
-            messages = listOf(
-                ChatMessage(
-                    id = MessageId("1"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.User,
-                    content = ContentUi(text = "What is quantum computing?"),
-                    formattedTimestamp = "10:30 AM",
+            activeToolCallBanner =
+                ToolCallBannerUi(
+                    kind = ToolCallBannerKind.SEARCH,
+                    label = "Searching for quantum computing basics...",
                 ),
-                ChatMessage(
-                    id = MessageId("2"),
-                    chatId = ChatId("1"),
-                    role = MessageRole.Assistant,
-                    content = ContentUi(text = ""),
-                    formattedTimestamp = "10:31 AM",
-                    indicatorState = IndicatorState.Processing,
-                    modelDisplayName = "Qwen 3 8B",
-                )
-            )
+            messages =
+                listOf(
+                    ChatMessage(
+                        id = MessageId("1"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.User,
+                        content = ContentUi(text = "What is quantum computing?"),
+                        formattedTimestamp = "10:30 AM",
+                    ),
+                    ChatMessage(
+                        id = MessageId("2"),
+                        chatId = ChatId("1"),
+                        role = MessageRole.Assistant,
+                        content = ContentUi(text = ""),
+                        formattedTimestamp = "10:31 AM",
+                        indicatorState = IndicatorState.Processing,
+                        modelDisplayName = "Qwen 3 8B",
+                    ),
+                ),
         )
     }
 }

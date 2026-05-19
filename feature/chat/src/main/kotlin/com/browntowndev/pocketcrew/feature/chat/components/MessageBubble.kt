@@ -1,4 +1,24 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.chat.components
 
@@ -96,35 +116,39 @@ fun MessageBubble(
     if (fullscreenImageUri != null) {
         Dialog(
             onDismissRequest = { fullscreenImageUri = null },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
+            properties =
+                DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.8f))
-                    .systemBarsPadding()
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .systemBarsPadding(),
             ) {
                 AsyncImage(
                     model = fullscreenImageUri,
                     contentDescription = "Fullscreen preview",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentScale = ContentScale.Fit
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                    contentScale = ContentScale.Fit,
                 )
                 IconButton(
                     onClick = { fullscreenImageUri = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close preview",
-                        tint = Color.White
+                        tint = Color.White,
                     )
                 }
             }
@@ -141,20 +165,22 @@ fun MessageBubble(
             // Image Previews (above the bubble)
             if (message.content.imageUris.isNotEmpty()) {
                 Row(
-                    modifier = Modifier
-                        .padding(bottom = 4.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier =
+                        Modifier
+                            .padding(bottom = 4.dp)
+                            .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     message.content.imageUris.forEach { imageUri ->
                         AsyncImage(
                             model = imageUri,
                             contentDescription = "Attached image",
-                            modifier = Modifier
-                                .widthIn(max = 120.dp)
-                                .heightIn(max = 120.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { fullscreenImageUri = imageUri }
+                            modifier =
+                                Modifier
+                                    .widthIn(max = 120.dp)
+                                    .heightIn(max = 120.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { fullscreenImageUri = imageUri },
                         )
                     }
                 }
@@ -162,52 +188,56 @@ fun MessageBubble(
 
             // Bubble
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth(fraction = .85f)
-                    .zIndex(1f)
-                    .clickable(
-                        onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
-                    ) { showActions = !showActions },
-                shape = RoundedCornerShape(
-                    topStart = 20.dp,
-                    topEnd = 20.dp,
-                    bottomStart = 20.dp,
-                    bottomEnd = 4.dp,
-                ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(fraction = .85f)
+                        .zIndex(1f)
+                        .clickable(
+                            onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
+                        ) { showActions = !showActions },
+                shape =
+                    RoundedCornerShape(
+                        topStart = 20.dp,
+                        topEnd = 20.dp,
+                        bottomStart = 20.dp,
+                        bottomEnd = 4.dp,
+                    ),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     // File Attachments
                     if (message.content.fileAttachments.isNotEmpty()) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                                    .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             message.content.fileAttachments.forEach { attachment ->
                                 AssistChip(
                                     onClick = { /* Open viewer potentially */ },
-                                    label = { 
+                                    label = {
                                         Text(
                                             text = attachment.name,
                                             style = MaterialTheme.typography.labelMedium,
-                                            maxLines = 1
-                                        ) 
+                                            maxLines = 1,
+                                        )
                                     },
                                     leadingIcon = {
                                         Icon(
                                             painter = painterResource(R.drawable.document),
                                             contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(16.dp),
                                         )
                                     },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        labelColor = MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    border = null
+                                    colors =
+                                        AssistChipDefaults.assistChipColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            labelColor = MaterialTheme.colorScheme.onSurface,
+                                        ),
+                                    border = null,
                                 )
                             }
                         }
@@ -223,15 +253,17 @@ fun MessageBubble(
                                 )
                             }
                         } else if (contentText.contains("```")) {
-                            val codeContent = contentText
-                                .substringAfter("```")
-                                .substringBeforeLast("```")
-                                .trim()
+                            val codeContent =
+                                contentText
+                                    .substringAfter("```")
+                                    .substringBeforeLast("```")
+                                    .trim()
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
                             ) {
                                 Text(
                                     text = codeContent,
@@ -253,9 +285,10 @@ fun MessageBubble(
                         text = message.formattedTimestamp,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .align(Alignment.End),
+                        modifier =
+                            Modifier
+                                .padding(top = 4.dp)
+                                .align(Alignment.End),
                     )
                 }
             }
@@ -308,9 +341,7 @@ fun MessageBubble(
 }
 
 @Composable
-private fun ExpandableTruncatableMessageText(
-    text: String,
-) {
+private fun ExpandableTruncatableMessageText(text: String) {
     var isExpanded by remember(text) { mutableStateOf(false) }
     var isTruncatable by remember(text) { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(
@@ -321,18 +352,20 @@ private fun ExpandableTruncatableMessageText(
     val bodyStyle = MaterialTheme.typography.bodyLarge
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-            ),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .animateContentSize(
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                ),
     ) {
         Text(
             text = text,
             style = bodyStyle,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(end = if (isTruncatable) 40.dp else 0.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(end = if (isTruncatable) 40.dp else 0.dp),
             maxLines = if (isExpanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { layout ->
@@ -347,18 +380,20 @@ private fun ExpandableTruncatableMessageText(
         if (isTruncatable) {
             IconButton(
                 onClick = { isExpanded = !isExpanded },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(40.dp)
-                    .zIndex(1f),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(40.dp)
+                        .zIndex(1f),
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) {
-                        "Collapse message"
-                    } else {
-                        "Expand message"
-                    },
+                    contentDescription =
+                        if (isExpanded) {
+                            "Collapse message"
+                        } else {
+                            "Expand message"
+                        },
                     modifier = Modifier.rotate(chevronRotation),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -375,13 +410,14 @@ private fun ExpandableTruncatableMessageText(
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            message = ChatMessage(
-                id = MessageId("1"),
-                chatId = ChatId("1"),
-                role = MessageRole.User,
-                content = ContentUi(text = "Hello!"),
-                formattedTimestamp = "10:30 AM"
-            ),
+            message =
+                ChatMessage(
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
+                    role = MessageRole.User,
+                    content = ContentUi(text = "Hello!"),
+                    formattedTimestamp = "10:30 AM",
+                ),
         )
     }
 }
@@ -392,19 +428,24 @@ private fun PreviewMessageBubbleUser() {
 private fun PreviewMessageBubbleCode() {
     PocketCrewTheme {
         MessageBubble(
-            message = ChatMessage(
-                id = MessageId("3"),
-                chatId = ChatId("1"),
-                role = MessageRole.User,
-                content = ContentUi(text = """
+            message =
+                ChatMessage(
+                    id = MessageId("3"),
+                    chatId = ChatId("1"),
+                    role = MessageRole.User,
+                    content =
+                        ContentUi(
+                            text =
+                                """
 ```
 fun main() {
   println("Hello")
 }
 ```
-                """.trimIndent()),
-                formattedTimestamp = "10:32 AM",
-            ),
+                                """.trimIndent(),
+                        ),
+                    formattedTimestamp = "10:32 AM",
+                ),
         )
     }
 }
@@ -415,16 +456,19 @@ fun main() {
 private fun PreviewMessageBubbleLong() {
     PocketCrewTheme {
         MessageBubble(
-            message = ChatMessage(
-                id = MessageId("4"),
-                chatId = ChatId("1"),
-                role = MessageRole.User,
-                content = ContentUi(
-                    text = "This is a longer message that spans multiple lines to verify layout " +
-                        "behavior and make sure the action buttons align properly beneath the bubble."
+            message =
+                ChatMessage(
+                    id = MessageId("4"),
+                    chatId = ChatId("1"),
+                    role = MessageRole.User,
+                    content =
+                        ContentUi(
+                            text =
+                                "This is a longer message that spans multiple lines to verify layout " +
+                                    "behavior and make sure the action buttons align properly beneath the bubble.",
+                        ),
+                    formattedTimestamp = "10:33 AM",
                 ),
-                formattedTimestamp = "10:33 AM",
-            ),
         )
     }
 }

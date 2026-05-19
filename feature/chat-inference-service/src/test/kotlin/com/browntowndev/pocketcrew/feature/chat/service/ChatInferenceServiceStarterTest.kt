@@ -12,7 +12,6 @@ import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 class ChatInferenceServiceStarterTest {
-
     private val context = mockk<Context>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val starter = ChatInferenceServiceStarter(context, loggingPort)

@@ -6,90 +6,64 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.InsertPhoto
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.InsertPhoto
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
-import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalImageAttachment
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
@@ -99,16 +73,7 @@ import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSh
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
-import com.browntowndev.pocketcrew.feature.chat.R
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
@@ -118,9 +83,9 @@ fun InputBar(
     speechState: SpeechState,
     selectedImageUris: List<String>,
     selectedFileName: String?,
-@Suppress("UnusedParameter")
+    @Suppress("UnusedParameter")
     isPhotoAttachmentEnabled: Boolean,
-@Suppress("UnusedParameter")
+    @Suppress("UnusedParameter")
     photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
@@ -136,7 +101,7 @@ fun InputBar(
     onClearImage: (String) -> Unit,
     onClearFile: () -> Unit,
     onMicClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var modeExpanded by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(false) }
@@ -145,15 +110,16 @@ fun InputBar(
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            onMicClick()
-        } else {
-            Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                onMicClick()
+            } else {
+                Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+            }
         }
-    }
 
     val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
     val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
@@ -172,7 +138,7 @@ fun InputBar(
                         onImageAttach()
                     },
                     enabled = isPhotoAttachmentEnabled,
-                    disabledReason = photoAttachmentDisabledReason
+                    disabledReason = photoAttachmentDisabledReason,
                 )
                 AttachmentMenuItem(
                     icon = Icons.Default.AttachFile,
@@ -180,7 +146,7 @@ fun InputBar(
                     onClick = {
                         showAttachmentSheet = false
                         onFileAttach()
-                    }
+                    },
                 )
             }
         }
@@ -189,18 +155,22 @@ fun InputBar(
     UniversalInputBar(
         isExpanded = isExpanded,
         onExpandToggle = { isExpanded = !isExpanded },
-        modifier = modifier.then(
-            if (!isExpanded && !isRecordingPhase) {
-                Modifier.clickable { focusRequester.requestFocus() }
-            } else Modifier
-        ),
+        modifier =
+            modifier.then(
+                if (!isExpanded && !isRecordingPhase) {
+                    Modifier.clickable { focusRequester.requestFocus() }
+                } else {
+                    Modifier
+                },
+            ),
         attachmentContent = {
             AnimatedVisibility(visible = selectedImageUris.isNotEmpty() && speechState == SpeechState.Idle) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     selectedImageUris.forEach { uri ->
                         UniversalImageAttachment(
@@ -213,20 +183,20 @@ fun InputBar(
 
             AnimatedVisibility(visible = selectedFileName != null && speechState == SpeechState.Idle) {
                 Row(
-                    modifier = Modifier
-                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(8.dp),
+                            ).padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -235,21 +205,20 @@ fun InputBar(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 200.dp)
+                        modifier = Modifier.widthIn(max = 200.dp),
                     )
                     Spacer(Modifier.width(8.dp))
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove file",
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onClearFile() },
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier =
+                            Modifier
+                                .size(16.dp)
+                                .clickable { onClearFile() },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            
-
         },
         inputContent = {
             BasicTextField(
@@ -257,57 +226,63 @@ fun InputBar(
                 onValueChange = {
                     onInputChange(it)
                 },
-                modifier = Modifier
-                    .padding(vertical = 5.dp)
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp
-                ),
+                modifier =
+                    Modifier
+                        .padding(vertical = 5.dp)
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
+                textStyle =
+                    TextStyle(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                    ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Default
-                ),
+                keyboardOptions =
+                    KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Default,
+                    ),
                 decorationBox = { innerTextField ->
                     Box(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
                         if (inputText.isEmpty() || isRecordingPhase) {
                             UniversalVoicePromptPlaceholder(
                                 speechState = speechState,
-                                idlePlaceholder = "Prompt the Pocket Crew"
+                                idlePlaceholder = "Prompt the Pocket Crew",
                             )
                         }
                         if (!isRecordingPhase) {
                             innerTextField()
                         }
                     }
-                }
+                },
             )
         },
-        actionContent = if (isRecordingPhase) null else {
-            {
-                // Plus Button
-                IconButton(
-                    onClick = { showAttachmentSheet = true },
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Show attachment options",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        actionContent =
+            if (isRecordingPhase) {
+                null
+            } else {
+                {
+                    // Plus Button
+                    IconButton(
+                        onClick = { showAttachmentSheet = true },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Show attachment options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-            }
-        },
+            },
         trailingAction = {
             if (!isRecordingPhase) {
                 // ChatModeUi selector
                 ExposedDropdownMenuBox(
                     expanded = modeExpanded,
-                    onExpandedChange = { modeExpanded = it }
+                    onExpandedChange = { modeExpanded = it },
                 ) {
                     StandardTrailingAction(
                         painter = painterResource(selectedMode.iconRes),
@@ -315,12 +290,12 @@ fun InputBar(
                         modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        description = selectedMode.getDisplayName(context)
+                        description = selectedMode.getDisplayName(context),
                     )
                     ExposedDropdownMenu(
                         expanded = modeExpanded,
                         onDismissRequest = { modeExpanded = false },
-                        modifier = Modifier.width(200.dp)
+                        modifier = Modifier.width(200.dp),
                     ) {
                         ChatModeUi.entries.forEach { mode ->
                             DropdownMenuItem(
@@ -332,9 +307,9 @@ fun InputBar(
                                 leadingIcon = {
                                     Icon(
                                         painter = painterResource(mode.iconRes),
-                                        contentDescription = null
+                                        contentDescription = null,
                                     )
-                                }
+                                },
                             )
                         }
                     }
@@ -356,9 +331,9 @@ fun InputBar(
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
-                isGlobalInferenceBlocked = isGlobalInferenceBlocked
+                isGlobalInferenceBlocked = isGlobalInferenceBlocked,
             )
-        }
+        },
     )
 }
 
@@ -369,59 +344,62 @@ private fun AttachmentMenuItem(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    disabledReason: String? = null
+    disabledReason: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val tooltipState = rememberTooltipState(isPersistent = true)
 
     val content = @Composable {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    if (enabled) {
-                        onClick()
-                    } else if (!disabledReason.isNullOrBlank()) {
-                        scope.launch { tooltipState.show() }
-                    }
-                }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (enabled) {
+                            onClick()
+                        } else if (!disabledReason.isNullOrBlank()) {
+                            scope.launch { tooltipState.show() }
+                        }
+                    }.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (enabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                }
+                tint =
+                    if (enabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                    },
             )
             Spacer(Modifier.width(12.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                }
+                color =
+                    if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    },
             )
         }
     }
 
     if (!enabled && !disabledReason.isNullOrBlank()) {
         TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                positioning = TooltipAnchorPosition.Above
-            ),
+            positionProvider =
+                TooltipDefaults.rememberTooltipPositionProvider(
+                    positioning = TooltipAnchorPosition.Above,
+                ),
             tooltip = {
                 PlainTooltip {
                     Text(disabledReason)
                 }
             },
             state = tooltipState,
-            content = content
+            content = content,
         )
     } else {
         content()
@@ -453,7 +431,7 @@ fun PreviewChatInputBar() {
                 onFileAttach = {},
                 onClearImage = {},
                 onClearFile = {},
-                onMicClick = {}
+                onMicClick = {},
             )
         }
     }
