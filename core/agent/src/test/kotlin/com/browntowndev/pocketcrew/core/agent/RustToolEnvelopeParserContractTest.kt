@@ -10,7 +10,6 @@ import kotlin.test.assertTrue
  * TOOL-PARSE-001 LI-03: real UniFFI round-trip through [RustToolEnvelopeParser].
  */
 class RustToolEnvelopeParserContractTest {
-
     private val parser = RustToolEnvelopeParser()
 
     @Test
@@ -61,21 +60,24 @@ class RustToolEnvelopeParserContractTest {
             "expected append_blocks default, got ${appendBlocksBatch.successes[0].argumentsJson}",
         )
 
-        val startArtifactBatch = parser.parse(
-            """<tool_call>{"name":"start_artifact","arguments":{"title":"Research Brief"}}</tool_call>""",
-        )
+        val startArtifactBatch =
+            parser.parse(
+                """<tool_call>{"name":"start_artifact","arguments":{"title":"Research Brief"}}</tool_call>""",
+            )
         assertTrue(startArtifactBatch.failures.isEmpty())
         assertEquals("start_artifact", startArtifactBatch.successes.single().toolName)
 
-        val manageMemoriesBatch = parser.parse(
-            """<tool_call>{"name":"manage_memories","arguments":{"action":"search"}}</tool_call>""",
-        )
+        val manageMemoriesBatch =
+            parser.parse(
+                """<tool_call>{"name":"manage_memories","arguments":{"action":"search"}}</tool_call>""",
+            )
         assertTrue(manageMemoriesBatch.failures.isEmpty())
         assertEquals("manage_memories", manageMemoriesBatch.successes.single().toolName)
 
-        val searchArtifactBatch = parser.parse(
-            """<tool_call>{"name":"search_current_artifact","arguments":{"artifactId":"artifact-1","query":"summary"}}</tool_call>""",
-        )
+        val searchArtifactBatch =
+            parser.parse(
+                """<tool_call>{"name":"search_current_artifact","arguments":{"artifactId":"artifact-1","query":"summary"}}</tool_call>""",
+            )
         assertTrue(searchArtifactBatch.failures.isEmpty())
         assertEquals("search_current_artifact", searchArtifactBatch.successes.single().toolName)
     }

@@ -8,10 +8,10 @@ import kotlin.test.assertTrue
  * TOOL-PARSE-002 K-01, K-02 — JNI contract for [RustToolStreamGate].
  */
 class RustToolStreamGateContractTest {
-
     private val gatePort = RustToolStreamGate()
 
-    private val dsmlSample = """
+    private val dsmlSample =
+        """
         <|DSML|tool_calls><|DSML|invoke name="web_search">
         <|DSML|parameter name="query" string="true">kotlin</|DSML|parameter>
         </|DSML|invoke></|DSML|tool_calls>

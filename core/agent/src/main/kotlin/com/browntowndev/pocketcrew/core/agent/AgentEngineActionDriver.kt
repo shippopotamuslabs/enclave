@@ -34,8 +34,10 @@ class AgentEngineActionDriver {
                 when (action) {
                     is FfiAgentAction.CallModel -> {
                         host.completeModelTurn(
-                            sessionMessages = action.request.sessionMessages.map { it.toDomainMessage() }
-                                .ifEmpty { loopMessages },
+                            sessionMessages =
+                                action.request.sessionMessages
+                                    .map { it.toDomainMessage() }
+                                    .ifEmpty { loopMessages },
                             systemPrompt = action.request.systemPrompt,
                             toolsSchemaJson = action.request.toolsSchemaJson,
                             allowToolCall = action.request.allowToolCall,
@@ -49,13 +51,14 @@ class AgentEngineActionDriver {
                         )
                     }
                     is FfiAgentAction.ExecuteTools -> {
-                        val calls = action.calls.map {
-                            AgentToolCall(
-                                callId = it.callId,
-                                name = it.name,
-                                argumentsJson = it.argumentsJson,
-                            )
-                        }
+                        val calls =
+                            action.calls.map {
+                                AgentToolCall(
+                                    callId = it.callId,
+                                    name = it.name,
+                                    argumentsJson = it.argumentsJson,
+                                )
+                            }
                         val results = host.executeTools(calls)
                         calls.zip(results).forEach { (call, result) ->
                             emit(AgentLoopEvent.ToolCallExecuted(call.name, result.resultJson))
@@ -80,14 +83,15 @@ class AgentEngineActionDriver {
 private fun FfiAgentMessage.toDomainMessage() =
     com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage(
         id = id,
-        role = when (role) {
-            FfiAgentRole.USER -> com.browntowndev.pocketcrew.domain.model.chat.Role.USER
-            FfiAgentRole.SYSTEM -> com.browntowndev.pocketcrew.domain.model.chat.Role.SYSTEM
-            FfiAgentRole.ASSISTANT,
-            FfiAgentRole.TOOL,
-            FfiAgentRole.COMPACT_SUMMARY,
-            -> com.browntowndev.pocketcrew.domain.model.chat.Role.ASSISTANT
-        },
+        role =
+            when (role) {
+                FfiAgentRole.USER -> com.browntowndev.pocketcrew.domain.model.chat.Role.USER
+                FfiAgentRole.SYSTEM -> com.browntowndev.pocketcrew.domain.model.chat.Role.SYSTEM
+                FfiAgentRole.ASSISTANT,
+                FfiAgentRole.TOOL,
+                FfiAgentRole.COMPACT_SUMMARY,
+                -> com.browntowndev.pocketcrew.domain.model.chat.Role.ASSISTANT
+            },
         content = content,
         metadataJson = metadataJson,
     )
