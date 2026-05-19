@@ -22,11 +22,12 @@ fun StudioMediaAsset.toUi(): StudioMediaUi =
         localUri = localUri,
         remoteUrl = remoteUrl,
         prompt = prompt,
-        mediaType = when (mediaType) {
-            MediaCapability.VIDEO.name -> MediaCapability.VIDEO
-            MediaCapability.MUSIC.name -> MediaCapability.MUSIC
-            else -> MediaCapability.IMAGE
-        },
+        mediaType =
+            when (mediaType) {
+                MediaCapability.VIDEO.name -> MediaCapability.VIDEO
+                MediaCapability.MUSIC.name -> MediaCapability.MUSIC
+                else -> MediaCapability.IMAGE
+            },
         createdAt = createdAt,
         albumId = albumId,
     )

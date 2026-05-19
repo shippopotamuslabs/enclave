@@ -3,12 +3,12 @@ package com.browntowndev.pocketcrew.feature.studio
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
@@ -21,7 +21,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GalleryScreenTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -30,23 +29,26 @@ class GalleryScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 GalleryScreen(
-                    uiState = GalleryUiState(
-                        albums = listOf(
-                            GalleryAlbumUi(
-                                id = DEFAULT_GALLERY_ALBUM_ID,
-                                name = "Default Album",
-                                items = listOf(
-                                    StudioMediaUi(
-                                        id = "video-1",
-                                        localUri = "file:///missing-preview.mp4",
-                                        prompt = "Video prompt",
-                                        mediaType = MediaCapability.VIDEO,
-                                        createdAt = 1L,
+                    uiState =
+                        GalleryUiState(
+                            albums =
+                                listOf(
+                                    GalleryAlbumUi(
+                                        id = DEFAULT_GALLERY_ALBUM_ID,
+                                        name = "Default Album",
+                                        items =
+                                            listOf(
+                                                StudioMediaUi(
+                                                    id = "video-1",
+                                                    localUri = "file:///missing-preview.mp4",
+                                                    prompt = "Video prompt",
+                                                    mediaType = MediaCapability.VIDEO,
+                                                    createdAt = 1L,
+                                                ),
+                                            ),
                                     ),
                                 ),
-                            ),
                         ),
-                    ),
                     onBackClick = {},
                     onMediaClick = { _, _ -> },
                     onAddAlbum = {},
@@ -76,20 +78,22 @@ class GalleryScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 GalleryScreen(
-                    uiState = GalleryUiState(
-                        albums = listOf(
-                            GalleryAlbumUi(
-                                id = DEFAULT_GALLERY_ALBUM_ID,
-                                name = "Default Album",
-                                items = emptyList(),
-                            ),
-                            GalleryAlbumUi(
-                                id = "other-album",
-                                name = "Other Album",
-                                items = emptyList(),
-                            ),
+                    uiState =
+                        GalleryUiState(
+                            albums =
+                                listOf(
+                                    GalleryAlbumUi(
+                                        id = DEFAULT_GALLERY_ALBUM_ID,
+                                        name = "Default Album",
+                                        items = emptyList(),
+                                    ),
+                                    GalleryAlbumUi(
+                                        id = "other-album",
+                                        name = "Other Album",
+                                        items = emptyList(),
+                                    ),
+                                ),
                         ),
-                    ),
                     onBackClick = {},
                     onMediaClick = { _, _ -> },
                     onAddAlbum = {},

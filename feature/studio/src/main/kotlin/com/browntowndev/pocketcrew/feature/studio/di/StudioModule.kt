@@ -13,7 +13,5 @@ import javax.inject.Singleton
 abstract class StudioModule {
     @Binds
     @Singleton
-    abstract fun bindStudioGenerationDispatcher(
-        impl: AndroidStudioGenerationDispatcher
-    ): StudioGenerationDispatcherPort
+    abstract fun bindStudioGenerationDispatcher(impl: AndroidStudioGenerationDispatcher): StudioGenerationDispatcherPort
 }

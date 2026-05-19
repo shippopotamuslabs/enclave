@@ -5,10 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -44,7 +44,7 @@ fun PromptHeaderDivider(
     hazeState: HazeState,
     isExpanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var localIsExpanded by rememberSaveable { mutableStateOf(false) }
     val expanded = isExpanded ?: localIsExpanded
@@ -52,33 +52,37 @@ fun PromptHeaderDivider(
     val clipboardManager = LocalClipboardManager.current
 
     Box(
-        modifier = modifier
-            .zIndex(1f) // Explicitly elevate to enable Haze sampling of the background source
-            .hazeEffect(state = hazeState) {
-                blurRadius = 24.dp
-                tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
-                noiseFactor = 0.15f
-            }
-            .hazeSource(state = hazeState)
-            .animateContentSize()
-            .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier)
+        modifier =
+            modifier
+                .zIndex(1f) // Explicitly elevate to enable Haze sampling of the background source
+                .hazeEffect(state = hazeState) {
+                    blurRadius = 24.dp
+                    tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
+                    noiseFactor = 0.15f
+                }.hazeSource(state = hazeState)
+                .animateContentSize()
+                .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier),
     ) {
         Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier =
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        if (expanded) {
-                            Modifier
-                                .heightIn(max = 240.dp)
-                                .verticalScroll(rememberScrollState())
-                        } else Modifier
-                    )
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .then(
+                            if (expanded) {
+                                Modifier
+                                    .heightIn(max = 240.dp)
+                                    .verticalScroll(rememberScrollState())
+                            } else {
+                                Modifier
+                            },
+                        ),
             ) {
                 Text(
                     text = prompt,
@@ -86,22 +90,22 @@ fun PromptHeaderDivider(
                     color = Color.White,
                     maxLines = if (expanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            
+
             SmallIconAction(
                 icon = Icons.Default.ContentCopy,
                 contentDescription = "Copy prompt",
-                onClick = { 
+                onClick = {
                     clipboardManager.setText(AnnotatedString(prompt))
-                }
+                },
             )
-            
+
             SmallIconAction(
                 icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (expanded) "Collapse" else "Expand",
-                onClick = { updateExpanded(!expanded) }
+                onClick = { updateExpanded(!expanded) },
             )
         }
     }
@@ -111,22 +115,23 @@ fun PromptHeaderDivider(
 private fun SmallIconAction(
     icon: ImageVector,
     contentDescription: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clickable(
-                onClick = onClick,
-                role = Role.Button
-            ),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(32.dp)
+                .clickable(
+                    onClick = onClick,
+                    role = Role.Button,
+                ),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
-            tint = Color.White.copy(alpha = 0.8f)
+            tint = Color.White.copy(alpha = 0.8f),
         )
     }
 }

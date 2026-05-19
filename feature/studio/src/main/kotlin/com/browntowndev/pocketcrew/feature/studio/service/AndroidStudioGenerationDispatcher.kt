@@ -7,23 +7,29 @@ import com.browntowndev.pocketcrew.domain.port.media.StudioGenerationDispatcherP
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
-class AndroidStudioGenerationDispatcher @Inject constructor(
-    @ApplicationContext private val context: Context
-) : StudioGenerationDispatcherPort {
-
-    override fun startGeneration(prompt: String, mediaType: MediaCapability) {
-        val intent = Intent(context, MultimediaGenerationService::class.java).apply {
-            action = MultimediaGenerationService.ACTION_START
-            putExtra(MultimediaGenerationService.EXTRA_PROMPT, prompt)
-            putExtra(MultimediaGenerationService.EXTRA_MEDIA_TYPE, mediaType.name)
+class AndroidStudioGenerationDispatcher
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+    ) : StudioGenerationDispatcherPort {
+        override fun startGeneration(
+            prompt: String,
+            mediaType: MediaCapability,
+        ) {
+            val intent =
+                Intent(context, MultimediaGenerationService::class.java).apply {
+                    action = MultimediaGenerationService.ACTION_START
+                    putExtra(MultimediaGenerationService.EXTRA_PROMPT, prompt)
+                    putExtra(MultimediaGenerationService.EXTRA_MEDIA_TYPE, mediaType.name)
+                }
+            context.startForegroundService(intent)
         }
-        context.startForegroundService(intent)
-    }
 
-    override fun stopGeneration() {
-        val intent = Intent(context, MultimediaGenerationService::class.java).apply {
-            action = MultimediaGenerationService.ACTION_STOP
+        override fun stopGeneration() {
+            val intent =
+                Intent(context, MultimediaGenerationService::class.java).apply {
+                    action = MultimediaGenerationService.ACTION_STOP
+                }
+            context.startService(intent)
         }
-        context.startService(intent)
     }
-}

@@ -1,22 +1,20 @@
 @file:OptIn(ExperimentalStdlibApi::class)
+
 package com.browntowndev.pocketcrew.feature.studio
 
-import kotlin.ExperimentalStdlibApi
-
+import android.Manifest
+import android.content.pm.PackageManager
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.RenderEffect
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,48 +22,44 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -75,14 +69,13 @@ import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.VideoPlayer
+import com.browntowndev.pocketcrew.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
 import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
-import com.browntowndev.pocketcrew.core.ui.component.dialog.AddAlbumDialog
-import com.browntowndev.pocketcrew.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.pocketcrew.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottomSheet
 import dev.chrisbanes.haze.HazeState
@@ -92,16 +85,8 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlin.ExperimentalStdlibApi
 import kotlin.random.Random
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.RenderEffect
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
-import android.widget.Toast
 
 private const val GRID_COLUMNS = 2
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -110,7 +95,7 @@ private const val PLACEHOLDER_ROW_KEY_PREFIX = "studio_placeholder_row_"
 
 data class StudioGalleryGroup(
     val prompt: String,
-    val mediaItems: List<StudioMediaUi>
+    val mediaItems: List<StudioMediaUi>,
 )
 
 data class StudioGalleryRow(
@@ -142,7 +127,7 @@ fun StudioScreen(
     onNavigateToGallery: () -> Unit,
     onMediaClick: (String) -> Unit,
     onShowSnackbar: (String, String?) -> Unit,
-    viewModel: MultimodalViewModel = hiltViewModel()
+    viewModel: MultimodalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hazeState = rememberHazeState()
@@ -150,31 +135,35 @@ fun StudioScreen(
     val context = LocalContext.current
     val visibleGallery = remember(uiState.gallery) { uiState.gallery }
     val groupedGallery = uiState.groupedGallery
-    val galleryRowKeys = remember(groupedGallery) {
-        groupedGallery.flatMap { group ->
-            group.mediaItems.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
+    val galleryRowKeys =
+        remember(groupedGallery) {
+            groupedGallery.flatMap { group ->
+                group.mediaItems.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
+            }
         }
-    }
-    val generationPlaceholderCount = (uiState.settings as? ImageGenerationSettings)
-        ?.generationCount
-        ?.coerceAtLeast(1)
-        ?: 1
+    val generationPlaceholderCount =
+        (uiState.settings as? ImageGenerationSettings)
+            ?.generationCount
+            ?.coerceAtLeast(1)
+            ?: 1
     var scrollOnGenerationStart by remember { mutableStateOf(false) }
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.onMicClick()
-        } else {
-            Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri ->
+            uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
         }
-    }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                viewModel.onMicClick()
+            } else {
+                Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+            }
+        }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -199,18 +188,18 @@ fun StudioScreen(
         snapshotFlow { listState.layoutInfo }
             .map { layoutInfo ->
                 val visibleKeys = layoutInfo.visibleItemsInfo.map { it.key }
-                val isNearBottom = isGenerativeScrollThresholdVisible(
-                    galleryRowKeys = latestGalleryRowKeys,
-                    visibleItemKeys = visibleKeys,
-                )
+                val isNearBottom =
+                    isGenerativeScrollThresholdVisible(
+                        galleryRowKeys = latestGalleryRowKeys,
+                        visibleItemKeys = visibleKeys,
+                    )
 
                 if (isNearBottom && latestGallery.isNotEmpty()) {
                     latestGallery.last().id to latestGallery.size
                 } else {
                     null
                 }
-            }
-            .distinctUntilChanged()
+            }.distinctUntilChanged()
             .collect { scrollTrigger ->
                 if (scrollTrigger != null) {
                     viewModel.onGenerativeScrollThresholdVisible(
@@ -232,11 +221,12 @@ fun StudioScreen(
                 hazeState = hazeState,
             )
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier =
+                Modifier
+                    .fillMaxSize(),
         ) {
             StudioGalleryPane(
                 groupedGallery = groupedGallery,
@@ -263,7 +253,7 @@ fun StudioScreen(
                         viewModel.toggleMediaSelection(id)
                     }
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
 
             StudioInputDock(
@@ -290,7 +280,7 @@ fun StudioScreen(
                         scrollOnGenerationStart = true
                     }
                     viewModel.generate()
-                }
+                },
             )
         }
     }
@@ -302,7 +292,7 @@ fun StudioScreen(
             onUpdateSettings = viewModel::onUpdateSettings,
             onContinualModeChange = viewModel::onContinualModeToggle,
             onMediaTypeChange = viewModel::onMediaTypeChange,
-            onTemplateSelected = viewModel::onTemplateSelected
+            onTemplateSelected = viewModel::onTemplateSelected,
         )
     }
 
@@ -311,7 +301,7 @@ fun StudioScreen(
             albums = uiState.albums.map { it.toAlbumSelectionItem() },
             onDismiss = viewModel::onToggleSaveBottomSheet,
             onMoveToAlbum = viewModel::onSaveSelectedMediaToAlbum,
-            onAddAlbum = viewModel::onAddAlbum
+            onAddAlbum = viewModel::onAddAlbum,
         )
     }
 }
@@ -326,35 +316,37 @@ private fun StudioTopBar(
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
     hazeState: HazeState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     CenterAlignedTopAppBar(
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = Color.Transparent,
-            scrolledContainerColor = Color.Transparent,
-            titleContentColor = Color.White,
-            navigationIconContentColor = Color.White,
-            actionIconContentColor = Color.White,
-        ),
-        modifier = modifier
-            .hazeEffect(state = hazeState) {
-                blurRadius = 24.dp
-                tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
-                noiseFactor = 0.15f
-            },
+        colors =
+            TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent,
+                titleContentColor = Color.White,
+                navigationIconContentColor = Color.White,
+                actionIconContentColor = Color.White,
+            ),
+        modifier =
+            modifier
+                .hazeEffect(state = hazeState) {
+                    blurRadius = 24.dp
+                    tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
+                    noiseFactor = 0.15f
+                },
         navigationIcon = {
             if (selectedCount > 0) {
                 IconButton(onClick = onClearSelection) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Clear selection"
+                        contentDescription = "Clear selection",
                     )
                 }
             } else {
                 IconButton(onClick = onNavigateToHistory) {
                     Icon(
                         imageVector = Icons.Default.Menu,
-                        contentDescription = "Open history"
+                        contentDescription = "Open history",
                     )
                 }
             }
@@ -363,7 +355,7 @@ private fun StudioTopBar(
             Text(
                 text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         actions = {
@@ -371,24 +363,24 @@ private fun StudioTopBar(
                 IconButton(onClick = onShareClick) {
                     Icon(
                         imageVector = Icons.Default.Share,
-                        contentDescription = "Share selected items"
+                        contentDescription = "Share selected items",
                     )
                 }
                 IconButton(onClick = onSaveClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                        contentDescription = "Save to album"
+                        contentDescription = "Save to album",
                     )
                 }
             } else {
                 IconButton(onClick = onNavigateToGallery) {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = "Open gallery"
+                        contentDescription = "Open gallery",
                     )
                 }
             }
-        }
+        },
     )
 }
 
@@ -405,7 +397,7 @@ private fun StudioGalleryPane(
     topPadding: Dp,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
         if (groupedGallery.isEmpty() && !isGenerating) {
@@ -421,7 +413,7 @@ private fun StudioGalleryPane(
                 listState = listState,
                 topPadding = topPadding,
                 onMediaClick = onMediaClick,
-                onMediaLongClick = onMediaLongClick
+                onMediaLongClick = onMediaLongClick,
             )
         }
     }
@@ -440,21 +432,22 @@ private fun StudioGalleryList(
     topPadding: Dp,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val promptHeaders = remember(
-        groupedGallery,
-        isGenerating,
-        activeGenerationPrompt,
-        generationPlaceholderCount,
-    ) {
-        buildStudioPromptHeaderInfo(
-            groupedGallery = groupedGallery,
-            isGenerating = isGenerating,
-            activeGenerationPrompt = activeGenerationPrompt,
-            generationPlaceholderCount = generationPlaceholderCount,
-        )
-    }
+    val promptHeaders =
+        remember(
+            groupedGallery,
+            isGenerating,
+            activeGenerationPrompt,
+            generationPlaceholderCount,
+        ) {
+            buildStudioPromptHeaderInfo(
+                groupedGallery = groupedGallery,
+                isGenerating = isGenerating,
+                activeGenerationPrompt = activeGenerationPrompt,
+                generationPlaceholderCount = generationPlaceholderCount,
+            )
+        }
     var stickyHeaderHeightPx by remember { mutableIntStateOf(0) }
     var expandedPromptHeaderKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(promptHeaders) {
@@ -467,12 +460,13 @@ private fun StudioGalleryList(
             calculateStudioStickyHeaderLayout(
                 headers = promptHeaders,
                 firstVisibleItemIndex = listState.firstVisibleItemIndex,
-                visibleItems = listState.layoutInfo.visibleItemsInfo.map { visibleItem ->
-                    StudioVisibleListItemInfo(
-                        key = visibleItem.key,
-                        offset = visibleItem.offset,
-                    )
-                },
+                visibleItems =
+                    listState.layoutInfo.visibleItemsInfo.map { visibleItem ->
+                        StudioVisibleListItemInfo(
+                            key = visibleItem.key,
+                            offset = visibleItem.offset,
+                        )
+                    },
                 stickyTopPx = stickyTopPx,
                 headerHeightPx = stickyHeaderHeightPx,
             )
@@ -481,19 +475,22 @@ private fun StudioGalleryList(
 
     LazyColumn(
         state = listState,
-        modifier = modifier
-            .fillMaxSize()
-            .hazeSource(state = hazeState),
-        contentPadding = PaddingValues(top = topPadding)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
+        contentPadding = PaddingValues(top = topPadding),
     ) {
         groupedGallery.forEachIndexed { index, group ->
-            val isActiveGenerationGroup = isGenerating &&
-                group.prompt == activeGenerationPrompt &&
-                index == groupedGallery.lastIndex
-            val galleryRows = buildStudioGalleryRows(
-                group = group,
-                placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
-            )
+            val isActiveGenerationGroup =
+                isGenerating &&
+                    group.prompt == activeGenerationPrompt &&
+                    index == groupedGallery.lastIndex
+            val galleryRows =
+                buildStudioGalleryRows(
+                    group = group,
+                    placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
+                )
 
             val headerKey = studioPromptHeaderKey(groupIndex = index, prompt = group.prompt)
             item(key = headerKey) {
@@ -502,17 +499,19 @@ private fun StudioGalleryList(
                     hazeState = hazeState,
                     isExpanded = headerKey in expandedPromptHeaderKeys,
                     onExpandedChange = { isExpanded ->
-                        expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
-                            expandedHeaderKeys = expandedPromptHeaderKeys,
-                            headerKey = headerKey,
-                            isExpanded = isExpanded,
-                        )
+                        expandedPromptHeaderKeys =
+                            updateStudioExpandedHeaderKeys(
+                                expandedHeaderKeys = expandedPromptHeaderKeys,
+                                headerKey = headerKey,
+                                isExpanded = isExpanded,
+                            )
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer {
-                            alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
-                        }
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
+                            },
                 )
             }
 
@@ -525,7 +524,7 @@ private fun StudioGalleryList(
                     selectedIds = selectedIds,
                     placeholderCount = row.placeholderCount,
                     onMediaClick = onMediaClick,
-                    onMediaLongClick = onMediaLongClick
+                    onMediaLongClick = onMediaLongClick,
                 )
             }
 
@@ -550,17 +549,19 @@ private fun StudioGalleryList(
                     hazeState = hazeState,
                     isExpanded = headerKey in expandedPromptHeaderKeys,
                     onExpandedChange = { isExpanded ->
-                        expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
-                            expandedHeaderKeys = expandedPromptHeaderKeys,
-                            headerKey = headerKey,
-                            isExpanded = isExpanded,
-                        )
+                        expandedPromptHeaderKeys =
+                            updateStudioExpandedHeaderKeys(
+                                expandedHeaderKeys = expandedPromptHeaderKeys,
+                                headerKey = headerKey,
+                                isExpanded = isExpanded,
+                            )
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .graphicsLayer {
-                            alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
-                        }
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
+                            },
                 )
             }
             items(
@@ -580,16 +581,18 @@ private fun StudioGalleryList(
             hazeState = hazeState,
             isExpanded = headerLayout.key in expandedPromptHeaderKeys,
             onExpandedChange = { isExpanded ->
-                expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
-                    expandedHeaderKeys = expandedPromptHeaderKeys,
-                    headerKey = headerLayout.key,
-                    isExpanded = isExpanded,
-                )
+                expandedPromptHeaderKeys =
+                    updateStudioExpandedHeaderKeys(
+                        expandedHeaderKeys = expandedPromptHeaderKeys,
+                        headerKey = headerLayout.key,
+                        isExpanded = isExpanded,
+                    )
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(x = 0, y = headerLayout.yOffset) }
-                .onSizeChanged { size -> stickyHeaderHeightPx = size.height },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(x = 0, y = headerLayout.yOffset) }
+                    .onSizeChanged { size -> stickyHeaderHeightPx = size.height },
         )
     }
 }
@@ -603,9 +606,10 @@ internal fun isGenerativeScrollThresholdVisible(
     }
 
     val triggerRowIndex = (galleryRowKeys.lastIndex - 1).coerceAtLeast(0)
-    val visibleGalleryRowIndexes = visibleItemKeys.mapNotNull { visibleKey ->
-        galleryRowKeys.indexOf(visibleKey).takeIf { index -> index >= 0 }
-    }
+    val visibleGalleryRowIndexes =
+        visibleItemKeys.mapNotNull { visibleKey ->
+            galleryRowKeys.indexOf(visibleKey).takeIf { index -> index >= 0 }
+        }
 
     return visibleGalleryRowIndexes.any { index -> index >= triggerRowIndex }
 }
@@ -621,9 +625,10 @@ internal fun buildStudioGalleryRows(
     group: StudioGalleryGroup,
     placeholderCount: Int,
 ): List<StudioGalleryRow> {
-    val mediaRows = group.mediaItems.chunked(GRID_COLUMNS).map { mediaItems ->
-        StudioGalleryRow(mediaItems = mediaItems)
-    }
+    val mediaRows =
+        group.mediaItems.chunked(GRID_COLUMNS).map { mediaItems ->
+            StudioGalleryRow(mediaItems = mediaItems)
+        }
 
     if (placeholderCount <= 0) {
         return mediaRows
@@ -633,8 +638,9 @@ internal fun buildStudioGalleryRows(
     var remainingPlaceholders = placeholderCount
     val lastMediaRow = mutableRows.lastOrNull()
     if (lastMediaRow != null && lastMediaRow.mediaItems.size < GRID_COLUMNS) {
-        val inlinePlaceholderCount = (GRID_COLUMNS - lastMediaRow.mediaItems.size)
-            .coerceAtMost(remainingPlaceholders)
+        val inlinePlaceholderCount =
+            (GRID_COLUMNS - lastMediaRow.mediaItems.size)
+                .coerceAtMost(remainingPlaceholders)
         mutableRows[mutableRows.lastIndex] = lastMediaRow.copy(placeholderCount = inlinePlaceholderCount)
         remainingPlaceholders -= inlinePlaceholderCount
     }
@@ -658,20 +664,22 @@ internal fun buildStudioPromptHeaderInfo(
     var itemIndex = 0
 
     groupedGallery.forEachIndexed { groupIndex, group ->
-        val isActiveGenerationGroup = isGenerating &&
-            group.prompt == activeGenerationPrompt &&
-            groupIndex == groupedGallery.lastIndex
-        val galleryRows = buildStudioGalleryRows(
-            group = group,
-            placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
-        )
+        val isActiveGenerationGroup =
+            isGenerating &&
+                group.prompt == activeGenerationPrompt &&
+                groupIndex == groupedGallery.lastIndex
+        val galleryRows =
+            buildStudioGalleryRows(
+                group = group,
+                placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
+            )
 
         headers.add(
             StudioPromptHeaderInfo(
                 key = studioPromptHeaderKey(groupIndex = groupIndex, prompt = group.prompt),
                 prompt = group.prompt,
                 itemIndex = itemIndex,
-            )
+            ),
         )
         itemIndex += 1
         itemIndex += galleryRows.count { it.mediaItems.isNotEmpty() }
@@ -684,7 +692,7 @@ internal fun buildStudioPromptHeaderInfo(
                 key = studioPromptHeaderKey(groupIndex = groupedGallery.size, prompt = activeGenerationPrompt),
                 prompt = activeGenerationPrompt,
                 itemIndex = itemIndex,
-            )
+            ),
         )
     }
 
@@ -709,19 +717,22 @@ internal fun calculateStudioStickyHeaderLayout(
     stickyTopPx: Int,
     headerHeightPx: Int,
 ): StudioStickyHeaderLayout? {
-    val currentHeader = headers.lastOrNull { header -> header.itemIndex <= firstVisibleItemIndex }
-        ?: return null
+    val currentHeader =
+        headers.lastOrNull { header -> header.itemIndex <= firstVisibleItemIndex }
+            ?: return null
     val currentVisibleHeader = visibleItems.firstOrNull { visibleItem -> visibleItem.key == currentHeader.key }
     if (currentVisibleHeader != null && currentVisibleHeader.offset > stickyTopPx) {
         return null
     }
 
-    val nextVisibleHeaderOffset = visibleItems
-        .filter { visibleItem -> headers.any { header -> header.key == visibleItem.key && header.key != currentHeader.key } }
-        .minOfOrNull { visibleItem -> visibleItem.offset }
-    val pushedOffset = nextVisibleHeaderOffset
-        ?.let { offset -> (stickyTopPx + offset - headerHeightPx).coerceAtMost(stickyTopPx) }
-        ?: stickyTopPx
+    val nextVisibleHeaderOffset =
+        visibleItems
+            .filter { visibleItem -> headers.any { header -> header.key == visibleItem.key && header.key != currentHeader.key } }
+            .minOfOrNull { visibleItem -> visibleItem.offset }
+    val pushedOffset =
+        nextVisibleHeaderOffset
+            ?.let { offset -> (stickyTopPx + offset - headerHeightPx).coerceAtMost(stickyTopPx) }
+            ?: stickyTopPx
 
     return StudioStickyHeaderLayout(
         key = currentHeader.key,
@@ -737,11 +748,12 @@ private fun GalleryGridRow(
     placeholderCount: Int = 0,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier =
+            modifier
+                .fillMaxWidth(),
     ) {
         rowItems.forEach { asset ->
             Box(modifier = Modifier.weight(1f)) {
@@ -750,7 +762,7 @@ private fun GalleryGridRow(
                     isSelected = asset.id in selectedIds,
                     selectionModeActive = selectedIds.isNotEmpty(),
                     onMediaClick = onMediaClick,
-                    onMediaLongClick = onMediaLongClick
+                    onMediaLongClick = onMediaLongClick,
                 )
             }
         }
@@ -766,11 +778,12 @@ private fun GalleryGridRow(
 @Composable
 private fun PlaceholderGridRow(
     placeholderCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier =
+            modifier
+                .fillMaxWidth(),
     ) {
         repeat(placeholderCount) {
             Box(modifier = Modifier.weight(1f)) {
@@ -782,9 +795,7 @@ private fun PlaceholderGridRow(
 }
 
 @Composable
-private fun RowScope.GridRemainderSpacer(
-    itemCount: Int
-) {
+private fun RowScope.GridRemainderSpacer(itemCount: Int) {
     if (itemCount < GRID_COLUMNS) {
         repeat(GRID_COLUMNS - itemCount) {
             Spacer(modifier = Modifier.weight(1f))
@@ -807,67 +818,76 @@ private fun StudioInputDock(
     onSettingsClick: () -> Unit,
     onMicClick: () -> Unit,
     onGenerateClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(false) }
-    
+
     BackHandler(enabled = isExpanded) {
         isExpanded = false
     }
 
-    val isRecordingPhase = speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
-                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
-                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
+    val isRecordingPhase =
+        speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
+            speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
+            speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .imePadding() // Ensure it stays above keyboard
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .imePadding(), // Ensure it stays above keyboard
     ) {
         UniversalInputBar(
             isExpanded = isExpanded,
             onExpandToggle = { isExpanded = !isExpanded },
-            attachmentContent = if (referenceImageUri != null) {
-                {
-                    UniversalImageAttachment(
-                        uri = referenceImageUri,
-                        isVideo = referenceMediaType == MediaCapability.VIDEO,
-                        onClear = onClearReferenceImage,
-                        modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                    )
-                }
-            } else null,
+            attachmentContent =
+                if (referenceImageUri != null) {
+                    {
+                        UniversalImageAttachment(
+                            uri = referenceImageUri,
+                            isVideo = referenceMediaType == MediaCapability.VIDEO,
+                            onClear = onClearReferenceImage,
+                            modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+                        )
+                    }
+                } else {
+                    null
+                },
             inputContent = {
                 StudioPromptField(
                     prompt = prompt,
                     speechState = speechState,
                     isExpanded = isExpanded,
-                    onPromptChange = { 
+                    onPromptChange = {
                         onPromptChange(it)
-                    }
+                    },
                 )
             },
-            actionContent = if (isRecordingPhase) null else {
-                {
-                    ReferenceImageAction(
-                        mediaType = mediaType,
-                        hasReferenceImage = referenceImageUri != null,
-                        onReferenceImageClick = onReferenceImageClick
-                    )
-                }
-            },
+            actionContent =
+                if (isRecordingPhase) {
+                    null
+                } else {
+                    {
+                        ReferenceImageAction(
+                            mediaType = mediaType,
+                            hasReferenceImage = referenceImageUri != null,
+                            onReferenceImageClick = onReferenceImageClick,
+                        )
+                    }
+                },
             trailingAction = {
                 if (!isRecordingPhase) {
                     StandardTrailingAction(
-                        icon = when (mediaType) {
-                            MediaCapability.IMAGE -> Icons.Default.Image
-                            MediaCapability.VIDEO -> Icons.Default.Movie
-                            MediaCapability.MUSIC -> Icons.Default.MusicNote
-                        },
+                        icon =
+                            when (mediaType) {
+                                MediaCapability.IMAGE -> Icons.Default.Image
+                                MediaCapability.VIDEO -> Icons.Default.Movie
+                                MediaCapability.MUSIC -> Icons.Default.MusicNote
+                            },
                         onClick = onSettingsClick,
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        description = "Studio Options"
+                        description = "Studio Options",
                     )
                     Spacer(Modifier.width(8.dp))
                 }
@@ -881,7 +901,7 @@ private fun StudioInputDock(
                     onStop = onGenerateClick,
                     onMicClick = onMicClick,
                 )
-            }
+            },
         )
     }
 }
@@ -892,41 +912,45 @@ private fun StudioPromptField(
     speechState: com.browntowndev.pocketcrew.domain.port.media.SpeechState,
     isExpanded: Boolean,
     onPromptChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val isRecordingPhase = speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
-                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
-                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
+    val isRecordingPhase =
+        speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
+            speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
+            speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
 
     BasicTextField(
         value = prompt,
         onValueChange = onPromptChange,
         maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 12.dp),
-        textStyle = TextStyle(
-            color = MaterialTheme.colorScheme.onSurface,
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 16.sp,
-            lineHeight = 22.sp
-        ),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp, horizontal = 12.dp),
+        textStyle =
+            TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+            ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         decorationBox = { innerTextField ->
             if (prompt.isEmpty() || isRecordingPhase) {
                 UniversalVoicePromptPlaceholder(
                     speechState = speechState,
-                    idlePlaceholder = "Describe what to create..."
+                    idlePlaceholder = "Describe what to create...",
                 )
             }
             if (!isRecordingPhase) {
                 innerTextField()
             }
         },
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Sentences,
-            imeAction = ImeAction.Default
-        )
+        keyboardOptions =
+            KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Default,
+            ),
     )
 }
 
@@ -935,21 +959,22 @@ private fun ReferenceImageAction(
     mediaType: MediaCapability,
     hasReferenceImage: Boolean,
     onReferenceImageClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (mediaType != MediaCapability.MUSIC) {
         IconButton(
             onClick = onReferenceImageClick,
-            modifier = modifier
+            modifier = modifier,
         ) {
             Icon(
                 imageVector = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
                 contentDescription = "Reference image",
-                tint = if (hasReferenceImage) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                tint =
+                    if (hasReferenceImage) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
         }
     }
@@ -963,26 +988,26 @@ private fun GalleryItem(
     selectionModeActive: Boolean,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val padding by animateDpAsState(
         targetValue = if (isSelected) 12.dp else 0.dp,
-        label = "selection_padding"
+        label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
         targetValue = if (isSelected) 8.dp else 0.dp,
-        label = "selection_corner_radius"
+        label = "selection_corner_radius",
     )
 
     Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = { onMediaClick(asset.id) },
-                onLongClick = { onMediaLongClick(asset.id) }
-            )
-            .padding(padding)
+        modifier =
+            modifier
+                .aspectRatio(1f)
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onMediaClick(asset.id) },
+                    onLongClick = { onMediaLongClick(asset.id) },
+                ).padding(padding),
     ) {
         if (asset.mediaType == MediaCapability.VIDEO) {
             VideoPlayer(
@@ -991,37 +1016,40 @@ private fun GalleryItem(
                 autoPlay = true,
                 controlsEnabled = false,
                 muted = true,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(cornerRadius)),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(cornerRadius)),
             )
         } else if (asset.mediaType == MediaCapability.MUSIC) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(cornerRadius))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(cornerRadius))
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black),
+                            ),
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(48.dp),
                 )
             }
         } else {
             AsyncImage(
                 model = asset.localUri,
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(cornerRadius)),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(cornerRadius)),
+                contentScale = ContentScale.Crop,
             )
         }
 
@@ -1030,15 +1058,16 @@ private fun GalleryItem(
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
                 shape = RoundedCornerShape(bottomStart = 8.dp),
-                modifier = Modifier.align(Alignment.TopEnd)
+                modifier = Modifier.align(Alignment.TopEnd),
             ) {
                 Icon(
                     imageVector = Icons.Default.Folder,
                     contentDescription = "Saved to album",
                     tint = Color.White,
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .size(16.dp)
+                    modifier =
+                        Modifier
+                            .padding(4.dp)
+                            .size(16.dp),
                 )
             }
         }
@@ -1046,28 +1075,30 @@ private fun GalleryItem(
         // Selection indicator (only for non-saved items)
         if (selectionModeActive && asset.albumId == null) {
             Box(
-                modifier = Modifier
-                    .padding(8.dp)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary
-                        else Color.Black.copy(alpha = 0.4f)
-                    )
-                    .border(
-                        width = 2.dp,
-                        color = Color.White,
-                        shape = CircleShape
-                    )
-                    .align(Alignment.TopStart),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .padding(8.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.Black.copy(alpha = 0.4f)
+                            },
+                        ).border(
+                            width = 2.dp,
+                            color = Color.White,
+                            shape = CircleShape,
+                        ).align(Alignment.TopStart),
+                contentAlignment = Alignment.Center,
             ) {
                 if (isSelected) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -1075,28 +1106,26 @@ private fun GalleryItem(
     }
 }
 
-
 @Composable
-private fun GeneratingPlaceholderItem(
-    modifier: Modifier = Modifier
-) {
+private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
     val localHazeState = remember { HazeState() }
-    
+
     // Use a monotonic time that never resets to avoid jagged jumps
     var time by remember { mutableStateOf(0f) }
-    
+
     // Each instance gets a slightly different speed and phase to ensure variety
     val personalitySeed = remember { Random.nextInt() }
-    val personalities = remember(personalitySeed) {
-        val random = Random(personalitySeed)
-        // [speedMultiplier, initialPhase] for each of the 4 blobs
-        List(4) { 
-            floatArrayOf(
-                random.nextFloat() * 0.3f + 0.85f, // 0.85 to 1.15 speed
-                random.nextFloat() * 2f * Math.PI.toFloat() // 0 to 2pi phase
-            )
+    val personalities =
+        remember(personalitySeed) {
+            val random = Random(personalitySeed)
+            // [speedMultiplier, initialPhase] for each of the 4 blobs
+            List(4) {
+                floatArrayOf(
+                    random.nextFloat() * 0.3f + 0.85f, // 0.85 to 1.15 speed
+                    random.nextFloat() * 2f * Math.PI.toFloat(), // 0 to 2pi phase
+                )
+            }
         }
-    }
 
     LaunchedEffect(Unit) {
         var lastFrameNanos = withFrameNanos { it }
@@ -1104,8 +1133,8 @@ private fun GeneratingPlaceholderItem(
             withFrameNanos { frameTimeNanos ->
                 val dt = (frameTimeNanos - lastFrameNanos) / 1_000_000_000f
                 lastFrameNanos = frameTimeNanos
-                
-                // Add a tiny bit of random drift to the time increment 
+
+                // Add a tiny bit of random drift to the time increment
                 // to fulfill the "random incremental changes" request.
                 // This makes the motion feel more organic and less mechanical.
                 val jitter = 1f + (Random.nextFloat() - 0.5f) * 0.03f
@@ -1115,111 +1144,129 @@ private fun GeneratingPlaceholderItem(
     }
 
     Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .fillMaxWidth()
-            .clipToBounds() // Fix: Prevent drawing outside the box
+        modifier =
+            modifier
+                .aspectRatio(1f)
+                .fillMaxWidth()
+                .clipToBounds(), // Fix: Prevent drawing outside the box
     ) {
         // Deep space background to make lava pop
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121214)))
 
         // Lava blobs layer (Metaball effect)
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = localHazeState)
-                .graphicsLayer {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val blur = RenderEffect.createBlurEffect(50f, 50f, android.graphics.Shader.TileMode.CLAMP)
-                        val colorMatrix = android.graphics.ColorMatrix().apply {
-                            set(
-                                floatArrayOf(
-                                    1f, 0f, 0f, 0f, 0f,
-                                    0f, 1f, 0f, 0f, 0f,
-                                    0f, 0f, 1f, 0f, 0f,
-                                    0f, 0f, 0f, 60f, -5000f // Alpha thresholding for metaballs
-                                )
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = localHazeState)
+                    .graphicsLayer {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val blur = RenderEffect.createBlurEffect(50f, 50f, android.graphics.Shader.TileMode.CLAMP)
+                            val colorMatrix =
+                                android.graphics.ColorMatrix().apply {
+                                    set(
+                                        floatArrayOf(
+                                            1f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            1f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            1f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            0f,
+                                            60f,
+                                            -5000f, // Alpha thresholding for metaballs
+                                        ),
+                                    )
+                                }
+                            val filter = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(colorMatrix))
+                            renderEffect = RenderEffect.createChainEffect(filter, blur).asComposeRenderEffect()
+                        } else {
+                            // Fallback for API < 31
+                            alpha = 0.9f
+                        }
+                    }.drawWithCache {
+                        onDrawBehind {
+                            val w = size.width
+                            val h = size.height
+                            val minD = size.minDimension
+
+                            // Apply personalities to create unique motion paths
+                            val t1 = time * personalities[0][0] + personalities[0][1]
+                            val t2 = time * personalities[1][0] + personalities[1][1]
+                            val t3 = time * personalities[2][0] + personalities[2][1]
+                            val t4 = time * personalities[3][0] + personalities[3][1]
+
+                            // Blob 1: Purple base, orbits slowly
+                            val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(t1)
+                            val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(t1)
+                            drawCircle(
+                                color = PurpleLightPrimary,
+                                radius = minD * 0.35f,
+                                center = Offset(x1, y1),
+                            )
+
+                            // Blob 2: Peach, dramatic vertical motion
+                            val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(t2 * 1.5f)
+                            val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(t2 * 0.8f)
+                            drawCircle(
+                                color = PeachAccent,
+                                radius = minD * 0.25f,
+                                center = Offset(x2, y2),
+                            )
+
+                            // Blob 3: Gold, counter-orbit and vertical
+                            val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(t3 * 1.2f)
+                            val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(t3 * 1.1f)
+                            drawCircle(
+                                color = GoldVariant,
+                                radius = minD * 0.2f,
+                                center = Offset(x3, y3),
+                            )
+
+                            // Blob 4: Small Peach accent, fast orbit
+                            val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(t4 * 2f)
+                            val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(t4 * 1.7f)
+                            drawCircle(
+                                color = PeachAccent,
+                                radius = minD * 0.15f,
+                                center = Offset(x4, y4),
+                            )
+
+                            // Central blob to anchor the others as they pass through
+                            drawCircle(
+                                color = PurpleLightPrimary.copy(alpha = 0.5f),
+                                radius = minD * 0.2f,
+                                center = Offset(w / 2, h / 2),
                             )
                         }
-                        val filter = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(colorMatrix))
-                        renderEffect = RenderEffect.createChainEffect(filter, blur).asComposeRenderEffect()
-                    } else {
-                        // Fallback for API < 31
-                        alpha = 0.9f
-                    }
-                }
-                .drawWithCache {
-                    onDrawBehind {
-                        val w = size.width
-                        val h = size.height
-                        val minD = size.minDimension
-
-                        // Apply personalities to create unique motion paths
-                        val t1 = time * personalities[0][0] + personalities[0][1]
-                        val t2 = time * personalities[1][0] + personalities[1][1]
-                        val t3 = time * personalities[2][0] + personalities[2][1]
-                        val t4 = time * personalities[3][0] + personalities[3][1]
-
-                        // Blob 1: Purple base, orbits slowly
-                        val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(t1)
-                        val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(t1)
-                        drawCircle(
-                            color = PurpleLightPrimary,
-                            radius = minD * 0.35f,
-                            center = Offset(x1, y1)
-                        )
-
-                        // Blob 2: Peach, dramatic vertical motion
-                        val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(t2 * 1.5f)
-                        val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(t2 * 0.8f)
-                        drawCircle(
-                            color = PeachAccent,
-                            radius = minD * 0.25f,
-                            center = Offset(x2, y2)
-                        )
-
-                        // Blob 3: Gold, counter-orbit and vertical
-                        val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(t3 * 1.2f)
-                        val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(t3 * 1.1f)
-                        drawCircle(
-                            color = GoldVariant,
-                            radius = minD * 0.2f,
-                            center = Offset(x3, y3)
-                        )
-                        
-                        // Blob 4: Small Peach accent, fast orbit
-                        val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(t4 * 2f)
-                        val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(t4 * 1.7f)
-                        drawCircle(
-                            color = PeachAccent,
-                            radius = minD * 0.15f,
-                            center = Offset(x4, y4)
-                        )
-                        
-                        // Central blob to anchor the others as they pass through
-                        drawCircle(
-                            color = PurpleLightPrimary.copy(alpha = 0.5f),
-                            radius = minD * 0.2f,
-                            center = Offset(w / 2, h / 2)
-                        )
-                    }
-                }
+                    },
         )
 
         // Hazy Glass Overlay
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeEffect(state = localHazeState) {
-                    blurRadius = 24.dp
-                    tints = listOf(HazeTint(Color.White.copy(alpha = 0.05f)))
-                    noiseFactor = 0.15f
-                }
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.08f),
-                    shape = RectangleShape
-                )
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .hazeEffect(state = localHazeState) {
+                        blurRadius = 24.dp
+                        tints = listOf(HazeTint(Color.White.copy(alpha = 0.05f)))
+                        noiseFactor = 0.15f
+                    }.border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.08f),
+                        shape = RectangleShape,
+                    ),
         )
     }
 }
@@ -1227,30 +1274,31 @@ private fun GeneratingPlaceholderItem(
 @Composable
 private fun EmptyStudioState(
     modifier: Modifier = Modifier,
-    topPadding: Dp = 0.dp
+    topPadding: Dp = 0.dp,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(top = topPadding),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(top = topPadding),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = 32.dp),
         ) {
             Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "No creations yet. Use the controls below to generate an image, video, or music track.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }

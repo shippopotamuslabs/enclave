@@ -1,18 +1,23 @@
 package com.browntowndev.pocketcrew.feature.studio
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,53 +39,36 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.FullscreenMediaViewer
+import com.browntowndev.pocketcrew.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import com.browntowndev.pocketcrew.core.ui.component.sheet.CustomAnimationPromptPane
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class StudioDetailUiState {
-    data class Success(val assets: List<StudioMediaUi>, val initialIndex: Int) : StudioDetailUiState()
+    data class Success(
+        val assets: List<StudioMediaUi>,
+        val initialIndex: Int,
+    ) : StudioDetailUiState()
 }
 
 @HiltViewModel
-class StudioDetailViewModel @Inject constructor(
-    private val saveMediaToGalleryUseCase: SaveMediaToGalleryUseCase
-) : ViewModel() {
-    fun saveToGallery(asset: StudioMediaUi) {
-        viewModelScope.launch {
-            saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
+class StudioDetailViewModel
+    @Inject
+    constructor(
+        private val saveMediaToGalleryUseCase: SaveMediaToGalleryUseCase,
+    ) : ViewModel() {
+        fun saveToGallery(asset: StudioMediaUi) {
+            viewModelScope.launch {
+                saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
+            }
         }
     }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,17 +82,18 @@ fun StudioDetailScreen(
     onDeleteMedia: (String) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     hasVideoModel: Boolean = false,
-    viewModel: StudioDetailViewModel = hiltViewModel()
+    viewModel: StudioDetailViewModel = hiltViewModel(),
 ) {
-    val initialIndex = remember(assets, assetId) {
-        assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
-    }
+    val initialIndex =
+        remember(assets, assetId) {
+            assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
+        }
     val hazeState = rememberHazeState()
 
     Scaffold(
         containerColor = Color.Black,
         topBar = { StudioDetailTopBar(onNavigateBack = onNavigateBack) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         if (assets.isNotEmpty()) {
             DetailContent(
@@ -127,14 +117,14 @@ fun StudioDetailScreen(
                     onDeleteMedia(asset.id)
                     onNavigateBack()
                 },
-                modifier = Modifier.padding(padding)
+                modifier = Modifier.padding(padding),
             )
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
                 Text(
                     text = "Asset not found",
                     color = Color.White,
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
         }
@@ -143,30 +133,28 @@ fun StudioDetailScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StudioDetailTopBar(
-    onNavigateBack: () -> Unit
-) {
+private fun StudioDetailTopBar(onNavigateBack: () -> Unit) {
     TopAppBar(
         title = { },
         navigationIcon = {
             IconButton(
                 onClick = onNavigateBack,
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close",
-                    tint = Color.White
+                    tint = Color.White,
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            navigationIconContentColor = Color.White
-        )
+        colors =
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                navigationIconContentColor = Color.White,
+            ),
     )
 }
-
 
 @Composable
 private fun DetailContent(
@@ -180,12 +168,13 @@ private fun DetailContent(
     onSave: (StudioMediaUi) -> Unit,
     onShare: (StudioMediaUi) -> Unit,
     onDelete: (StudioMediaUi) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = initialIndex,
-        pageCount = { assets.size }
-    )
+    val pagerState =
+        rememberPagerState(
+            initialPage = initialIndex,
+            pageCount = { assets.size },
+        )
     var showCustomPromptInput by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialIndex) {
@@ -201,9 +190,11 @@ private fun DetailContent(
     Box(modifier = modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
-                .hazeSource(hazeState),
-            beyondViewportPageCount = 1
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .hazeSource(hazeState),
+            beyondViewportPageCount = 1,
         ) { page ->
             val asset = assets[page]
             Box(modifier = Modifier.fillMaxSize()) {
@@ -225,7 +216,7 @@ private fun DetailContent(
                     onSave = { onSave(asset) },
                     onShare = { onShare(asset) },
                     onDelete = { onDelete(asset) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
         }
@@ -234,7 +225,7 @@ private fun DetailContent(
             visible = showCustomPromptInput,
             enter = slideInVertically(initialOffsetY = { it }),
             exit = slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             val asset = assets[pagerState.currentPage]
             CustomAnimationPromptPane(
@@ -243,7 +234,7 @@ private fun DetailContent(
                     showCustomPromptInput = false
                 },
                 onDismiss = { showCustomPromptInput = false },
-                hazeState = hazeState
+                hazeState = hazeState,
             )
         }
     }
@@ -253,34 +244,38 @@ private fun DetailContent(
 private fun DetailMedia(
     asset: StudioMediaUi,
     videoGenerationState: VideoGenerationState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val generatedVideoUri = (videoGenerationState as? VideoGenerationState.Success)
-        ?.takeIf { it.sourceAssetId == asset.id }
-        ?.localUri
-    val isLoading = videoGenerationState is VideoGenerationState.Loading &&
-        videoGenerationState.sourceAssetId == asset.id
+    val generatedVideoUri =
+        (videoGenerationState as? VideoGenerationState.Success)
+            ?.takeIf { it.sourceAssetId == asset.id }
+            ?.localUri
+    val isLoading =
+        videoGenerationState is VideoGenerationState.Loading &&
+            videoGenerationState.sourceAssetId == asset.id
 
     Box(modifier = modifier.fillMaxSize()) {
         FullscreenMediaViewer(
             localUri = generatedVideoUri ?: asset.localUri,
-            mediaType = if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
-                MediaCapability.VIDEO
-            } else if (asset.mediaType == MediaCapability.MUSIC) {
-                MediaCapability.MUSIC
-            } else {
-                MediaCapability.IMAGE
-            },
+            mediaType =
+                if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
+                    MediaCapability.VIDEO
+                } else if (asset.mediaType == MediaCapability.MUSIC) {
+                    MediaCapability.MUSIC
+                } else {
+                    MediaCapability.IMAGE
+                },
             contentDescription = asset.prompt,
             modifier = Modifier.fillMaxSize(),
         )
 
         if (isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.42f))
-                    .semantics { contentDescription = "Animating image" },
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.42f))
+                        .semantics { contentDescription = "Animating image" },
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = Color.White)
@@ -298,24 +293,24 @@ private fun DetailActionsOverlay(
     onSave: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
-                )
-            )
-            .padding(24.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                    ),
+                ).padding(24.dp),
     ) {
         Text(
             text = asset.prompt,
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White,
             maxLines = 3,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -327,13 +322,12 @@ private fun DetailActionsOverlay(
             onAnimate = onAnimate,
             onSave = onSave,
             onShare = onShare,
-            onDelete = onDelete
+            onDelete = onDelete,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
-
 
 @Suppress("UnusedPrivateMember")
 @Preview(name = "Image detail", showBackground = true, backgroundColor = 0xFF000000)
@@ -409,12 +403,12 @@ private fun DetailActionRow(
     onSave: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         ActionItem(Icons.Default.Edit, "Edit", onEdit)
         if (mediaType == MediaCapability.IMAGE) {
@@ -448,7 +442,7 @@ private fun ActionItem(
     isDestructive: Boolean = false,
     enabled: Boolean = true,
     disabledTooltip: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val tooltipState = rememberTooltipState(isPersistent = true)
     val scope = rememberCoroutineScope()
@@ -465,39 +459,43 @@ private fun ActionItem(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = modifier
-                .alpha(if (enabled) 1f else 0.38f)
-                .clickable {
-                    if (enabled) onClick()
-                    else if (disabledTooltip != null) scope.launch { tooltipState.show() }
-                }
+            modifier =
+                modifier
+                    .alpha(if (enabled) 1f else 0.38f)
+                    .clickable {
+                        if (enabled) {
+                            onClick()
+                        } else if (disabledTooltip != null) {
+                            scope.launch { tooltipState.show() }
+                        }
+                    },
         ) {
             Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .background(
-                        if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
-                        CircleShape
-                    )
-                    .border(
-                        1.dp,
-                        if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(56.dp)
+                        .background(
+                            if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
+                            CircleShape,
+                        ).border(
+                            1.dp,
+                            if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
+                            CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = label,
                     tint = if (isDestructive) Color.Red else Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f)
+                color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f),
             )
         }
     }
