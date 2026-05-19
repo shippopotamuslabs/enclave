@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import com.browntowndev.pocketcrew.core.data.local.dao.message.MessagePersistPayload
+import com.browntowndev.pocketcrew.core.data.local.dao.message.MessageWithFiles
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -191,15 +193,17 @@ class MessageDaoSortingTest {
 
             runCurrent()
             dao.persistAllMessageData(
-                messageId = assistantMessageId,
-                modelType = ModelType.FAST,
-                thinkingStartTime = 0L,
-                thinkingEndTime = 0L,
-                thinkingDuration = null,
-                thinkingRaw = null,
-                content = "final answer",
-                messageState = MessageState.COMPLETE,
-                pipelineStep = null,
+                MessagePersistPayload(
+                    messageId = assistantMessageId,
+                    modelType = ModelType.FAST,
+                    thinkingStartTime = 0L,
+                    thinkingEndTime = 0L,
+                    thinkingDuration = null,
+                    thinkingRaw = null,
+                    content = "final answer",
+                    messageState = MessageState.COMPLETE,
+                    pipelineStep = null,
+                ),
             )
             collectJob.join()
 
@@ -217,5 +221,72 @@ class MessageDaoSortingTest {
                     finalContentWithoutCompleteState || completeStateWithoutFinalContent
                 },
             )
+        }
+
+    @Test
+    fun `getMessagesForChat filters by chat and preserves createdAt ordering`() =
+        runTest {
+            val chatId = ChatId("chat-filter")
+            val otherChatId = ChatId("chat-other")
+
+            database.chatDao().upsert(
+                ChatEntity(
+                    id = chatId,
+                    name = "Target",
+                    created = Date(),
+                    lastModified = Date(),
+                    pinned = false,
+                ),
+            )
+            database.chatDao().upsert(
+                ChatEntity(
+                    id = otherChatId,
+                    name = "Other",
+                    created = Date(),
+                    lastModified = Date(),
+                    pinned = false,
+                ),
+            )
+
+            dao.upsert(
+                MessageEntity(
+                    id = MessageId("a"),
+                    chatId = chatId,
+                    role = Role.USER,
+                    messageState = MessageState.COMPLETE,
+                    content = "first",
+                    createdAt = 1000L,
+                ),
+            )
+            dao.upsert(
+                MessageEntity(
+                    id = MessageId("b"),
+                    chatId = chatId,
+                    role = Role.ASSISTANT,
+                    messageState = MessageState.COMPLETE,
+                    content = "second",
+                    createdAt = 2000L,
+                ),
+            )
+            dao.upsert(
+                MessageEntity(
+                    id = MessageId("other"),
+                    chatId = otherChatId,
+                    role = Role.USER,
+                    messageState = MessageState.COMPLETE,
+                    content = "wrong chat",
+                    createdAt = 3000L,
+                ),
+            )
+
+            val filtered =
+                dao.getMessagesForChat(
+                    chatId = chatId,
+                    ids = listOf(MessageId("b"), MessageId("a"), MessageId("other")),
+                )
+
+            assertEquals(2, filtered.size)
+            assertEquals("a", filtered[0].message.id.value)
+            assertEquals("b", filtered[1].message.id.value)
         }
 }

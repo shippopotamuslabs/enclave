@@ -32,7 +32,11 @@ import androidx.room.TypeConverters
 abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
 
-    abstract fun messageDao(): MessageDao
+    abstract fun messageQueryDao(): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageQueryDao
+
+    abstract fun messageCommandDao(): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageCommandDao
+
+    abstract fun messageSyncCommandDao(): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageSyncCommandDao
 
     abstract fun chatSummaryDao(): ChatSummaryDao
 

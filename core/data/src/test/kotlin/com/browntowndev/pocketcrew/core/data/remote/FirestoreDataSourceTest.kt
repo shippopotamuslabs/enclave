@@ -88,7 +88,7 @@ class FirestoreDataSourceTest {
         every { firestore.document(any()) } returns mockk(relaxed = true)
 
         dataSource =
-            FirestoreDataSource(
+            createTestFirestoreDataSource(
                 documentDao = documentDao,
                 firestore = firestore,
                 chatDao = chatDao,
@@ -145,7 +145,7 @@ class FirestoreDataSourceTest {
         @DisplayName("does nothing when userId is null")
         fun doesNothingWhenUserIdNull() {
             val nullUserIdSource =
-                FirestoreDataSource(
+                createTestFirestoreDataSource(
                     documentDao = mockk(relaxed = true),
                     firestore = firestore,
                     chatDao = chatDao,
@@ -588,7 +588,7 @@ class FirestoreDataSourceTest {
         fun returnsFailureWhenNotSignedIn() =
             testScope.runTest {
                 val nullUserIdSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -694,7 +694,7 @@ class FirestoreDataSourceTest {
         fun returnsFailureWhenNotSignedIn() =
             testScope.runTest {
                 val nullUserSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -801,7 +801,7 @@ class FirestoreDataSourceTest {
         fun uploadsLocallyEncryptedFieldEnvelopesWithoutReEncryptingForFirestore() =
             testScope.runTest {
                 val source =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = documentDao,
                         firestore = firestore,
                         chatDao = chatDao,
@@ -859,7 +859,7 @@ class FirestoreDataSourceTest {
         fun selfHealsPendingPlaintextRoomFieldsBeforeFirestoreUpload() =
             testScope.runTest {
                 val source =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = documentDao,
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1310,7 +1310,7 @@ class FirestoreDataSourceTest {
         @BeforeEach
         fun setupListener() {
             dataSource =
-                FirestoreDataSource(
+                createTestFirestoreDataSource(
                     documentDao = mockk(relaxed = true),
                     firestore = firestore,
                     chatDao = chatDao,
@@ -1406,7 +1406,7 @@ class FirestoreDataSourceTest {
         fun setupListener() {
             // Re-create dataSource with mocked vision analysis DAO
             dataSource =
-                FirestoreDataSource(
+                createTestFirestoreDataSource(
                     documentDao = mockk(relaxed = true),
                     firestore = firestore,
                     chatDao = chatDao,
@@ -1589,7 +1589,7 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val messageVisionAnalysisDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1650,7 +1650,7 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val messageFileDao = mockk<com.browntowndev.pocketcrew.core.data.local.MessageFileDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1707,7 +1707,7 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val webSearchSourceDao = mockk<com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1770,7 +1770,7 @@ class FirestoreDataSourceTest {
         fun syncsMessage() =
             runTest {
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1842,7 +1842,7 @@ class FirestoreDataSourceTest {
         fun decryptsGeneratedMediaAssetIdsJsonFromBlob() =
             runTest {
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1912,7 +1912,7 @@ class FirestoreDataSourceTest {
             runTest {
                 val mediaProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.MediaProviderDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -1988,7 +1988,7 @@ class FirestoreDataSourceTest {
             runTest {
                 val ttsProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.TtsProviderDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -2064,7 +2064,7 @@ class FirestoreDataSourceTest {
             runTest {
                 val apiModelConfigurationsDao = mockk<com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -2144,7 +2144,7 @@ class FirestoreDataSourceTest {
                 val localModelConfigurationsDao =
                     mockk<com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -2322,7 +2322,7 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val studioMediaDao = mockk<com.browntowndev.pocketcrew.core.data.local.StudioMediaDao>(relaxed = true)
                 val localDataSource =
-                    FirestoreDataSource(
+                    createTestFirestoreDataSource(
                         documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
@@ -2419,25 +2419,42 @@ class FirestoreDataSourceTest {
     @DisplayName("cloud purge placeholder guard")
     inner class CloudPurgePlaceholderGuardTests {
         private val messagesListenerSlot = slot<EventListener<QuerySnapshot>>()
+        private val purgeInProgress = AtomicBoolean(false)
+        private lateinit var purgeGuardDataSource: FirestoreDataSource
 
         @BeforeEach
         fun setupMessagesListener() {
+            purgeInProgress.set(false)
+            purgeGuardDataSource =
+                createTestFirestoreDataSource(
+                    firestore = firestore,
+                    chatDao = chatDao,
+                    messageDao = messageDao,
+                    apiCredentialsDao = apiCredentialsDao,
+                    chatSummaryDao = chatSummaryDao,
+                    documentDao = documentDao,
+                    embeddingDao = embeddingDao,
+                    apiKeyManager = apiKeyManager,
+                    cryptoManager = cryptoManager,
+                    loggingPort = loggingPort,
+                    externalScope = testScope,
+                    embeddingCoordinator = embeddingCoordinator,
+                    purgeInProgress = purgeInProgress,
+                )
             val chatsCollection = mockk<CollectionReference>(relaxed = true)
             val messagesCollection = mockk<CollectionReference>(relaxed = true)
             every { firestore.collection("users/test-user-id/chats") } returns chatsCollection
             every { firestore.collection("users/test-user-id/messages") } returns messagesCollection
             every { chatsCollection.addSnapshotListener(any()) } returns mockk(relaxed = true)
             every { messagesCollection.addSnapshotListener(capture(messagesListenerSlot)) } returns mockk(relaxed = true)
-            dataSource.startListening()
+            purgeGuardDataSource.startListening()
         }
 
         @Test
         @DisplayName("ADDED skips placeholder chat insert while cloud purge is in progress")
         fun addedSkipsPlaceholderChatWhilePurgeInProgress() =
             testScope.runTest {
-                val purgeField = FirestoreDataSource::class.java.getDeclaredField("purgeInProgress")
-                purgeField.isAccessible = true
-                (purgeField.get(dataSource) as AtomicBoolean).set(true)
+                purgeInProgress.set(true)
 
                 val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
                 every { mockDoc.id } returns "msg-1"

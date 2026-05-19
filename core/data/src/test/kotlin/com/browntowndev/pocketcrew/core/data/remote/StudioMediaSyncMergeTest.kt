@@ -50,7 +50,7 @@ class StudioMediaSyncMergeTest {
         every { cryptoManager.decrypt(any()) } answers { Result.success(String(it.invocation.args[0] as ByteArray)) }
 
         dataSource =
-            FirestoreDataSource(
+            createTestFirestoreDataSource(
                 documentDao = mockk(relaxed = true),
                 firestore = firestore,
                 chatDao = mockk(relaxed = true),
