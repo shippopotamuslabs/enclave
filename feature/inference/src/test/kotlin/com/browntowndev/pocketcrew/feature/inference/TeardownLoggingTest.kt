@@ -52,8 +52,9 @@ class TeardownLoggingTest {
                 ),
             )
 
+        manager.engineCreatorHolder.override = { _, _, _, _, _ -> mockEngine }
+
         // Default mock behaviors
-        every { manager.createEngine(any(), any(), any(), any(), any()) } returns mockEngine
         every { manager.getModelPath(any()) } returns "/mock/path"
         every { mockEngine.createConversation(any()) } returns mockConversation
         every { mockConversation.isAlive } returns true

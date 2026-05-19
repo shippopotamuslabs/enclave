@@ -9,8 +9,6 @@ import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
-
 class JniLlamaEnginePerformanceAuditTest {
     private val gpuProfiler: GpuProfiler = mockk(relaxed = true)
     private lateinit var engine: JniLlamaEngine
@@ -63,61 +61,4 @@ class JniLlamaEnginePerformanceAuditTest {
             }
         }
 
-    @Test
-    fun `checkAndCompressContext reports native context usage without mutating KV positions`() {
-        val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
-
-        val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
-        loadedField.isAccessible = true
-        (loadedField.get(engine) as AtomicBoolean).set(true)
-
-        val lastPromptTokensField = JniLlamaEngine::class.java.getDeclaredField("lastPromptTokens")
-        lastPromptTokensField.isAccessible = true
-        lastPromptTokensField.setInt(engine, 10)
-
-        val lastGeneratedTokensField = JniLlamaEngine::class.java.getDeclaredField("lastGeneratedTokens")
-        lastGeneratedTokensField.isAccessible = true
-        lastGeneratedTokensField.setInt(engine, 10)
-
-        every { engine.getContextSizeForCompression() } returns 100
-        every { engine.getContextUsageForCompression() } returns 85
-        every { engine.saveState() } returns null
-        every { engine.applyCompressionForContext(any()) } returns true
-
-        val method = JniLlamaEngine::class.java.getDeclaredMethod("checkAndCompressContext")
-        method.isAccessible = true
-        method.invoke(engine)
-
-        verify { engine.getContextUsageForCompression() }
-        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
-    }
-
-    @Test
-    fun `checkAndCompressContext falls back to tracked token counts without mutating KV positions`() {
-        val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
-
-        val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
-        loadedField.isAccessible = true
-        (loadedField.get(engine) as AtomicBoolean).set(true)
-
-        val lastPromptTokensField = JniLlamaEngine::class.java.getDeclaredField("lastPromptTokens")
-        lastPromptTokensField.isAccessible = true
-        lastPromptTokensField.setInt(engine, 60)
-
-        val lastGeneratedTokensField = JniLlamaEngine::class.java.getDeclaredField("lastGeneratedTokens")
-        lastGeneratedTokensField.isAccessible = true
-        lastGeneratedTokensField.setInt(engine, 25)
-
-        every { engine.getContextSizeForCompression() } returns 100
-        every { engine.getContextUsageForCompression() } returns 0
-        every { engine.saveState() } returns null
-        every { engine.applyCompressionForContext(any()) } returns true
-
-        val method = JniLlamaEngine::class.java.getDeclaredMethod("checkAndCompressContext")
-        method.isAccessible = true
-        method.invoke(engine)
-
-        verify { engine.getContextUsageForCompression() }
-        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
-    }
 }

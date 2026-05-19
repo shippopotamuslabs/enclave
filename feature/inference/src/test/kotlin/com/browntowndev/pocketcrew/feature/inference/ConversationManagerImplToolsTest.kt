@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
@@ -9,6 +11,12 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.feature.inference.conversation.ConversationCancellationGate
+import com.browntowndev.pocketcrew.feature.inference.conversation.ConversationSignatureCache
+import com.browntowndev.pocketcrew.feature.inference.conversation.LiteRtNativeToolsets
+import com.browntowndev.pocketcrew.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.pocketcrew.feature.inference.conversation.LiteRtToolContext
+import com.browntowndev.pocketcrew.feature.inference.conversation.NoopAgentPolicyPort
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
@@ -24,6 +32,7 @@ class ConversationManagerImplToolsTest {
     private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
 
     private lateinit var manager: ConversationManagerImpl
+    private lateinit var toolLoop: LiteRtToolCallLoop
 
     @BeforeEach
     fun setUp() {
@@ -42,6 +51,15 @@ class ConversationManagerImplToolsTest {
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
             )
+
+        toolLoop =
+            LiteRtToolCallLoop(
+                cache = ConversationSignatureCache(),
+                toolExecutor = toolExecutor,
+                loggingPort = loggingPort,
+                agentPolicyPort = NoopAgentPolicyPort,
+                cancellationGate = ConversationCancellationGate(),
+            )
     }
 
     @AfterEach
@@ -52,24 +70,14 @@ class ConversationManagerImplToolsTest {
     @Test
     fun `LocalSearchChatHistoryToolset splits multiple queries correctly`() =
         runTest {
-            // Given
-            val toolset =
-                instantiateToolset(
-                    "LocalSearchChatHistoryToolset",
-                    ModelType.FAST,
-                    "chat-1",
-                    "msg-1",
-                )
+            val toolset = createSearchChatHistoryToolset()
 
-            val searchMethod = toolset.javaClass.declaredMethods.find { it.name == "search_chat_history" }!!
-            searchMethod.isAccessible = true
+            val searchMethod = toolset.javaClass.getDeclaredMethod("search_chat_history", String::class.java)
 
             coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("search_chat_history", "{\"results\":[]}")
 
-            // When
             searchMethod.invoke(toolset, "query1, query2 ,  query3")
 
-            // Then
             val requestSlot = slot<ToolCallRequest>()
             coVerify { toolExecutor.execute(capture(requestSlot)) }
 
@@ -82,24 +90,20 @@ class ConversationManagerImplToolsTest {
     @Test
     fun `LocalExtractToolset parses URLs correctly`() =
         runTest {
-            // Given
-            val toolset =
-                instantiateToolset(
-                    "LocalExtractToolset",
-                    ModelType.FAST,
-                    "chat-1",
-                    "msg-1",
-                )
+            val toolset = createExtractToolset()
 
-            val extractMethod = toolset.javaClass.declaredMethods.find { it.name == "tavily_extract" }!!
-            extractMethod.isAccessible = true
+            val extractMethod =
+                toolset.javaClass.getDeclaredMethod(
+                    "tavily_extract",
+                    String::class.java,
+                    String::class.java,
+                    String::class.java,
+                )
 
             coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_extract", "{\"results\":[]}")
 
-            // When
             extractMethod.invoke(toolset, "[\"https://example.com\", \"https://google.com\"]", "advanced", "markdown")
 
-            // Then
             val requestSlot = slot<ToolCallRequest>()
             coVerify { toolExecutor.execute(capture(requestSlot)) }
 
@@ -113,7 +117,6 @@ class ConversationManagerImplToolsTest {
     @Test
     fun `executeToolSafely handles tool execution failure and returns error JSON`() =
         runTest {
-            // Given
             coEvery { toolExecutor.execute(any()) } throws RuntimeException("Network error")
 
             val request =
@@ -124,33 +127,24 @@ class ConversationManagerImplToolsTest {
                     modelType = ModelType.FAST,
                 )
 
-            // When
             val result = manager.executeToolSafelyForTest(request)
 
-            // Then
             assertTrue(result.contains("tool_execution_failed"))
             assertTrue(result.contains("Network error"))
             verify { loggingPort.error(any(), any(), any()) }
         }
 
-    private fun instantiateToolset(
-        className: String,
-        modelType: ModelType,
-        chatId: String?,
-        messageId: String?,
-    ): Any {
-        val toolsetClass =
-            manager.javaClass
-                .getDeclaredClasses()
-                .find { it.simpleName == className }!!
+    private fun createToolContext(): LiteRtToolContext =
+        LiteRtToolContext(
+            modelType = ModelType.FAST,
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolLoop = toolLoop,
+        )
 
-        // Find constructor with (Outer, ModelType, String, String, DefaultMarker)
-        val constructor =
-            toolsetClass
-                .getDeclaredConstructors()
-                .find { it.parameterCount == 5 }!!
+    private fun createSearchChatHistoryToolset(): LiteRtNativeToolsets.LocalSearchChatHistoryToolset =
+        LiteRtNativeToolsets.LocalSearchChatHistoryToolset(createToolContext())
 
-        constructor.isAccessible = true
-        return constructor.newInstance(manager, modelType, chatId, messageId, null)
-    }
+    private fun createExtractToolset(): LiteRtNativeToolsets.LocalExtractToolset =
+        LiteRtNativeToolsets.LocalExtractToolset(createToolContext())
 }
