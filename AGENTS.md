@@ -139,16 +139,20 @@ or edit generated binding outputs only as part of that regeneration workflow.
 
 ## 6. Code Intelligence Setup
 
-- Android/Kotlin: import the root Gradle project in Android Studio or IntelliJ. Use JDK 17 and the checked-in Gradle wrapper.
+- Android/Kotlin: import the root Gradle project in **Android Studio Quail** (or IntelliJ). Keep Studio open on **Pocket Crew** during agent sessions so `android studio` bridge commands work. Use JDK 17 and the checked-in Gradle wrapper.
+- **Android CLI:** `android` 1.0+ on PATH (`android info`). Run `android init` once per machine; project skills live under `.agents/skills/`.
 - TypeScript functions: run `npm --prefix functions install` if dependencies are missing; TypeScript server should use `functions/tsconfig.json`.
 - Rust bridge crates: use `rust-analyzer` rooted at `third_party/agent_core/Cargo.toml` or `third_party/docgen_core/Cargo.toml`.
 - Native C/C++: Android Studio/CMake can generate compile commands under native build output folders; those outputs are intentionally ignored.
 
 ---
 
-## 7. MCP Tool Priority
+## 7. Tool Priority (MCP and Android CLI)
 
-Before any task, check available MCP tools:
+Before any Android/Kotlin task, check MCP tools **and** whether Android Studio bridge
+commands are available.
+
+### MCP servers
 
 | MCP Server | When to use |
 |------------|-------------|
@@ -158,7 +162,35 @@ Before any task, check available MCP tools:
 | `github-mcp-server` | PR creation, branch management, code search across the repo |
 | `synthitect` | CFAW workflow phases when explicitly invoked by the user |
 
-Use MCP tools before manual execution. Manual shell commands are a last resort.
+Use MCP tools before ad-hoc web search. Prefer MCP over guessing APIs.
+
+### Android CLI and Studio bridge (shell)
+
+| Capability | Command family | When to use |
+|------------|----------------|-------------|
+| Studio connected | `android studio check` | Start of Compose UI, refactor, or navigation tasks |
+| Symbol navigation | `android studio find-declaration`, `find-usages` | Cross-module Kotlin references (prefer over blind grep) |
+| IDE inspections | `android studio analyze-file` | Before/after editing a Kotlin/Compose file |
+| Resolved versions | `android studio version-lookup` | Dependency bumps, version skew debugging |
+| Compose previews | `android studio render-compose-preview` | Visual check of `@Preview` composables — **requires debug build** (see below) |
+| APK / deploy | `android describe`, `android run` | After `./gradlew :app:assembleDebug` |
+| Device UI tree | `android layout` | Layout/debug on connected device or emulator |
+| Android docs | `android docs search`, `android docs fetch` | Authoritative KB lookups |
+
+**Project identifier:** `--project="Pocket Crew"` when multiple projects could be open.
+
+**Compose previews:** Build debug first (`./gradlew :feature:<module>:assembleDebug` or
+`:app:assembleDebug`). Release artifacts do not satisfy preview rendering. If
+`Missing ComposeViewAdapter` appears, open the preview in Studio once and rebuild debug.
+
+**AndroJack vs Android CLI:** AndroJack validates **generated** code (§3.2). Android CLI
+queries the **running IDE** and devices. Use both; neither replaces the other.
+
+**Agent rule and recipes:** `.agents/rules/android-studio-cli.md`,
+`.agents/skills/pocket-crew-studio-bridge/SKILL.md`.
+
+If `android studio check` reports no running Studio, continue with Gradle/tests and note
+that bridge commands were skipped.
 
 ---
 
@@ -167,7 +199,7 @@ Use MCP tools before manual execution. Manual shell commands are a last resort.
 Keep reusable expertise out of root instructions. Good candidates for on-demand
 skills or skill-like docs in this repo:
 
-- Android Compose feature work against `ARCHITECTURE_RULES.md`, `CODE_STYLE_RULES.md`, `UI_DESIGN_SPEC.md`, and `UNIT_TESTING.md`.
+- Android Compose feature work against `ARCHITECTURE_RULES.md`, `CODE_STYLE_RULES.md`, `UI_DESIGN_SPEC.md`, and `UNIT_TESTING.md`; use **Android Studio bridge** per §7 and `pocket-crew-studio-bridge` skill.
 - Room/schema changes against `DATA_LAYER_RULES.md`.
 - Inference/provider changes against `INFERENCE_RULES.md`.
 - UniFFI binding regeneration for `core/agent` and `core/docgen`.
@@ -179,9 +211,10 @@ are Gradle tasks, npm scripts, Cargo tests, and scripts under `scripts/`. Do not
 invent hook config unless the repo adds checked-in hook infrastructure.
 
 Existing MCP config is `.cursor/mcp.json`, which configures `androjack`.
+Android CLI is shell-based (not MCP); Studio bridge requires Quail + Gemini signed in.
 Candidate future integrations, if maintainers choose to add them: GitHub issue
-and PR access, Firebase project operations, and Android device/emulator
-automation.
+and PR access, Firebase project operations, and deeper emulator automation beyond
+`android emulator` / `mobile-mcp`.
 
 ---
 
