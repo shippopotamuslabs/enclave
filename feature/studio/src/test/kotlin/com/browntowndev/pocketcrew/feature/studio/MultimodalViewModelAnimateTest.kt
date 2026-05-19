@@ -22,6 +22,12 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioAlbumSelectionCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioSpeechCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioUiStateReducer
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -96,16 +102,26 @@ class MultimodalViewModelAnimateTest {
                 supportsVideo = true,
             )
 
+        val generationCoordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
+        val albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository)
+        val speechCoordinator = StudioSpeechCoordinator(chatUseCases)
+        val playbackCoordinator = StudioPlaybackCoordinator(playbackController)
+        val studioUiStateReducer = StudioUiStateReducer()
+        val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
+
         viewModel =
             MultimodalViewModel(
                 shareMediaPort = shareMediaPort,
                 studioRepository = studioRepository,
-                dispatcher = dispatcher,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
-                chatUseCases = chatUseCases,
-                playbackController = playbackController,
+                generationCoordinator = generationCoordinator,
+                albumSelectionCoordinator = albumSelectionCoordinator,
+                speechCoordinator = speechCoordinator,
+                playbackCoordinator = playbackCoordinator,
+                studioUiStateReducer = studioUiStateReducer,
+                capabilitiesCoordinator = capabilitiesCoordinator,
             )
     }
 

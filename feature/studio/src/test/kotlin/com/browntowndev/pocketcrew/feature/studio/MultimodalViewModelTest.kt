@@ -21,7 +21,14 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioAlbumSelectionCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioSpeechCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioCapabilitiesCoordinator
+import com.browntowndev.pocketcrew.feature.studio.coordinators.StudioUiStateReducer
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
+import app.cash.turbine.test
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -58,6 +65,11 @@ class MultimodalViewModelTest {
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
+    private lateinit var generationCoordinator: StudioGenerationCoordinator
+    private lateinit var albumSelectionCoordinator: StudioAlbumSelectionCoordinator
+    private lateinit var speechCoordinator: StudioSpeechCoordinator
+    private lateinit var playbackCoordinator: StudioPlaybackCoordinator
+    private lateinit var studioUiStateReducer: StudioUiStateReducer
 
     private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
@@ -143,16 +155,26 @@ class MultimodalViewModelTest {
         every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
+        generationCoordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
+        albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository)
+        speechCoordinator = StudioSpeechCoordinator(chatUseCases)
+        playbackCoordinator = StudioPlaybackCoordinator(playbackController)
+        studioUiStateReducer = StudioUiStateReducer()
+        val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
+
         viewModel =
             MultimodalViewModel(
                 shareMediaPort = shareMediaPort,
                 studioRepository = studioRepository,
-                dispatcher = dispatcher,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
-                chatUseCases = chatUseCases,
-                playbackController = playbackController,
+                generationCoordinator = generationCoordinator,
+                albumSelectionCoordinator = albumSelectionCoordinator,
+                speechCoordinator = speechCoordinator,
+                playbackCoordinator = playbackCoordinator,
+                studioUiStateReducer = studioUiStateReducer,
+                capabilitiesCoordinator = capabilitiesCoordinator,
             )
     }
 
@@ -160,6 +182,22 @@ class MultimodalViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `uiState emits typed studio state without generation error`() =
+        runTest {
+            viewModel.uiState.test {
+                val initial = awaitItem()
+                assertEquals("", initial.prompt)
+                assertFalse(initial.isGenerating)
+
+                viewModel.onPromptChange("studio prompt")
+                val updated = awaitItem()
+                assertEquals("studio prompt", updated.prompt)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     @Test
     fun `capabilities should be updated via use case`() =
