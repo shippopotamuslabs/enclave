@@ -12,33 +12,35 @@ import javax.inject.Inject
  * This is used during logout to ensure the app remains functional for guest users without
  * cloud configurations.
  */
-class AutoAssignLocalModelsUseCase @Inject constructor(
-    private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
-    private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
-    private val setDefaultModelUseCase: SetDefaultModelUseCase,
-) {
-    suspend operator fun invoke() {
-        val currentAssignments = getDefaultModelsUseCase().first()
-        val assignedTypes = currentAssignments.map { it.modelType }.toSet()
+class AutoAssignLocalModelsUseCase
+    @Inject
+    constructor(
+        private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
+        private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
+        private val setDefaultModelUseCase: SetDefaultModelUseCase,
+    ) {
+        suspend operator fun invoke() {
+            val currentAssignments = getDefaultModelsUseCase().first()
+            val assignedTypes = currentAssignments.map { it.modelType }.toSet()
 
-        val localAssets = getLocalModelAssetsUseCase().first()
-        if (localAssets.isEmpty()) return
+            val localAssets = getLocalModelAssetsUseCase().first()
+            if (localAssets.isEmpty()) return
 
-        // Pick the first available local configuration
-        val firstAsset = localAssets.first()
-        val firstConfig = firstAsset.configurations.firstOrNull() ?: return
+            // Pick the first available local configuration
+            val firstAsset = localAssets.first()
+            val firstConfig = firstAsset.configurations.firstOrNull() ?: return
 
-        // Auto-assign to all LLM-based slots that are currently empty
-        ModelType.entries
-            .filter { it.isTextModel && it !in assignedTypes }
-            .forEach { modelType ->
-            setDefaultModelUseCase(
-                modelType = modelType,
-                localConfigId = firstConfig.id,
-                apiConfigId = null,
-                ttsProviderId = null,
-                mediaProviderId = null
-            )
+            // Auto-assign to all LLM-based slots that are currently empty
+            ModelType.entries
+                .filter { it.isTextModel && it !in assignedTypes }
+                .forEach { modelType ->
+                    setDefaultModelUseCase(
+                        modelType = modelType,
+                        localConfigId = firstConfig.id,
+                        apiConfigId = null,
+                        ttsProviderId = null,
+                        mediaProviderId = null,
+                    )
+                }
         }
     }
-}

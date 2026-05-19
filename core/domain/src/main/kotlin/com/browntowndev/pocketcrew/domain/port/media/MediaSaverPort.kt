@@ -10,5 +10,8 @@ interface MediaSaverPort {
      * Saves the media file at [localUri] to the device's public gallery.
      * @return the URI of the saved media in the public gallery.
      */
-    suspend fun saveToGallery(localUri: String, mediaType: MediaCapability): Result<String>
+    suspend fun saveToGallery(
+        localUri: String,
+        mediaType: MediaCapability,
+    ): Result<String>
 }

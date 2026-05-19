@@ -7,10 +7,8 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
 class JTokkitTokenCounterTest {
-
     @Nested
     inner class BasicAccuracy {
-
         @Test
         @DisplayName("countTokens returns 0 for empty string")
         fun returnsZeroForEmptyString() {
@@ -39,8 +37,10 @@ class JTokkitTokenCounterTest {
             val text = "Hello world"
             val nullModel = JTokkitTokenCounter.countTokens(text, null)
             val unknownModel = JTokkitTokenCounter.countTokens(text, "unknown-model-xyz")
-            assertEquals(nullModel, unknownModel,
-                "Unknown model should fall back to cl100k_base, same as null modelId"
+            assertEquals(
+                nullModel,
+                unknownModel,
+                "Unknown model should fall back to cl100k_base, same as null modelId",
             )
         }
 
@@ -52,8 +52,9 @@ class JTokkitTokenCounterTest {
             val tokenCount = JTokkitTokenCounter.countTokens(text, null)
             val charsPerToken = text.length.toDouble() / tokenCount
             // BPE for English typically gives 3-5 chars/token
-            assertTrue(charsPerToken in 2.0..6.0,
-                "Expected charsPerToken between 2 and 6, got $charsPerToken ($text.length chars / $tokenCount tokens)"
+            assertTrue(
+                charsPerToken in 2.0..6.0,
+                "Expected charsPerToken between 2 and 6, got $charsPerToken ($text.length chars / $tokenCount tokens)",
             )
         }
 
@@ -87,8 +88,10 @@ class JTokkitTokenCounterTest {
             val gpt4Count = JTokkitTokenCounter.countTokens(text, "gpt-4")
             val defaultCount = JTokkitTokenCounter.countTokens(text, null)
             // GPT-4 uses cl100k_base, so counts should be identical
-            assertEquals(gpt4Count, defaultCount,
-                "GPT-4 model should use same encoding as default fallback"
+            assertEquals(
+                gpt4Count,
+                defaultCount,
+                "GPT-4 model should use same encoding as default fallback",
             )
         }
     }

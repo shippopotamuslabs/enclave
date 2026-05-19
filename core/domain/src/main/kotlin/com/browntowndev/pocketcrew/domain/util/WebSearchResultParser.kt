@@ -20,17 +20,21 @@ object WebSearchResultParser {
      * @param resultJson The raw JSON string returned by the web search tool.
      * @return A list of [WebSearchSource] objects.
      */
-    fun parse(messageId: MessageId, resultJson: String): List<WebSearchSource> {
+    fun parse(
+        messageId: MessageId,
+        resultJson: String,
+    ): List<WebSearchSource> {
         val sources = mutableListOf<WebSearchSource>()
         runCatching {
             val jsonElement = json.parseToJsonElement(resultJson)
-            
+
             // Handle X search result (JsonArray of posts)
             if (jsonElement is JsonArray) {
                 jsonElement.forEach { post ->
                     val postObj = post.jsonObject
-                    val content = postObj["text"]?.jsonPrimitive?.content 
-                        ?: postObj["content"]?.jsonPrimitive?.content
+                    val content =
+                        postObj["text"]?.jsonPrimitive?.content
+                            ?: postObj["content"]?.jsonPrimitive?.content
                     val url = postObj["url"]?.jsonPrimitive?.content
                     val userName = postObj["user_name"]?.jsonPrimitive?.content
 
@@ -41,8 +45,8 @@ object WebSearchResultParser {
                                 title = userName ?: "X Post",
                                 url = url,
                                 content = content,
-                                score = postObj["impact_score"]?.jsonPrimitive?.double ?: 1.0
-                            )
+                                score = postObj["impact_score"]?.jsonPrimitive?.double ?: 1.0,
+                            ),
                         )
                     }
                 }
@@ -50,7 +54,7 @@ object WebSearchResultParser {
                 // Handle standard web search format (Tavily/Exa/Google)
                 // Some formats might have results in "results" or "data"
                 val results = jsonElement["results"]?.jsonArray ?: jsonElement["data"]?.jsonArray
-                
+
                 if (results != null) {
                     results.forEach { itemElement ->
                         val item = itemElement.jsonObject
@@ -66,8 +70,8 @@ object WebSearchResultParser {
                                     title = title ?: "Source",
                                     url = url,
                                     content = content,
-                                    score = score
-                                )
+                                    score = score,
+                                ),
                             )
                         }
                     }

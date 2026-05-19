@@ -6,6 +6,8 @@ package com.browntowndev.pocketcrew.domain.port.repository
  */
 interface ExtractedUrlTrackerPort {
     val urls: Set<String>
+
     fun add(url: String)
+
     fun clear()
 }

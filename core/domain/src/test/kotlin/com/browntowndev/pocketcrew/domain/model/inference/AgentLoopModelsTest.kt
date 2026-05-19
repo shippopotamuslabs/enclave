@@ -7,14 +7,16 @@ import kotlin.test.assertTrue
 class AgentLoopModelsTest {
     @Test
     fun `finish boundary hook flags default to disabled`() {
-        val config = AgentLoopConfig(
-            io = AgentLoopSessionIoParams(
-                provider = "TEST",
-                contextWindowTokens = 128_000u,
-                toolsSchemaJson = "[]",
-                systemPrompt = "system",
-            ),
-        )
+        val config =
+            AgentLoopConfig(
+                io =
+                    AgentLoopSessionIoParams(
+                        provider = "TEST",
+                        contextWindowTokens = 128_000u,
+                        toolsSchemaJson = "[]",
+                        systemPrompt = "system",
+                    ),
+            )
 
         assertFalse(config.agent.enableLoopHooks)
         assertFalse(config.agent.enablePendingWorkGuard)
@@ -23,21 +25,25 @@ class AgentLoopModelsTest {
 
     @Test
     fun `finish boundary hook flags can be enabled by Kotlin callers`() {
-        val config = AgentLoopConfig(
-            agent = AgentLoopAgentConfig(
-                enableLoopHooks = true,
-                enablePendingWorkGuard = true,
-            ),
-            capabilities = AgentLoopSessionCapabilities(
-                lifecycleHooksSupported = true,
-            ),
-            io = AgentLoopSessionIoParams(
-                provider = "TEST",
-                contextWindowTokens = 128_000u,
-                toolsSchemaJson = "[]",
-                systemPrompt = "system",
-            ),
-        )
+        val config =
+            AgentLoopConfig(
+                agent =
+                    AgentLoopAgentConfig(
+                        enableLoopHooks = true,
+                        enablePendingWorkGuard = true,
+                    ),
+                capabilities =
+                    AgentLoopSessionCapabilities(
+                        lifecycleHooksSupported = true,
+                    ),
+                io =
+                    AgentLoopSessionIoParams(
+                        provider = "TEST",
+                        contextWindowTokens = 128_000u,
+                        toolsSchemaJson = "[]",
+                        systemPrompt = "system",
+                    ),
+            )
 
         assertTrue(config.agent.enableLoopHooks)
         assertTrue(config.agent.enablePendingWorkGuard)

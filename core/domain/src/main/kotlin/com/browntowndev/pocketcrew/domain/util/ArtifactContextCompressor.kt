@@ -4,8 +4,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -16,7 +14,6 @@ import kotlinx.serialization.json.jsonPrimitive
  * to stay within context window limits.
  */
 object ArtifactContextCompressor {
-
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
@@ -29,25 +26,25 @@ object ArtifactContextCompressor {
         var appendBlocksFound = false
         var lastBlockText: String? = null
         var totalBlocks = 0
-        
+
         // Find the most recent append_blocks result to get the last block text
         for (i in history.indices.reversed()) {
             val message = history[i]
             if (message.role == Role.USER) {
                 try {
                     val payload = json.parseToJsonElement(message.content).jsonObject
-                    if (payload["status"]?.jsonPrimitive?.content == "success" && 
-                        payload.containsKey("totalBlocks")) {
-                        
+                    if (payload["status"]?.jsonPrimitive?.content == "success" &&
+                        payload.containsKey("totalBlocks")
+                    ) {
                         if (!appendBlocksFound) {
                             appendBlocksFound = true
                             totalBlocks = payload["totalBlocks"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-                            
+
                             // Try to extract the last block text from the arguments of the matching assistant message
                             // if it's not in the result itself.
                             // Actually, let's look at the assistant message BEFORE this result.
                             if (i > 0) {
-                                val assistantMessage = history[i-1]
+                                val assistantMessage = history[i - 1]
                                 if (assistantMessage.role == Role.ASSISTANT) {
                                     lastBlockText = extractLastBlockTextFromAssistant(assistantMessage.content)
                                 }
@@ -91,7 +88,7 @@ object ArtifactContextCompressor {
     private fun isAppendBlocksMessage(message: ChatMessage): Boolean {
         // Catch both the tool call and the success result
         return message.content.contains(ToolDefinition.APPEND_BLOCKS.name) ||
-               (message.content.contains("\"totalBlocks\"") && message.content.contains("\"success\""))
+            (message.content.contains("\"totalBlocks\"") && message.content.contains("\"success\""))
     }
 
     private fun extractLastBlockTextFromAssistant(content: String): String? {
@@ -102,18 +99,25 @@ object ArtifactContextCompressor {
             val blocksJson = blocksMatch?.groupValues?.get(1) ?: return null
             val blocks = json.parseToJsonElement(blocksJson).jsonArray
             val lastBlock = blocks.lastOrNull()?.jsonObject ?: return null
-            
+
             // Handle different block types (heading, paragraph, etc.)
-            lastBlock["text"]?.jsonPrimitive?.content 
-                ?: lastBlock["items"]?.jsonArray?.lastOrNull()?.jsonPrimitive?.content
+            lastBlock["text"]?.jsonPrimitive?.content
+                ?: lastBlock["items"]
+                    ?.jsonArray
+                    ?.lastOrNull()
+                    ?.jsonPrimitive
+                    ?.content
                 ?: lastBlock["latex"]?.jsonPrimitive?.content
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun buildSummary(totalBlocks: Int, lastBlockText: String?): String {
-        return buildString {
+    private fun buildSummary(
+        totalBlocks: Int,
+        lastBlockText: String?,
+    ): String =
+        buildString {
             append("System Note: Previous document blocks have been saved to the local artifact database. ")
             append("You have generated $totalBlocks blocks so far. ")
             if (lastBlockText != null) {
@@ -124,5 +128,4 @@ object ArtifactContextCompressor {
             }
             append("Do not repeat any previously generated content.")
         }
-    }
 }

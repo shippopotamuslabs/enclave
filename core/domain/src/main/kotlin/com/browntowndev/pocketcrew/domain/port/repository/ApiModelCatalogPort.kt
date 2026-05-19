@@ -7,13 +7,13 @@ interface ApiModelCatalogPort {
     suspend fun fetchModels(
         provider: ApiProvider,
         apiKey: String,
-        baseUrl: String? = null
+        baseUrl: String? = null,
     ): List<DiscoveredApiModel>
 
     suspend fun fetchModel(
         provider: ApiProvider,
         apiKey: String,
         modelId: String,
-        baseUrl: String? = null
+        baseUrl: String? = null,
     ): DiscoveredApiModel?
 }

@@ -32,7 +32,10 @@ interface MessageRepository {
      * @param messageId The ID of the message
      * @param embedding The vector embedding
      */
-    suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray)
+    suspend fun saveEmbedding(
+        messageId: MessageId,
+        embedding: FloatArray,
+    )
 
     /**
      * Searches for message IDs similar to the given vector.
@@ -41,7 +44,10 @@ interface MessageRepository {
      * @param limit The maximum number of results
      * @return List of message IDs
      */
-    suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int = 50): List<MessageId>
+    suspend fun searchSimilarMessages(
+        queryVector: FloatArray,
+        limit: Int = 50,
+    ): List<MessageId>
 
     /**
      * Retrieves a message by its ID.
@@ -67,9 +73,7 @@ interface MessageRepository {
         modelType: ModelType,
     )
 
-    suspend fun getVisionAnalysesForMessages(
-        userMessageIds: List<MessageId>
-    ): Map<MessageId, List<MessageVisionAnalysis>>
+    suspend fun getVisionAnalysesForMessages(userMessageIds: List<MessageId>): Map<MessageId, List<MessageVisionAnalysis>>
 
     /**
      * Resolves the latest image-bearing user message for a chat.
@@ -97,7 +101,11 @@ interface MessageRepository {
      * @param limit The maximum number of results.
      * @return List of matching messages in chronological order.
      */
-    suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int = 10): List<Message>
+    suspend fun searchMessagesInChat(
+        chatId: ChatId,
+        queryVector: FloatArray,
+        limit: Int = 10,
+    ): List<Message>
 
     /**
      * Searches messages across all chats using vector similarity search.
@@ -106,7 +114,10 @@ interface MessageRepository {
      * @param limit The maximum number of results.
      * @return List of matching messages in chronological order, each with its chatId.
      */
-    suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int = 50): List<Message>
+    suspend fun searchMessagesAcrossChats(
+        queryVector: FloatArray,
+        limit: Int = 50,
+    ): List<Message>
 
     /**
      * Retrieves messages surrounding a specific message in its chat.
@@ -119,7 +130,12 @@ interface MessageRepository {
      * @param after Number of messages after the anchor to return.
      * @return List of messages in chronological order around the anchor.
      */
-    suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message>
+    suspend fun getMessagesAround(
+        chatId: ChatId,
+        timestamp: Long,
+        before: Int,
+        after: Int,
+    ): List<Message>
 
     /**
      * Retrieves the rolling summary of a chat.

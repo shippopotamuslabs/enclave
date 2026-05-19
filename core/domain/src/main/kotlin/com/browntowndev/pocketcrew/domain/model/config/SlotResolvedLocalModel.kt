@@ -9,5 +9,5 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 data class SlotResolvedLocalModel(
     val modelType: ModelType,
     val asset: LocalModelAsset,
-    val selectedConfig: LocalModelConfiguration
+    val selectedConfig: LocalModelConfiguration,
 )

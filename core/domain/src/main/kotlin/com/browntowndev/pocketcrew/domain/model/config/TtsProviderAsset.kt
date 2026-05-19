@@ -6,7 +6,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
  * Unique identifier for a TTS provider configuration.
  */
 @JvmInline
-value class TtsProviderId(val value: String)
+value class TtsProviderId(
+    val value: String,
+)
 
 /**
  * Domain model representing a configured Text-to-Speech voice/provider.

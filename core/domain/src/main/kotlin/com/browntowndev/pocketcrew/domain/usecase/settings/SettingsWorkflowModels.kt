@@ -3,11 +3,11 @@ package com.browntowndev.pocketcrew.domain.usecase.settings
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
@@ -40,10 +40,21 @@ data class LocalModelPresetDraft(
 )
 
 sealed interface ModelDeletionTarget {
-    data class LocalModelAsset(val id: LocalModelId) : ModelDeletionTarget
-    data class LocalModelPreset(val id: LocalModelConfigurationId) : ModelDeletionTarget
-    data class ApiProvider(val id: ApiCredentialsId) : ModelDeletionTarget
-    data class ApiPreset(val id: ApiModelConfigurationId) : ModelDeletionTarget
+    data class LocalModelAsset(
+        val id: LocalModelId,
+    ) : ModelDeletionTarget
+
+    data class LocalModelPreset(
+        val id: LocalModelConfigurationId,
+    ) : ModelDeletionTarget
+
+    data class ApiProvider(
+        val id: ApiCredentialsId,
+    ) : ModelDeletionTarget
+
+    data class ApiPreset(
+        val id: ApiModelConfigurationId,
+    ) : ModelDeletionTarget
 }
 
 data class ReassignmentCandidate(
@@ -142,7 +153,8 @@ data class SearchSkillSettingsDraft(
 
 data class TtsProviderDraft(
     val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId =
-        com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+        com.browntowndev.pocketcrew.domain.model.config
+            .TtsProviderId(""),
     val displayName: String,
     val provider: ApiProvider,
     val voiceName: String,
@@ -155,7 +167,8 @@ data class TtsProviderDraft(
 
 data class MediaProviderDraft(
     val id: com.browntowndev.pocketcrew.domain.model.config.MediaProviderId =
-        com.browntowndev.pocketcrew.domain.model.config.MediaProviderId(""),
+        com.browntowndev.pocketcrew.domain.model.config
+            .MediaProviderId(""),
     val displayName: String,
     val provider: ApiProvider,
     val modelId: String,

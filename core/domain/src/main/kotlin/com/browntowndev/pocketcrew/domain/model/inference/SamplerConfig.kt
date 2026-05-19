@@ -7,5 +7,5 @@ package com.browntowndev.pocketcrew.domain.model.inference
 data class SamplerConfig(
     val temperature: Double = 0.7,
     val topK: Int = 40,
-    val topP: Double = 0.95
+    val topP: Double = 0.95,
 )

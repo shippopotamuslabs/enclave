@@ -15,17 +15,27 @@ interface BiometricPort {
      * @param subtitle The subtitle for the biometric prompt.
      * @return Result.success(Unit) if authentication succeeded.
      */
-    suspend fun authenticate(title: String, subtitle: String): Result<Unit>
+    suspend fun authenticate(
+        title: String,
+        subtitle: String,
+    ): Result<Unit>
 
     /**
      * Securely stores a value in hardware-backed storage, protected by biometrics.
      */
-    suspend fun storeSecureValue(key: String, value: String): Result<Unit>
+    suspend fun storeSecureValue(
+        key: String,
+        value: String,
+    ): Result<Unit>
 
     /**
      * Retrieves a value from hardware-backed storage, prompting for biometrics if needed.
      */
-    suspend fun getSecureValue(key: String, promptTitle: String, promptSubtitle: String): Result<String?>
+    suspend fun getSecureValue(
+        key: String,
+        promptTitle: String,
+        promptSubtitle: String,
+    ): Result<String?>
 
     /**
      * Checks if a secure value exists for the given key.

@@ -19,5 +19,5 @@ data class Chat(
     val created: Date,
     val lastModified: Date,
     val pinned: Boolean = false,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
 )

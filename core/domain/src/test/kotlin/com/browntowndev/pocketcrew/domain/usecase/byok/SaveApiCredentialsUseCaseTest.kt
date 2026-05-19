@@ -22,41 +22,45 @@ class SaveApiCredentialsUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository saveCredentials`() = runTest {
-        val credentials = ApiCredentials(
-            id = ApiCredentialsId(""),
-            displayName = "Test Provider",
-            provider = ApiProvider.OPENAI,
-            modelId = "gpt-4",
-            credentialAlias = "test_alias"
-        )
-        val apiKey = "test_key"
-        val expectedId = ApiCredentialsId("1")
-        coEvery { repository.saveCredentials(credentials, apiKey, null) } returns expectedId
+    fun `invoke calls repository saveCredentials`() =
+        runTest {
+            val credentials =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "Test Provider",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4",
+                    credentialAlias = "test_alias",
+                )
+            val apiKey = "test_key"
+            val expectedId = ApiCredentialsId("1")
+            coEvery { repository.saveCredentials(credentials, apiKey, null) } returns expectedId
 
-        val result = useCase(credentials, apiKey)
+            val result = useCase(credentials, apiKey)
 
-        assertEquals(expectedId, result)
-        coVerify(exactly = 1) { repository.saveCredentials(credentials, apiKey, null) }
-    }
+            assertEquals(expectedId, result)
+            coVerify(exactly = 1) { repository.saveCredentials(credentials, apiKey, null) }
+        }
 
     @Test
-    fun `invoke forwards source alias when reusing a stored key`() = runTest {
-        val credentials = ApiCredentials(
-            id = ApiCredentialsId(""),
-            displayName = "Test Provider",
-            provider = ApiProvider.XAI,
-            modelId = "grok-4.20",
-            credentialAlias = "new_alias"
-        )
-        val expectedId = ApiCredentialsId("7")
-        coEvery { repository.saveCredentials(credentials, "", "existing_alias") } returns expectedId
+    fun `invoke forwards source alias when reusing a stored key`() =
+        runTest {
+            val credentials =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "Test Provider",
+                    provider = ApiProvider.XAI,
+                    modelId = "grok-4.20",
+                    credentialAlias = "new_alias",
+                )
+            val expectedId = ApiCredentialsId("7")
+            coEvery { repository.saveCredentials(credentials, "", "existing_alias") } returns expectedId
 
-        val result = useCase(credentials, apiKey = "", sourceCredentialAlias = "existing_alias")
+            val result = useCase(credentials, apiKey = "", sourceCredentialAlias = "existing_alias")
 
-        assertEquals(expectedId, result)
-        coVerify(exactly = 1) {
-            repository.saveCredentials(credentials, "", "existing_alias")
+            assertEquals(expectedId, result)
+            coVerify(exactly = 1) {
+                repository.saveCredentials(credentials, "", "existing_alias")
+            }
         }
-    }
 }

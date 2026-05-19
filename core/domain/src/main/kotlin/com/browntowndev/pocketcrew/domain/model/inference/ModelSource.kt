@@ -5,5 +5,5 @@ package com.browntowndev.pocketcrew.domain.model.inference
  */
 enum class ModelSource {
     ON_DEVICE,
-    API
+    API,
 }

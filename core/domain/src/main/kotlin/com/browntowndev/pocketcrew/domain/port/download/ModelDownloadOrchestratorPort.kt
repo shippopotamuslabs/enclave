@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
+import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
-import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -22,17 +22,27 @@ interface ModelDownloadOrchestratorPort {
      * Start downloads using pre-computed models result (from checkModels).
      * This avoids duplicate scanning.
      */
-    suspend fun startDownloads(modelsResult: DownloadModelsResult, wifiOnly: Boolean): Boolean
+    suspend fun startDownloads(
+        modelsResult: DownloadModelsResult,
+        wifiOnly: Boolean,
+    ): Boolean
 
     /**
      * Legacy method for backward compatibility - do a scan and start downloads.
      */
     suspend fun startDownloads(wifiOnly: Boolean): Boolean
+
     suspend fun updateFromProgressUpdate(progressUpdate: DownloadProgressUpdate)
+
     fun pauseDownloads()
+
     suspend fun resumeDownloads()
+
     suspend fun cancelDownloads()
+
     suspend fun retryFailed()
+
     suspend fun downloadOnMobileData()
+
     fun setError(message: String)
 }

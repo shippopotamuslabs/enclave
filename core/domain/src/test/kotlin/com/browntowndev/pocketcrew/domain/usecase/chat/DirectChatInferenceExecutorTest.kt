@@ -402,7 +402,8 @@ class DirectChatInferenceExecutorTest {
         runTest {
             val factory = FakeInferenceFactory()
             factory.exceptionToThrow =
-                com.browntowndev.pocketcrew.domain.model.error.InferenceIOException("disk error")
+                com.browntowndev.pocketcrew.domain.model.error
+                    .InferenceIOException("disk error")
 
             val executor = createExecutor(factory)
             val states =

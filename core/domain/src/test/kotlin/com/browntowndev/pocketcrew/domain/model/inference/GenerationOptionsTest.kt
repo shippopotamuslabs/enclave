@@ -10,18 +10,18 @@ import org.junit.jupiter.api.Test
  * Verifies data class contract and reasoningBudget derivation from config thinkingEnabled.
  */
 class GenerationOptionsTest {
-
     @Test
     fun `data class has correct properties`() {
-        val options = GenerationOptions(
-            reasoningBudget = 2048,
-            systemPrompt = "You are helpful.",
-            temperature = 0.7f,
-            topK = 40,
-            topP = 0.9f,
-            minP = 0.1f,
-            maxTokens = 4096
-        )
+        val options =
+            GenerationOptions(
+                reasoningBudget = 2048,
+                systemPrompt = "You are helpful.",
+                temperature = 0.7f,
+                topK = 40,
+                topP = 0.9f,
+                minP = 0.1f,
+                maxTokens = 4096,
+            )
         assertEquals(2048, options.reasoningBudget)
         assertEquals("You are helpful.", options.systemPrompt)
         assertEquals(0.7f, options.temperature)

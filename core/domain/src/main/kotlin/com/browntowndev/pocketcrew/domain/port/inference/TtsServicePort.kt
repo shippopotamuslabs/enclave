@@ -12,5 +12,9 @@ interface TtsServicePort {
      * @param modelId The identifier for the model to use (optional, provider-specific).
      * @return A [Result] containing the raw audio bytes (typically MP3) on success.
      */
-    suspend fun synthesizeSpeech(text: String, voice: String, modelId: String? = null): Result<ByteArray>
+    suspend fun synthesizeSpeech(
+        text: String,
+        voice: String,
+        modelId: String? = null,
+    ): Result<ByteArray>
 }

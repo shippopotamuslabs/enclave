@@ -5,5 +5,5 @@ data class StudioTemplate(
     val name: String,
     val exampleUri: String,
     val promptPrefix: String = "",
-    val promptSuffix: String = ""
+    val promptSuffix: String = "",
 )

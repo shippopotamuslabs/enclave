@@ -11,7 +11,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeField
 interface ToolEnvelopeParserPort {
     fun parse(raw: String): ToolEnvelopeBatch
 
-    fun coerceProviderArguments(toolName: String, argsJson: String): ToolEnvelopeField
+    fun coerceProviderArguments(
+        toolName: String,
+        argsJson: String,
+    ): ToolEnvelopeField
 
     fun hasLocalToolContract(systemPrompt: String?): Boolean
 

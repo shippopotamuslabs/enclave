@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class ChatIdTest {
-
     // ========================================================================
     // Test: Blank ChatId throws IllegalArgumentException
     // Evidence: Invariant — ChatId must never be blank (prevents Firestore corruption)

@@ -21,7 +21,6 @@ import java.util.Date
  * Expected values come from scenario Givens, NOT from implementation spec.
  */
 class GetAllChatsUseCaseTest {
-
     private lateinit var mockRepository: ChatRepository
 
     private val testDate = Date(1700_000_000_000L)
@@ -29,14 +28,15 @@ class GetAllChatsUseCaseTest {
     private fun createTestChat(
         id: ChatId,
         name: String,
-        pinned: Boolean = false
-    ): Chat = Chat(
-        id = id,
-        name = name,
-        created = testDate,
-        lastModified = testDate,
-        pinned = pinned
-    )
+        pinned: Boolean = false,
+    ): Chat =
+        Chat(
+            id = id,
+            name = name,
+            created = testDate,
+            lastModified = testDate,
+            pinned = pinned,
+        )
 
     @BeforeEach
     fun setup() {
@@ -56,29 +56,31 @@ class GetAllChatsUseCaseTest {
      * Then: Flow emits exactly 3 Chat objects
      */
     @Test
-    fun `A1 returns chats from repository`() = runTest {
-        // Given: Repository returns Flow with 3 chats
-        val testChats = listOf(
-            createTestChat(ChatId("1"), "Alpha"),
-            createTestChat(ChatId("2"), "Beta"),
-            createTestChat(ChatId("3"), "Gamma")
-        )
-        val chatFlow = MutableStateFlow<List<Chat>>(testChats)
-        every { mockRepository.getAllChats() } returns chatFlow
+    fun `A1 returns chats from repository`() =
+        runTest {
+            // Given: Repository returns Flow with 3 chats
+            val testChats =
+                listOf(
+                    createTestChat(ChatId("1"), "Alpha"),
+                    createTestChat(ChatId("2"), "Beta"),
+                    createTestChat(ChatId("3"), "Gamma"),
+                )
+            val chatFlow = MutableStateFlow<List<Chat>>(testChats)
+            every { mockRepository.getAllChats() } returns chatFlow
 
-        // When: Use case is invoked
-        val useCase = GetAllChatsUseCase(mockRepository)
+            // When: Use case is invoked
+            val useCase = GetAllChatsUseCase(mockRepository)
 
-        // Then: Flow emits exactly 3 Chat objects
-        useCase().test {
-            val emittedChats = awaitItem()
-            assertEquals(3, emittedChats.size)
-            assertEquals("Alpha", emittedChats[0].name)
-            assertEquals("Beta", emittedChats[1].name)
-            assertEquals("Gamma", emittedChats[2].name)
-            cancelAndIgnoreRemainingEvents()
+            // Then: Flow emits exactly 3 Chat objects
+            useCase().test {
+                val emittedChats = awaitItem()
+                assertEquals(3, emittedChats.size)
+                assertEquals("Alpha", emittedChats[0].name)
+                assertEquals("Beta", emittedChats[1].name)
+                assertEquals("Gamma", emittedChats[2].name)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     /**
      * Scenario A2: Empty database returns empty list
@@ -88,22 +90,23 @@ class GetAllChatsUseCaseTest {
      * Then: Flow emits empty list
      */
     @Test
-    fun `A2 empty database returns empty list`() = runTest {
-        // Given: Repository returns Flow with empty list
-        val emptyFlow = MutableStateFlow<List<Chat>>(emptyList())
-        every { mockRepository.getAllChats() } returns emptyFlow
+    fun `A2 empty database returns empty list`() =
+        runTest {
+            // Given: Repository returns Flow with empty list
+            val emptyFlow = MutableStateFlow<List<Chat>>(emptyList())
+            every { mockRepository.getAllChats() } returns emptyFlow
 
-        // When: Use case is invoked
-        val useCase = GetAllChatsUseCase(mockRepository)
+            // When: Use case is invoked
+            val useCase = GetAllChatsUseCase(mockRepository)
 
-        // Then: Flow emits empty list
-        useCase().test {
-            val emittedChats = awaitItem()
-            assertEquals(0, emittedChats.size)
-            assertEquals(emptyList<Chat>(), emittedChats)
-            cancelAndIgnoreRemainingEvents()
+            // Then: Flow emits empty list
+            useCase().test {
+                val emittedChats = awaitItem()
+                assertEquals(0, emittedChats.size)
+                assertEquals(emptyList<Chat>(), emittedChats)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     /**
      * Scenario A3: Flow emissions are forwarded
@@ -113,31 +116,33 @@ class GetAllChatsUseCaseTest {
      * Then: Use case flow receives both emissions
      */
     @Test
-    fun `A3 flow emissions are forwarded`() = runTest {
-        // Given: Repository flow that can emit multiple times
-        val chatFlow = MutableStateFlow<List<Chat>>(emptyList())
-        every { mockRepository.getAllChats() } returns chatFlow
+    fun `A3 flow emissions are forwarded`() =
+        runTest {
+            // Given: Repository flow that can emit multiple times
+            val chatFlow = MutableStateFlow<List<Chat>>(emptyList())
+            every { mockRepository.getAllChats() } returns chatFlow
 
-        val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(mockRepository)
 
-        // When/Then: Flow receives both emissions
-        useCase().test {
-            // First emission - empty
-            assertEquals(0, awaitItem().size)
+            // When/Then: Flow receives both emissions
+            useCase().test {
+                // First emission - empty
+                assertEquals(0, awaitItem().size)
 
-            // Emit second list with 2 chats
-            chatFlow.value = listOf(
-                createTestChat(ChatId("1"), "Chat A"),
-                createTestChat(ChatId("2"), "Chat B")
-            )
+                // Emit second list with 2 chats
+                chatFlow.value =
+                    listOf(
+                        createTestChat(ChatId("1"), "Chat A"),
+                        createTestChat(ChatId("2"), "Chat B"),
+                    )
 
-            // Second emission - 2 chats
-            val secondEmission = awaitItem()
-            assertEquals(2, secondEmission.size)
+                // Second emission - 2 chats
+                val secondEmission = awaitItem()
+                assertEquals(2, secondEmission.size)
 
-            cancelAndIgnoreRemainingEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     /**
      * Scenario A4: Repository error propagates
@@ -147,17 +152,19 @@ class GetAllChatsUseCaseTest {
      * Then: Error propagates through use case
      */
     @Test
-    fun `A4 repository error propagates`() = runTest {
-        // Given: Repository that throws RuntimeException via flow error
-        every { mockRepository.getAllChats() } returns flow {
-            throw RuntimeException("DB Error")
-        }
+    fun `A4 repository error propagates`() =
+        runTest {
+            // Given: Repository that throws RuntimeException via flow error
+            every { mockRepository.getAllChats() } returns
+                flow {
+                    throw RuntimeException("DB Error")
+                }
 
-        val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(mockRepository)
 
-        // When/Then: Error propagates through use case
-        useCase().test {
-            awaitError()
+            // When/Then: Error propagates through use case
+            useCase().test {
+                awaitError()
+            }
         }
-    }
 }

@@ -4,7 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 data class LocalModelAsset(
     val metadata: LocalModelMetadata,
-    val configurations: List<LocalModelConfiguration>
+    val configurations: List<LocalModelConfiguration>,
 )
 
 /**
@@ -18,13 +18,14 @@ data class LocalModelAsset(
  */
 fun resolveSlotAssignments(
     assets: List<LocalModelAsset>,
-    slotAssignments: Map<ModelType, LocalModelConfigurationId>
+    slotAssignments: Map<ModelType, LocalModelConfigurationId>,
 ): Map<ModelType, LocalModelAsset> {
     val result = mutableMapOf<ModelType, LocalModelAsset>()
     for ((modelType, configId) in slotAssignments) {
-        val asset = assets.find { asset ->
-            asset.configurations.any { it.id == configId }
-        }
+        val asset =
+            assets.find { asset ->
+                asset.configurations.any { it.id == configId }
+            }
         if (asset != null) {
             result[modelType] = asset
         }

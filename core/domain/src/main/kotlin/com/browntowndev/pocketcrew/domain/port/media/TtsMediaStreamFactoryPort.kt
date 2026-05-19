@@ -45,5 +45,9 @@ interface TtsMediaStreamServicePort {
      * @param modelId Optional model identifier.
      * @return A [TtsMediaStream] containing the audio data.
      */
-    suspend fun openStream(text: String, voice: String, modelId: String? = null): TtsMediaStream
+    suspend fun openStream(
+        text: String,
+        voice: String,
+        modelId: String? = null,
+    ): TtsMediaStream
 }

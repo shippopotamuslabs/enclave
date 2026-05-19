@@ -13,7 +13,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
  * All computation is pure — no framework or SDK dependencies.
  */
 object ToolContextBudget {
-
     /**
      * Result of evaluating whether the context window is full after a tool result.
      *
@@ -52,26 +51,29 @@ object ToolContextBudget {
         toolResultCount: Int = 1,
         thresholdRatio: Double = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
     ): Evaluation {
-        val budget = ContextWindowPlanner.budgetFor(
-            contextWindowTokens = contextWindowTokens,
-            options = options,
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-            thresholdRatio = thresholdRatio,
-        )
+        val budget =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = contextWindowTokens,
+                options = options,
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+                thresholdRatio = thresholdRatio,
+            )
         val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
         val contextFull = estimatedUsedTokens > budget.thresholdTokens
 
-        val truncateToTokens = if (contextFull ||
-            estimatedUsedTokens + ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS > budget.usablePromptTokens
-        ) {
-            // Compute per-result token budget
-            val availableTokens = (budget.usablePromptTokens - estimatedUsedTokens)
-                .coerceAtLeast(0)
-            maxOf(100, availableTokens / toolResultCount.coerceAtLeast(1))
-        } else {
-            null
-        }
+        val truncateToTokens =
+            if (contextFull ||
+                estimatedUsedTokens + ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS > budget.usablePromptTokens
+            ) {
+                // Compute per-result token budget
+                val availableTokens =
+                    (budget.usablePromptTokens - estimatedUsedTokens)
+                        .coerceAtLeast(0)
+                maxOf(100, availableTokens / toolResultCount.coerceAtLeast(1))
+            } else {
+                null
+            }
 
         return Evaluation(
             contextFull = contextFull,
@@ -98,14 +100,15 @@ object ToolContextBudget {
         toolResultPayloads: List<String>,
         modelId: String?,
         tokenCounter: TokenCounter = JTokkitTokenCounter,
-    ): Int = ContextWindowPlanner.estimatePromptTokens(
-        history = history,
-        systemPrompt = systemPrompt,
-        currentPrompt = currentPrompt,
-        toolResultPayloads = toolResultPayloads,
-        modelId = modelId,
-        tokenCounter = tokenCounter,
-    )
+    ): Int =
+        ContextWindowPlanner.estimatePromptTokens(
+            history = history,
+            systemPrompt = systemPrompt,
+            currentPrompt = currentPrompt,
+            toolResultPayloads = toolResultPayloads,
+            modelId = modelId,
+            tokenCounter = tokenCounter,
+        )
 
     /**
      * Evaluates whether an API model's context is exceeded and whether mid-loop
@@ -131,21 +134,23 @@ object ToolContextBudget {
         modelId: String?,
         tokenCounter: TokenCounter = JTokkitTokenCounter,
     ): Boolean {
-        val budget = ContextWindowPlanner.budgetFor(
-            contextWindowTokens = contextWindowTokens,
-            options = options,
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-            thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
-        )
-        val totalTokens = estimateApiPromptTokens(
-            history = history,
-            systemPrompt = systemPrompt,
-            currentPrompt = currentPrompt,
-            toolResultPayloads = toolResultPayloads,
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-        )
+        val budget =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = contextWindowTokens,
+                options = options,
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+                thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
+            )
+        val totalTokens =
+            estimateApiPromptTokens(
+                history = history,
+                systemPrompt = systemPrompt,
+                currentPrompt = currentPrompt,
+                toolResultPayloads = toolResultPayloads,
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+            )
         return ContextWindowPlanner.shouldCompact(totalTokens, budget)
     }
 
@@ -175,21 +180,23 @@ object ToolContextBudget {
         tokenCounter: TokenCounter = JTokkitTokenCounter,
     ): Int? {
         if (contextWindowTokens == null) return null
-        val budget = ContextWindowPlanner.budgetFor(
-            contextWindowTokens = contextWindowTokens,
-            options = options,
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-            thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
-        )
-        val usedTokens = estimateApiPromptTokens(
-            history = history,
-            systemPrompt = systemPrompt,
-            currentPrompt = currentPrompt,
-            toolResultPayloads = toolResultPayloads,
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-        )
+        val budget =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = contextWindowTokens,
+                options = options,
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+                thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
+            )
+        val usedTokens =
+            estimateApiPromptTokens(
+                history = history,
+                systemPrompt = systemPrompt,
+                currentPrompt = currentPrompt,
+                toolResultPayloads = toolResultPayloads,
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+            )
         val availableTokens = (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
         return maxOf(100, availableTokens / toolResultCount.coerceAtLeast(1))
     }
@@ -210,8 +217,9 @@ object ToolContextBudget {
         historyTokens: Int,
         transientToolResultTokens: Int,
         bufferTokens: Int = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
-    ): Int = (contextWindowTokens - systemPromptTokens - historyTokens - transientToolResultTokens - bufferTokens)
-        .coerceAtLeast(0)
+    ): Int =
+        (contextWindowTokens - systemPromptTokens - historyTokens - transientToolResultTokens - bufferTokens)
+            .coerceAtLeast(0)
 
     /**
      * Counts tokens in all history messages.

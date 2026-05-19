@@ -18,6 +18,6 @@ interface MusicGenerationPort {
     suspend fun generateMusic(
         prompt: String,
         provider: MediaProviderAsset,
-        settings: GenerationSettings
+        settings: GenerationSettings,
     ): Result<ByteArray>
 }

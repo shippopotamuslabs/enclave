@@ -1,19 +1,20 @@
 package com.browntowndev.pocketcrew.domain.model.artifact
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
  * Represents the standard MIME types supported by the system.
  */
 @Serializable
-enum class MimeType(val value: String) {
+enum class MimeType(
+    val value: String,
+) {
     PDF("application/pdf"),
     MARKDOWN("text/markdown"),
     PLAIN_TEXT("text/plain"),
     WORD("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     EXCEL("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-    POWERPOINT("application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    POWERPOINT("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
 }
 
 /**
@@ -22,7 +23,7 @@ enum class MimeType(val value: String) {
 @Serializable
 enum class FileSource {
     GENERATED,
-    ATTACHMENT
+    ATTACHMENT,
 }
 
 /**
@@ -59,9 +60,10 @@ fun mergeArtifactGenerationRequests(
         if (index < 0) {
             merged.add(candidate)
         } else if (shouldPreferArtifactContent(merged[index], candidate)) {
-            merged[index] = candidate.copy(
-                targetFormat = candidate.targetFormat ?: merged[index].targetFormat,
-            )
+            merged[index] =
+                candidate.copy(
+                    targetFormat = candidate.targetFormat ?: merged[index].targetFormat,
+                )
         }
     }
     return merged
@@ -82,7 +84,7 @@ private fun shouldPreferArtifactContent(
 @Serializable
 data class ArtifactGenerationResult(
     val request: ArtifactGenerationRequest,
-    val generatedAt: Long = System.currentTimeMillis()
+    val generatedAt: Long = System.currentTimeMillis(),
 ) {
     val isPdf: Boolean get() = request.targetFormat == MimeType.PDF
     val isWord: Boolean get() = request.targetFormat == MimeType.WORD

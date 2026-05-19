@@ -18,7 +18,10 @@ sealed class TtsPlaybackStatus {
     data object Completed : TtsPlaybackStatus()
 
     /** An error occurred during playback. */
-    data class Error(val message: String, val cause: Throwable? = null) : TtsPlaybackStatus()
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+    ) : TtsPlaybackStatus()
 
     /** Playback was explicitly stopped by the user. */
     data object Stopped : TtsPlaybackStatus()

@@ -1,4 +1,25 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
+
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
@@ -82,8 +103,18 @@ interface SettingsAuthUseCases {
 
 interface SettingsMemoriesUseCases {
     fun getAllMemoriesFlow(): kotlinx.coroutines.flow.Flow<List<com.browntowndev.pocketcrew.domain.model.memory.Memory>>
-    suspend fun insertMemory(category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory, content: String): com.browntowndev.pocketcrew.domain.model.memory.Memory
-    suspend fun updateMemory(id: String, content: String, category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?)
+
+    suspend fun insertMemory(
+        category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory,
+        content: String,
+    ): com.browntowndev.pocketcrew.domain.model.memory.Memory
+
+    suspend fun updateMemory(
+        id: String,
+        content: String,
+        category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?,
+    )
+
     suspend fun deleteMemory(id: String)
 }
 

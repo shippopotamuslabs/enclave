@@ -8,12 +8,13 @@ interface DeleteLocalModelMetadataUseCase {
     suspend operator fun invoke(id: LocalModelId): Result<Unit>
 }
 
-class DeleteLocalModelMetadataUseCaseImpl @Inject constructor(
-    private val localModelRepository: LocalModelRepositoryPort,
-) : DeleteLocalModelMetadataUseCase {
-    override suspend fun invoke(id: LocalModelId): Result<Unit> {
-        return Result.runCatching {
-            localModelRepository.deleteLocalModelMetadata(id)
-        }
+class DeleteLocalModelMetadataUseCaseImpl
+    @Inject
+    constructor(
+        private val localModelRepository: LocalModelRepositoryPort,
+    ) : DeleteLocalModelMetadataUseCase {
+        override suspend fun invoke(id: LocalModelId): Result<Unit> =
+            Result.runCatching {
+                localModelRepository.deleteLocalModelMetadata(id)
+            }
     }
-}

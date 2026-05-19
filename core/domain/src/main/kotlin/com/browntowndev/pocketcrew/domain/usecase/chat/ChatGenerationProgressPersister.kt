@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
@@ -11,34 +11,37 @@ import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPor
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import javax.inject.Inject
 
-class ChatGenerationProgressPersister @Inject constructor(
-    private val chatRepository: ChatRepository,
-    private val messageRepository: MessageRepository,
-    private val embeddingEngine: EmbeddingEnginePort,
-    private val extractedUrlTracker: ExtractedUrlTrackerPort,
-) {
-    fun startSession(
-        mode: Mode,
-        chatId: ChatId,
-        userMessageId: MessageId,
-        assistantMessageId: MessageId,
-    ): ChatGenerationProgressSession {
-        val accumulatorManager = ChatGenerationAccumulatorManager(
-            mode = mode,
-            chatId = chatId,
-            userMessageId = userMessageId,
-            defaultAssistantMessageId = assistantMessageId,
-            chatRepository = chatRepository,
-        )
-        return ChatGenerationProgressSession(
-            accumulatorManager = accumulatorManager,
-            chatRepository = chatRepository,
-            messageRepository = messageRepository,
-            embeddingEngine = embeddingEngine,
-            extractedUrlTracker = extractedUrlTracker,
-        )
+class ChatGenerationProgressPersister
+    @Inject
+    constructor(
+        private val chatRepository: ChatRepository,
+        private val messageRepository: MessageRepository,
+        private val embeddingEngine: EmbeddingEnginePort,
+        private val extractedUrlTracker: ExtractedUrlTrackerPort,
+    ) {
+        fun startSession(
+            mode: Mode,
+            chatId: ChatId,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+        ): ChatGenerationProgressSession {
+            val accumulatorManager =
+                ChatGenerationAccumulatorManager(
+                    mode = mode,
+                    chatId = chatId,
+                    userMessageId = userMessageId,
+                    defaultAssistantMessageId = assistantMessageId,
+                    chatRepository = chatRepository,
+                )
+            return ChatGenerationProgressSession(
+                accumulatorManager = accumulatorManager,
+                chatRepository = chatRepository,
+                messageRepository = messageRepository,
+                embeddingEngine = embeddingEngine,
+                extractedUrlTracker = extractedUrlTracker,
+            )
+        }
     }
-}
 
 class ChatGenerationProgressSession internal constructor(
     private val accumulatorManager: ChatGenerationAccumulatorManager,

@@ -20,13 +20,14 @@ class DeleteLocalModelConfigurationUseCaseTest {
     }
 
     @Test
-    fun `invoke deletes specific configuration`() = runTest {
-        val configId = LocalModelConfigurationId("config-1")
-        coEvery { repository.deleteConfiguration(configId) } returns Unit
+    fun `invoke deletes specific configuration`() =
+        runTest {
+            val configId = LocalModelConfigurationId("config-1")
+            coEvery { repository.deleteConfiguration(configId) } returns Unit
 
-        val result = useCase(configId)
+            val result = useCase(configId)
 
-        assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { repository.deleteConfiguration(configId) }
-    }
+            assertTrue(result.isSuccess)
+            coVerify(exactly = 1) { repository.deleteConfiguration(configId) }
+        }
 }

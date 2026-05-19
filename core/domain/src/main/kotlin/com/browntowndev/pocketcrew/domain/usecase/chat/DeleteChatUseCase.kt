@@ -24,15 +24,17 @@ import javax.inject.Inject
  * Use case for deleting a chat by its ID.
  * This will cascade delete all associated messages due to foreign key constraints.
  */
-class DeleteChatUseCase @Inject constructor(
-    private val chatRepository: ChatRepository
-) {
-    /**
-     * Deletes a chat by its ID.
-     *
-     * @param chatId The ID of the chat to delete
-     */
-    suspend operator fun invoke(chatId: ChatId) {
-        chatRepository.deleteChat(chatId)
+class DeleteChatUseCase
+    @Inject
+    constructor(
+        private val chatRepository: ChatRepository,
+    ) {
+        /**
+         * Deletes a chat by its ID.
+         *
+         * @param chatId The ID of the chat to delete
+         */
+        suspend operator fun invoke(chatId: ChatId) {
+            chatRepository.deleteChat(chatId)
+        }
     }
-}

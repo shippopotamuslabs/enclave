@@ -7,9 +7,10 @@ import org.junit.jupiter.api.Test
 
 class CancelInferenceUseCaseTest {
     private val chatInferenceExecutor = mockk<ChatInferenceExecutorPort>(relaxed = true)
-    private val useCase = CancelInferenceUseCase(
-        chatInferenceExecutor = chatInferenceExecutor,
-    )
+    private val useCase =
+        CancelInferenceUseCase(
+            chatInferenceExecutor = chatInferenceExecutor,
+        )
 
     @Test
     fun `invoke should stop chat inference executor`() {

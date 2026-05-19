@@ -25,6 +25,6 @@ interface StreamingTtsServicePort {
     fun synthesizeSpeechStreaming(
         text: String,
         voice: String,
-        modelId: String? = null
+        modelId: String? = null,
     ): Flow<TtsAudioChunk>
 }

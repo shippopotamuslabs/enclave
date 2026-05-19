@@ -7,5 +7,5 @@ data class ModelScanResult(
     val partialDownloads: Map<String, Long>,
     val allValid: Boolean,
     val directoryError: Boolean = false,
-    val invalidModels: List<LocalModelAsset> = emptyList()
+    val invalidModels: List<LocalModelAsset> = emptyList(),
 )

@@ -6,8 +6,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
@@ -81,11 +81,13 @@ internal class ChatGenerationAccumulatorManager(
             }
 
             is MessageGenerationState.StepCompleted,
-            is MessageGenerationState.Finished -> {
-                val modelType = when (state) {
-                    is MessageGenerationState.StepCompleted -> state.modelType
-                    is MessageGenerationState.Finished -> state.modelType
-                }
+            is MessageGenerationState.Finished,
+            -> {
+                val modelType =
+                    when (state) {
+                        is MessageGenerationState.StepCompleted -> state.modelType
+                        is MessageGenerationState.Finished -> state.modelType
+                    }
                 getOrCreateAccumulator(modelType).apply {
                     isComplete = true
                     currentState = MessageState.COMPLETE
@@ -107,8 +109,8 @@ internal class ChatGenerationAccumulatorManager(
                             state.error.message
                                 ?: "Another message is in progress. Please wait until it completes."
                         } else {
-                            "Error: ${state.error.message ?: "Unknown error"}"
-                        }
+                            "Sorry, something went wrong. Please try again."
+                        },
                     )
                     isComplete = true
                     currentState = MessageState.COMPLETE
@@ -127,20 +129,21 @@ internal class ChatGenerationAccumulatorManager(
     suspend fun reconcileWithSnapshot(snapshot: AccumulatedMessages) {
         snapshot.messages.forEach { (messageId, messageSnapshot) ->
             // Find or create the accumulator for this message
-            val accumulator = _messages.getOrPut(messageId) {
-                MessageAccumulator(
-                    messageId = messageId,
-                    modelType = messageSnapshot.modelType,
-                    pipelineStep = messageSnapshot.pipelineStep,
-                ).apply {
-                    content.append(messageSnapshot.content)
-                    thinkingRaw.append(messageSnapshot.thinkingRaw)
-                    thinkingStartTime = messageSnapshot.thinkingStartTime
-                    thinkingEndTime = messageSnapshot.thinkingEndTime
-                    isComplete = messageSnapshot.isComplete
-                    currentState = messageSnapshot.messageState
+            val accumulator =
+                _messages.getOrPut(messageId) {
+                    MessageAccumulator(
+                        messageId = messageId,
+                        modelType = messageSnapshot.modelType,
+                        pipelineStep = messageSnapshot.pipelineStep,
+                    ).apply {
+                        content.append(messageSnapshot.content)
+                        thinkingRaw.append(messageSnapshot.thinkingRaw)
+                        thinkingStartTime = messageSnapshot.thinkingStartTime
+                        thinkingEndTime = messageSnapshot.thinkingEndTime
+                        isComplete = messageSnapshot.isComplete
+                        currentState = messageSnapshot.messageState
+                    }
                 }
-            }
 
             if (messageSnapshot.transcriptSegments.isNotEmpty()) {
                 accumulator.restoreTranscriptSegments(messageSnapshot.transcriptSegments)
@@ -179,16 +182,17 @@ internal class ChatGenerationAccumulatorManager(
 
     fun toMessagesState(): AccumulatedMessages =
         AccumulatedMessages(
-            messages = _messages.mapValues { (_, accumulator) -> accumulator.toSnapshot() }
+            messages = _messages.mapValues { (_, accumulator) -> accumulator.toSnapshot() },
         )
 
     suspend fun markIncompleteAsCancelled() {
         if (_messages.isEmpty()) {
-            val defaultModelType = when (mode) {
-                Mode.FAST -> ModelType.FAST
-                Mode.THINKING -> ModelType.THINKING
-                Mode.CREW -> ModelType.DRAFT_ONE
-            }
+            val defaultModelType =
+                when (mode) {
+                    Mode.FAST -> ModelType.FAST
+                    Mode.THINKING -> ModelType.THINKING
+                    Mode.CREW -> ModelType.DRAFT_ONE
+                }
             getOrCreateAccumulator(defaultModelType)
         }
 
@@ -204,28 +208,31 @@ internal class ChatGenerationAccumulatorManager(
      */
     fun markWebSearchSourcesExtracted(urls: List<String>) {
         _messages.values.forEach { accumulator ->
-            val updatedSources = accumulator.webSearchSources.map { source ->
-                if (source.url in urls) source.copy(extracted = true) else source
-            }
+            val updatedSources =
+                accumulator.webSearchSources.map { source ->
+                    if (source.url in urls) source.copy(extracted = true) else source
+                }
             accumulator.webSearchSources.clear()
             accumulator.webSearchSources.addAll(updatedSources)
         }
     }
 
     private suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
-        val messageId = if (mode != Mode.CREW) {
-            defaultAssistantMessageId
-        } else {
-            assistantMessageIds[modelType]
-                ?: chatRepository.createAssistantMessage(
-                    chatId = chatId,
-                    userMessageId = userMessageId,
-                    modelType = modelType,
-                    pipelineStep = getPipelineStepForModelType(modelType),
-                ).also { newId ->
-                    assistantMessageIds[modelType] = newId
-                }
-        }
+        val messageId =
+            if (mode != Mode.CREW) {
+                defaultAssistantMessageId
+            } else {
+                assistantMessageIds[modelType]
+                    ?: chatRepository
+                        .createAssistantMessage(
+                            chatId = chatId,
+                            userMessageId = userMessageId,
+                            modelType = modelType,
+                            pipelineStep = getPipelineStepForModelType(modelType),
+                        ).also { newId ->
+                            assistantMessageIds[modelType] = newId
+                        }
+            }
 
         return _messages.getOrPut(messageId) {
             MessageAccumulator(
@@ -336,21 +343,23 @@ internal class MessageAccumulator(
         transcriptSegmentsMutable.clear()
         segments.forEach { seg ->
             when (seg) {
-                is MessageTranscriptSegment.Thinking -> transcriptSegmentsMutable.add(
-                    MutableTranscriptSegment(
-                        kind = TranscriptSegmentKind.THINKING,
-                        text = StringBuilder(seg.text),
-                        thinkingStartMs = seg.thinkingStartTime,
-                        thinkingEndMs = seg.thinkingEndTime,
-                        restoredDurationSeconds = seg.thinkingDurationSeconds?.takeIf { it > 0L },
-                    ),
-                )
-                is MessageTranscriptSegment.AssistantText -> transcriptSegmentsMutable.add(
-                    MutableTranscriptSegment(
-                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
-                        text = StringBuilder(seg.text),
-                    ),
-                )
+                is MessageTranscriptSegment.Thinking ->
+                    transcriptSegmentsMutable.add(
+                        MutableTranscriptSegment(
+                            kind = TranscriptSegmentKind.THINKING,
+                            text = StringBuilder(seg.text),
+                            thinkingStartMs = seg.thinkingStartTime,
+                            thinkingEndMs = seg.thinkingEndTime,
+                            restoredDurationSeconds = seg.thinkingDurationSeconds?.takeIf { it > 0L },
+                        ),
+                    )
+                is MessageTranscriptSegment.AssistantText ->
+                    transcriptSegmentsMutable.add(
+                        MutableTranscriptSegment(
+                            kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                            text = StringBuilder(seg.text),
+                        ),
+                    )
             }
         }
         markTranscriptSegmentsDirty()
@@ -455,8 +464,8 @@ internal class MessageAccumulator(
         return cachedTranscriptSegments
     }
 
-    private fun buildTranscriptSegments(): List<MessageTranscriptSegment> {
-        return transcriptSegmentsMutable.mapIndexed { index, seg ->
+    private fun buildTranscriptSegments(): List<MessageTranscriptSegment> =
+        transcriptSegmentsMutable.mapIndexed { index, seg ->
             when (seg.kind) {
                 TranscriptSegmentKind.THINKING -> {
                     val durFromWallClock =
@@ -479,13 +488,13 @@ internal class MessageAccumulator(
                         thinkingEndTime = seg.thinkingEndMs,
                     )
                 }
-                TranscriptSegmentKind.ASSISTANT_TEXT -> MessageTranscriptSegment.AssistantText(
-                    ordinal = index,
-                    text = seg.text.toString(),
-                )
+                TranscriptSegmentKind.ASSISTANT_TEXT ->
+                    MessageTranscriptSegment.AssistantText(
+                        ordinal = index,
+                        text = seg.text.toString(),
+                    )
             }
         }
-    }
 
     fun toSnapshot(): MessageSnapshot {
         val shouldFinalizeOpenThinking = currentState != MessageState.THINKING
@@ -530,8 +539,8 @@ internal class MessageAccumulator(
         scalarVersion += 1
     }
 
-    private fun snapshotVersion(): Long {
-        return scalarVersion.toLong() +
+    private fun snapshotVersion(): Long =
+        scalarVersion.toLong() +
             webSearchSourcesList.version +
             artifactsList.version +
             generatedMediaUrisList.version +
@@ -539,7 +548,6 @@ internal class MessageAccumulator(
             generatedMediaTypesList.version +
             generatedMediaPromptsList.version +
             transcriptSegmentsVersion
-    }
 }
 
 internal enum class TranscriptSegmentKind {
@@ -567,9 +575,7 @@ private class SnapshotMutableList<T>(
     override val size: Int
         get() = values.size
 
-    override fun get(index: Int): T {
-        return values[index]
-    }
+    override fun get(index: Int): T = values[index]
 
     override fun add(
         index: Int,

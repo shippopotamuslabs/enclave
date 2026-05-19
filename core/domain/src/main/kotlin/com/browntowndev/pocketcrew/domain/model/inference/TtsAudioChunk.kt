@@ -8,7 +8,9 @@ sealed class TtsAudioChunk {
     /**
      * A chunk of audio data bytes (typically PCM 16-bit).
      */
-    data class Data(val bytes: ByteArray) : TtsAudioChunk() {
+    data class Data(
+        val bytes: ByteArray,
+    ) : TtsAudioChunk() {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (javaClass != other?.javaClass) return false
@@ -27,5 +29,8 @@ sealed class TtsAudioChunk {
     /**
      * Signals that an error occurred during streaming.
      */
-    data class Error(val message: String, val cause: Throwable? = null) : TtsAudioChunk()
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+    ) : TtsAudioChunk()
 }

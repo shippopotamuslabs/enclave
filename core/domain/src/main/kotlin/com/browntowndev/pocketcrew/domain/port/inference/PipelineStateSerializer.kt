@@ -7,5 +7,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
  */
 interface PipelineStateSerializer {
     fun toJson(state: PipelineState): String
+
     fun fromJson(json: String): PipelineState
 }

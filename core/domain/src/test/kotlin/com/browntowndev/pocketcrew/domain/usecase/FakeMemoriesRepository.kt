@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Lightweight fake for settings cleanup tests — listing/deletion only. */
 class FakeMemoriesRepository : MemoriesRepository {
-
     private val _memories = MutableStateFlow<List<Memory>>(emptyList())
     private val deletedIds = mutableSetOf<String>()
 
@@ -29,19 +28,31 @@ class FakeMemoriesRepository : MemoriesRepository {
         _memories.value = _memories.value.filter { it.id != id }
     }
 
+    override suspend fun deleteAllMemories() {
+        deleteMemoryFailure?.let { throw it }
+        deletedIds.addAll(_memories.value.map { it.id })
+        _memories.value = emptyList()
+    }
+
     override suspend fun getCoreMemories(): List<Memory> = unsupported()
 
-    override suspend fun insertMemory(category: MemoryCategory, content: String): Memory =
-        unsupported()
+    override suspend fun insertMemory(
+        category: MemoryCategory,
+        content: String,
+    ): Memory = unsupported()
 
-    override suspend fun updateMemory(id: String, content: String, category: MemoryCategory?) =
-        unsupported()
+    override suspend fun updateMemory(
+        id: String,
+        content: String,
+        category: MemoryCategory?,
+    ) = unsupported()
 
     override suspend fun getMemoryById(id: String): Memory? = unsupported()
 
-    override suspend fun searchMemories(queryVector: FloatArray, limit: Int): List<Memory> =
-        unsupported()
+    override suspend fun searchMemories(
+        queryVector: FloatArray,
+        limit: Int,
+    ): List<Memory> = unsupported()
 
-    private fun unsupported(): Nothing =
-        throw UnsupportedOperationException("FakeMemoriesRepository: not implemented")
+    private fun unsupported(): Nothing = throw UnsupportedOperationException("FakeMemoriesRepository: not implemented")
 }

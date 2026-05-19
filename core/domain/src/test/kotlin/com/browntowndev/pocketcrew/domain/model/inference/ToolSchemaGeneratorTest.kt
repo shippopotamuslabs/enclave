@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ToolSchemaGeneratorTest {
-
     @Serializable
     enum class TestEnum {
-        VALUE_A, VALUE_B
+        VALUE_A,
+        VALUE_B,
     }
 
     @Serializable
@@ -25,7 +25,7 @@ class ToolSchemaGeneratorTest {
         @property:ToolParam(description = "A list of strings")
         val listField: List<String>,
         @property:ToolParam(description = "An enum field")
-        val enumField: TestEnum
+        val enumField: TestEnum,
     ) : ToolParameters
 
     @Test
@@ -48,7 +48,14 @@ class ToolSchemaGeneratorTest {
         // List field
         val listProp = properties["listField"]?.jsonObject!!
         assertEquals("array", listProp["type"]?.jsonPrimitive?.content)
-        assertEquals("string", listProp["items"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals(
+            "string",
+            listProp["items"]
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.content,
+        )
 
         // Enum field
         val enumProp = properties["enumField"]?.jsonObject!!
@@ -66,26 +73,98 @@ class ToolSchemaGeneratorTest {
     }
 
     @Serializable
-    data class SimpleParams(val query: String) : ToolParameters
+    data class SimpleParams(
+        val query: String,
+    ) : ToolParameters
 
     @Test
     fun `generateSchema handles data class without annotations`() {
         val schema = ToolSchemaGenerator.generateSchema(SimpleParams::class).toJsonObject()
         val properties = schema["properties"]?.jsonObject!!
-        
+
         assertTrue(properties.containsKey("query"))
-        assertEquals("string", properties["query"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
+        assertEquals(
+            "string",
+            properties["query"]
+                ?.jsonObject
+                ?.get("type")
+                ?.jsonPrimitive
+                ?.content,
+        )
         assertFalse(properties["query"]?.jsonObject?.containsKey("description") == true)
     }
 
     @Test
     fun `generateSchema handles List of JsonElement without stack overflow`() {
-        val schema = ToolSchemaGenerator.generateSchema(
-            com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams::class
-        ).toJsonObject()
+        val schema =
+            ToolSchemaGenerator
+                .generateSchema(
+                    com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams::class,
+                ).toJsonObject()
         val properties = schema["properties"]?.jsonObject!!
         val blocks = properties["blocks"]?.jsonObject!!
         assertEquals("array", blocks["type"]?.jsonPrimitive?.content)
         assertTrue(blocks.containsKey("items"))
+    }
+
+    // ── FSIE-05 ──────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `FSIE-05 AppendBlocksParams blocks items emits type object not empty schema`() {
+        val schema =
+            ToolSchemaGenerator
+                .generateSchema(
+                    com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams::class,
+                ).toJsonObject()
+        val properties = schema["properties"]?.jsonObject!!
+        val blocks = properties["blocks"]?.jsonObject!!
+
+        // blocks must be an array
+        assertEquals("array", blocks["type"]?.jsonPrimitive?.content)
+
+        // items must exist and be a JsonObject
+        val items = blocks["items"]?.jsonObject
+        assertTrue(items != null, "blocks.items must be present and be a JsonObject")
+
+        // items must have type=object, NOT be an empty {}
+        assertEquals(
+            "object",
+            items!!["type"]?.jsonPrimitive?.content,
+            "blocks.items[\"type\"] must equal \"object\", not be absent or different",
+        )
+
+        // items must not be empty (size >= 1)
+        assertTrue(
+            items.size >= 1,
+            "blocks.items must not be an empty schema {}",
+        )
+    }
+
+    // ── FSIE-08 ──────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `FSIE-08 blocks items schema contains at least the type key mutation defense`() {
+        val schema =
+            ToolSchemaGenerator
+                .generateSchema(
+                    com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams::class,
+                ).toJsonObject()
+        val properties = schema["properties"]?.jsonObject!!
+        val blocks = properties["blocks"]?.jsonObject!!
+        val items = blocks["items"]?.jsonObject
+
+        assertFalse(items == null, "blocks.items must not be null")
+
+        // The most plausible revert leaves items as buildJsonObject {} → empty entries.
+        assertFalse(
+            items!!.entries.isEmpty(),
+            "blocks.items.entries must NOT be empty — empty schema {} is forbidden",
+        )
+
+        // Must contain the "type" key specifically.
+        assertTrue(
+            items.containsKey("type"),
+            "blocks.items must contain a \"type\" key",
+        )
     }
 }

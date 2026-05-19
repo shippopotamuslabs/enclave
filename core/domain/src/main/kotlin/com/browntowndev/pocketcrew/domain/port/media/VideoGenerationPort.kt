@@ -18,6 +18,6 @@ interface VideoGenerationPort {
     suspend fun generateVideo(
         prompt: String,
         provider: MediaProviderAsset,
-        settings: GenerationSettings
+        settings: GenerationSettings,
     ): Result<ByteArray>
 }

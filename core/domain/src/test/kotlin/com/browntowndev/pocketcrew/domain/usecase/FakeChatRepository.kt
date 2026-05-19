@@ -1,29 +1,27 @@
 package com.browntowndev.pocketcrew.domain.usecase
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import org.junit.jupiter.api.Assertions
-
 
 /**
  * Fake implementation of ChatRepository for testing.
  * Allows controlling chat creation and verifying method calls.
  */
 class FakeChatRepository : ChatRepository {
-
     private val createdChats = mutableListOf<Chat>()
     private var nextChatId = 1
     var shouldThrowOnCreateChat = false
@@ -31,51 +29,62 @@ class FakeChatRepository : ChatRepository {
     val persistedMessageData = mutableListOf<PersistedMessageData>()
 
     private val messagesFlows = mutableMapOf<ChatId, MutableStateFlow<List<Message>>>()
-    
+
     // Track incomplete crew messages for testing
     private var incompleteCrewMessages: List<Message> = emptyList()
 
     // For getAllChats and togglePinStatus tests
     private val _chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
     private val pinnedChats = mutableMapOf<ChatId, Boolean>()
-    
+
     fun setChats(chats: List<Chat>) {
         _chatsFlow.value = chats
         chats.forEach { pinnedChats[it.id] = it.pinned }
     }
-    
+
     override fun getAllChats(): Flow<List<Chat>> = _chatsFlow
-    
+
     override suspend fun togglePinStatus(chatId: ChatId) {
         val current = pinnedChats[chatId] ?: return
         pinnedChats[chatId] = !current
         // Update the flow with modified chat
-        _chatsFlow.value = _chatsFlow.value.map { chat ->
-            if (chat.id == chatId) chat.copy(pinned = !current) else chat
-        }
+        _chatsFlow.value =
+            _chatsFlow.value.map { chat ->
+                if (chat.id == chatId) chat.copy(pinned = !current) else chat
+            }
     }
-    
+
     fun setIncompleteCrewMessages(messages: List<Message>) {
         incompleteCrewMessages = messages
     }
 
-    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
-        return messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }
-    }
+    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> = messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }
 
-    fun setMessagesForChat(chatId: ChatId, messages: List<Message>) {
+    fun setMessagesForChat(
+        chatId: ChatId,
+        messages: List<Message>,
+    ) {
         messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }.value = messages
     }
 
-    override suspend fun updateMessageState(messageId: MessageId, messageState: MessageState) {
+    override suspend fun updateMessageState(
+        messageId: MessageId,
+        messageState: MessageState,
+    ) {
         // No-op for testing
     }
 
-    override suspend fun updateMessageContent(messageId: MessageId, content: String) {
+    override suspend fun updateMessageContent(
+        messageId: MessageId,
+        content: String,
+    ) {
         // No-op for testing
     }
 
-    override suspend fun appendMessageContent(messageId: MessageId, content: String) {
+    override suspend fun appendMessageContent(
+        messageId: MessageId,
+        content: String,
+    ) {
         // No-op for testing
     }
 
@@ -87,7 +96,10 @@ class FakeChatRepository : ChatRepository {
         // No-op for testing
     }
 
-    override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
+    override suspend fun appendThinkingRaw(
+        messageId: MessageId,
+        thinkingText: String,
+    ) {
         // No-op for testing
     }
 
@@ -95,7 +107,10 @@ class FakeChatRepository : ChatRepository {
         // No-op for testing
     }
 
-    override suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType) {
+    override suspend fun updateMessageModelType(
+        messageId: MessageId,
+        modelType: ModelType,
+    ) {
         // No-op for testing
     }
 
@@ -112,12 +127,17 @@ class FakeChatRepository : ChatRepository {
     override suspend fun saveAssistantMessage(
         messageId: MessageId,
         content: String,
-        thinkingData: ThinkingData?
+        thinkingData: ThinkingData?,
     ) {
         savedAssistantMessages.add(messageId to content)
     }
 
-    override suspend fun createAssistantMessage(chatId: ChatId, userMessageId: MessageId, modelType: ModelType, pipelineStep: PipelineStep?): MessageId {
+    override suspend fun createAssistantMessage(
+        chatId: ChatId,
+        userMessageId: MessageId,
+        modelType: ModelType,
+        pipelineStep: PipelineStep?,
+    ): MessageId {
         // Return a fake message ID
         return MessageId((nextChatId++).toString())
     }
@@ -131,7 +151,7 @@ class FakeChatRepository : ChatRepository {
     fun verifyChatName(expectedName: String) {
         Assertions.assertTrue(
             createdChats.any { it.name == expectedName },
-            "No chat was created with name: $expectedName"
+            "No chat was created with name: $expectedName",
         )
     }
 
@@ -144,7 +164,7 @@ class FakeChatRepository : ChatRepository {
         deletedChatIdStorage.clear()
         deleteChatFailure = null
     }
-    
+
     /**
      * Returns messages that have incomplete state (PROCESSING, THINKING, or GENERATING)
      * for CREW pipeline resume.
@@ -154,8 +174,8 @@ class FakeChatRepository : ChatRepository {
         val messages = messagesFlows[chatId]?.value ?: return emptyList()
         return messages.filter { message ->
             message.messageState == MessageState.PROCESSING ||
-            message.messageState == MessageState.THINKING ||
-            message.messageState == MessageState.GENERATING
+                message.messageState == MessageState.THINKING ||
+                message.messageState == MessageState.GENERATING
         }
     }
 
@@ -174,21 +194,34 @@ class FakeChatRepository : ChatRepository {
         _chatsFlow.value = _chatsFlow.value.filter { it.id != chatId }
     }
 
-    override suspend fun renameChat(chatId: ChatId, newName: String) {
-        _chatsFlow.value = _chatsFlow.value.map { chat ->
-            if (chat.id == chatId) chat.copy(name = newName) else chat
-        }
+    override suspend fun deleteAllChats() {
+        deleteChatFailure?.let { throw it }
+        deletedChatIdStorage.addAll(_chatsFlow.value.map { it.id })
+        _chatsFlow.value = emptyList()
+        messagesFlows.clear()
     }
 
-    override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {
-        return _chatsFlow.map { list ->
+    override suspend fun renameChat(
+        chatId: ChatId,
+        newName: String,
+    ) {
+        _chatsFlow.value =
+            _chatsFlow.value.map { chat ->
+                if (chat.id == chatId) chat.copy(name = newName) else chat
+            }
+    }
+
+    override fun searchChats(
+        query: String,
+        messageIds: List<MessageId>,
+    ): Flow<List<Chat>> =
+        _chatsFlow.map { list ->
             list.filter { it.name.contains(query, ignoreCase = true) }
         }
-    }
 
-    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
-        return _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
-    }
+    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> =
+        _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -225,7 +258,7 @@ class FakeChatRepository : ChatRepository {
                 generatedMediaTypes = generatedMediaTypes,
                 generatedMediaPrompts = generatedMediaPrompts,
                 transcriptSegments = transcriptSegments,
-            )
+            ),
         )
     }
 

@@ -17,7 +17,7 @@ interface TtsServiceFactoryPort {
     fun create(
         provider: ApiProvider,
         apiKey: String,
-        baseUrl: String? = null
+        baseUrl: String? = null,
     ): TtsServicePort
 
     /**
@@ -34,6 +34,6 @@ interface TtsServiceFactoryPort {
     fun createStreaming(
         provider: ApiProvider,
         apiKey: String,
-        baseUrl: String? = null
+        baseUrl: String? = null,
     ): StreamingTtsServicePort?
 }

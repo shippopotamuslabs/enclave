@@ -2,13 +2,11 @@ package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import org.junit.jupiter.api.Assertions
 
-
 /**
  * Fake implementation of TransactionProvider for testing.
  * Allows verifying transaction boundaries and simulating transaction failures.
  */
 class FakeTransactionProvider : TransactionProvider {
-
     private var transactionCount = 0
     private var shouldThrowInTransaction = false
 
@@ -35,4 +33,3 @@ class FakeTransactionProvider : TransactionProvider {
         shouldThrowInTransaction = false
     }
 }
-

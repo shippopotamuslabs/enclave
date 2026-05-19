@@ -7,7 +7,9 @@ sealed interface GenerationEvent {
     /**
      * Emitted when a new token is generated.
      */
-    data class Token(val text: String) : GenerationEvent
+    data class Token(
+        val text: String,
+    ) : GenerationEvent
 
     /**
      * Emitted when generation is complete.
@@ -15,11 +17,13 @@ sealed interface GenerationEvent {
     data class Completed(
         val fullText: String,
         val promptTokens: Int? = null,
-        val generatedTokens: Int? = null
+        val generatedTokens: Int? = null,
     ) : GenerationEvent
 
     /**
      * Emitted when an error occurs during generation.
      */
-    data class Error(val throwable: Throwable) : GenerationEvent
+    data class Error(
+        val throwable: Throwable,
+    ) : GenerationEvent
 }

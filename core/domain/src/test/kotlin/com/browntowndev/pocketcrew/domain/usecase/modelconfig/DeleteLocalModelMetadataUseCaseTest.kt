@@ -20,13 +20,14 @@ class DeleteLocalModelMetadataUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository deleteLocalModelMetadata`() = runTest {
-        val id = LocalModelId("1")
-        coEvery { repository.deleteLocalModelMetadata(id) } returns Unit
+    fun `invoke calls repository deleteLocalModelMetadata`() =
+        runTest {
+            val id = LocalModelId("1")
+            coEvery { repository.deleteLocalModelMetadata(id) } returns Unit
 
-        val result = useCase(id)
+            val result = useCase(id)
 
-        assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { repository.deleteLocalModelMetadata(id) }
-    }
+            assertTrue(result.isSuccess)
+            coVerify(exactly = 1) { repository.deleteLocalModelMetadata(id) }
+        }
 }

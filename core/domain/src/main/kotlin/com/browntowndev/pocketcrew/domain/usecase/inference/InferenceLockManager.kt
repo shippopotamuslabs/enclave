@@ -45,5 +45,5 @@ enum class InferenceType {
     ON_DEVICE,
 
     /** External API inference (future BYOK feature) - allows concurrent */
-    BYOK
+    BYOK,
 }

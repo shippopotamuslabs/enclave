@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test
  * Gherkin scenarios from: plans/2026-03-22-markdown_output_testing-v2.md
  */
 class ProcessThinkingTokensNewlinePreservationTest {
-
     private lateinit var useCase: ProcessThinkingTokensUseCase
 
     @BeforeEach
@@ -32,7 +31,6 @@ class ProcessThinkingTokensNewlinePreservationTest {
     @Nested
     @DisplayName("Feature: Preserve All Newlines in Visible Text")
     inner class MarkdownHeaderTests {
-
         @Test
         @DisplayName("Scenario: Preserve newlines before markdown headers")
         fun shouldPreserveNewlinesBeforeMarkdownHeaderAfterThinking() {
@@ -108,7 +106,6 @@ class ProcessThinkingTokensNewlinePreservationTest {
     @Nested
     @DisplayName("Test Data Matrix Coverage")
     inner class TestDataMatrixTests {
-
         @Test
         @DisplayName("<think>A</think>\\## Header -> \\n## Header (Markdown header after thinking)")
         fun markdownHeaderAfterThinkingPreservesNewline() {
@@ -183,7 +180,6 @@ class ProcessThinkingTokensNewlinePreservationTest {
     @Nested
     @DisplayName("Edge Cases")
     inner class EdgeCaseTests {
-
         @Test
         @DisplayName("Empty thinking block <think></think> emits nothing")
         fun emptyThinkingBlockEmitsNothing() {
@@ -235,7 +231,6 @@ class ProcessThinkingTokensNewlinePreservationTest {
     @Nested
     @DisplayName("[THINK] Variant Tests - Newline Preservation")
     inner class BracketVariantNewlineTests {
-
         @Test
         @DisplayName("Newline before markdown header with [THINK] variant")
         fun newlineBeforeHeaderWithBracketVariant() {

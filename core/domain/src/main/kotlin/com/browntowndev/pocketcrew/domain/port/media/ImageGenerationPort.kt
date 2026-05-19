@@ -18,6 +18,6 @@ interface ImageGenerationPort {
     suspend fun generateImage(
         prompt: String,
         provider: MediaProviderAsset,
-        settings: GenerationSettings
+        settings: GenerationSettings,
     ): Result<List<ByteArray>>
 }

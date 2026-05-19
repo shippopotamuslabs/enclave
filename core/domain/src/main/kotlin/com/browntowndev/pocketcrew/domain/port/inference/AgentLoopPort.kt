@@ -23,8 +23,10 @@ interface AgentLoopPort {
     suspend fun readContextReference(referenceId: String): String =
         error("Context reference retrieval requires a stateful agent loop session")
 
-    suspend fun searchContextReferences(query: String, limit: Int): List<AgentContextReference> =
-        emptyList()
+    suspend fun searchContextReferences(
+        query: String,
+        limit: Int,
+    ): List<AgentContextReference> = emptyList()
 }
 
 data class AgentManualCompactRequest(
@@ -41,15 +43,28 @@ data class AgentManualCompactResult(
 )
 
 sealed interface AgentLoopEvent {
-    data class TurnStarted(val index: Int) : AgentLoopEvent
+    data class TurnStarted(
+        val index: Int,
+    ) : AgentLoopEvent
 
-    data class TurnCompleted(val index: Int, val toolCallCount: Int, val terminal: Boolean = false) : AgentLoopEvent
+    data class TurnCompleted(
+        val index: Int,
+        val toolCallCount: Int,
+        val terminal: Boolean = false,
+    ) : AgentLoopEvent
 
-    data class TextToken(val text: String) : AgentLoopEvent
+    data class TextToken(
+        val text: String,
+    ) : AgentLoopEvent
 
-    data class ThinkingToken(val text: String) : AgentLoopEvent
+    data class ThinkingToken(
+        val text: String,
+    ) : AgentLoopEvent
 
-    data class ToolCallExecuted(val toolName: String, val resultJson: String) : AgentLoopEvent
+    data class ToolCallExecuted(
+        val toolName: String,
+        val resultJson: String,
+    ) : AgentLoopEvent
 
     data class CompactionApplied(
         val tier: String,
@@ -58,12 +73,19 @@ sealed interface AgentLoopEvent {
         val trigger: String,
     ) : AgentLoopEvent
 
-    data class ToolRepaired(val originalName: String, val resolvedName: String, val confidence: Float) :
-        AgentLoopEvent
+    data class ToolRepaired(
+        val originalName: String,
+        val resolvedName: String,
+        val confidence: Float,
+    ) : AgentLoopEvent
 
-    data class KvCacheInvalidated(val reason: String) : AgentLoopEvent
+    data class KvCacheInvalidated(
+        val reason: String,
+    ) : AgentLoopEvent
 
-    data class PreCompact(val trigger: String) : AgentLoopEvent
+    data class PreCompact(
+        val trigger: String,
+    ) : AgentLoopEvent
 
     data class PostCompact(
         val trigger: String,
@@ -73,5 +95,7 @@ sealed interface AgentLoopEvent {
 
     data object Finished : AgentLoopEvent
 
-    data class Failed(val message: String) : AgentLoopEvent
+    data class Failed(
+        val message: String,
+    ) : AgentLoopEvent
 }

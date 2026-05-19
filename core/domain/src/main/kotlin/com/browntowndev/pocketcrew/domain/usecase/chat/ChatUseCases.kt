@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.chat.Message
 import kotlinx.coroutines.flow.Flow
 
 interface ChatUseCases {

@@ -6,15 +6,19 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
  * Unique identifier for a media provider configuration.
  */
 @JvmInline
-value class MediaProviderId(val value: String)
+value class MediaProviderId(
+    val value: String,
+)
 
 /**
  * Enum representing media capabilities.
  */
-enum class MediaCapability(val displayName: String) {
+enum class MediaCapability(
+    val displayName: String,
+) {
     IMAGE("Image"),
     VIDEO("Video"),
-    MUSIC("Music")
+    MUSIC("Music"),
 }
 
 /**

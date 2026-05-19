@@ -12,7 +12,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
  * as `trailingFlush` so agent-loop tests can assert raw submit behavior on JVM.
  */
 class FakeToolStreamGatePort : ToolStreamGatePort {
-
     val pushCalls: MutableList<Pair<ToolStreamGateHandle, String>> = mutableListOf()
     val finishCalls: MutableList<Pair<ToolStreamGateHandle, Boolean>> = mutableListOf()
     val resetCalls: MutableList<ToolStreamGateHandle> = mutableListOf()
@@ -31,7 +30,10 @@ class FakeToolStreamGatePort : ToolStreamGatePort {
         buffers[handle]?.clear()
     }
 
-    override fun push(handle: ToolStreamGateHandle, chunk: String): ToolStreamGatePushResult {
+    override fun push(
+        handle: ToolStreamGateHandle,
+        chunk: String,
+    ): ToolStreamGatePushResult {
         pushCalls.add(handle to chunk)
         buffers.getValue(handle).append(chunk)
         val allowToolCall = (handle.nativeHandle as FakeHandle).allowToolCall
@@ -40,7 +42,10 @@ class FakeToolStreamGatePort : ToolStreamGatePort {
         )
     }
 
-    override fun finish(handle: ToolStreamGateHandle, hasNativeToolCalls: Boolean): ToolStreamGateFinish {
+    override fun finish(
+        handle: ToolStreamGateHandle,
+        hasNativeToolCalls: Boolean,
+    ): ToolStreamGateFinish {
         finishCalls.add(handle to hasNativeToolCalls)
         val buffered = buffers.getValue(handle).toString()
         val allowToolCall = (handle.nativeHandle as FakeHandle).allowToolCall
@@ -52,5 +57,8 @@ class FakeToolStreamGatePort : ToolStreamGatePort {
 
     override fun bufferedText(handle: ToolStreamGateHandle): String = buffers.getValue(handle).toString()
 
-    data class FakeHandle(val id: Int, val allowToolCall: Boolean)
+    data class FakeHandle(
+        val id: Int,
+        val allowToolCall: Boolean,
+    )
 }

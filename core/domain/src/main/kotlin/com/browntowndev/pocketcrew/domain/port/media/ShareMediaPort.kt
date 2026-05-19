@@ -6,7 +6,10 @@ import com.browntowndev.pocketcrew.domain.model.media.ShareDocumentBytesInput
  * Port for sharing media assets from domain workflows.
  */
 interface ShareMediaPort {
-    fun shareMedia(uris: List<String>, mimeType: String)
+    fun shareMedia(
+        uris: List<String>,
+        mimeType: String,
+    )
 
     /**
      * Shares one or more generated documents. Implementations must stage [ShareDocumentBytesInput.bytes]

@@ -16,7 +16,6 @@ import org.junit.jupiter.api.assertThrows
  * These tests verify the use case correctly forwards the pin toggle action to the repository.
  */
 class TogglePinChatUseCaseTest {
-
     private lateinit var mockRepository: ChatRepository
     private lateinit var useCase: TogglePinChatUseCase
 
@@ -34,17 +33,18 @@ class TogglePinChatUseCaseTest {
      * Then: The repository's togglePinStatus method is called with the correct ID
      */
     @Test
-    fun `toggling pin status delegates to repository`() = runTest {
-        // Given
-        val chatId = ChatId("123")
-        coEvery { mockRepository.togglePinStatus(chatId) } returns Unit
+    fun `toggling pin status delegates to repository`() =
+        runTest {
+            // Given
+            val chatId = ChatId("123")
+            coEvery { mockRepository.togglePinStatus(chatId) } returns Unit
 
-        // When
-        useCase(chatId)
+            // When
+            useCase(chatId)
 
-        // Then
-        coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
-    }
+            // Then
+            coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
+        }
 
     /**
      * Scenario: Repository exceptions are propagated
@@ -54,17 +54,18 @@ class TogglePinChatUseCaseTest {
      * Then: The exception is propagated to the caller
      */
     @Test
-    fun `repository exceptions are propagated`() = runTest {
-        // Given
-        val chatId = ChatId("456")
-        val expectedException = RuntimeException("Database error")
-        coEvery { mockRepository.togglePinStatus(chatId) } throws expectedException
+    fun `repository exceptions are propagated`() =
+        runTest {
+            // Given
+            val chatId = ChatId("456")
+            val expectedException = RuntimeException("Database error")
+            coEvery { mockRepository.togglePinStatus(chatId) } throws expectedException
 
-        // When / Then
-        assertThrows<RuntimeException> {
-            useCase(chatId)
+            // When / Then
+            assertThrows<RuntimeException> {
+                useCase(chatId)
+            }
+
+            coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
         }
-
-        coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
-    }
 }

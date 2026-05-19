@@ -7,17 +7,16 @@ import javax.inject.Inject
 
 interface GetLocalModelAssetsUseCase {
     operator fun invoke(): Flow<List<LocalModelAsset>>
+
     suspend fun getSoftDeletedModels(): List<LocalModelAsset>
 }
 
-class GetLocalModelAssetsUseCaseImpl @Inject constructor(
-    private val localModelRepository: LocalModelRepositoryPort,
-) : GetLocalModelAssetsUseCase {
-    override fun invoke(): Flow<List<LocalModelAsset>> {
-        return localModelRepository.observeAllLocalAssets()
-    }
+class GetLocalModelAssetsUseCaseImpl
+    @Inject
+    constructor(
+        private val localModelRepository: LocalModelRepositoryPort,
+    ) : GetLocalModelAssetsUseCase {
+        override fun invoke(): Flow<List<LocalModelAsset>> = localModelRepository.observeAllLocalAssets()
 
-    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
-        return localModelRepository.getSoftDeletedModels()
+        override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = localModelRepository.getSoftDeletedModels()
     }
-}

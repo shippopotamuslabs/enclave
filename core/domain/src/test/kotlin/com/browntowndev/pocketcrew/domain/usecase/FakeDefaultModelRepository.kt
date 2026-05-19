@@ -13,32 +13,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 
 class FakeDefaultModelRepository : DefaultModelRepositoryPort {
-
     private val _defaults = MutableStateFlow<Map<ModelType, DefaultModelAssignment>>(emptyMap())
 
-    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? {
-        return _defaults.value[modelType]
-    }
+    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? = _defaults.value[modelType]
 
-    override fun observeDefaults(): Flow<List<DefaultModelAssignment>> {
-        return _defaults.asStateFlow().map { it.values.toList() }
-    }
+    override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = _defaults.asStateFlow().map { it.values.toList() }
 
     override suspend fun setDefault(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
-        mediaProviderId: MediaProviderId?
+        mediaProviderId: MediaProviderId?,
     ) {
         val current = _defaults.value.toMutableMap()
-        current[modelType] = DefaultModelAssignment(
-            modelType = modelType,
-            localConfigId = localConfigId,
-            apiConfigId = apiConfigId,
-            ttsProviderId = ttsProviderId,
-            mediaProviderId = mediaProviderId
-        )
+        current[modelType] =
+            DefaultModelAssignment(
+                modelType = modelType,
+                localConfigId = localConfigId,
+                apiConfigId = apiConfigId,
+                ttsProviderId = ttsProviderId,
+                mediaProviderId = mediaProviderId,
+            )
         _defaults.value = current
     }
 

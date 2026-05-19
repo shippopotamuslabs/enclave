@@ -6,11 +6,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  * Status of an individual file download.
  */
 enum class FileStatus {
-    QUEUED,      // Waiting to be downloaded
+    QUEUED, // Waiting to be downloaded
     DOWNLOADING, // Currently downloading
-    COMPLETE,    // Successfully downloaded
-    FAILED,      // Download failed
-    PAUSED       // Paused by user
+    COMPLETE, // Successfully downloaded
+    FAILED, // Download failed
+    PAUSED, // Paused by user
 }
 
 /**
@@ -23,5 +23,5 @@ data class FileProgress(
     val bytesDownloaded: Long,
     val totalBytes: Long,
     val status: FileStatus,
-    val speedMBs: Double? = null
+    val speedMBs: Double? = null,
 )

@@ -13,42 +13,46 @@ import javax.inject.Inject
  * - Wrong password → `unwrapDek` fails (typically with `AEADBadTagException`) → `Result.failure`.
  * - On failure, no key is cached and no side effects are persisted.
  */
-class UnlockVaultUseCase @Inject constructor(
-    private val cryptoManager: CryptoManagerPort,
-    private val apiModelRepository: ApiModelRepositoryPort,
-    private val apiKeyProvider: ApiKeyProviderPort,
-) {
-    suspend operator fun invoke(
-        password: String,
-        salt: ByteArray,
-        wrappedDek: ByteArray,
-    ): Result<Unit> {
-        val kek = cryptoManager.deriveKek(password, salt).getOrElse {
-            cryptoManager.clearKey()
-            return Result.failure(it)
-        }
-        val dek = cryptoManager.unwrapDek(wrappedDek, kek).getOrElse {
-            cryptoManager.clearKey()
-            return Result.failure(it)
-        }
-        cryptoManager.cacheDek(dek).getOrElse {
-            cryptoManager.clearKey()
-            return Result.failure(it)
-        }
+class UnlockVaultUseCase
+    @Inject
+    constructor(
+        private val cryptoManager: CryptoManagerPort,
+        private val apiModelRepository: ApiModelRepositoryPort,
+        private val apiKeyProvider: ApiKeyProviderPort,
+    ) {
+        suspend operator fun invoke(
+            password: String,
+            salt: ByteArray,
+            wrappedDek: ByteArray,
+        ): Result<Unit> {
+            val kek =
+                cryptoManager.deriveKek(password, salt).getOrElse {
+                    cryptoManager.clearKey()
+                    return Result.failure(it)
+                }
+            val dek =
+                cryptoManager.unwrapDek(wrappedDek, kek).getOrElse {
+                    cryptoManager.clearKey()
+                    return Result.failure(it)
+                }
+            cryptoManager.cacheDek(dek).getOrElse {
+                cryptoManager.clearKey()
+                return Result.failure(it)
+            }
 
-        return try {
-            val credentials = apiModelRepository.getAllCredentials()
-            credentials.forEach { cred ->
-                cred.encryptedApiKey?.let { encryptedKey ->
-                    cryptoManager.decrypt(encryptedKey).getOrNull()?.let { plaintext ->
-                        apiKeyProvider.saveApiKey(cred.credentialAlias, plaintext)
+            return try {
+                val credentials = apiModelRepository.getAllCredentials()
+                credentials.forEach { cred ->
+                    cred.encryptedApiKey?.let { encryptedKey ->
+                        cryptoManager.decrypt(encryptedKey).getOrNull()?.let { plaintext ->
+                            apiKeyProvider.saveApiKey(cred.credentialAlias, plaintext)
+                        }
                     }
                 }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                cryptoManager.clearKey()
+                Result.failure(e)
             }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            cryptoManager.clearKey()
-            Result.failure(e)
         }
     }
-}

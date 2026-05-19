@@ -8,8 +8,10 @@ import javax.inject.Inject
 /**
  * Use case for fetching all configured media providers.
  */
-class GetMediaProvidersUseCase @Inject constructor(
-    private val repository: MediaProviderRepositoryPort,
-) {
-    operator fun invoke(): Flow<List<MediaProviderAsset>> = repository.getMediaProviders()
-}
+class GetMediaProvidersUseCase
+    @Inject
+    constructor(
+        private val repository: MediaProviderRepositoryPort,
+    ) {
+        operator fun invoke(): Flow<List<MediaProviderAsset>> = repository.getMediaProviders()
+    }

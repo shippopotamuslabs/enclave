@@ -4,4 +4,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @JvmInline
-value class LocalModelConfigurationId(override val value: String) : ModelConfigurationId
+value class LocalModelConfigurationId(
+    override val value: String,
+) : ModelConfigurationId

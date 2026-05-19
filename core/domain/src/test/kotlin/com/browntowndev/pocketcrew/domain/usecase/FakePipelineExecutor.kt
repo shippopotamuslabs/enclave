@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
+import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.flow
  * Allows controlling the flow of MessageGenerationState events.
  */
 class FakePipelineExecutor : PipelineExecutorPort {
-    
     private val eventsToEmit = mutableListOf<MessageGenerationState>()
     var shouldThrow: Throwable? = null
     var executePipelineCalled = false
@@ -21,40 +20,41 @@ class FakePipelineExecutor : PipelineExecutorPort {
     var lastChatId: String? = null
     var lastUserMessage: String? = null
     var lastPipelineId: String? = null
-    
+
     override fun executePipeline(
         chatId: String,
-        userMessage: String
-    ): Flow<MessageGenerationState> = flow {
-        executePipelineCalled = true
-        lastChatId = chatId
-        lastUserMessage = userMessage
-        
-        shouldThrow?.let { throw it }
-        
-        for (event in eventsToEmit) {
-            emit(event)
+        userMessage: String,
+    ): Flow<MessageGenerationState> =
+        flow {
+            executePipelineCalled = true
+            lastChatId = chatId
+            lastUserMessage = userMessage
+
+            shouldThrow?.let { throw it }
+
+            for (event in eventsToEmit) {
+                emit(event)
+            }
         }
-    }
-    
+
     override suspend fun stopPipeline(pipelineId: String) {
         stopPipelineCalled = true
         lastPipelineId = pipelineId
     }
-    
+
     override suspend fun resumeFromState(
         chatId: String,
         pipelineId: String,
         onComplete: () -> Unit,
-        onError: (Throwable) -> Unit
+        onError: (Throwable) -> Unit,
     ): Flow<MessageGenerationState> {
         resumeFromStateCalled = true
         lastChatId = chatId
         lastPipelineId = pipelineId
-        
+
         return executePipeline(chatId, "")
     }
-    
+
     /**
      * Add a Processing event to be emitted.
      * Used to simulate a step starting (before thinking/generation).
@@ -62,21 +62,27 @@ class FakePipelineExecutor : PipelineExecutorPort {
     fun addProcessingEvent(modelType: ModelType = ModelType.DRAFT_ONE) {
         eventsToEmit.add(MessageGenerationState.Processing(modelType))
     }
-    
+
     /**
      * Add a ThinkingLive event to be emitted.
      */
-    fun addThinkingLiveEvent(chunk: String, modelType: ModelType = ModelType.DRAFT_ONE) {
+    fun addThinkingLiveEvent(
+        chunk: String,
+        modelType: ModelType = ModelType.DRAFT_ONE,
+    ) {
         eventsToEmit.add(MessageGenerationState.ThinkingLive(chunk, modelType))
     }
-    
+
     /**
      * Add a GeneratingText event to be emitted.
      */
-    fun addGeneratingTextEvent(text: String, modelType: ModelType = ModelType.DRAFT_ONE) {
+    fun addGeneratingTextEvent(
+        text: String,
+        modelType: ModelType = ModelType.DRAFT_ONE,
+    ) {
         eventsToEmit.add(MessageGenerationState.GeneratingText(text, modelType))
     }
-    
+
     /**
      * Add a StepCompleted event to be emitted.
      */
@@ -84,39 +90,45 @@ class FakePipelineExecutor : PipelineExecutorPort {
         stepOutput: String,
         modelDisplayName: String,
         modelType: ModelType = ModelType.DRAFT_ONE,
-        stepType: PipelineStep = PipelineStep.DRAFT_ONE
+        stepType: PipelineStep = PipelineStep.DRAFT_ONE,
     ) {
         eventsToEmit.add(
             MessageGenerationState.StepCompleted(
                 stepOutput = stepOutput,
                 modelDisplayName = modelDisplayName,
                 modelType = modelType,
-                stepType = stepType
-            )
+                stepType = stepType,
+            ),
         )
     }
-    
+
     /**
      * Add a Finished event to be emitted.
      */
     fun addFinishedEvent(modelType: ModelType = ModelType.DRAFT_ONE) {
         eventsToEmit.add(MessageGenerationState.Finished(modelType))
     }
-    
+
     /**
      * Add a Blocked event to be emitted.
      */
-    fun addBlockedEvent(reason: String, modelType: ModelType = ModelType.DRAFT_ONE) {
+    fun addBlockedEvent(
+        reason: String,
+        modelType: ModelType = ModelType.DRAFT_ONE,
+    ) {
         eventsToEmit.add(MessageGenerationState.Blocked(reason, modelType))
     }
-    
+
     /**
      * Add a Failed event to be emitted.
      */
-    fun addFailedEvent(error: Throwable, modelType: ModelType = ModelType.DRAFT_ONE) {
+    fun addFailedEvent(
+        error: Throwable,
+        modelType: ModelType = ModelType.DRAFT_ONE,
+    ) {
         eventsToEmit.add(MessageGenerationState.Failed(error, modelType))
     }
-    
+
     /**
      * Configure a complete CREW pipeline simulation (4 steps).
      */
@@ -132,7 +144,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
             stepOutput = "First approach completed.",
             modelDisplayName = "Draft One",
             modelType = ModelType.DRAFT_ONE,
-            stepType = PipelineStep.DRAFT_ONE
+            stepType = PipelineStep.DRAFT_ONE,
         )
 
         // DRAFT_TWO
@@ -143,7 +155,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
             stepOutput = "Alternative approach completed.",
             modelDisplayName = "Draft Two",
             modelType = ModelType.DRAFT_TWO,
-            stepType = PipelineStep.DRAFT_TWO
+            stepType = PipelineStep.DRAFT_TWO,
         )
 
         // SYNTHESIS
@@ -154,7 +166,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
             stepOutput = "Synthesis completed.",
             modelDisplayName = "Main",
             modelType = ModelType.MAIN,
-            stepType = PipelineStep.SYNTHESIS
+            stepType = PipelineStep.SYNTHESIS,
         )
 
         // FINAL
@@ -163,7 +175,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
         addGeneratingTextEvent("Final response:\n\n", ModelType.FINAL_SYNTHESIS)
         addFinishedEvent(ModelType.FINAL_SYNTHESIS)
     }
-    
+
     fun reset() {
         eventsToEmit.clear()
         shouldThrow = null

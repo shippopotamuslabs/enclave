@@ -9,12 +9,13 @@ interface SaveLocalModelConfigurationUseCase {
     suspend operator fun invoke(configuration: LocalModelConfiguration): Result<LocalModelConfigurationId>
 }
 
-class SaveLocalModelConfigurationUseCaseImpl @Inject constructor(
-    private val localModelRepository: LocalModelRepositoryPort,
-) : SaveLocalModelConfigurationUseCase {
-    override suspend fun invoke(configuration: LocalModelConfiguration): Result<LocalModelConfigurationId> {
-        return Result.runCatching {
-            localModelRepository.saveConfiguration(configuration)
-        }
+class SaveLocalModelConfigurationUseCaseImpl
+    @Inject
+    constructor(
+        private val localModelRepository: LocalModelRepositoryPort,
+    ) : SaveLocalModelConfigurationUseCase {
+        override suspend fun invoke(configuration: LocalModelConfiguration): Result<LocalModelConfigurationId> =
+            Result.runCatching {
+                localModelRepository.saveConfiguration(configuration)
+            }
     }
-}

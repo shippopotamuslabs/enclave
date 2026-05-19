@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test
  * Tests for MessageState enum.
  */
 class MessageStateTest {
-
     @Test
     fun messageState_hasProcessingValue() {
         val state = MessageState.PROCESSING

@@ -28,7 +28,7 @@ interface CloudSyncPort {
      */
     suspend fun syncEntitiesToCloud(
         chats: List<Chat>,
-        messages: List<Message>
+        messages: List<Message>,
     ): Result<Unit>
 
     /**
@@ -46,6 +46,7 @@ interface CloudSyncPort {
      * Retrieves the user's vault salt from the cloud.
      */
     suspend fun getVaultSalt(): Result<String?>
+
     /**
      * Updates the user's vault verification ciphertext in the cloud.
      */
@@ -91,4 +92,24 @@ interface CloudSyncPort {
      * callers typically invoke [com.browntowndev.pocketcrew.domain.port.auth.AuthManager.signOut] after success.
      */
     suspend fun deleteUserAccount(): Result<Unit>
+
+    /**
+     * Purges all chat-related collections from Firestore for the current user.
+     */
+    suspend fun deleteAllChatsFromCloud(): Result<Unit>
+
+    /**
+     * Purges all studio media and album collections from Firestore for the current user.
+     */
+    suspend fun deleteAllMediaFromCloud(): Result<Unit>
+
+    /**
+     * Purges all memories from Firestore for the current user.
+     */
+    suspend fun deleteAllMemoriesFromCloud(): Result<Unit>
+
+    /**
+     * Purges all artifacts/documents from Firestore for the current user.
+     */
+    suspend fun deleteAllArtifactsFromCloud(): Result<Unit>
 }

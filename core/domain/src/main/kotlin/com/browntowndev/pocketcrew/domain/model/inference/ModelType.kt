@@ -1,13 +1,15 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Enum representing the logical model slots in the inference pipeline.
  */
 @Serializable
-enum class ModelType(val apiValue: String) {
+enum class ModelType(
+    val apiValue: String,
+) {
     /**
      * Vision model for image understanding (e.g., Qwen2.5-VL).
      */
@@ -78,57 +80,60 @@ enum class ModelType(val apiValue: String) {
      * Used for models that are being re-downloaded but are not yet assigned to a role.
      */
     @SerialName("unassigned")
-    UNASSIGNED("unassigned");
+    UNASSIGNED("unassigned"),
+    ;
 
     /**
      * Returns the human-readable display name for this model role.
      */
-    fun displayName(): String = when (this) {
-        VISION -> "Vision"
-        DRAFT_ONE -> "Draft One"
-        DRAFT_TWO -> "Draft Two"
-        MAIN -> "Synthesis"
-        FAST -> "Fast"
-        THINKING -> "Thinking"
-        FINAL_SYNTHESIS -> "Final Review"
-        TTS -> "Text-to-Speech"
-        IMAGE_GENERATION -> "Image Generation"
-        VIDEO_GENERATION -> "Video Generation"
-        MUSIC_GENERATION -> "Music Generation"
-        UNASSIGNED -> "Unassigned"
-    }
+    fun displayName(): String =
+        when (this) {
+            VISION -> "Vision"
+            DRAFT_ONE -> "Draft One"
+            DRAFT_TWO -> "Draft Two"
+            MAIN -> "Synthesis"
+            FAST -> "Fast"
+            THINKING -> "Thinking"
+            FINAL_SYNTHESIS -> "Final Review"
+            TTS -> "Text-to-Speech"
+            IMAGE_GENERATION -> "Image Generation"
+            VIDEO_GENERATION -> "Video Generation"
+            MUSIC_GENERATION -> "Music Generation"
+            UNASSIGNED -> "Unassigned"
+        }
 
     /**
      * Returns a human-readable description for this model role.
      */
     val description: String
-        get() = when (this) {
-            VISION -> "Model that can analyze images for non-multimodal models."
-            DRAFT_ONE -> "Quick initial drafting of responses."
-            DRAFT_TWO -> "Refining initial drafts for better quality."
-            MAIN -> "Produces the primary, high-quality chat response."
-            FAST -> "Immediate, non-thinking, responses for simple queries."
-            THINKING -> "Deep reasoning and logic for complex tasks."
-            FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
-            TTS -> "Synthesize text responses into natural-sounding speech."
-            IMAGE_GENERATION -> "Generate images from text prompts."
-            VIDEO_GENERATION -> "Generate videos from text prompts."
-            MUSIC_GENERATION -> "Generate music from text prompts."
-            UNASSIGNED -> "Models not yet assigned to a role."
-        }
+        get() =
+            when (this) {
+                VISION -> "Model that can analyze images for non-multimodal models."
+                DRAFT_ONE -> "Quick initial drafting of responses."
+                DRAFT_TWO -> "Refining initial drafts for better quality."
+                MAIN -> "Produces the primary, high-quality chat response."
+                FAST -> "Immediate, non-thinking, responses for simple queries."
+                THINKING -> "Deep reasoning and logic for complex tasks."
+                FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
+                TTS -> "Synthesize text responses into natural-sounding speech."
+                IMAGE_GENERATION -> "Generate images from text prompts."
+                VIDEO_GENERATION -> "Generate videos from text prompts."
+                MUSIC_GENERATION -> "Generate music from text prompts."
+                UNASSIGNED -> "Models not yet assigned to a role."
+            }
 
     val isTextModel: Boolean
-        get() = when (this) {
-            FAST, THINKING, MAIN, DRAFT_ONE, DRAFT_TWO, FINAL_SYNTHESIS, VISION -> true
-            else -> false
-        }
+        get() =
+            when (this) {
+                FAST, THINKING, MAIN, DRAFT_ONE, DRAFT_TWO, FINAL_SYNTHESIS, VISION -> true
+                else -> false
+            }
 
     companion object {
         /**
          * Maps a string value to a ModelType enum.
          * Defaults to MAIN if the value doesn't match any type.
          */
-        fun fromApiValue(value: String): ModelType =
-            entries.firstOrNull { it.apiValue == value } ?: MAIN
+        fun fromApiValue(value: String): ModelType = entries.firstOrNull { it.apiValue == value } ?: MAIN
     }
 }

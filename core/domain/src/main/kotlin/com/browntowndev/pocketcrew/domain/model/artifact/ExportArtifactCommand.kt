@@ -28,7 +28,11 @@ data class ExportArtifactDocumentsCommand(
 )
 
 sealed class ArtifactExportOutcome {
-    data class Shared(val fileCount: Int) : ArtifactExportOutcome()
+    data class Shared(
+        val fileCount: Int,
+    ) : ArtifactExportOutcome()
 
-    data class Downloaded(val savedDisplayNames: List<String>) : ArtifactExportOutcome()
+    data class Downloaded(
+        val savedDisplayNames: List<String>,
+    ) : ArtifactExportOutcome()
 }

@@ -9,10 +9,10 @@ interface GetDefaultModelsUseCase {
     operator fun invoke(): Flow<List<DefaultModelAssignment>>
 }
 
-class GetDefaultModelsUseCaseImpl @Inject constructor(
-    private val defaultModelRepository: DefaultModelRepositoryPort,
-) : GetDefaultModelsUseCase {
-    override fun invoke(): Flow<List<DefaultModelAssignment>> {
-        return defaultModelRepository.observeDefaults()
+class GetDefaultModelsUseCaseImpl
+    @Inject
+    constructor(
+        private val defaultModelRepository: DefaultModelRepositoryPort,
+    ) : GetDefaultModelsUseCase {
+        override fun invoke(): Flow<List<DefaultModelAssignment>> = defaultModelRepository.observeDefaults()
     }
-}

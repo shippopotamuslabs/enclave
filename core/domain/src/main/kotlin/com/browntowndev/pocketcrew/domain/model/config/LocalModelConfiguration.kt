@@ -35,5 +35,5 @@ data class LocalModelConfiguration(
      * Which ModelType slots this configuration should be assigned to by default.
      * Transient — populated from remote config, not persisted to the database.
      */
-    val defaultAssignments: List<ModelType> = emptyList()
+    val defaultAssignments: List<ModelType> = emptyList(),
 ) : ModelTuningConfiguration

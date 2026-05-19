@@ -12,27 +12,28 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("GenerateArtifactUseCase")
 class GenerateArtifactUseCaseTest {
-
     private val mockExecutor = mockk<ArtifactToolExecutorPort>()
     private val mockValidation = mockk<com.browntowndev.pocketcrew.domain.port.docgen.DocumentValidationPort>()
     private val useCase = GenerateArtifactUseCase(mockExecutor, mockValidation)
 
     @Test
     @DisplayName("Delegates to executor and returns result")
-    fun `delegates to executor`() = runTest {
-        val params = GenerateArtifactParams(title = "Report", content = "# Content")
-        val expectedResult = ToolExecutionResult(
-            toolName = "start_artifact",
-            resultJson = """{"artifactId":"123"}""",
-            cached = false,
-            latencyMs = 450
-        )
+    fun `delegates to executor`() =
+        runTest {
+            val params = GenerateArtifactParams(title = "Report", content = "# Content")
+            val expectedResult =
+                ToolExecutionResult(
+                    toolName = "start_artifact",
+                    resultJson = """{"artifactId":"123"}""",
+                    cached = false,
+                    latencyMs = 450,
+                )
 
-        io.mockk.every { mockValidation.validate(any()) } returns Result.success(Unit)
-        coEvery { mockExecutor.execute(params) } returns expectedResult
+            io.mockk.every { mockValidation.validate(any()) } returns Result.success(Unit)
+            coEvery { mockExecutor.execute(params) } returns expectedResult
 
-        val result = useCase(params)
+            val result = useCase(params)
 
-        assertEquals(expectedResult, result)
-    }
+            assertEquals(expectedResult, result)
+        }
 }

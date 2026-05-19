@@ -6,7 +6,7 @@ package com.browntowndev.pocketcrew.domain.port.docgen
 interface DocumentGeneratorPort {
     /**
      * Generates a Word (DOCX) document.
-     * 
+     *
      * @param json The structured document JSON.
      * @return A Result containing the raw bytes of the generated DOCX.
      */
@@ -14,7 +14,7 @@ interface DocumentGeneratorPort {
 
     /**
      * Generates a PDF document.
-     * 
+     *
      * @param json The structured document JSON.
      * @return A Result containing the raw bytes of the generated PDF.
      */

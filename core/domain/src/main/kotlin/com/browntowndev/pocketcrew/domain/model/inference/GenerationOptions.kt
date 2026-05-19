@@ -13,7 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  * - thinkingEnabled = false -> reasoningBudget = 0
  */
 data class GenerationOptions(
-    val reasoningBudget: Int,        // 0 = reasoning OFF, >0 = reasoning ON with budget
+    val reasoningBudget: Int, // 0 = reasoning OFF, >0 = reasoning ON with budget
     val modelType: ModelType? = null, // The requesting role (FAST, THINKING, etc.)
     val modelId: String? = null,
     val apiProvider: ApiProvider? = null,

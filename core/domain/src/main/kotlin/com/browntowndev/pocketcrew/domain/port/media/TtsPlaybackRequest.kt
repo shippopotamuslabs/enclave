@@ -38,19 +38,21 @@ data class TtsPlaybackRequest(
 fun TtsProviderAsset.toPlaybackRequest(
     requestId: String,
     text: String,
-): TtsPlaybackRequest = TtsPlaybackRequest(
-    requestId = requestId,
-    text = text,
-    provider = provider,
-    voiceName = voiceName,
-    modelName = modelName,
-    baseUrl = baseUrl,
-    credentialAlias = credentialAlias,
-    audioMimeType = provider.toPlaybackMimeType(),
-    notificationArtist = displayName,
-)
+): TtsPlaybackRequest =
+    TtsPlaybackRequest(
+        requestId = requestId,
+        text = text,
+        provider = provider,
+        voiceName = voiceName,
+        modelName = modelName,
+        baseUrl = baseUrl,
+        credentialAlias = credentialAlias,
+        audioMimeType = provider.toPlaybackMimeType(),
+        notificationArtist = displayName,
+    )
 
-fun ApiProvider.toPlaybackMimeType(): String = when (this) {
-    ApiProvider.GOOGLE -> TtsPlaybackRequest.MIME_TYPE_WAV
-    else -> TtsPlaybackRequest.MIME_TYPE_MP3
-}
+fun ApiProvider.toPlaybackMimeType(): String =
+    when (this) {
+        ApiProvider.GOOGLE -> TtsPlaybackRequest.MIME_TYPE_WAV
+        else -> TtsPlaybackRequest.MIME_TYPE_MP3
+    }

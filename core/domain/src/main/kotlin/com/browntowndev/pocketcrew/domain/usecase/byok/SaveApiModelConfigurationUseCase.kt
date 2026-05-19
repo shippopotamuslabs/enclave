@@ -9,15 +9,17 @@ interface SaveApiModelConfigurationUseCase {
     suspend operator fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId>
 }
 
-class SaveApiModelConfigurationUseCaseImpl @Inject constructor(
-    private val apiModelRepository: ApiModelRepositoryPort,
-) : SaveApiModelConfigurationUseCase {
-    override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> {
-        apiModelRepository.getCredentialsById(configuration.apiCredentialsId)
-            ?: return Result.failure(IllegalArgumentException("Parent credentials not found"))
-            
-        return Result.runCatching {
-            apiModelRepository.saveConfiguration(configuration)
+class SaveApiModelConfigurationUseCaseImpl
+    @Inject
+    constructor(
+        private val apiModelRepository: ApiModelRepositoryPort,
+    ) : SaveApiModelConfigurationUseCase {
+        override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> {
+            apiModelRepository.getCredentialsById(configuration.apiCredentialsId)
+                ?: return Result.failure(IllegalArgumentException("Parent credentials not found"))
+
+            return Result.runCatching {
+                apiModelRepository.saveConfiguration(configuration)
+            }
         }
     }
-}

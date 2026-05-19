@@ -1,23 +1,29 @@
 package com.browntowndev.pocketcrew.domain.model.config
 
-enum class OpenRouterProviderSort(val wireValue: String, val displayName: String) {
+enum class OpenRouterProviderSort(
+    val wireValue: String,
+    val displayName: String,
+) {
     PRICE("price", "Price"),
     LATENCY("latency", "Latency"),
-    THROUGHPUT("throughput", "Throughput");
+    THROUGHPUT("throughput", "Throughput"),
+    ;
 
     companion object {
-        fun fromWireValue(value: String?): OpenRouterProviderSort =
-            entries.firstOrNull { it.wireValue == value } ?: THROUGHPUT
+        fun fromWireValue(value: String?): OpenRouterProviderSort = entries.firstOrNull { it.wireValue == value } ?: THROUGHPUT
     }
 }
 
-enum class OpenRouterDataCollectionPolicy(val wireValue: String, val displayName: String) {
+enum class OpenRouterDataCollectionPolicy(
+    val wireValue: String,
+    val displayName: String,
+) {
     ALLOW("allow", "Allow"),
-    DENY("deny", "Deny");
+    DENY("deny", "Deny"),
+    ;
 
     companion object {
-        fun fromWireValue(value: String?): OpenRouterDataCollectionPolicy =
-            entries.firstOrNull { it.wireValue == value } ?: DENY
+        fun fromWireValue(value: String?): OpenRouterDataCollectionPolicy = entries.firstOrNull { it.wireValue == value } ?: DENY
     }
 }
 

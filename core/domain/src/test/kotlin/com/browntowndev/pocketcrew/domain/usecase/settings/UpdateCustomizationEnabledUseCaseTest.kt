@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class UpdateCustomizationEnabledUseCaseTest {
-
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var updateCustomizationEnabledUseCase: UpdateCustomizationEnabledUseCase
 
@@ -20,28 +19,30 @@ class UpdateCustomizationEnabledUseCaseTest {
     }
 
     @Test
-    fun `invoke with true calls updateCustomizationEnabled with true`() = runTest {
-        // Given
-        val enabled = true
-        coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
+    fun `invoke with true calls updateCustomizationEnabled with true`() =
+        runTest {
+            // Given
+            val enabled = true
+            coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
 
-        // When
-        updateCustomizationEnabledUseCase(enabled)
+            // When
+            updateCustomizationEnabledUseCase(enabled)
 
-        // Then
-        coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
-    }
+            // Then
+            coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
+        }
 
     @Test
-    fun `invoke with false calls updateCustomizationEnabled with false`() = runTest {
-        // Given
-        val enabled = false
-        coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
+    fun `invoke with false calls updateCustomizationEnabled with false`() =
+        runTest {
+            // Given
+            val enabled = false
+            coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
 
-        // When
-        updateCustomizationEnabledUseCase(enabled)
+            // When
+            updateCustomizationEnabledUseCase(enabled)
 
-        // Then
-        coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
-    }
+            // Then
+            coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
+        }
 }

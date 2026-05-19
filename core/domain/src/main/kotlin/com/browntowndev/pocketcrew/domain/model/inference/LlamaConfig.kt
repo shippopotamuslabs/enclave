@@ -25,7 +25,7 @@ data class LlamaSamplingConfig(
     val contextWindow: Int = 4096,
     val batchSize: Int = 256,
     val gpuLayers: Int = 0,
-    val thinkingEnabled: Boolean = false
+    val thinkingEnabled: Boolean = false,
 )
 
 /**
@@ -39,5 +39,5 @@ data class LlamaModelConfig(
     val modelPath: String,
     val mmprojPath: String? = null,
     val systemPrompt: String = "You are a helpful assistant.",
-    val sampling: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
+    val sampling: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f),
 )

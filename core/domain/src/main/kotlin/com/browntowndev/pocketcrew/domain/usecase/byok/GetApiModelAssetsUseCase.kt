@@ -11,20 +11,21 @@ interface GetApiModelAssetsUseCase {
     operator fun invoke(): Flow<List<ApiModelAsset>>
 }
 
-class GetApiModelAssetsUseCaseImpl @Inject constructor(
-    private val apiModelRepository: ApiModelRepositoryPort,
-) : GetApiModelAssetsUseCase {
-    override fun invoke(): Flow<List<ApiModelAsset>> {
-        return combine(
-            apiModelRepository.observeAllCredentials(),
-            apiModelRepository.observeAllConfigurations()
-        ) { credentials, allConfigs ->
-            credentials.map { creds ->
-                ApiModelAsset(
-                    credentials = creds,
-                    configurations = allConfigs.filter { it.apiCredentialsId == creds.id }
-                )
+class GetApiModelAssetsUseCaseImpl
+    @Inject
+    constructor(
+        private val apiModelRepository: ApiModelRepositoryPort,
+    ) : GetApiModelAssetsUseCase {
+        override fun invoke(): Flow<List<ApiModelAsset>> =
+            combine(
+                apiModelRepository.observeAllCredentials(),
+                apiModelRepository.observeAllConfigurations(),
+            ) { credentials, allConfigs ->
+                credentials.map { creds ->
+                    ApiModelAsset(
+                        credentials = creds,
+                        configurations = allConfigs.filter { it.apiCredentialsId == creds.id },
+                    )
+                }
             }
-        }
     }
-}

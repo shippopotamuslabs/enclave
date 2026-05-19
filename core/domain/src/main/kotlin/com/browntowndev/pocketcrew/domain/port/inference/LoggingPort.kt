@@ -6,17 +6,34 @@ package com.browntowndev.pocketcrew.domain.port.inference
  * This abstraction allows domain code to log without depending on Android SDK.
  */
 interface LoggingPort {
-    fun debug(tag: String, message: String)
+    fun debug(
+        tag: String,
+        message: String,
+    )
 
-    fun info(tag: String, message: String)
+    fun info(
+        tag: String,
+        message: String,
+    )
 
-    fun warning(tag: String, message: String)
+    fun warning(
+        tag: String,
+        message: String,
+    )
 
-    fun error(tag: String, message: String, throwable: Throwable? = null)
+    fun error(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    )
 
     /**
      * Records an exception specifically for remote crash reporting.
      * Use this when you want to capture the stack trace and context without a human-readable log level.
      */
-    fun recordException(tag: String, message: String, throwable: Throwable)
+    fun recordException(
+        tag: String,
+        message: String,
+        throwable: Throwable,
+    )
 }

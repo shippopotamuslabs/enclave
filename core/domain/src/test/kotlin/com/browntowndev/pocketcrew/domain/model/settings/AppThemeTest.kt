@@ -1,10 +1,9 @@
 package com.browntowndev.pocketcrew.domain.model.settings
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 class AppThemeTest {
-
     @Test
     fun `AppTheme has correct values`() {
         val themes = AppTheme.entries
@@ -30,4 +29,3 @@ class AppThemeTest {
         }
     }
 }
-

@@ -6,18 +6,15 @@ import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import org.junit.jupiter.api.Assertions
-
 
 /**
  * Fake implementation of MessageRepository for testing.
  * Allows controlling message saving and verifying method calls.
  */
 class FakeMessageRepository : MessageRepository {
-
     private val savedMessages = mutableListOf<Message>()
     private var getMessageByIdResult: Message? = null
     private var getMessagesForChatResult: List<Message> = emptyList()
@@ -39,21 +36,21 @@ class FakeMessageRepository : MessageRepository {
         return id
     }
 
-    override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
+    override suspend fun saveEmbedding(
+        messageId: MessageId,
+        embedding: FloatArray,
+    ) {
         embeddings[messageId] = embedding
     }
 
-    override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
-        return emptyList()
-    }
+    override suspend fun searchSimilarMessages(
+        queryVector: FloatArray,
+        limit: Int,
+    ): List<MessageId> = emptyList()
 
-    override suspend fun getMessageById(id: MessageId): Message? {
-        return getMessageByIdResult
-    }
+    override suspend fun getMessageById(id: MessageId): Message? = getMessageByIdResult
 
-    override suspend fun getMessagesForChat(chatId: ChatId): List<Message> {
-        return getMessagesForChatResult
-    }
+    override suspend fun getMessagesForChat(chatId: ChatId): List<Message> = getMessagesForChatResult
 
     override suspend fun saveVisionAnalysis(
         userMessageId: MessageId,
@@ -73,13 +70,11 @@ class FakeMessageRepository : MessageRepository {
                 modelType = modelType,
                 createdAt = 0L,
                 updatedAt = 0L,
-            )
+            ),
         )
     }
 
-    override suspend fun getVisionAnalysesForMessages(
-        userMessageIds: List<MessageId>
-    ): Map<MessageId, List<MessageVisionAnalysis>> =
+    override suspend fun getVisionAnalysesForMessages(userMessageIds: List<MessageId>): Map<MessageId, List<MessageVisionAnalysis>> =
         visionAnalyses.filter { it.userMessageId in userMessageIds }.groupBy { it.userMessageId }
 
     override suspend fun resolveLatestImageBearingUserMessage(
@@ -87,17 +82,23 @@ class FakeMessageRepository : MessageRepository {
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? = resolvedImageTarget
 
-    override suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int): List<Message> {
-        return emptyList()
-    }
+    override suspend fun searchMessagesInChat(
+        chatId: ChatId,
+        queryVector: FloatArray,
+        limit: Int,
+    ): List<Message> = emptyList()
 
-    override suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int): List<Message> {
-        return emptyList()
-    }
+    override suspend fun searchMessagesAcrossChats(
+        queryVector: FloatArray,
+        limit: Int,
+    ): List<Message> = emptyList()
 
-    override suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message> {
-        return emptyList()
-    }
+    override suspend fun getMessagesAround(
+        chatId: ChatId,
+        timestamp: Long,
+        before: Int,
+        after: Int,
+    ): List<Message> = emptyList()
 
     override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = summaries[chatId]
 
@@ -127,7 +128,7 @@ class FakeMessageRepository : MessageRepository {
     fun verifyMessageSaved(message: Message) {
         Assertions.assertTrue(
             savedMessages.any { it.id == message.id && it.content == message.content && it.role == message.role },
-            "Message was not saved: $message"
+            "Message was not saved: $message",
         )
     }
 

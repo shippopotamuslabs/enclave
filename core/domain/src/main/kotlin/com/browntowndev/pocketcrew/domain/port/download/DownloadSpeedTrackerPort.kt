@@ -15,7 +15,7 @@ interface DownloadSpeedTrackerPort {
     fun calculateSpeedAndEta(
         filename: String,
         bytesDownloaded: Long,
-        totalSize: Long
+        totalSize: Long,
     ): Pair<Double, Long>
 
     /**
@@ -26,7 +26,7 @@ interface DownloadSpeedTrackerPort {
      */
     fun calculateAggregateSpeedAndEta(
         totalBytesDownloaded: Long,
-        totalSize: Long
+        totalSize: Long,
     ): Pair<Double, Long>
 
     /**

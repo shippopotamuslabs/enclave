@@ -105,7 +105,9 @@ sealed class AgentFinishReason {
 
     data object MaxTokens : AgentFinishReason()
 
-    data class Other(val reason: String) : AgentFinishReason()
+    data class Other(
+        val reason: String,
+    ) : AgentFinishReason()
 }
 
 data class AgentToolCall(
@@ -165,7 +167,11 @@ interface AgentLoopHostCallbacks {
     suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult>
 
     // Invoked after each tool result for UI side effects (web search sources, artifacts, media).
-    suspend fun onToolResult(toolName: String, argumentsJson: String, resultJson: String) {}
+    suspend fun onToolResult(
+        toolName: String,
+        argumentsJson: String,
+        resultJson: String,
+    ) {}
 
     suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
         error("Summarization requested but host did not implement summarize()")

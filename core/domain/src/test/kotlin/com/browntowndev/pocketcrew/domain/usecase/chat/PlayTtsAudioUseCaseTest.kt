@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class PlayTtsAudioUseCaseTest {
-
     private val resolveSelectionUseCase: ResolveAssignedModelSelectionUseCase = mockk()
     private val ttsFactory: TtsServiceFactoryPort = mockk()
     private val audioPlayer: AudioPlayerPort = mockk(relaxed = true)
@@ -32,23 +31,24 @@ class PlayTtsAudioUseCaseTest {
     }
 
     @Test
-    fun `invoke synthesizes and plays audio on success`() = runTest {
-        val ttsAsset = TtsProviderAsset(TtsProviderId("1"), "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias-1")
-        val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-        val audioBytes = byteArrayOf(1, 2, 3)
-        val ttsService: TtsServicePort = mockk()
+    fun `invoke synthesizes and plays audio on success`() =
+        runTest {
+            val ttsAsset = TtsProviderAsset(TtsProviderId("1"), "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias-1")
+            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
+            val audioBytes = byteArrayOf(1, 2, 3)
+            val ttsService: TtsServicePort = mockk()
 
-        coEvery { resolveSelectionUseCase(any()) } returns selection
-        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "sk-test"
-        every { ttsFactory.create(ApiProvider.OPENAI, "sk-test", null) } returns ttsService
-        coEvery { ttsService.synthesizeSpeech("Hello", "alloy") } returns Result.success(audioBytes)
+            coEvery { resolveSelectionUseCase(any()) } returns selection
+            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "sk-test"
+            every { ttsFactory.create(ApiProvider.OPENAI, "sk-test", null) } returns ttsService
+            coEvery { ttsService.synthesizeSpeech("Hello", "alloy") } returns Result.success(audioBytes)
 
-        val result = useCase("Hello")
+            val result = useCase("Hello")
 
-        assertTrue(result.isSuccess)
-        coVerify {
-            ttsService.synthesizeSpeech("Hello", "alloy")
-            audioPlayer.playAudio(audioBytes)
+            assertTrue(result.isSuccess)
+            coVerify {
+                ttsService.synthesizeSpeech("Hello", "alloy")
+                audioPlayer.playAudio(audioBytes)
+            }
         }
-    }
 }
