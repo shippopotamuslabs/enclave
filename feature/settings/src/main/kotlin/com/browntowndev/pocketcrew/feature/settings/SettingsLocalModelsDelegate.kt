@@ -1,25 +1,3 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
-
 package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
@@ -37,7 +15,6 @@ internal class SettingsLocalModelsDelegate
     constructor(
         private val localModelUseCases: SettingsLocalModelUseCases,
         private val deletionHelper: SettingsDeletionHelper,
-        private val localModelAssetUiMapper: LocalModelAssetUiMapper,
         private val errorHandler: ViewModelErrorHandler,
     ) {
         fun observeActiveLocalModels(

@@ -466,18 +466,16 @@ private fun buildMinimalViewModel(): SettingsViewModel {
             SettingsLocalModelsDelegate(
                 settingsUseCases.localModels,
                 deletionHelper,
-                localModelAssetUiMapper,
                 errorHandler,
             ),
         apiProvidersDelegate =
-            SettingsApiProvidersDelegate(
-                settingsUseCases.apiProviders,
-                settingsUseCases.tts,
-                settingsUseCases.media,
-                deletionHelper,
-                apiModelAssetUiMapper,
-                ttsProviderAssetUiMapper,
-                errorHandler,
+            createSettingsApiProvidersDelegate(
+                apiProviderUseCases = settingsUseCases.apiProviders,
+                ttsUseCases = settingsUseCases.tts,
+                mediaUseCases = settingsUseCases.media,
+                deletionHelper = deletionHelper,
+                apiModelAssetUiMapper = apiModelAssetUiMapper,
+                errorHandler = errorHandler,
             ),
         searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler),
         assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler),
