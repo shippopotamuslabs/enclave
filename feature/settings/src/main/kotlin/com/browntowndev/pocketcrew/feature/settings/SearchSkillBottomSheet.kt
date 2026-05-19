@@ -74,20 +74,21 @@ fun SearchSkillBottomSheet(
 
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
                 text = "Search Skills",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
             )
 
             TabRow(
@@ -98,10 +99,10 @@ fun SearchSkillBottomSheet(
                 indicator = { tabPositions ->
                     SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Tab(
                     selected = selectedTab == 0,
@@ -112,9 +113,9 @@ fun SearchSkillBottomSheet(
                         Icon(
                             imageVector = Icons.Default.Public,
                             contentDescription = "Web",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
-                    }
+                    },
                 )
                 Tab(
                     selected = selectedTab == 1,
@@ -125,18 +126,19 @@ fun SearchSkillBottomSheet(
                         Icon(
                             imageVector = XIcon,
                             contentDescription = "X",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
-                    }
+                    },
                 )
             }
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 if (selectedTab == 0) {
                     WebSearchTabContent(
@@ -154,7 +156,7 @@ fun SearchSkillBottomSheet(
                         onExaApiKeyChange = onExaApiKeyChange,
                         onClearExaApiKey = onClearExaApiKey,
                         onSave = onSaveWebSearch,
-                        onDismiss = onDismiss
+                        onDismiss = onDismiss,
                     )
                 } else {
                     XSearchTabContent(
@@ -163,11 +165,10 @@ fun SearchSkillBottomSheet(
                         onApiKeyChange = onXApiKeyChange,
                         onClearApiKey = onClearXApiKey,
                         onSave = onSaveXSearch,
-                        onDismiss = onDismiss
+                        onDismiss = onDismiss,
                     )
                 }
             }
-
         }
     }
 
@@ -185,16 +186,16 @@ fun SearchSkillBottomSheet(
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Checkbox(
                             checked = dontShowAgain,
-                            onCheckedChange = { dontShowAgain = it }
+                            onCheckedChange = { dontShowAgain = it },
                         )
                         Text(
                             text = "Don't show again",
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 8.dp)
+                            modifier = Modifier.padding(start = 8.dp),
                         )
                     }
                 }
@@ -207,7 +208,7 @@ fun SearchSkillBottomSheet(
                         }
                         onSearchProviderChange(targetProvider)
                         showSwitchConfirm = null
-                    }
+                    },
                 ) {
                     Text("Switch")
                 }
@@ -216,16 +217,17 @@ fun SearchSkillBottomSheet(
                 TextButton(onClick = { showSwitchConfirm = null }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 }
 
 internal fun shouldShowProviderSwitchAlert(state: SearchSkillEditorUiState): Boolean {
-    val currentHasKey = when (state.selectedProvider) {
-        SearchProvider.TAVILY -> state.tavilyKeyPresent
-        SearchProvider.EXA -> state.exaKeyPresent
-    }
+    val currentHasKey =
+        when (state.selectedProvider) {
+            SearchProvider.TAVILY -> state.tavilyKeyPresent
+            SearchProvider.EXA -> state.exaKeyPresent
+        }
     return currentHasKey
 }
 
@@ -253,7 +255,7 @@ internal fun ApiKeyInput(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Key saved",
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -284,15 +286,15 @@ internal fun ApiKeyInput(
                             "The stored key stays encrypted and hidden. Typing here switches back to a new key."
                         } else {
                             "You are entering a new key. The previously stored key will be replaced upon saving."
-                        }
+                        },
                     )
                 }
-            }
+            },
         )
         if (keyPresent) {
             TextButton(
                 onClick = onClearKey,
-                modifier = Modifier.align(Alignment.End)
+                modifier = Modifier.align(Alignment.End),
             ) {
                 Text("Clear Saved Key", color = MaterialTheme.colorScheme.error)
             }
@@ -318,15 +320,15 @@ private fun WebSearchTabContent(
             icon = Icons.Default.Public,
             checked = searchState.enabled,
             onCheckedChange = onSearchEnabledChange,
-            subtitle = "Allow AI to search the web for real-time information"
+            subtitle = "Allow AI to search the web for real-time information",
         )
 
         if (searchState.enabled) {
             SectionHeader(text = "Search Provider")
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ThemeOption(
                     text = "Tavily",
@@ -336,7 +338,7 @@ private fun WebSearchTabContent(
                             onSearchProviderChange(SearchProvider.TAVILY)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 ThemeOption(
                     text = "Exa",
@@ -346,7 +348,7 @@ private fun WebSearchTabContent(
                             onSearchProviderChange(SearchProvider.EXA)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
 
@@ -359,7 +361,7 @@ private fun WebSearchTabContent(
                         value = searchState.currentTavilyApiKey,
                         onValueChange = onTavilyApiKeyChange,
                         keyPresent = searchState.tavilyKeyPresent,
-                        onClearKey = onClearTavilyApiKey
+                        onClearKey = onClearTavilyApiKey,
                     )
                 }
                 SearchProvider.EXA -> {
@@ -368,7 +370,7 @@ private fun WebSearchTabContent(
                         value = searchState.currentExaApiKey,
                         onValueChange = onExaApiKeyChange,
                         keyPresent = searchState.exaKeyPresent,
-                        onClearKey = onClearExaApiKey
+                        onClearKey = onClearExaApiKey,
                     )
                 }
             }
@@ -381,10 +383,11 @@ private fun WebSearchTabContent(
                 onSave()
                 onDismiss()
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
         ) {
             Icon(Icons.Default.Check, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -408,7 +411,7 @@ private fun XSearchTabContent(
             icon = XIcon,
             checked = xSearchState.enabled,
             onCheckedChange = onEnabledChange,
-            subtitle = "Allow AI to search for recent posts on X (Twitter)"
+            subtitle = "Allow AI to search for recent posts on X (Twitter)",
         )
 
         if (xSearchState.enabled) {
@@ -417,7 +420,7 @@ private fun XSearchTabContent(
                 value = xSearchState.currentApiKey,
                 onValueChange = onApiKeyChange,
                 keyPresent = xSearchState.apiKeyPresent,
-                onClearKey = onClearApiKey
+                onClearKey = onClearApiKey,
             )
         }
 
@@ -429,10 +432,11 @@ private fun XSearchTabContent(
                     onDismiss()
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
         ) {
             Icon(Icons.Default.Check, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))

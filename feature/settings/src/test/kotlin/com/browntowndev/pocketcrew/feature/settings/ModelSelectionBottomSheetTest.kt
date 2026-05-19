@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class ModelSelectionBottomSheetTest {
-
     @Test
     fun `formatUsdPerMillion formats normalized prices without scientific notation`() {
         assertEquals("2", 2.0.formatUsdPerMillion())

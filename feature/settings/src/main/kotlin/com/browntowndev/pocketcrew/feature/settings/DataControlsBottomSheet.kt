@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,50 +67,52 @@ fun DataControlsBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val dc = uiState.dataControls
-    val dataRows = listOf(
+    val dataRows =
+        listOf(
+            DataControlRow(
+                title = "Delete all chats",
+                subtitle = "Permanently removes all conversations and their messages.",
+                alertBody = "All your chats and messages will be permanently deleted. This cannot be undone.",
+                pending = DataControlsPendingAction.DeleteChats,
+                onRequest = onRequestDeleteAllChats,
+                onConfirm = onConfirmDeleteAllChats,
+            ),
+            DataControlRow(
+                title = "Delete all media",
+                subtitle = "Permanently removes all generated images, videos, and music.",
+                alertBody = "All studio media assets will be permanently deleted. This cannot be undone.",
+                pending = DataControlsPendingAction.DeleteMedia,
+                onRequest = onRequestDeleteAllMedia,
+                onConfirm = onConfirmDeleteAllMedia,
+            ),
+            DataControlRow(
+                title = "Delete all memories",
+                subtitle = "Permanently removes all stored memories.",
+                alertBody = "All your memories will be permanently deleted. This cannot be undone.",
+                pending = DataControlsPendingAction.DeleteMemories,
+                onRequest = onRequestDeleteAllMemories,
+                onConfirm = onConfirmDeleteAllMemories,
+            ),
+            DataControlRow(
+                title = "Delete all artifacts",
+                subtitle = "Permanently removes all generated documents and code files.",
+                alertBody = "All generated artifacts and attachments will be permanently deleted. This cannot be undone.",
+                pending = DataControlsPendingAction.DeleteArtifacts,
+                onRequest = onRequestDeleteAllArtifacts,
+                onConfirm = onConfirmDeleteAllArtifacts,
+            ),
+        )
+    val accountRow =
         DataControlRow(
-            title = "Delete all chats",
-            subtitle = "Permanently removes all conversations and their messages.",
-            alertBody = "All your chats and messages will be permanently deleted. This cannot be undone.",
-            pending = DataControlsPendingAction.DeleteChats,
-            onRequest = onRequestDeleteAllChats,
-            onConfirm = onConfirmDeleteAllChats,
-        ),
-        DataControlRow(
-            title = "Delete all media",
-            subtitle = "Permanently removes all generated images, videos, and music.",
-            alertBody = "All studio media assets will be permanently deleted. This cannot be undone.",
-            pending = DataControlsPendingAction.DeleteMedia,
-            onRequest = onRequestDeleteAllMedia,
-            onConfirm = onConfirmDeleteAllMedia,
-        ),
-        DataControlRow(
-            title = "Delete all memories",
-            subtitle = "Permanently removes all stored memories.",
-            alertBody = "All your memories will be permanently deleted. This cannot be undone.",
-            pending = DataControlsPendingAction.DeleteMemories,
-            onRequest = onRequestDeleteAllMemories,
-            onConfirm = onConfirmDeleteAllMemories,
-        ),
-        DataControlRow(
-            title = "Delete all artifacts",
-            subtitle = "Permanently removes all generated documents and code files.",
-            alertBody = "All generated artifacts and attachments will be permanently deleted. This cannot be undone.",
-            pending = DataControlsPendingAction.DeleteArtifacts,
-            onRequest = onRequestDeleteAllArtifacts,
-            onConfirm = onConfirmDeleteAllArtifacts,
-        ),
-    )
-    val accountRow = DataControlRow(
-        title = "Delete account",
-        subtitle = "Permanently purges all cloud data and signs you out.",
-        alertBody =
-            "Your account and all associated cloud data will be permanently deleted. " +
-                "You will be signed out. This cannot be undone.",
-        pending = DataControlsPendingAction.DeleteAccount,
-        onRequest = onRequestDeleteAccount,
-        onConfirm = onConfirmDeleteAccount,
-    )
+            title = "Delete account",
+            subtitle = "Permanently purges all cloud data and signs you out.",
+            alertBody =
+                "Your account and all associated cloud data will be permanently deleted. " +
+                    "You will be signed out. This cannot be undone.",
+            pending = DataControlsPendingAction.DeleteAccount,
+            onRequest = onRequestDeleteAccount,
+            onConfirm = onConfirmDeleteAccount,
+        )
     val allRows = dataRows + accountRow
 
     JumpFreeModalBottomSheet(
@@ -119,10 +122,11 @@ fun DataControlsBottomSheet(
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
         ) {
             Text(
                 text = "Data Controls",
@@ -142,9 +146,10 @@ fun DataControlsBottomSheet(
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
             ) {
                 Column {
                     dataRows.forEachIndexed { index, row ->
@@ -173,9 +178,10 @@ fun DataControlsBottomSheet(
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
             ) {
                 DataRow(
                     row = accountRow,
@@ -207,7 +213,27 @@ fun DataControlsBottomSheet(
                     dismissOnClickOutside = !dc.isDeleting,
                 ),
             title = { Text("Are you sure?") },
-            text = { Text(activeRow.alertBody) },
+            text = {
+                Column {
+                    Text(activeRow.alertBody)
+                    if (dc.isDeleting) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Deleting...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = activeRow.onConfirm,
@@ -254,24 +280,27 @@ private fun DataRow(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(enabled = !isDeleting, onClick = row.onRequest)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(enabled = !isDeleting, onClick = row.onRequest)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = iconTint,
-            modifier = Modifier
-                .size(22.dp)
-                .padding(end = 0.dp),
+            modifier =
+                Modifier
+                    .size(22.dp)
+                    .padding(end = 0.dp),
         )
         Column(
-            modifier = Modifier
-                .padding(start = 16.dp)
-                .weight(1f),
+            modifier =
+                Modifier
+                    .padding(start = 16.dp)
+                    .weight(1f),
         ) {
             Text(
                 text = row.title,

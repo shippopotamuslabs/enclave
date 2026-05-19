@@ -51,7 +51,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
@@ -62,7 +61,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 internal fun MediaConfigureRoute(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
@@ -97,7 +96,7 @@ internal fun MediaConfigureRoute(
                 onNavigateBack()
             })
         },
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -125,7 +124,8 @@ fun MediaConfigureScreen(
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
 
-    val isSaveEnabled = draft.displayName.isNotBlank() &&
+    val isSaveEnabled =
+        draft.displayName.isNotBlank() &&
             draft.modelName.isNotBlank() &&
             (apiKey.isNotBlank() || isKeySaved)
 
@@ -138,45 +138,48 @@ fun MediaConfigureScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
             )
         },
         bottomBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
                 Button(
                     onClick = onSaveMediaProvider,
                     enabled = isSaveEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Text("Save Media Provider", fontWeight = FontWeight.Bold)
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp)
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Provider Selection
             ExposedDropdownMenuBox(
                 expanded = providerDropdownExpanded,
                 onExpandedChange = { providerDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
                     value = draft.provider.displayName,
@@ -184,15 +187,16 @@ fun MediaConfigureScreen(
                     readOnly = true,
                     label = { Text("API Provider") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerDropdownExpanded) },
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier =
+                        Modifier
+                            .padding(top = 16.dp)
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = providerDropdownExpanded,
-                    onDismissRequest = { providerDropdownExpanded = false }
+                    onDismissRequest = { providerDropdownExpanded = false },
                 ) {
                     listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE).forEach { provider ->
                         DropdownMenuItem(
@@ -200,7 +204,7 @@ fun MediaConfigureScreen(
                             onClick = {
                                 onMediaAssetFieldChange(draft.copy(provider = provider))
                                 providerDropdownExpanded = false
-                            }
+                            },
                         )
                     }
                 }
@@ -210,7 +214,7 @@ fun MediaConfigureScreen(
             ExposedDropdownMenuBox(
                 expanded = capabilityDropdownExpanded,
                 onExpandedChange = { capabilityDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
                     value = draft.capability.displayName,
@@ -218,14 +222,15 @@ fun MediaConfigureScreen(
                     readOnly = true,
                     label = { Text("Capability") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = capabilityDropdownExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier =
+                        Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = capabilityDropdownExpanded,
-                    onDismissRequest = { capabilityDropdownExpanded = false }
+                    onDismissRequest = { capabilityDropdownExpanded = false },
                 ) {
                     MediaCapability.entries.forEach { capability ->
                         DropdownMenuItem(
@@ -233,22 +238,23 @@ fun MediaConfigureScreen(
                             onClick = {
                                 onMediaAssetFieldChange(draft.copy(capability = capability))
                                 capabilityDropdownExpanded = false
-                            }
+                            },
                         )
                     }
                 }
             }
 
             // Reusable Key Dropdown
-            val reusableCredentials = uiState.apiProvidersSheet.assets
-                .filter { it.provider == draft.provider }
-                .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
-            
+            val reusableCredentials =
+                uiState.apiProvidersSheet.assets
+                    .filter { it.provider == draft.provider }
+                    .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+
             if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
                 ReusableCredentialDropdown(
                     reusableCredentials = reusableCredentials,
                     selectedReusableCredential = uiState.mediaProviderEditor.selectedReusableCredential,
-                    onSelectReusableCredential = onSelectReusableApiCredential
+                    onSelectReusableCredential = onSelectReusableApiCredential,
                 )
             }
 
@@ -265,7 +271,7 @@ fun MediaConfigureScreen(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Key saved",
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -281,11 +287,12 @@ fun MediaConfigureScreen(
                 supportingText = {
                     if (isKeySaved) {
                         Text(
-                            text = if (apiKey.isEmpty()) {
-                                "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                            } else {
-                                "You are entering a new key. The previously stored key will be replaced upon saving."
-                            }
+                            text =
+                                if (apiKey.isEmpty()) {
+                                    "The stored key stays encrypted and hidden. Typing here switches back to a new key."
+                                } else {
+                                    "You are entering a new key. The previously stored key will be replaced upon saving."
+                                },
                         )
                     }
                 },
@@ -293,10 +300,10 @@ fun MediaConfigureScreen(
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (passwordVisible) "Toggle password visibility" else "Toggle password visibility"
+                            contentDescription = if (passwordVisible) "Toggle password visibility" else "Toggle password visibility",
                         )
                     }
-                }
+                },
             )
 
             // Display Name
@@ -305,22 +312,23 @@ fun MediaConfigureScreen(
                 onValueChange = { onMediaAssetFieldChange(draft.copy(displayName = it)) },
                 label = { Text("Display Name (e.g. OpenAI Images 2)") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
             )
 
             // Model ID
             val canFetchModels = !uiState.mediaProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved)
             ModelSelectionField(
-                asset = ApiModelAssetUi(
-                    credentialsId = draft.id.toApiCredentialsId(),
-                    displayName = draft.displayName,
-                    provider = draft.provider,
-                    modelId = draft.modelName,
-                    baseUrl = draft.baseUrl,
-                    isMultimodal = false,
-                    credentialAlias = draft.credentialAlias,
-                    configurations = emptyList()
-                ),
+                asset =
+                    ApiModelAssetUi(
+                        credentialsId = draft.id.toApiCredentialsId(),
+                        displayName = draft.displayName,
+                        provider = draft.provider,
+                        modelId = draft.modelName,
+                        baseUrl = draft.baseUrl,
+                        isMultimodal = false,
+                        credentialAlias = draft.credentialAlias,
+                        configurations = emptyList(),
+                    ),
                 availableModels = uiState.mediaProviderEditor.discovery.models,
                 filteredModels = uiState.mediaProviderEditor.discovery.filteredModels,
                 isFetchingModels = uiState.mediaProviderEditor.discovery.isLoading,
@@ -335,7 +343,7 @@ fun MediaConfigureScreen(
                 onUpdateSearchQuery = onUpdateModelSearchQuery,
                 onToggleProviderFilter = onToggleModelProviderFilter,
                 onClearProviderFilters = onClearModelProviderFilters,
-                onUpdateSortOption = onUpdateModelSortOption
+                onUpdateSortOption = onUpdateModelSortOption,
             )
 
             // Base URL (for proxies)
@@ -344,16 +352,17 @@ fun MediaConfigureScreen(
                 onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
                 label = { Text("Base URL (Optional)") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
             )
 
             // Use as Default Toggle
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -370,7 +379,7 @@ fun MediaConfigureScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Switch(
                     checked = draft.useAsDefault,
-                    onCheckedChange = { onMediaAssetFieldChange(draft.copy(useAsDefault = it)) }
+                    onCheckedChange = { onMediaAssetFieldChange(draft.copy(useAsDefault = it)) },
                 )
             }
 

@@ -3,27 +3,18 @@ package com.browntowndev.pocketcrew.feature.settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -31,13 +22,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -54,7 +43,7 @@ fun VisionSettingsBottomSheet(
         LocalModelConfigurationId?,
         ApiModelConfigurationId?,
         TtsProviderId?,
-        com.browntowndev.pocketcrew.domain.model.config.MediaProviderId?
+        com.browntowndev.pocketcrew.domain.model.config.MediaProviderId?,
     ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -62,11 +51,11 @@ fun VisionSettingsBottomSheet(
 
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         AnimatedContent(
             targetState = isDrilledDown,
-            label = "VisionSettingsTransition"
+            label = "VisionSettingsTransition",
         ) { drilledDown ->
             if (drilledDown) {
                 AssignmentSelectionContent(
@@ -81,7 +70,7 @@ fun VisionSettingsBottomSheet(
                     onSelect = { localId, apiId, ttsId, mediaId ->
                         onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId, mediaId)
                         isDrilledDown = false
-                    }
+                    },
                 )
             } else {
                 Column(modifier = Modifier.padding(bottom = 24.dp)) {
@@ -89,22 +78,24 @@ fun VisionSettingsBottomSheet(
                         text = "Vision Settings",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
 
                     val currentVisionModel = uiState.assignments.assignments.find { it.modelType == ModelType.VISION }
-                    
+
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { isDrilledDown = true }
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { isDrilledDown = true },
                     ) {
                         ListItem(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -112,14 +103,14 @@ fun VisionSettingsBottomSheet(
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             },
                             headlineContent = { Text("API Vision Model", fontWeight = FontWeight.Bold) },
                             supportingContent = { Text(currentVisionModel?.currentModelName ?: "None") },
                             trailingContent = {
                                 Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                            }
+                            },
                         )
                     }
                 }

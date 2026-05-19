@@ -19,15 +19,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -90,7 +89,8 @@ fun TtsConfigureScreen(
     var voiceDropdownExpanded by remember { mutableStateOf(false) }
     var showModelSelectionSheet by remember { mutableStateOf(false) }
 
-    val isSaveEnabled = draft.displayName.isNotBlank() &&
+    val isSaveEnabled =
+        draft.displayName.isNotBlank() &&
             draft.voiceName.isNotBlank() &&
             (apiKey.isNotBlank() || isKeySaved)
 
@@ -103,45 +103,48 @@ fun TtsConfigureScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
             )
         },
         bottomBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
                 Button(
                     onClick = onSaveTtsProvider,
                     enabled = isSaveEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Text("Save TTS Provider", fontWeight = FontWeight.Bold)
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp)
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // Provider Selection
             ExposedDropdownMenuBox(
                 expanded = providerDropdownExpanded,
                 onExpandedChange = { providerDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
                     value = draft.provider.displayName,
@@ -149,15 +152,16 @@ fun TtsConfigureScreen(
                     readOnly = true,
                     label = { Text("API Provider") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerDropdownExpanded) },
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier =
+                        Modifier
+                            .padding(top = 16.dp)
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = providerDropdownExpanded,
-                    onDismissRequest = { providerDropdownExpanded = false }
+                    onDismissRequest = { providerDropdownExpanded = false },
                 ) {
                     listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE).forEach { provider ->
                         DropdownMenuItem(
@@ -165,22 +169,23 @@ fun TtsConfigureScreen(
                             onClick = {
                                 onTtsAssetFieldChange(draft.copy(provider = provider, voiceName = ""))
                                 providerDropdownExpanded = false
-                            }
+                            },
                         )
                     }
                 }
             }
 
             // Reusable Key Dropdown
-            val reusableCredentials = uiState.apiProvidersSheet.assets
-                .filter { it.provider == draft.provider }
-                .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
-            
+            val reusableCredentials =
+                uiState.apiProvidersSheet.assets
+                    .filter { it.provider == draft.provider }
+                    .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+
             if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
                 ReusableCredentialDropdown(
                     reusableCredentials = reusableCredentials,
                     selectedReusableCredential = uiState.ttsProviderEditor.selectedReusableCredential,
-                    onSelectReusableCredential = onSelectReusableApiCredential
+                    onSelectReusableCredential = onSelectReusableApiCredential,
                 )
             }
 
@@ -197,7 +202,7 @@ fun TtsConfigureScreen(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Key saved",
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -213,11 +218,12 @@ fun TtsConfigureScreen(
                 supportingText = {
                     if (isKeySaved) {
                         Text(
-                            text = if (apiKey.isEmpty()) {
-                                "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                            } else {
-                                "You are entering a new key. The previously stored key will be replaced upon saving."
-                            }
+                            text =
+                                if (apiKey.isEmpty()) {
+                                    "The stored key stays encrypted and hidden. Typing here switches back to a new key."
+                                } else {
+                                    "You are entering a new key. The previously stored key will be replaced upon saving."
+                                },
                         )
                     }
                 },
@@ -225,10 +231,10 @@ fun TtsConfigureScreen(
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (passwordVisible) "Toggle password visibility" else "Toggle password visibility"
+                            contentDescription = if (passwordVisible) "Toggle password visibility" else "Toggle password visibility",
                         )
                     }
-                }
+                },
             )
 
             // Display Name
@@ -237,7 +243,7 @@ fun TtsConfigureScreen(
                 onValueChange = { onTtsAssetFieldChange(draft.copy(displayName = it)) },
                 label = { Text("Display Name (e.g. My OpenAI TTS)") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
             )
 
             if (draft.provider == ApiProvider.GOOGLE) {
@@ -246,9 +252,10 @@ fun TtsConfigureScreen(
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
                     ) {
                         OutlinedTextField(
                             value = draft.modelName ?: DEFAULT_GOOGLE_TTS_MODEL_ID,
@@ -258,40 +265,43 @@ fun TtsConfigureScreen(
                             label = { Text("Model ID") },
                             supportingText = {
                                 Text(
-                                    text = when {
-                                        discovery.isLoading -> "Fetching models..."
-                                        hasModels -> "${discovery.models.size} models discovered"
-                                        else -> "Discover models or enter a model ID manually"
-                                    }
+                                    text =
+                                        when {
+                                            discovery.isLoading -> "Fetching models..."
+                                            hasModels -> "${discovery.models.size} models discovered"
+                                            else -> "Discover models or enter a model ID manually"
+                                        },
                                 )
                             },
-                            trailingIcon = if (hasModels) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Select model",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                null
-                            },
+                            trailingIcon =
+                                if (hasModels) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Select model",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
+                            colors =
+                                OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
                         )
                     }
 
                     TextButton(
                         onClick = onFetchApiModels,
                         enabled = !uiState.apiProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved),
-                        modifier = Modifier.align(Alignment.End)
+                        modifier = Modifier.align(Alignment.End),
                     ) {
                         if (uiState.apiProviderEditor.discovery.isLoading) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -301,7 +311,7 @@ fun TtsConfigureScreen(
                             Icon(
                                 imageVector = if (hasModels) Icons.Default.Refresh else Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(16.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(if (hasModels) "Refresh Models" else "Discover Models")
@@ -317,7 +327,7 @@ fun TtsConfigureScreen(
                     onValueChange = { onTtsAssetFieldChange(draft.copy(baseUrl = it)) },
                     label = { Text("Base URL (Optional)") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
                 )
             }
 
@@ -326,7 +336,7 @@ fun TtsConfigureScreen(
             ExposedDropdownMenuBox(
                 expanded = voiceDropdownExpanded,
                 onExpandedChange = { voiceDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 OutlinedTextField(
                     value = voices.find { it.id == draft.voiceName }?.displayName ?: "Select a voice",
@@ -334,14 +344,15 @@ fun TtsConfigureScreen(
                     readOnly = true,
                     label = { Text("Voice") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = voiceDropdownExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier =
+                        Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = voiceDropdownExpanded,
-                    onDismissRequest = { voiceDropdownExpanded = false }
+                    onDismissRequest = { voiceDropdownExpanded = false },
                 ) {
                     voices.forEach { voice ->
                         DropdownMenuItem(
@@ -349,7 +360,7 @@ fun TtsConfigureScreen(
                             onClick = {
                                 onTtsAssetFieldChange(draft.copy(voiceName = voice.id))
                                 voiceDropdownExpanded = false
-                            }
+                            },
                         )
                     }
                 }
@@ -357,11 +368,12 @@ fun TtsConfigureScreen(
 
             // Use as Default Toggle
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -378,7 +390,7 @@ fun TtsConfigureScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Switch(
                     checked = draft.useAsDefault,
-                    onCheckedChange = { onTtsAssetFieldChange(draft.copy(useAsDefault = it)) }
+                    onCheckedChange = { onTtsAssetFieldChange(draft.copy(useAsDefault = it)) },
                 )
             }
 
@@ -413,16 +425,19 @@ fun TtsConfigureScreen(
 fun TtsConfigureScreenPreview() {
     PocketCrewTheme {
         TtsConfigureScreen(
-            uiState = MockSettingsData.baseUiState.copy(
-                ttsProviderEditor = TtsProviderEditorUiState(
-                    assetDraft = TtsProviderAssetUi(
-                        displayName = "My Google TTS",
-                        provider = ApiProvider.GOOGLE,
-                        voiceName = "Puck",
-                        modelName = "gemini-3.1-flash-tts-preview"
-                    )
-                )
-            ),
+            uiState =
+                MockSettingsData.baseUiState.copy(
+                    ttsProviderEditor =
+                        TtsProviderEditorUiState(
+                            assetDraft =
+                                TtsProviderAssetUi(
+                                    displayName = "My Google TTS",
+                                    provider = ApiProvider.GOOGLE,
+                                    voiceName = "Puck",
+                                    modelName = "gemini-3.1-flash-tts-preview",
+                                ),
+                        ),
+                ),
             apiKey = "test-key",
             onNavigateBack = {},
             onTtsAssetFieldChange = {},

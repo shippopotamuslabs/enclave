@@ -14,6 +14,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -35,10 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
@@ -47,19 +49,17 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfigur
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningPolicy
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 
 @Composable
 fun OpenRouterRoutingCard(
     routing: OpenRouterRoutingConfiguration,
-    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit
+    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConfigurationHeader("OpenRouter Routing")
         OpenRouterRoutingSection(
             routing = routing,
-            onRoutingChange = onRoutingChange
+            onRoutingChange = onRoutingChange,
         )
     }
 }
@@ -68,7 +68,7 @@ fun OpenRouterRoutingCard(
 @Composable
 fun OpenRouterRoutingSection(
     routing: OpenRouterRoutingConfiguration,
-    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit
+    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
 ) {
     var sortExpanded by remember(routing.providerSort) { mutableStateOf(false) }
     var dataCollectionExpanded by remember(routing.dataCollectionPolicy) { mutableStateOf(false) }
@@ -77,7 +77,7 @@ fun OpenRouterRoutingSection(
         ExposedDropdownMenuBox(
             expanded = sortExpanded,
             onExpandedChange = { sortExpanded = it },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
                 value = routing.providerSort.displayName,
@@ -85,14 +85,15 @@ fun OpenRouterRoutingSection(
                 readOnly = true,
                 label = { Text("Provider Sort") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                modifier =
+                    Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
             )
             ExposedDropdownMenu(
                 expanded = sortExpanded,
-                onDismissRequest = { sortExpanded = false }
+                onDismissRequest = { sortExpanded = false },
             ) {
                 OpenRouterProviderSort.entries.forEach { sort ->
                     DropdownMenuItem(
@@ -100,7 +101,7 @@ fun OpenRouterRoutingSection(
                         onClick = {
                             onRoutingChange(routing.copy(providerSort = sort))
                             sortExpanded = false
-                        }
+                        },
                     )
                 }
             }
@@ -109,7 +110,7 @@ fun OpenRouterRoutingSection(
         ExposedDropdownMenuBox(
             expanded = dataCollectionExpanded,
             onExpandedChange = { dataCollectionExpanded = it },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
                 value = routing.dataCollectionPolicy.displayName,
@@ -117,14 +118,15 @@ fun OpenRouterRoutingSection(
                 readOnly = true,
                 label = { Text("Data Collection Policy") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dataCollectionExpanded) },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                modifier =
+                    Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
             )
             ExposedDropdownMenu(
                 expanded = dataCollectionExpanded,
-                onDismissRequest = { dataCollectionExpanded = false }
+                onDismissRequest = { dataCollectionExpanded = false },
             ) {
                 OpenRouterDataCollectionPolicy.entries.forEach { policy ->
                     DropdownMenuItem(
@@ -132,7 +134,7 @@ fun OpenRouterRoutingSection(
                         onClick = {
                             onRoutingChange(routing.copy(dataCollectionPolicy = policy))
                             dataCollectionExpanded = false
-                        }
+                        },
                     )
                 }
             }
@@ -142,21 +144,21 @@ fun OpenRouterRoutingSection(
             label = "Allow Fallbacks",
             description = "OpenRouter may fall back to alternate providers when the primary one is unavailable.",
             checked = routing.allowFallbacks,
-            onCheckedChange = { onRoutingChange(routing.copy(allowFallbacks = it)) }
+            onCheckedChange = { onRoutingChange(routing.copy(allowFallbacks = it)) },
         )
 
         RoutingSwitchRow(
             label = "Require Parameters",
             description = "Only route to providers that support every parameter in the request.",
             checked = routing.requireParameters,
-            onCheckedChange = { onRoutingChange(routing.copy(requireParameters = it)) }
+            onCheckedChange = { onRoutingChange(routing.copy(requireParameters = it)) },
         )
 
         RoutingSwitchRow(
             label = "Zero Data Retention",
             description = "Prefer providers that support zero data retention for this request.",
             checked = routing.zeroDataRetention,
-            onCheckedChange = { onRoutingChange(routing.copy(zeroDataRetention = it)) }
+            onCheckedChange = { onRoutingChange(routing.copy(zeroDataRetention = it)) },
         )
     }
 }
@@ -166,16 +168,16 @@ fun RoutingSwitchRow(
     label: String,
     description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(label, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.width(4.dp))
@@ -187,28 +189,29 @@ fun RoutingSwitchRow(
 
 internal data class ReasoningOptionUi(
     val label: String,
-    val effort: ApiReasoningEffort
+    val effort: ApiReasoningEffort,
 )
 
 internal fun reasoningOptions(policy: ApiReasoningPolicy): List<ReasoningOptionUi> =
     policy.supportedEfforts.map { effort ->
         ReasoningOptionUi(
-            label = if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
-                    "16 agents"
+            label =
+                if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                    if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
+                        "16 agents"
+                    } else {
+                        "4 agents"
+                    }
                 } else {
-                    "4 agents"
-                }
-            } else {
-                effort.displayName
-            },
-            effort = effort
+                    effort.displayName
+                },
+            effort = effort,
         )
     }
 
 internal fun reasoningSelectionLabel(
     effort: ApiReasoningEffort?,
-    policy: ApiReasoningPolicy
+    policy: ApiReasoningPolicy,
 ): String {
     if (effort == null) {
         return ""
@@ -228,31 +231,31 @@ internal fun reasoningSelectionLabel(
 @Composable
 fun CustomHeadersList(
     customHeaders: List<CustomHeaderUi>,
-    onNavigateToCustomHeaders: () -> Unit
+    onNavigateToCustomHeaders: () -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(horizontal = 8.dp).fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (customHeaders.isNotEmpty()) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     customHeaders.take(3).forEach { header ->
                         Text(
                             text = "${header.key}: ${header.value}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (customHeaders.size > 3) {
                         Text(
                             text = "... and ${customHeaders.size - 3} more",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -260,30 +263,31 @@ fun CustomHeadersList(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onNavigateToCustomHeaders)
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToCustomHeaders)
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 modifier = Modifier.size(24.dp),
                 imageVector = Icons.Default.Settings,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Configure",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.weight(1f))
             Icon(
                 modifier = Modifier.size(24.dp),
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -296,7 +300,7 @@ fun ConfigurationHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 8.dp)
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 
@@ -307,7 +311,7 @@ fun TuningSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var textValue by remember(value) { mutableStateOf("%.2f".format(value)) }
@@ -316,7 +320,7 @@ fun TuningSlider(
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
@@ -327,7 +331,7 @@ fun TuningSlider(
                 text = "%.2f".format(value),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(enabled = enabled) { showDialog = true }
+                modifier = Modifier.clickable(enabled = enabled) { showDialog = true },
             )
         }
         Slider(
@@ -335,7 +339,7 @@ fun TuningSlider(
             onValueChange = onValueChange,
             valueRange = range,
             modifier = Modifier.fillMaxWidth(),
-            enabled = enabled
+            enabled = enabled,
         )
     }
 
@@ -348,7 +352,7 @@ fun TuningSlider(
                     Text(
                         text = "Enter a value between ${"%.2f".format(range.start)} and ${"%.2f".format(range.endInclusive)}",
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 8.dp),
                     )
                     OutlinedTextField(
                         value = textValue,
@@ -356,7 +360,7 @@ fun TuningSlider(
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
                     )
                 }
             },
@@ -368,7 +372,7 @@ fun TuningSlider(
                             onValueChange(newValue)
                             showDialog = false
                         }
-                    }
+                    },
                 ) {
                     Text("Save")
                 }
@@ -377,7 +381,7 @@ fun TuningSlider(
                 TextButton(onClick = { showDialog = false }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 }
@@ -386,23 +390,25 @@ fun TuningSlider(
 @Composable
 fun PreviewByokCustomHeadersList() {
     PocketCrewTheme {
-        val headers = listOf(
-            CustomHeaderUi("X-Custom-Header-1", "Value 1"),
-            CustomHeaderUi("X-Custom-Header-2", "Value 2"),
-            CustomHeaderUi("X-Custom-Header-3", "Value 3"),
-            CustomHeaderUi("X-Custom-Header-4", "Value 4")
-        )
-        val mockConfig = MockSettingsData.apiModels[0].configurations[0].copy(
-            customHeaders = headers
-        )
+        val headers =
+            listOf(
+                CustomHeaderUi("X-Custom-Header-1", "Value 1"),
+                CustomHeaderUi("X-Custom-Header-2", "Value 2"),
+                CustomHeaderUi("X-Custom-Header-3", "Value 3"),
+                CustomHeaderUi("X-Custom-Header-4", "Value 4"),
+            )
+        val mockConfig =
+            MockSettingsData.apiModels[0].configurations[0].copy(
+                customHeaders = headers,
+            )
 
         Surface(
             modifier = Modifier.padding(16.dp),
-            color = MaterialTheme.colorScheme.background
+            color = MaterialTheme.colorScheme.background,
         ) {
             CustomHeadersList(
                 customHeaders = mockConfig.customHeaders,
-                onNavigateToCustomHeaders = {}
+                onNavigateToCustomHeaders = {},
             )
         }
     }

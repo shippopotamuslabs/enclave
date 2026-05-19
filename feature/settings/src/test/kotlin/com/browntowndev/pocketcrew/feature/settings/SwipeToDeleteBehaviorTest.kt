@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SwipeToDeleteBehaviorTest {
-
     // S2 — Last-preset guard disables swipe when exactly 1 config remains
     @Test
     fun `isPresetSwipeDeletionEnabled returns false when configuration count is 1`() {

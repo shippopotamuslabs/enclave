@@ -25,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelReDownloadViewModelTest {
-
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>()
     private val downloadWorkRepository = mockk<DownloadWorkRepository>()
     private lateinit var viewModel: ModelReDownloadViewModel
@@ -36,96 +35,109 @@ class ModelReDownloadViewModelTest {
     }
 
     @Test
-    fun `reDownloadModel transitions to Preparing then Downloading and Complete`() = runTest {
-        val modelId = LocalModelId("test")
+    fun `reDownloadModel transitions to Preparing then Downloading and Complete`() =
+        runTest {
+            val modelId = LocalModelId("test")
 
-        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(
-            ScheduledDownload(
-                sessionId = "test-session",
-                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
-                targetModelId = modelId,
-            )
-        )
+            coEvery { reDownloadModelUseCase(modelId) } returns
+                Result.success(
+                    ScheduledDownload(
+                        sessionId = "test-session",
+                        requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                        targetModelId = modelId,
+                    ),
+                )
 
-        val progressData = Data.Builder()
-            .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("unassigned|50|100"))
-            .build()
+            val progressData =
+                Data
+                    .Builder()
+                    .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("unassigned|50|100"))
+                    .build()
 
-        val workInfoRunning = mockk<WorkInfo>()
-        every { workInfoRunning.state } returns WorkInfo.State.RUNNING
-        every { workInfoRunning.progress } returns progressData
+            val workInfoRunning = mockk<WorkInfo>()
+            every { workInfoRunning.state } returns WorkInfo.State.RUNNING
+            every { workInfoRunning.progress } returns progressData
 
-        // Simulate the finalizer SUCCEEDED (terminal state in the chain)
-        val finalizerOutputData = Data.Builder()
-            .putString("worker_stage", "FINALIZE")
-            .build()
-        val workInfoSucceeded = mockk<WorkInfo>()
-        every { workInfoSucceeded.state } returns WorkInfo.State.SUCCEEDED
-        every { workInfoSucceeded.progress } returns Data.EMPTY
-        every { workInfoSucceeded.outputData } returns finalizerOutputData
+            // Simulate the finalizer SUCCEEDED (terminal state in the chain)
+            val finalizerOutputData =
+                Data
+                    .Builder()
+                    .putString("worker_stage", "FINALIZE")
+                    .build()
+            val workInfoSucceeded = mockk<WorkInfo>()
+            every { workInfoSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { workInfoSucceeded.progress } returns Data.EMPTY
+            every { workInfoSucceeded.outputData } returns finalizerOutputData
 
-        every { downloadWorkRepository.observeDownloadProgress() } returns
-            flowOf(workInfoRunning, workInfoSucceeded)
+            every { downloadWorkRepository.observeDownloadProgress() } returns
+                flowOf(workInfoRunning, workInfoSucceeded)
 
-        viewModel.reDownloadModel(modelId)
-        advanceUntilIdle()
+            viewModel.reDownloadModel(modelId)
+            advanceUntilIdle()
 
-        val finalState = viewModel.reDownloadStates.value[modelId]
-        assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
-    }
-
-    @Test
-    fun `reDownloadModel on use case failure transitions to Failed`() = runTest {
-        val modelId = LocalModelId("test")
-        coEvery { reDownloadModelUseCase(modelId) } returns Result.failure(Exception("Fetch failed"))
-
-        viewModel.reDownloadModel(modelId)
-        advanceUntilIdle()
-
-        val finalState = viewModel.reDownloadStates.value[modelId]
-        assertTrue(finalState is ReDownloadProgress.Failed || finalState == null)
-        if (finalState is ReDownloadProgress.Failed) {
-            assertEquals("Fetch failed", finalState.error)
+            val finalState = viewModel.reDownloadStates.value[modelId]
+            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
         }
-    }
 
     @Test
-    fun `reDownloadModel keeps observing while downloader succeeds before finalizer`() = runTest {
-        val modelId = LocalModelId("test")
+    fun `reDownloadModel on use case failure transitions to Failed`() =
+        runTest {
+            val modelId = LocalModelId("test")
+            coEvery { reDownloadModelUseCase(modelId) } returns Result.failure(Exception("Fetch failed"))
 
-        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(
-            ScheduledDownload(
-                sessionId = "test-session",
-                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
-                targetModelId = modelId,
-            )
-        )
+            viewModel.reDownloadModel(modelId)
+            advanceUntilIdle()
 
-        // Downloader SUCCEEDED (intermediate) — should NOT trigger Complete yet
-        val downloaderOutputData = Data.Builder()
-            .putString("worker_stage", "DOWNLOAD")
-            .build()
-        val downloaderSucceeded = mockk<WorkInfo>()
-        every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
-        every { downloaderSucceeded.progress } returns Data.EMPTY
-        every { downloaderSucceeded.outputData } returns downloaderOutputData
+            val finalState = viewModel.reDownloadStates.value[modelId]
+            assertTrue(finalState is ReDownloadProgress.Failed || finalState == null)
+            if (finalState is ReDownloadProgress.Failed) {
+                assertEquals("Fetch failed", finalState.error)
+            }
+        }
 
-        // Finalizer SUCCEEDED (terminal) — triggers Complete
-        val finalizerOutputData = Data.Builder()
-            .putString("worker_stage", "FINALIZE")
-            .build()
-        val finalizerSucceeded = mockk<WorkInfo>()
-        every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
-        every { finalizerSucceeded.progress } returns Data.EMPTY
-        every { finalizerSucceeded.outputData } returns finalizerOutputData
+    @Test
+    fun `reDownloadModel keeps observing while downloader succeeds before finalizer`() =
+        runTest {
+            val modelId = LocalModelId("test")
 
-        every { downloadWorkRepository.observeDownloadProgress() } returns
-            flowOf(downloaderSucceeded, finalizerSucceeded)
+            coEvery { reDownloadModelUseCase(modelId) } returns
+                Result.success(
+                    ScheduledDownload(
+                        sessionId = "test-session",
+                        requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                        targetModelId = modelId,
+                    ),
+                )
 
-        viewModel.reDownloadModel(modelId)
-        advanceUntilIdle()
+            // Downloader SUCCEEDED (intermediate) — should NOT trigger Complete yet
+            val downloaderOutputData =
+                Data
+                    .Builder()
+                    .putString("worker_stage", "DOWNLOAD")
+                    .build()
+            val downloaderSucceeded = mockk<WorkInfo>()
+            every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { downloaderSucceeded.progress } returns Data.EMPTY
+            every { downloaderSucceeded.outputData } returns downloaderOutputData
 
-        val finalState = viewModel.reDownloadStates.value[modelId]
-        assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
-    }
+            // Finalizer SUCCEEDED (terminal) — triggers Complete
+            val finalizerOutputData =
+                Data
+                    .Builder()
+                    .putString("worker_stage", "FINALIZE")
+                    .build()
+            val finalizerSucceeded = mockk<WorkInfo>()
+            every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { finalizerSucceeded.progress } returns Data.EMPTY
+            every { finalizerSucceeded.outputData } returns finalizerOutputData
+
+            every { downloadWorkRepository.observeDownloadProgress() } returns
+                flowOf(downloaderSucceeded, finalizerSucceeded)
+
+            viewModel.reDownloadModel(modelId)
+            advanceUntilIdle()
+
+            val finalState = viewModel.reDownloadStates.value[modelId]
+            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
+        }
 }

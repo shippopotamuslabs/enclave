@@ -46,10 +46,11 @@ fun OssLicensesBottomSheet(
         modifier = modifier,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
         ) {
             Text(
                 text = "Open Source Licenses",
@@ -65,7 +66,9 @@ fun OssLicensesBottomSheet(
             )
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                verticalArrangement =
+                    androidx.compose.foundation.layout.Arrangement
+                        .spacedBy(12.dp),
             ) {
                 items(
                     items = OssLicenses.entries,
@@ -134,10 +137,11 @@ private fun LicenseChip(
             )
         },
         modifier = modifier,
-        colors = SuggestionChipDefaults.suggestionChipColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
+        colors =
+            SuggestionChipDefaults.suggestionChipColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
     )
 }
 

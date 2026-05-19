@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.feature.settings
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
-import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
@@ -41,12 +40,10 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
 class OssLicensesBottomSheetTest {
-
     // ── Group 1: SettingsGeneralDelegate sheet toggle ──────────────────────
 
     @Nested
     inner class DelegateToggle {
-
         private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
         private val authUseCases = mockk<SettingsAuthUseCases>(relaxed = true)
         private val errorHandler = mockk<ViewModelErrorHandler>()
@@ -57,18 +54,19 @@ class OssLicensesBottomSheetTest {
         fun setup() {
             every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
                 CoroutineExceptionHandler { _, _ -> }
-            delegate = SettingsGeneralDelegate(
-                preferencesUseCases = preferencesUseCases,
-                authUseCases = authUseCases,
-                errorHandler = errorHandler,
-                detectVaultReconciliationStateUseCase = mockk(relaxed = true),
-                adoptCloudVaultUseCase = mockk(relaxed = true),
-                bootstrapCloudVaultFromLocalUseCase = mockk(relaxed = true),
-                createVaultUseCase = mockk(relaxed = true),
-                cryptoManager = mockk(relaxed = true),
-                vaultMetadataPort = mockk(relaxed = true),
-                cloudSyncPort = mockk(relaxed = true),
-            )
+            delegate =
+                SettingsGeneralDelegate(
+                    preferencesUseCases = preferencesUseCases,
+                    authUseCases = authUseCases,
+                    errorHandler = errorHandler,
+                    detectVaultReconciliationStateUseCase = mockk(relaxed = true),
+                    adoptCloudVaultUseCase = mockk(relaxed = true),
+                    bootstrapCloudVaultFromLocalUseCase = mockk(relaxed = true),
+                    createVaultUseCase = mockk(relaxed = true),
+                    cryptoManager = mockk(relaxed = true),
+                    vaultMetadataPort = mockk(relaxed = true),
+                    cloudSyncPort = mockk(relaxed = true),
+                )
             sheetVisibility = MutableStateFlow(SheetVisibilityState())
         }
 
@@ -102,19 +100,19 @@ class OssLicensesBottomSheetTest {
 
     @Nested
     inner class FactoryPropagation {
-
         private lateinit var factory: SettingsUiStateFactory
 
         @BeforeEach
         fun setup() {
-            factory = SettingsUiStateFactory(
-                localModelAssetUiMapper = LocalModelAssetUiMapper(),
-                apiModelAssetUiMapper = ApiModelAssetUiMapper(),
-                ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                mediaProviderAssetUiMapper = mockk(relaxed = true),
-                apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
-                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
-            )
+            factory =
+                SettingsUiStateFactory(
+                    localModelAssetUiMapper = LocalModelAssetUiMapper(),
+                    apiModelAssetUiMapper = ApiModelAssetUiMapper(),
+                    ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
+                    mediaProviderAssetUiMapper = mockk(relaxed = true),
+                    apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
+                    applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                )
         }
 
         // S2-01
@@ -136,7 +134,6 @@ class OssLicensesBottomSheetTest {
 
     @Nested
     inner class ViewModelEndToEnd {
-
         private lateinit var viewModel: SettingsViewModel
 
         @BeforeEach
@@ -146,34 +143,36 @@ class OssLicensesBottomSheetTest {
 
         // S3-01
         @Test
-        fun `onShowOssLicensesSheet true reflects in uiState`() = runTest {
-            viewModel.onShowOssLicensesSheet(true)
-            assertEquals(true, viewModel.uiState.value.home.isOssLicensesSheetOpen)
-        }
+        fun `onShowOssLicensesSheet true reflects in uiState`() =
+            runTest {
+                viewModel.onShowOssLicensesSheet(true)
+                assertEquals(true, viewModel.uiState.value.home.isOssLicensesSheetOpen)
+            }
 
         // S3-02
         @Test
-        fun `onShowOssLicensesSheet false resets flag after being true`() = runTest {
-            viewModel.onShowOssLicensesSheet(true)
-            viewModel.onShowOssLicensesSheet(false)
-            assertEquals(false, viewModel.uiState.value.home.isOssLicensesSheetOpen)
-        }
+        fun `onShowOssLicensesSheet false resets flag after being true`() =
+            runTest {
+                viewModel.onShowOssLicensesSheet(true)
+                viewModel.onShowOssLicensesSheet(false)
+                assertEquals(false, viewModel.uiState.value.home.isOssLicensesSheetOpen)
+            }
 
         // S3-03
         @Test
-        fun `onShowOssLicensesSheet does not disturb isFeedbackSheetOpen`() = runTest {
-            viewModel.onShowFeedbackSheet(true)
-            viewModel.onShowOssLicensesSheet(true)
-            assertEquals(true, viewModel.uiState.value.home.isFeedbackSheetOpen)
-            assertEquals(true, viewModel.uiState.value.home.isOssLicensesSheetOpen)
-        }
+        fun `onShowOssLicensesSheet does not disturb isFeedbackSheetOpen`() =
+            runTest {
+                viewModel.onShowFeedbackSheet(true)
+                viewModel.onShowOssLicensesSheet(true)
+                assertEquals(true, viewModel.uiState.value.home.isFeedbackSheetOpen)
+                assertEquals(true, viewModel.uiState.value.home.isOssLicensesSheetOpen)
+            }
     }
 
     // ── Group 4: OssLicenses static data contract ─────────────────────────
 
     @Nested
     inner class StaticDataContract {
-
         // S4-01
         @Test
         fun `OssLicenses entries is non-empty`() {
@@ -268,36 +267,35 @@ class OssLicensesBottomSheetTest {
  * Minimal factory.create() call for G2 tests that only care about the
  * isOssLicensesSheetOpen field.
  */
-private fun SettingsUiStateFactory.createMinimal(
-    sheetVisibility: SheetVisibilityState,
-): SettingsUiState = create(
-    persistedSettings = SettingsData(),
-    localAssets = emptyList(),
-    apiAssets = emptyList(),
-    ttsAssets = emptyList(),
-    mediaAssets = emptyList(),
-    defaultModels = emptyList(),
-    authState = AuthState.Loading,
-    sheetVisibility = sheetVisibility,
-    memories = emptyList(),
-    feedbackText = "",
-    localModelsState = LocalModelsTransientState(),
-    apiState = ApiProvidersTransientState(),
-    ttsState = TtsProvidersTransientState(),
-    mediaState = MediaProvidersTransientState(),
-    searchSkillState = SearchSkillTransientState(),
-    assignmentsState = AssignmentDialogTransientState(),
-    deletionState = DeletionTransientState(),
-    memoriesState = MemoriesTransientState(),
-    dataControlsState = DataControlsTransientState(),
-    currentTavilyApiKey = "",
-    currentExaApiKey = "",
-    currentXApiKey = "",
-    xSearchState = XSearchTransientState(),
-    isReindexing = false,
-    reindexProgress = 0f,
-    vaultReauthSheet = VaultReauthSheetState.Hidden,
-)
+private fun SettingsUiStateFactory.createMinimal(sheetVisibility: SheetVisibilityState): SettingsUiState =
+    create(
+        persistedSettings = SettingsData(),
+        localAssets = emptyList(),
+        apiAssets = emptyList(),
+        ttsAssets = emptyList(),
+        mediaAssets = emptyList(),
+        defaultModels = emptyList(),
+        authState = AuthState.Loading,
+        sheetVisibility = sheetVisibility,
+        memories = emptyList(),
+        feedbackText = "",
+        localModelsState = LocalModelsTransientState(),
+        apiState = ApiProvidersTransientState(),
+        ttsState = TtsProvidersTransientState(),
+        mediaState = MediaProvidersTransientState(),
+        searchSkillState = SearchSkillTransientState(),
+        assignmentsState = AssignmentDialogTransientState(),
+        deletionState = DeletionTransientState(),
+        memoriesState = MemoriesTransientState(),
+        dataControlsState = DataControlsTransientState(),
+        currentTavilyApiKey = "",
+        currentExaApiKey = "",
+        currentXApiKey = "",
+        xSearchState = XSearchTransientState(),
+        isReindexing = false,
+        reindexProgress = 0f,
+        vaultReauthSheet = VaultReauthSheetState.Hidden,
+    )
 
 /**
  * Builds a minimal but real SettingsViewModel identical to the pattern
@@ -338,74 +336,84 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>(relaxed = true)
     val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>(relaxed = true)
 
-    val settingsUseCases = SettingsUseCasesImpl(
-        preferences = SettingsPreferencesUseCasesImpl(
-            getSettings = getSettingsUseCase,
-            updateTheme = mockk(relaxed = true),
-            updateHapticResponse = mockk(relaxed = true),
-            updateCustomizationEnabled = mockk(relaxed = true),
-            updateSelectedPromptOption = mockk(relaxed = true),
-            updateCustomPromptText = mockk(relaxed = true),
-            updateAllowMemories = mockk(relaxed = true),
-            updateSearchEnabled = mockk(relaxed = true),
-            updateSearchProvider = updateSearchProviderUseCase,
-            saveTavilyApiKey = mockk(relaxed = true),
-            clearTavilyApiKey = mockk(relaxed = true),
-            saveExaApiKey = saveExaApiKeyUseCase,
-            clearExaApiKey = clearExaApiKeyUseCase,
-            updateXSearchEnabled = mockk(relaxed = true),
-            saveXApiKey = mockk(relaxed = true),
-            clearXApiKey = mockk(relaxed = true),
-            updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
-            updateBackgroundInferenceEnabled = mockk(relaxed = true),
-        ),
-        localModels = SettingsLocalModelUseCasesImpl(
-            getLocalModelAssets = getLocalModelAssetsUseCase,
-            getRestorableLocalModels = mockk(relaxed = true),
-            saveLocalModelPreset = mockk(relaxed = true),
-            reDownloadModel = mockk<ReDownloadModelUseCase>(relaxed = true),
-        ),
-        apiProviders = SettingsApiProviderUseCasesImpl(
-            getApiModelAssets = getApiModelAssetsUseCase,
-            saveApiProviderDraft = mockk(relaxed = true),
-            saveApiPreset = mockk(relaxed = true),
-            discoverApiModels = mockk(relaxed = true),
-            applyApiModelMetadataDefaults = mockk(relaxed = true),
-        ),
-        assignments = SettingsAssignmentUseCasesImpl(
-            getDefaultModels = getDefaultModelsUseCase,
-            setDefaultModel = mockk(relaxed = true),
-            clearDefaultModel = mockk(relaxed = true),
-            resolveAssignedModelSelection = mockk(relaxed = true),
-        ),
-        deletion = SettingsDeletionUseCasesImpl(
-            prepareModelDeletion = mockk(relaxed = true),
-            executeModelDeletionWithReassignment = mockk(relaxed = true),
-        ),
-        tts = SettingsTtsUseCasesImpl(
-            getTtsProviders = getTtsProvidersUseCase,
-            saveTtsProvider = mockk(relaxed = true),
-            deleteTtsProvider = mockk(relaxed = true),
-        ),
-        media = SettingsMediaUseCasesImpl(
-            getMediaProviders = getMediaProvidersUseCase,
-            saveMediaProvider = mockk<SaveMediaProviderUseCase>(relaxed = true),
-            deleteMediaProvider = mockk<DeleteMediaProviderUseCase>(relaxed = true),
-        ),
-        auth = SettingsAuthUseCasesImpl(
-            loginWithGoogle = mockk(relaxed = true),
-            logout = mockk(relaxed = true),
-            getAuthState = getAuthStateUseCase,
-        ),
-        memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
-        dataControls = SettingsDataControlsUseCasesImpl(
-            deleteAllChats = mockk(relaxed = true),
-            deleteAllMedia = mockk(relaxed = true),
-            deleteAllMemories = mockk(relaxed = true),
-            deleteAllArtifacts = mockk(relaxed = true),
-            deleteAccount = mockk(relaxed = true),
-        ),
-    )
+    val settingsUseCases =
+        SettingsUseCasesImpl(
+            preferences =
+                SettingsPreferencesUseCasesImpl(
+                    getSettings = getSettingsUseCase,
+                    updateTheme = mockk(relaxed = true),
+                    updateHapticResponse = mockk(relaxed = true),
+                    updateCustomizationEnabled = mockk(relaxed = true),
+                    updateSelectedPromptOption = mockk(relaxed = true),
+                    updateCustomPromptText = mockk(relaxed = true),
+                    updateAllowMemories = mockk(relaxed = true),
+                    updateSearchEnabled = mockk(relaxed = true),
+                    updateSearchProvider = updateSearchProviderUseCase,
+                    saveTavilyApiKey = mockk(relaxed = true),
+                    clearTavilyApiKey = mockk(relaxed = true),
+                    saveExaApiKey = saveExaApiKeyUseCase,
+                    clearExaApiKey = clearExaApiKeyUseCase,
+                    updateXSearchEnabled = mockk(relaxed = true),
+                    saveXApiKey = mockk(relaxed = true),
+                    clearXApiKey = mockk(relaxed = true),
+                    updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
+                    updateBackgroundInferenceEnabled = mockk(relaxed = true),
+                ),
+            localModels =
+                SettingsLocalModelUseCasesImpl(
+                    getLocalModelAssets = getLocalModelAssetsUseCase,
+                    getRestorableLocalModels = mockk(relaxed = true),
+                    saveLocalModelPreset = mockk(relaxed = true),
+                    reDownloadModel = mockk<ReDownloadModelUseCase>(relaxed = true),
+                ),
+            apiProviders =
+                SettingsApiProviderUseCasesImpl(
+                    getApiModelAssets = getApiModelAssetsUseCase,
+                    saveApiProviderDraft = mockk(relaxed = true),
+                    saveApiPreset = mockk(relaxed = true),
+                    discoverApiModels = mockk(relaxed = true),
+                    applyApiModelMetadataDefaults = mockk(relaxed = true),
+                ),
+            assignments =
+                SettingsAssignmentUseCasesImpl(
+                    getDefaultModels = getDefaultModelsUseCase,
+                    setDefaultModel = mockk(relaxed = true),
+                    clearDefaultModel = mockk(relaxed = true),
+                    resolveAssignedModelSelection = mockk(relaxed = true),
+                ),
+            deletion =
+                SettingsDeletionUseCasesImpl(
+                    prepareModelDeletion = mockk(relaxed = true),
+                    executeModelDeletionWithReassignment = mockk(relaxed = true),
+                ),
+            tts =
+                SettingsTtsUseCasesImpl(
+                    getTtsProviders = getTtsProvidersUseCase,
+                    saveTtsProvider = mockk(relaxed = true),
+                    deleteTtsProvider = mockk(relaxed = true),
+                ),
+            media =
+                SettingsMediaUseCasesImpl(
+                    getMediaProviders = getMediaProvidersUseCase,
+                    saveMediaProvider = mockk<SaveMediaProviderUseCase>(relaxed = true),
+                    deleteMediaProvider = mockk<DeleteMediaProviderUseCase>(relaxed = true),
+                ),
+            auth =
+                SettingsAuthUseCasesImpl(
+                    loginWithGoogle = mockk(relaxed = true),
+                    logout = mockk(relaxed = true),
+                    getAuthState = getAuthStateUseCase,
+                ),
+            memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
+            dataControls =
+                SettingsDataControlsUseCasesImpl(
+                    deleteAllChats = mockk(relaxed = true),
+                    deleteAllMedia = mockk(relaxed = true),
+                    deleteAllMemories = mockk(relaxed = true),
+                    deleteAllArtifacts = mockk(relaxed = true),
+                    deleteAccount = mockk(relaxed = true),
+                ),
+        )
 
     val embeddingProgressPort = mockk<EmbeddingProgressPort>()
     every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
@@ -419,18 +427,19 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
     val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
 
-    val generalDelegate = SettingsGeneralDelegate(
-        settingsUseCases.preferences,
-        settingsUseCases.auth,
-        errorHandler,
-        detectVaultReconciliationStateUseCase,
-        adoptCloudVaultUseCase,
-        bootstrapCloudVaultFromLocalUseCase,
-        createVaultUseCase,
-        cryptoManager,
-        vaultMetadataPort,
-        cloudSyncPort,
-    )
+    val generalDelegate =
+        SettingsGeneralDelegate(
+            settingsUseCases.preferences,
+            settingsUseCases.auth,
+            errorHandler,
+            detectVaultReconciliationStateUseCase,
+            adoptCloudVaultUseCase,
+            bootstrapCloudVaultFromLocalUseCase,
+            createVaultUseCase,
+            cryptoManager,
+            vaultMetadataPort,
+            cloudSyncPort,
+        )
 
     val localModelAssetUiMapper = LocalModelAssetUiMapper()
     val apiModelAssetUiMapper = ApiModelAssetUiMapper()
@@ -441,27 +450,35 @@ private fun buildMinimalViewModel(): SettingsViewModel {
 
     return SettingsViewModel(
         settingsUseCases = settingsUseCases,
-        settingsUiStateFactory = SettingsUiStateFactory(
-            localModelAssetUiMapper,
-            apiModelAssetUiMapper,
-            ttsProviderAssetUiMapper,
-            mediaProviderAssetUiMapper,
-            ApiDiscoveryUiFilter(),
-            ApplyApiModelMetadataDefaultsUseCase(),
-        ),
+        settingsUiStateFactory =
+            SettingsUiStateFactory(
+                localModelAssetUiMapper,
+                apiModelAssetUiMapper,
+                ttsProviderAssetUiMapper,
+                mediaProviderAssetUiMapper,
+                ApiDiscoveryUiFilter(),
+                ApplyApiModelMetadataDefaultsUseCase(),
+            ),
         generalDelegate = generalDelegate,
         memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler),
         dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler),
-        localModelsDelegate = SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler),
-        apiProvidersDelegate = SettingsApiProvidersDelegate(
-            settingsUseCases.apiProviders,
-            settingsUseCases.tts,
-            settingsUseCases.media,
-            deletionHelper,
-            apiModelAssetUiMapper,
-            ttsProviderAssetUiMapper,
-            errorHandler,
-        ),
+        localModelsDelegate =
+            SettingsLocalModelsDelegate(
+                settingsUseCases.localModels,
+                deletionHelper,
+                localModelAssetUiMapper,
+                errorHandler,
+            ),
+        apiProvidersDelegate =
+            SettingsApiProvidersDelegate(
+                settingsUseCases.apiProviders,
+                settingsUseCases.tts,
+                settingsUseCases.media,
+                deletionHelper,
+                apiModelAssetUiMapper,
+                ttsProviderAssetUiMapper,
+                errorHandler,
+            ),
         searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler),
         assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler),
         deletionHelper = deletionHelper,

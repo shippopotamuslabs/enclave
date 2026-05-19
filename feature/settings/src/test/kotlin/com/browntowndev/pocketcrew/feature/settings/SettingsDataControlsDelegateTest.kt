@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.feature.settings
 
-import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.usecase.settings.DeleteAccountUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.DeleteAllArtifactsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.DeleteAllChatsUseCase
@@ -28,7 +28,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class SettingsDataControlsDelegateTest {
-
     private val deleteAllChats = mockk<DeleteAllChatsUseCase>()
     private val deleteAllMedia = mockk<DeleteAllMediaUseCase>()
     private val deleteAllMemories = mockk<DeleteAllMemoriesUseCase>()
@@ -58,27 +57,29 @@ class SettingsDataControlsDelegateTest {
     }
 
     @Test
-    fun `opening sheet sets visibility`() = runTest {
-        val sheet = MutableStateFlow(SheetVisibilityState())
-        val dc = MutableStateFlow(DataControlsTransientState())
-        delegate.onShowDataControlsSheet(sheet, dc, show = true)
-        assertTrue(sheet.value.dataControls)
-    }
+    fun `opening sheet sets visibility`() =
+        runTest {
+            val sheet = MutableStateFlow(SheetVisibilityState())
+            val dc = MutableStateFlow(DataControlsTransientState())
+            delegate.onShowDataControlsSheet(sheet, dc, show = true)
+            assertTrue(sheet.value.dataControls)
+        }
 
     @Test
-    fun `closing sheet resets transient state`() = runTest {
-        val sheet = MutableStateFlow(SheetVisibilityState(dataControls = true))
-        val dc =
-            MutableStateFlow(
-                DataControlsTransientState(
-                    pendingAction = DataControlsPendingAction.DeleteChats,
-                    isDeleting = true,
-                ),
-            )
-        delegate.onShowDataControlsSheet(sheet, dc, show = false)
-        assertFalse(sheet.value.dataControls)
-        assertEquals(DataControlsTransientState(), dc.value)
-    }
+    fun `closing sheet resets transient state`() =
+        runTest {
+            val sheet = MutableStateFlow(SheetVisibilityState(dataControls = true))
+            val dc =
+                MutableStateFlow(
+                    DataControlsTransientState(
+                        pendingAction = DataControlsPendingAction.DeleteChats,
+                        isDeleting = true,
+                    ),
+                )
+            delegate.onShowDataControlsSheet(sheet, dc, show = false)
+            assertFalse(sheet.value.dataControls)
+            assertEquals(DataControlsTransientState(), dc.value)
+        }
 
     @Test
     fun `request delete chats sets pending action`() {
@@ -111,68 +112,72 @@ class SettingsDataControlsDelegateTest {
     }
 
     @Test
-    fun `confirm delete chats resets state on success`() = runTest {
-        val dc = MutableStateFlow(DataControlsTransientState(pendingAction = DataControlsPendingAction.DeleteChats))
-        delegate.onConfirmDeleteAllChats(this, "tag", dc)
-        advanceUntilIdle()
-        assertEquals(DataControlsTransientState(), dc.value)
-        coVerify(exactly = 1) { deleteAllChats.invoke() }
-    }
+    fun `confirm delete chats resets state on success`() =
+        runTest {
+            val dc = MutableStateFlow(DataControlsTransientState(pendingAction = DataControlsPendingAction.DeleteChats))
+            delegate.onConfirmDeleteAllChats(this, "tag", dc)
+            advanceUntilIdle()
+            assertEquals(DataControlsTransientState(), dc.value)
+            coVerify(exactly = 1) { deleteAllChats.invoke() }
+        }
 
     @Test
-    fun `confirm delete chats sets error on failure`() = runTest {
-        coEvery { deleteAllChats.invoke() } throws RuntimeException("db error")
-        val dc = MutableStateFlow(DataControlsTransientState())
-        delegate.onConfirmDeleteAllChats(this, "tag", dc)
-        advanceUntilIdle()
-        assertEquals("db error", dc.value.deleteError)
-        assertNull(dc.value.pendingAction)
-        assertFalse(dc.value.isDeleting)
-        verify(exactly = 1) {
-            errorHandler.handleError(
-                "tag",
-                "Failed to delete all chats",
-                match { it is RuntimeException && it.message == "db error" },
-                "Couldn't delete chats",
-            )
+    fun `confirm delete chats sets error on failure`() =
+        runTest {
+            coEvery { deleteAllChats.invoke() } throws RuntimeException("db error")
+            val dc = MutableStateFlow(DataControlsTransientState())
+            delegate.onConfirmDeleteAllChats(this, "tag", dc)
+            advanceUntilIdle()
+            assertEquals("db error", dc.value.deleteError)
+            assertNull(dc.value.pendingAction)
+            assertFalse(dc.value.isDeleting)
+            verify(exactly = 1) {
+                errorHandler.handleError(
+                    "tag",
+                    "Failed to delete all chats",
+                    match { it is RuntimeException && it.message == "db error" },
+                    "Couldn't delete chats",
+                )
+            }
         }
-    }
 
     @Test
-    fun `confirm delete account handles Result failure`() = runTest {
-        coEvery { deleteAccount.invoke() } returns Result.failure(Exception("purge failed"))
-        val dc = MutableStateFlow(DataControlsTransientState())
-        delegate.onConfirmDeleteAccount(this, "tag", dc)
-        advanceUntilIdle()
-        assertEquals("purge failed", dc.value.deleteError)
-        assertNull(dc.value.pendingAction)
-        assertFalse(dc.value.isDeleting)
-        verify(exactly = 1) {
-            errorHandler.handleError(
-                "tag",
-                "Failed to delete account",
-                match { it is Exception && it.message == "purge failed" },
-                "Couldn't delete account",
-            )
+    fun `confirm delete account handles Result failure`() =
+        runTest {
+            coEvery { deleteAccount.invoke() } returns Result.failure(Exception("purge failed"))
+            val dc = MutableStateFlow(DataControlsTransientState())
+            delegate.onConfirmDeleteAccount(this, "tag", dc)
+            advanceUntilIdle()
+            assertEquals("purge failed", dc.value.deleteError)
+            assertNull(dc.value.pendingAction)
+            assertFalse(dc.value.isDeleting)
+            verify(exactly = 1) {
+                errorHandler.handleError(
+                    "tag",
+                    "Failed to delete account",
+                    match { it is Exception && it.message == "purge failed" },
+                    "Couldn't delete account",
+                )
+            }
         }
-    }
 
     @Test
-    fun `confirm delete account clears deleting state when invoke throws`() = runTest {
-        coEvery { deleteAccount.invoke() } throws RuntimeException("sign-out failed")
-        val dc = MutableStateFlow(DataControlsTransientState())
-        delegate.onConfirmDeleteAccount(this, "tag", dc)
-        advanceUntilIdle()
-        assertEquals("sign-out failed", dc.value.deleteError)
-        assertNull(dc.value.pendingAction)
-        assertFalse(dc.value.isDeleting)
-        verify(exactly = 1) {
-            errorHandler.handleError(
-                "tag",
-                "Failed to delete account",
-                match { it is RuntimeException && it.message == "sign-out failed" },
-                "Couldn't delete account",
-            )
+    fun `confirm delete account clears deleting state when invoke throws`() =
+        runTest {
+            coEvery { deleteAccount.invoke() } throws RuntimeException("sign-out failed")
+            val dc = MutableStateFlow(DataControlsTransientState())
+            delegate.onConfirmDeleteAccount(this, "tag", dc)
+            advanceUntilIdle()
+            assertEquals("sign-out failed", dc.value.deleteError)
+            assertNull(dc.value.pendingAction)
+            assertFalse(dc.value.isDeleting)
+            verify(exactly = 1) {
+                errorHandler.handleError(
+                    "tag",
+                    "Failed to delete account",
+                    match { it is RuntimeException && it.message == "sign-out failed" },
+                    "Couldn't delete account",
+                )
+            }
         }
-    }
 }

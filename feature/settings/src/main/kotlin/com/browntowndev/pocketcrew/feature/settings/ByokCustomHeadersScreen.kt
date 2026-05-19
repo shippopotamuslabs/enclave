@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,14 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.BackHandler
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 internal fun ByokCustomHeadersRoute(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -49,7 +49,7 @@ internal fun ByokCustomHeadersRoute(
         onNavigateBack = handleBack,
         onAddHeader = viewModel::onAddCustomHeader,
         onDeleteHeader = viewModel::onDeleteCustomHeader,
-        onHeaderChange = viewModel::onCustomHeaderChange
+        onHeaderChange = viewModel::onCustomHeaderChange,
     )
 
     BackHandler(onBack = handleBack)
@@ -62,7 +62,7 @@ fun ByokCustomHeadersScreen(
     onNavigateBack: () -> Unit,
     onAddHeader: () -> Unit,
     onDeleteHeader: (Int) -> Unit,
-    onHeaderChange: (Int, CustomHeaderUi) -> Unit
+    onHeaderChange: (Int, CustomHeaderUi) -> Unit,
 ) {
     val isDoneEnabled = headers.all { it.key.isNotBlank() && it.value.isNotBlank() }
 
@@ -73,7 +73,7 @@ fun ByokCustomHeadersScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        enabled = isDoneEnabled
+                        enabled = isDoneEnabled,
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
@@ -82,30 +82,31 @@ fun ByokCustomHeadersScreen(
                     IconButton(onClick = onAddHeader) {
                         Icon(Icons.Default.Add, contentDescription = "Add Header")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp),
         ) {
             if (headers.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
                         "No custom headers configured",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Button(
                         onClick = onAddHeader,
-                        modifier = Modifier.padding(top = 16.dp)
+                        modifier = Modifier.padding(top = 16.dp),
                     ) {
                         Text("Add First Header")
                     }
@@ -114,24 +115,27 @@ fun ByokCustomHeadersScreen(
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp)
+                    contentPadding =
+                        androidx.compose.foundation.layout
+                            .PaddingValues(vertical = 16.dp),
                 ) {
                     itemsIndexed(headers) { index, header ->
                         HeaderRow(
                             header = header,
                             onHeaderChange = { onHeaderChange(index, it) },
-                            onDelete = { onDeleteHeader(index) }
+                            onDelete = { onDeleteHeader(index) },
                         )
                     }
                 }
-                
+
                 Button(
                     onClick = onNavigateBack,
                     enabled = isDoneEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
                 ) {
                     Text("Done")
                 }
@@ -144,12 +148,12 @@ fun ByokCustomHeadersScreen(
 fun HeaderRow(
     header: CustomHeaderUi,
     onHeaderChange: (CustomHeaderUi) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedTextField(
             value = header.key,
@@ -158,7 +162,9 @@ fun HeaderRow(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(8.dp),
             singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next)
+            keyboardOptions =
+                androidx.compose.foundation.text
+                    .KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next),
         )
         OutlinedTextField(
             value = header.value,
@@ -167,13 +173,15 @@ fun HeaderRow(
             modifier = Modifier.weight(1.5f),
             shape = RoundedCornerShape(8.dp),
             singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
+            keyboardOptions =
+                androidx.compose.foundation.text
+                    .KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
         )
         IconButton(onClick = onDelete) {
             Icon(
                 Icons.Default.Delete,
                 contentDescription = "Delete header",
-                tint = MaterialTheme.colorScheme.error
+                tint = MaterialTheme.colorScheme.error,
             )
         }
     }

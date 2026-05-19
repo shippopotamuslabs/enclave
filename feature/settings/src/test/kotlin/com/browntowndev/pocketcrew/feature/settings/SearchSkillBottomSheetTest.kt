@@ -6,40 +6,43 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SearchSkillBottomSheetTest {
-
     @Test
     fun `shouldShowProviderSwitchAlert returns true when leaving Tavily with saved key`() {
-        val state = SearchSkillEditorUiState(
-            selectedProvider = SearchProvider.TAVILY,
-            tavilyKeyPresent = true,
-        )
+        val state =
+            SearchSkillEditorUiState(
+                selectedProvider = SearchProvider.TAVILY,
+                tavilyKeyPresent = true,
+            )
         assertTrue(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
     fun `shouldShowProviderSwitchAlert returns false when leaving Tavily without saved key`() {
-        val state = SearchSkillEditorUiState(
-            selectedProvider = SearchProvider.TAVILY,
-            tavilyKeyPresent = false,
-        )
+        val state =
+            SearchSkillEditorUiState(
+                selectedProvider = SearchProvider.TAVILY,
+                tavilyKeyPresent = false,
+            )
         assertFalse(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
     fun `shouldShowProviderSwitchAlert returns true when leaving Exa with saved key`() {
-        val state = SearchSkillEditorUiState(
-            selectedProvider = SearchProvider.EXA,
-            exaKeyPresent = true,
-        )
+        val state =
+            SearchSkillEditorUiState(
+                selectedProvider = SearchProvider.EXA,
+                exaKeyPresent = true,
+            )
         assertTrue(shouldShowProviderSwitchAlert(state))
     }
 
     @Test
     fun `shouldShowProviderSwitchAlert returns false when leaving Exa without saved key`() {
-        val state = SearchSkillEditorUiState(
-            selectedProvider = SearchProvider.EXA,
-            exaKeyPresent = false,
-        )
+        val state =
+            SearchSkillEditorUiState(
+                selectedProvider = SearchProvider.EXA,
+                exaKeyPresent = false,
+            )
         assertFalse(shouldShowProviderSwitchAlert(state))
     }
 }
