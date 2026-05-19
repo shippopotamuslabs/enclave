@@ -74,32 +74,32 @@ class ChatViewModelHapticsStateTest {
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
+        val studioRepository =
+            mockk<com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort>(relaxed = true) {
+                every { observeEphemeralMedia() } returns flowOf(emptyList())
+                every { observeAllMedia() } returns flowOf(emptyList())
+            }
         viewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = mockk<StageImageAttachmentUseCase>(relaxed = true),
                 savedStateHandle = SavedStateHandle(mapOf("chatId" to "chat-1")),
-                cancelInferenceUseCase = mockk<CancelInferenceUseCase>(relaxed = true),
+                cancelInferenceUseCase = mockk(relaxed = true),
                 inferenceLockManager = inferenceLockManager,
                 modelDisplayNamesUseCase = modelDisplayNamesUseCase,
                 activeModelProvider = activeModelProvider,
-                errorHandler = mockk(relaxed = true),
                 toolExecutionEventPort =
                     mockk<ToolExecutionEventPort> {
                         every { events } returns toolEvents
                     },
-                loggingPort = mockk(relaxed = true),
+                errorHandler = mockk(relaxed = true),
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
                 playbackController = mockk(relaxed = true),
-                studioRepository =
-                    mockk(relaxed = true) {
-                        every { observeEphemeralMedia() } returns flowOf(emptyList())
-                        every { observeAllMedia() } returns flowOf(emptyList())
-                    },
-                shareChatUseCase = mockk<ShareChatUseCase>(relaxed = true),
+                studioRepository = studioRepository,
+                shareChatUseCase = mockk(relaxed = true),
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = mockk(relaxed = true),
             )
     }
 

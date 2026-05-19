@@ -84,10 +84,9 @@ class ActiveTurnSnapshotThrottleTest {
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
-        return ChatViewModel(
+        return ChatViewModelTestSupport.createViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
-            stageImageAttachmentUseCase = mockk(relaxed = true),
             savedStateHandle = savedStateHandle,
             cancelInferenceUseCase = mockk(relaxed = true),
             inferenceLockManager = inferenceLockManager,
@@ -102,6 +101,7 @@ class ActiveTurnSnapshotThrottleTest {
             shareChatUseCase = mockk(relaxed = true),
             chatRepository = mockk(relaxed = true),
             exportArtifactDocumentsUseCase = mockk(relaxed = true),
+            stageImageAttachmentUseCase = mockk(relaxed = true),
         )
     }
 

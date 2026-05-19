@@ -72,17 +72,16 @@ class ChatViewModelFlowTest {
         val savedStateHandle = SavedStateHandle()
 
         chatViewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 savedStateHandle = savedStateHandle,
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
                 modelDisplayNamesUseCase = modelDisplayNamesUseCase,
                 activeModelProvider = activeModelProvider,
-                errorHandler = errorHandler,
                 toolExecutionEventPort = toolExecutionEventPort,
+                errorHandler = errorHandler,
                 loggingPort = loggingPort,
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
                 playbackController = mockk(relaxed = true),
@@ -90,6 +89,7 @@ class ChatViewModelFlowTest {
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
 

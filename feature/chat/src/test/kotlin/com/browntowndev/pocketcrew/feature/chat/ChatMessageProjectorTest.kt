@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -205,4 +206,44 @@ class ChatMessageProjectorTest {
             thinkingRaw = "",
             isComplete = false,
         )
+
+    @Test
+    fun `project merges completed snapshot artifacts onto generating db row`() {
+        val assistantId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantId)
+        val artifact1 = ArtifactGenerationRequest(artifactId = "a1", title = "Doc 1", content = "")
+        val artifact2 = ArtifactGenerationRequest(artifactId = "a2", title = "Doc 2", content = "")
+        val dbMessages =
+            listOf(
+                Message(
+                    id = assistantId,
+                    chatId = chatId,
+                    role = Role.ASSISTANT,
+                    content = Content(text = "Generating"),
+                    messageState = MessageState.GENERATING,
+                ),
+            )
+        val snapshot =
+            AccumulatedMessages(
+                messages =
+                    mapOf(
+                        assistantId to
+                            MessageSnapshot(
+                                messageId = assistantId,
+                                modelType = ModelType.FAST,
+                                content = "Here are your docs",
+                                thinkingRaw = "",
+                                messageState = MessageState.COMPLETE,
+                                artifacts = listOf(artifact1, artifact2),
+                            ),
+                    ),
+            )
+
+        val result = projector.project(dbMessages, snapshot, key)
+
+        assertEquals(1, result.messages.size)
+        assertEquals(2, result.messages.single().content.artifacts.size)
+        assertEquals("Doc 1", result.messages.single().content.artifacts[0].title)
+        assertEquals("Doc 2", result.messages.single().content.artifacts[1].title)
+    }
 }

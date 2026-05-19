@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.compose.ui.test.assertIsDisplayed
+import com.browntowndev.pocketcrew.feature.chat.artifactexport.ArtifactExportWizardContent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule

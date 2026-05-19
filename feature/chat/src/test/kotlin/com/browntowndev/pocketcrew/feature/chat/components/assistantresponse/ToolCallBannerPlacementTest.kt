@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.feature.chat.components
+package com.browntowndev.pocketcrew.feature.chat.components.assistantresponse
 
 import com.browntowndev.pocketcrew.feature.chat.TranscriptSegmentUi
 import org.junit.jupiter.api.Assertions.assertEquals

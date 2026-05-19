@@ -1,25 +1,3 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
-
 package com.browntowndev.pocketcrew.feature.chat.delegates
 
 import androidx.lifecycle.SavedStateHandle
@@ -33,7 +11,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -61,7 +38,6 @@ class InferenceOrchestrator
         private val cancelInferenceUseCase: CancelInferenceUseCase,
         private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         private val errorHandler: ViewModelErrorHandler,
-        private val loggingPort: LoggingPort,
         private val savedStateHandle: SavedStateHandle,
     ) {
         private val _currentChatId = MutableStateFlow<ChatId?>(null)

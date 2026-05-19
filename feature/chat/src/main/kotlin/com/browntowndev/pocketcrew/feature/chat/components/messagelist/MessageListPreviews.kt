@@ -1,76 +1,7 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
+package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 
-package com.browntowndev.pocketcrew.feature.chat.components
-
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -80,590 +11,14 @@ import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
-import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-
-@Composable
-fun MessageList(
-    modifier: Modifier = Modifier,
-    messages: List<ChatMessage>,
-    hasActiveIndicator: Boolean,
-    activeToolCallBanner: ToolCallBannerUi? = null,
-    activeIndicatorMessageId: MessageId? = null,
-    hasTtsProviderAssigned: Boolean = false,
-    isPreview: Boolean = false,
-    chatMode: ChatModeUi = ChatModeUi.FAST,
-    onEditMessage: (String) -> Unit = { _: String -> },
-    onPlayAudio: (String) -> Unit = {},
-    onArtifactCardClick: (
-        com.browntowndev.pocketcrew.domain.model.chat.MessageId,
-        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel,
-    ) -> Unit = { _, _ -> },
-    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
-    onShareClick: (MessageId) -> Unit = {},
-) {
-    val listState = rememberLazyListState()
-
-    // Identification of the latest user interaction
-    val latestUserMessageIndex = messages.indexOfLast { it.role == MessageRole.User }
-    val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
-
-    val chatId = messages.firstOrNull()?.chatId
-    // Per-chat bookkeeping so a new chat never inherits "already scrolled" state from the prior chat,
-    // and so we do not depend on ordering between two LaunchedEffects (initial vs follow-up).
-    var initialScrollDone by remember(chatId) { mutableStateOf(false) }
-    var lastScrolledUserMessageId by remember(chatId) { mutableStateOf<MessageId?>(null) }
-
-    LaunchedEffect(chatId, messages.isNotEmpty(), latestUserMessageId, latestUserMessageIndex) {
-        if (messages.isEmpty()) return@LaunchedEffect
-
-        val targetLazyIndex =
-            messageListScrollTargetLazyIndex(
-                messageCount = messages.size,
-                latestUserMessageIndex = latestUserMessageIndex,
-            )
-
-        if (!initialScrollDone) {
-            listState.scrollToItem(targetLazyIndex)
-            initialScrollDone = true
-            lastScrolledUserMessageId = latestUserMessageId
-            return@LaunchedEffect
-        }
-
-        if (latestUserMessageId != null && latestUserMessageId != lastScrolledUserMessageId) {
-            // Wait until after layout so the active-interaction column (min viewport height) includes
-            // the new user bubble before we animate; avoids intermittent wrong scroll offsets.
-            withFrameNanos { }
-            listState.animateScrollToItem(latestUserMessageIndex.coerceAtLeast(0))
-            lastScrolledUserMessageId = latestUserMessageId
-        }
-    }
-
-    if (messages.isEmpty() && !hasActiveIndicator) {
-        EmptyState(modifier = modifier)
-    } else {
-        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-            val viewportHeight = maxHeight
-            val bottomContentPadding = 16.dp
-            val activeInteractionMinHeight =
-                activeInteractionMinHeight(
-                    viewportHeight = viewportHeight,
-                    bottomContentPadding = bottomContentPadding,
-                )
-
-            // Total item count for scroll-to-bottom targeting
-            val totalItems =
-                if (latestUserMessageIndex != -1) {
-                    (if (latestUserMessageIndex > 0) latestUserMessageIndex else 0) + 1
-                } else {
-                    messages.size
-                }
-
-            // The last LazyColumn item index (the active_interaction column or the last history item).
-            // The FAB should only be visible when this last item is NOT yet the first visible item —
-            // i.e. the user has scrolled up into history. If the user is scrolling *within* the
-            // active_interaction item (which is heightIn(min = viewportHeight) tall), canScrollForward
-            // would still be true, incorrectly showing the FAB. Using firstVisibleItemIndex avoids that.
-            val lastLazyItemIndex = totalItems - 1
-
-            // FAB is logically visible when not at bottom; auto-hides 3s after scrolling stops
-            var fabVisible by remember { mutableStateOf(false) }
-            // Incrementing this key cancels and restarts the 3-second hide timer.
-            var fabAutoHideSignal by remember { mutableIntStateOf(0) }
-            LaunchedEffect(listState, lastLazyItemIndex) {
-                snapshotFlow {
-                    listState.isScrollInProgress to
-                        (listState.firstVisibleItemIndex < lastLazyItemIndex)
-                }.collect { (isScrolling, isAboveLastItem) ->
-                    when {
-                        isScrolling -> fabVisible = isAboveLastItem
-                        !isAboveLastItem -> fabVisible = false
-                        else -> fabAutoHideSignal++ // restart the auto-hide timer
-                    }
-                }
-            }
-            LaunchedEffect(fabAutoHideSignal) {
-                if (fabAutoHideSignal > 0) {
-                    delay(3_000)
-                    fabVisible = false
-                }
-            }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(top = 0.dp, bottom = bottomContentPadding),
-            ) {
-                // 1. History: all messages before the latest user prompt
-                val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
-                items(
-                    count = historyCount,
-                    key = { index -> "history_msg_${messages[index].id}" },
-                ) { index ->
-                    MessageItem(
-                        message = messages[index],
-                        activeIndicatorMessageId = activeIndicatorMessageId,
-                        activeToolCallBanner = activeToolCallBanner,
-                        hasTtsProviderAssigned = hasTtsProviderAssigned,
-                        chatMode = chatMode,
-                        onEditMessage = onEditMessage,
-                        onPlayAudio = onPlayAudio,
-                        onArtifactCardClick = onArtifactCardClick,
-                        onNavigateToStudio = onNavigateToStudio,
-                        onShareClick = onShareClick,
-                        isPreview = isPreview,
-                    )
-                }
-
-                // 2. Active interaction: user prompt + streaming response in one item.
-                //    heightIn(min = activeInteractionMinHeight) keeps the item plus trailing content
-                //    padding viewport-tall, so bottom padding does not become a small real scroll range.
-                if (latestUserMessageIndex != -1) {
-                    item(key = "active_interaction_$latestUserMessageId") {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = activeInteractionMinHeight),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            for (i in latestUserMessageIndex until messages.size) {
-                                key(messages[i].id) {
-                                    MessageItem(
-                                        message = messages[i],
-                                        activeIndicatorMessageId = activeIndicatorMessageId,
-                                        activeToolCallBanner = activeToolCallBanner,
-                                        hasTtsProviderAssigned = hasTtsProviderAssigned,
-                                        chatMode = chatMode,
-                                        onEditMessage = onEditMessage,
-                                        onPlayAudio = onPlayAudio,
-                                        onArtifactCardClick = onArtifactCardClick,
-                                        onNavigateToStudio = onNavigateToStudio,
-                                        onShareClick = onShareClick,
-                                        isPreview = isPreview,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Scroll-to-bottom FAB — floats above the InputBar at the bottom-right
-            val coroutineScope = rememberCoroutineScope()
-            ScrollToBottomFab(
-                visible = fabVisible,
-                onClick = {
-                    val lastIndex = totalItems - 1
-                    if (lastIndex >= 0) {
-                        coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
-                    }
-                },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 12.dp),
-            )
-        }
-    }
-}
-
-/**
- * Circular FAB that fades in when the user has scrolled above the bottom,
- * and triggers a smooth scroll to the last item when tapped.
- */
-@Composable
-private fun ScrollToBottomFab(
-    visible: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
-        label = "scrollToBottomAlpha",
-    )
-
-    // Keep the composable in the tree while fading out so the animation completes
-    if (alpha > 0f || visible) {
-        SmallFloatingActionButton(
-            onClick = onClick,
-            modifier = modifier.graphicsLayer { this.alpha = alpha },
-            shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Scroll to bottom",
-            )
-        }
-    }
-}
-
-/**
- * Renders a single message (User bubble or Assistant response).
- */
-@Composable
-private fun MessageItem(
-    message: ChatMessage,
-    activeIndicatorMessageId: MessageId?,
-    activeToolCallBanner: ToolCallBannerUi?,
-    hasTtsProviderAssigned: Boolean,
-    chatMode: ChatModeUi,
-    onEditMessage: (String) -> Unit,
-    onPlayAudio: (String) -> Unit,
-    onArtifactCardClick: (
-        com.browntowndev.pocketcrew.domain.model.chat.MessageId,
-        com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel,
-    ) -> Unit,
-    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
-    onShareClick: (MessageId) -> Unit,
-    isPreview: Boolean,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp),
-    ) {
-        // ============================================================
-        // Indicator rendering - shows at TOP for Assistant messages
-        // ============================================================
-        Indicators(
-            modelDisplayName = message.modelDisplayName,
-            indicatorState = message.indicatorState,
-            chatMode = chatMode,
-            suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
-        )
-
-        val activeBanner =
-            if (message.id == activeIndicatorMessageId) activeToolCallBanner else null
-        val inlineToolCallBannerInTranscript =
-            message.role == MessageRole.Assistant && message.transcriptSegments.isNotEmpty()
-
-        if (!inlineToolCallBannerInTranscript) {
-            ToolCallBanner(
-                banner = activeBanner,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-
-        // ============================================================
-        // Content rendering based on message role
-        // ============================================================
-        if (message.role == MessageRole.User) {
-            MessageBubble(
-                message = message,
-                onEditClick = onEditMessage,
-            )
-        } else {
-            AssistantResponse(
-                message = message,
-                isPreview = isPreview,
-                hasTtsProviderAssigned = hasTtsProviderAssigned,
-                toolCallBanner = if (inlineToolCallBannerInTranscript) activeBanner else null,
-                onPlayAudio = onPlayAudio,
-                onArtifactCardClick = onArtifactCardClick,
-                onNavigateToStudio = onNavigateToStudio,
-                onShareClick = onShareClick,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(modifier: Modifier = Modifier) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier.fillMaxSize(),
-    ) {
-        Image(
-            painter = painterResource(R.drawable.pocket_crew_icon),
-            contentDescription = null,
-            modifier = Modifier.size(160.dp),
-        )
-        Text(
-            text = "Pocket Crew is ready",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            text = "Ask us anything",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
-}
-
-/**
- * When interleaved transcript rows render thinking, the top [ThinkingIndicator] is omitted.
- * Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
- */
-internal fun transcriptLayoutShowsTopThinkingIndicator(
-    indicatorState: IndicatorState?,
-    suppressDuplicateThoughtForHeader: Boolean,
-): Boolean = indicatorState is IndicatorState.Thinking && !suppressDuplicateThoughtForHeader
-
-/**
- * Aggregate "Thought for …" header above the assistant body is omitted when transcript segments
- * already carry per-chunk headers. Unit-tested via [TranscriptIndicatorDuplicatePolicyTest].
- */
-internal fun transcriptLayoutShowsAggregateThoughtForHeader(
-    indicatorState: IndicatorState?,
-    suppressDuplicateThoughtForHeader: Boolean,
-): Boolean {
-    if (indicatorState == null || suppressDuplicateThoughtForHeader) return false
-    val raw =
-        when (indicatorState) {
-            is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingRaw
-            is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingRaw
-            else -> null
-        }
-    return !raw.isNullOrBlank()
-}
-
-internal fun activeInteractionMinHeight(
-    viewportHeight: Dp,
-    bottomContentPadding: Dp,
-): Dp = maxOf(0.dp, viewportHeight - bottomContentPadding)
-
-/**
- * LazyColumn index of the row that should be shown after open or when jumping to the latest turn:
- * the combined "active interaction" row when there is a user message, otherwise the last history row.
- */
-internal fun messageListScrollTargetLazyIndex(
-    messageCount: Int,
-    latestUserMessageIndex: Int,
-): Int {
-    if (messageCount <= 0) return 0
-    return if (latestUserMessageIndex != -1) {
-        latestUserMessageIndex
-    } else {
-        messageCount - 1
-    }
-}
-
-/**
- * Shows the appropriate indicator(s) based on the message's indicator state.
- */
-@Composable
-private fun Indicators(
-    modelDisplayName: String,
-    indicatorState: IndicatorState?,
-    chatMode: ChatModeUi,
-    suppressDuplicateThoughtForHeader: Boolean,
-) {
-    if (indicatorState != null) {
-        var isThinkingSheetVisible by remember { mutableStateOf(false) }
-
-        // Hoist elapsed time counter to share between Indicator and BottomSheet
-        var elapsedSeconds by remember { mutableIntStateOf(0) }
-        val startTime =
-            when (indicatorState) {
-                is IndicatorState.Thinking -> indicatorState.thinkingStartTime
-                is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
-                is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
-                else -> 0L
-            }
-        val isThinkingActive =
-            indicatorState is IndicatorState.Thinking ||
-                indicatorState is IndicatorState.EngineLoading ||
-                (indicatorState is IndicatorState.Generating && indicatorState.thinkingData?.thinkingDurationSeconds == 0L)
-
-        if (startTime > 0 && isThinkingActive) {
-            LaunchedEffect(startTime) {
-                while (true) {
-                    elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
-                    kotlinx.coroutines.delay(1000L)
-                }
-            }
-        }
-        // Sync the final duration after state settles — must not write state during composition.
-        LaunchedEffect(indicatorState) {
-            if (!isThinkingActive) {
-                elapsedSeconds =
-                    when (indicatorState) {
-                        is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
-                        is IndicatorState.EngineLoading -> 0
-                        is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                        is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
-                        else -> 0
-                    }
-            }
-        }
-
-        when (indicatorState) {
-            is IndicatorState.EngineLoading -> {
-                EngineLoadingIndicator(modelDisplayName = modelDisplayName)
-            }
-            is IndicatorState.Thinking -> {
-                if (transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)) {
-                    ThinkingIndicator(
-                        elapsedSeconds = elapsedSeconds,
-                        isExpanded = isThinkingSheetVisible,
-                        onToggleDetails = {
-                            isThinkingSheetVisible = !isThinkingSheetVisible
-                        },
-                    )
-                }
-            }
-            is IndicatorState.Processing -> {
-                ProcessingIndicator()
-            }
-            is IndicatorState.Generating -> {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (transcriptLayoutShowsAggregateThoughtForHeader(
-                            indicatorState,
-                            suppressDuplicateThoughtForHeader,
-                        )
-                    ) {
-                        ThoughtForHeader(
-                            modifier = Modifier.padding(top = 8.dp),
-                            durationText = formatThinkingDuration(elapsedSeconds),
-                            isExpanded = isThinkingSheetVisible,
-                            onViewFullThinking = {
-                                isThinkingSheetVisible = !isThinkingSheetVisible
-                            },
-                        )
-                    }
-
-                    if (chatMode == ChatModeUi.CREW) {
-                        GeneratingIndicator()
-                    }
-                }
-            }
-            is IndicatorState.Complete -> {
-                if (transcriptLayoutShowsAggregateThoughtForHeader(
-                        indicatorState,
-                        suppressDuplicateThoughtForHeader,
-                    )
-                ) {
-                    ThoughtForHeader(
-                        modifier = Modifier.padding(top = 8.dp),
-                        durationText = formatThinkingDuration(elapsedSeconds),
-                        isExpanded = isThinkingSheetVisible,
-                        onViewFullThinking = {
-                            isThinkingSheetVisible = !isThinkingSheetVisible
-                        },
-                    )
-                }
-            }
-            is IndicatorState.None -> {
-                // Show no indicator at all.
-            }
-        }
-
-        if (isThinkingSheetVisible) {
-            val isStreaming =
-                indicatorState !is IndicatorState.Complete &&
-                    indicatorState !is IndicatorState.None
-
-            ThinkingDetailsBottomSheet(
-                isVisible = isThinkingSheetVisible,
-                thinkingRaw =
-                    indicatorState.let {
-                        when (it) {
-                            is IndicatorState.Thinking -> it.thinkingRaw
-                            is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
-                            is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
-                            else -> ""
-                        }
-                    },
-                thinkingDurationSeconds =
-                    indicatorState.let {
-                        when (it) {
-                            is IndicatorState.Thinking -> it.thinkingDurationSeconds
-                            is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                            is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                            else -> 0
-                        }
-                    },
-                elapsedSeconds = elapsedSeconds,
-                isStreaming = isStreaming,
-                onDismiss = { isThinkingSheetVisible = false },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ThoughtForHeader(
-    modifier: Modifier = Modifier,
-    durationText: String,
-    isExpanded: Boolean = false,
-    onViewFullThinking: () -> Unit,
-) {
-    val rotation by animateFloatAsState(
-        targetValue = if (isExpanded) 90f else 0f,
-        animationSpec = tween(durationMillis = 200),
-        label = "chevronRotation",
-    )
-
-    // Header row: lightbulb + "Thought for Xs" — clickable to open bottom sheet
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            modifier
-                .padding(bottom = 8.dp)
-                .fillMaxWidth()
-                .offset(x = (-11).dp)
-                .clickable { onViewFullThinking() },
-    ) {
-        Box(
-            modifier = Modifier.size(46.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.lightbulb),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
-        }
-        Spacer(Modifier.width(5.dp))
-
-        Text(
-            text = "Thought for $durationText",
-            style =
-                MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(Modifier.width(6.dp))
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = if (isExpanded) "Collapse details" else "Expand details",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier =
-                Modifier
-                    .size(24.dp)
-                    .rotate(rotation),
-        )
-    }
-}
-
-// ── "Thought for Xs" header that opens bottom sheet ──
-
-internal fun formatThinkingDuration(seconds: Int): String =
-    when {
-        seconds < 60 -> "${seconds}s"
-        else -> "${seconds / 60}m ${seconds % 60}s"
-    }
-
-// ==================== PREVIEWS ====================
 
 @Preview
 @Composable
-private fun PreviewMessageListEmpty() {
+internal fun PreviewMessageListEmpty() {
     PocketCrewTheme {
         MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview = true)
     }
@@ -671,7 +26,7 @@ private fun PreviewMessageListEmpty() {
 
 @Preview
 @Composable
-private fun PreviewMessageListLong() {
+internal fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview = true)
     }
@@ -679,7 +34,7 @@ private fun PreviewMessageListLong() {
 
 @Preview
 @Composable
-private fun PreviewMessageListThinking() {
+internal fun PreviewMessageListThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -726,7 +81,7 @@ private fun PreviewMessageListThinking() {
 
 @Preview
 @Composable
-private fun PreviewMessageListProcessing() {
+internal fun PreviewMessageListProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -756,7 +111,7 @@ private fun PreviewMessageListProcessing() {
 
 @Preview
 @Composable
-private fun PreviewMessageListGenerating() {
+internal fun PreviewMessageListGenerating() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -799,7 +154,7 @@ private fun PreviewMessageListGenerating() {
 // DRAFT_ONE - Generating with ThinkingData
 @Preview(name = "Pipeline: DRAFT_ONE Generating with Thinking")
 @Composable
-private fun PreviewPipelineDraftOneGeneratingWithThinking() {
+internal fun PreviewPipelineDraftOneGeneratingWithThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -841,7 +196,7 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
 // DRAFT_ONE - Thinking (streaming)
 @Preview(name = "Pipeline: DRAFT_ONE Thinking")
 @Composable
-private fun PreviewPipelineDraftOneThinking() {
+internal fun PreviewPipelineDraftOneThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -883,7 +238,7 @@ private fun PreviewPipelineDraftOneThinking() {
 // DRAFT_ONE - Processing
 @Preview(name = "Pipeline: DRAFT_ONE Processing")
 @Composable
-private fun PreviewPipelineDraftOneProcessing() {
+internal fun PreviewPipelineDraftOneProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -914,7 +269,7 @@ private fun PreviewPipelineDraftOneProcessing() {
 // Full chain: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL (all complete with varied thinkingData)
 @Preview(name = "Pipeline: Full Chain with FINAL Thinking")
 @Composable
-private fun PreviewPipelineFullChainWithFinalThinking() {
+internal fun PreviewPipelineFullChainWithFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -1028,7 +383,7 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
 // Full chain: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL (all complete, FINAL without thinking)
 @Preview(name = "Pipeline: Full Chain without FINAL Thinking")
 @Composable
-private fun PreviewPipelineFullChainNoFinalThinking() {
+internal fun PreviewPipelineFullChainNoFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -1128,7 +483,7 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
 // Pipeline in progress: Thinking -> Generating -> Complete
 @Preview(name = "Pipeline: Various Steps In Progress")
 @Composable
-private fun PreviewPipelineVariousStepsInProgress() {
+internal fun PreviewPipelineVariousStepsInProgress() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -1207,7 +562,7 @@ private fun PreviewPipelineVariousStepsInProgress() {
 // Single step: DRAFT_ONE in various states
 @Preview(name = "Pipeline: DRAFT_ONE All States")
 @Composable
-private fun PreviewPipelineDraftOneAllStates() {
+internal fun PreviewPipelineDraftOneAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -1308,7 +663,7 @@ private fun PreviewPipelineDraftOneAllStates() {
 // FINAL step states
 @Preview(name = "Pipeline: FINAL All States")
 @Composable
-private fun PreviewPipelineFinalAllStates() {
+internal fun PreviewPipelineFinalAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview = true,
@@ -1408,7 +763,7 @@ private fun PreviewPipelineFinalAllStates() {
 
 @Preview(name = "Message List with Tool Call Banner")
 @Composable
-private fun PreviewMessageListWithToolCall() {
+internal fun PreviewMessageListWithToolCall() {
     PocketCrewTheme(darkTheme = true) {
         val messageId = MessageId("active_msg")
         MessageList(

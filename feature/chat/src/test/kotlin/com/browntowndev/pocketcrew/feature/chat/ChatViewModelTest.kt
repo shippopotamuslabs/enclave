@@ -148,10 +148,9 @@ class ChatViewModelTest {
         savedStateHandle = SavedStateHandle()
 
         chatViewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 savedStateHandle = savedStateHandle,
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
@@ -166,6 +165,7 @@ class ChatViewModelTest {
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = chatRepository,
                 exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
 
@@ -664,88 +664,6 @@ class ChatViewModelTest {
         }
 
     @Test
-    fun `UI state reflects multiple artifacts from active turn snapshot`() =
-        runTest {
-            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
-            val snapshotFlow = MutableStateFlow<AccumulatedMessages?>(null)
-            val chatId = ChatId("chat")
-            val assistantId = MessageId("assistant")
-            val key = ActiveChatTurnKey(chatId, assistantId)
-
-            // Mock processPrompt to return our IDs, which sets the requestedTurnKey
-            coEvery { chatUseCases.processPrompt(any()) } returns
-                com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase.PromptResult(
-                    chatId = chatId,
-                    userMessageId = MessageId("user"),
-                    assistantMessageId = assistantId,
-                )
-
-            every { activeChatTurnStore.observe(key) } returns snapshotFlow
-
-            // Trigger send to set the active turn key
-            chatViewModel.onInputChange("test")
-            chatViewModel.onSendMessage()
-            advanceUntilIdle() // Ensure requestedTurnKey is processed
-
-            // Simulate a snapshot with two artifacts
-            val artifact1 =
-                ArtifactGenerationRequest(
-                    artifactId = "artifact-doc-1",
-                    title = "Doc 1",
-                    content = "",
-                )
-            val artifact2 =
-                ArtifactGenerationRequest(
-                    artifactId = "artifact-doc-2",
-                    title = "Doc 2",
-                    content = "",
-                )
-
-            val snapshot =
-                AccumulatedMessages(
-                    messages =
-                        mapOf(
-                            assistantId to
-                                MessageSnapshot(
-                                    messageId = assistantId,
-                                    modelType = ModelType.FAST,
-                                    content = "Here are your docs",
-                                    thinkingRaw = "",
-                                    messageState = MessageState.COMPLETE,
-                                    artifacts = listOf(artifact1, artifact2),
-                                ),
-                        ),
-                )
-
-            snapshotFlow.value = snapshot
-            advanceUntilIdle() // Ensure snapshot update is processed
-
-            val uiMessages = chatViewModel.uiState.value.messages
-            val assistantMessage = uiMessages.find { it.id == assistantId }
-
-            assertEquals(1, uiMessages.size)
-            assertEquals(2, assistantMessage?.content?.artifacts?.size)
-            assertEquals(
-                "Doc 1",
-                assistantMessage
-                    ?.content
-                    ?.artifacts
-                    ?.get(0)
-                    ?.title,
-            )
-            assertEquals(
-                "Doc 2",
-                assistantMessage
-                    ?.content
-                    ?.artifacts
-                    ?.get(1)
-                    ?.title,
-            )
-
-            collectJob.cancel()
-        }
-
-    @Test
     fun `onPlayTts with Initializing status does not set isPlayingTts`() =
         runTest {
             val text = "Hello"
@@ -870,10 +788,9 @@ class ChatViewModelTest {
 
             val savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value))
             chatViewModel =
-                ChatViewModel(
+                ChatViewModelTestSupport.createViewModel(
                     settingsUseCases = settingsUseCases,
                     chatUseCases = chatUseCases,
-                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     savedStateHandle = savedStateHandle,
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
@@ -888,6 +805,7 @@ class ChatViewModelTest {
                     shareChatUseCase = shareChatUseCase,
                     chatRepository = chatRepository,
                     exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
             // Initial state should use cache URI

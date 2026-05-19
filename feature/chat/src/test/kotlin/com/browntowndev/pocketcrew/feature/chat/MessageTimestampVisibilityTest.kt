@@ -8,11 +8,14 @@ import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -29,13 +32,16 @@ class MessageTimestampVisibilityTest {
     @BeforeEach
     fun setup() {
         every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
-        every { settingsUseCases.assignments.getDefaultModels() } returns flowOf(emptyList())
+        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
+        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
+        every { settingsUseCases.assignments } returns assignmentUseCases
+        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
+        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
 
         viewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = mockk(relaxed = true),
                 savedStateHandle = SavedStateHandle(),
                 cancelInferenceUseCase = mockk(relaxed = true),
                 inferenceLockManager = mockk(relaxed = true),
@@ -43,47 +49,45 @@ class MessageTimestampVisibilityTest {
                 activeModelProvider = mockk(relaxed = true),
                 toolExecutionEventPort = mockk(relaxed = true),
                 errorHandler = mockk(relaxed = true),
-                loggingPort = mockk(relaxed = true),
                 activeChatTurnSnapshotPort = mockk(relaxed = true),
                 playbackController = mockk(relaxed = true),
                 studioRepository = mockk(relaxed = true),
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = mockk(relaxed = true),
             )
     }
 
     @Test
     fun `mapToChatMessageForTesting preserves non-empty timestamp`() {
-        val chatId = ChatId("1")
         val message =
             Message(
-                id = MessageId("1"),
-                chatId = chatId,
-                content = Content(text = "Hello"),
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
                 role = Role.USER,
-                createdAt = 1700000000000L, // Valid timestamp
+                content = Content(text = "Hello"),
+                createdAt = 1_700_000_000_000L,
             )
 
         val chatMessage = viewModel.mapToChatMessageForTesting(message)
 
-        // Just verify it's not empty. The exact format depends on the system locale/timezone.
-        assert(chatMessage.formattedTimestamp.isNotBlank())
+        assertEquals(true, chatMessage.formattedTimestamp.isNotEmpty())
     }
 
     @Test
     fun `mapToChatMessageForTesting returns empty string for null timestamp`() {
-        val chatId = ChatId("1")
         val message =
             Message(
-                id = MessageId("1"),
-                chatId = chatId,
-                content = Content(text = "Hello"),
+                id = MessageId("msg-1"),
+                chatId = ChatId("chat-1"),
                 role = Role.USER,
+                content = Content(text = "Hello"),
                 createdAt = null,
             )
 
         val chatMessage = viewModel.mapToChatMessageForTesting(message)
+
         assertEquals("", chatMessage.formattedTimestamp)
     }
 }

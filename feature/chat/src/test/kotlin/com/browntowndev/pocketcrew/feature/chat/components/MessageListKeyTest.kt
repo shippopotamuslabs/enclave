@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
+import com.browntowndev.pocketcrew.feature.chat.components.messagelist.MessageList
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
