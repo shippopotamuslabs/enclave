@@ -28,22 +28,23 @@ fun PersistentTooltip(
     description: String,
     modifier: Modifier = Modifier,
     iconSize: Int = 16,
-    iconButtonSize: Int = 20
+    iconButtonSize: Int = 20,
 ) {
     val scope = rememberCoroutineScope()
     val tooltipState = rememberTooltipState(isPersistent = true)
 
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-            positioning = TooltipAnchorPosition.Above
-        ),
+        positionProvider =
+            TooltipDefaults.rememberTooltipPositionProvider(
+                positioning = TooltipAnchorPosition.Above,
+            ),
         tooltip = {
             PlainTooltip {
                 Text(description)
             }
         },
         state = tooltipState,
-        modifier = modifier
+        modifier = modifier,
     ) {
         IconButton(
             onClick = {
@@ -51,13 +52,13 @@ fun PersistentTooltip(
                     tooltipState.show()
                 }
             },
-            modifier = Modifier.size(iconButtonSize.dp)
+            modifier = Modifier.size(iconButtonSize.dp),
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = "Show description",
                 modifier = Modifier.size(iconSize.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
         }
     }

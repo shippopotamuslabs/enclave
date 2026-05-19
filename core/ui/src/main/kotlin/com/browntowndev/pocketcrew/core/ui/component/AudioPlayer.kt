@@ -79,9 +79,10 @@ fun AudioPlayer(
     }
 
     val context = LocalContext.current
-    val playbackHandle = remember(localUri) {
-        ExoAudioPlaybackHandle(context, localUri, autoPlay, isMuted)
-    }
+    val playbackHandle =
+        remember(localUri) {
+            ExoAudioPlaybackHandle(context, localUri, autoPlay, isMuted)
+        }
 
     LaunchedEffect(playbackHandle) {
         while (true) {
@@ -106,39 +107,42 @@ fun AudioPlayer(
     }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .semantics { this.contentDescription = contentDescription },
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         // Visualizer-like background
         AudioVisualizerBackground(
             isPlaying = isPlaying,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
 
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             // Hero Icon
             Surface(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape),
+                modifier =
+                    Modifier
+                        .size(120.dp)
+                        .clip(CircleShape),
                 color = Color.White.copy(alpha = 0.1f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = Color.White
+                        tint = Color.White,
                     )
                 }
             }
@@ -157,26 +161,27 @@ fun AudioPlayer(
                         playbackHandle.player.seekTo(currentPosition)
                         isDraggingSlider = false
                     },
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = PurpleLightPrimary,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    colors =
+                        SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = PurpleLightPrimary,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.2f),
+                        ),
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
                         text = formatDuration(currentPosition),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.7f),
                     )
                     Text(
                         text = formatDuration(duration),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.7f),
                     )
                 }
             }
@@ -187,16 +192,16 @@ fun AudioPlayer(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 IconButton(
                     onClick = { isMuted = !isMuted },
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                         contentDescription = if (isMuted) "Unmute" else "Mute",
-                        tint = Color.White
+                        tint = Color.White,
                     )
                 }
 
@@ -204,15 +209,16 @@ fun AudioPlayer(
 
                 IconButton(
                     onClick = { isPlaying = !isPlaying },
-                    modifier = Modifier
-                        .size(80.dp)
-                        .background(Color.White, CircleShape)
+                    modifier =
+                        Modifier
+                            .size(80.dp)
+                            .background(Color.White, CircleShape),
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.Black,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp),
                     )
                 }
 
@@ -228,29 +234,32 @@ fun AudioPlayer(
 @Composable
 private fun AudioVisualizerBackground(
     isPlaying: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "audio_visualizer")
     val pulse by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (isPlaying) 1.2f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween<Float>(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween<Float>(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "pulse",
     )
 
     Box(
-        modifier = modifier
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        PurpleLightPrimary.copy(alpha = 0.15f * pulse),
-                        Color.Transparent
-                    )
-                )
-            )
+        modifier =
+            modifier
+                .background(
+                    Brush.radialGradient(
+                        colors =
+                            listOf(
+                                PurpleLightPrimary.copy(alpha = 0.15f * pulse),
+                                Color.Transparent,
+                            ),
+                    ),
+                ),
     )
 }
 
@@ -267,13 +276,14 @@ private class ExoAudioPlaybackHandle(
     autoPlay: Boolean,
     muted: Boolean,
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
-        setMediaItem(MediaItem.fromUri(localUri.toUri()))
-        repeatMode = Player.REPEAT_MODE_ONE
-        playWhenReady = autoPlay
-        volume = if (muted) 0f else 1f
-        prepare()
-    }
+    val player: ExoPlayer =
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(localUri.toUri()))
+            repeatMode = Player.REPEAT_MODE_ONE
+            playWhenReady = autoPlay
+            volume = if (muted) 0f else 1f
+            prepare()
+        }
 
     var playWhenReady: Boolean
         get() = player.playWhenReady
@@ -298,9 +308,10 @@ private fun AudioPreviewPlaceholder(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .background(Color.DarkGray)
-            .semantics { this.contentDescription = contentDescription },
+        modifier =
+            modifier
+                .background(Color.DarkGray)
+                .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

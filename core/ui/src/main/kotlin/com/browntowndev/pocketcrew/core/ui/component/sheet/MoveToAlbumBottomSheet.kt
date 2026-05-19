@@ -52,122 +52,127 @@ fun MoveToAlbumBottomSheet(
     onMoveToAlbum: (String) -> Unit,
     onAddAlbum: (String) -> Unit,
     modifier: Modifier = Modifier,
-    title: String = "Save to Album"
+    title: String = "Save to Album",
 ) {
     var isAddingNewAlbum by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
+        modifier = modifier,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp),
             )
 
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                contentPadding = PaddingValues(bottom = 16.dp),
             ) {
                 item {
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        onClick = { isAddingNewAlbum = true }
+                        onClick = { isAddingNewAlbum = true },
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                            horizontalArrangement = Arrangement.Center,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Create New Album",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     }
                 }
-                
+
                 if (albums.isNotEmpty()) {
                     item {
                         Text(
                             text = "Existing Albums",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp),
                         )
                     }
                 }
 
                 items(
                     items = albums,
-                    key = { album -> album.id }
+                    key = { album -> album.id },
                 ) { album ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onMoveToAlbum(album.id) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onMoveToAlbum(album.id) }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         val imageSize = 72.dp
                         if (album.coverUri != null) {
-                            val imageModifier = Modifier
-                                .size(imageSize)
-                                .clip(RoundedCornerShape(12.dp))
+                            val imageModifier =
+                                Modifier
+                                    .size(imageSize)
+                                    .clip(RoundedCornerShape(12.dp))
 
                             if (album.coverMediaType == MediaCapability.VIDEO) {
                                 VideoThumbnail(
                                     videoUri = album.coverUri,
                                     contentDescription = null,
-                                    modifier = imageModifier
+                                    modifier = imageModifier,
                                 )
                             } else {
                                 AsyncImage(
                                     model = album.coverUri,
                                     contentDescription = null,
                                     modifier = imageModifier,
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
                                 )
                             }
                         } else {
                             Box(
-                                modifier = Modifier
-                                    .size(imageSize)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier
+                                        .size(imageSize)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhotoLibrary,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(32.dp),
                                 )
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.width(20.dp))
-                        
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = album.name,
@@ -175,13 +180,13 @@ fun MoveToAlbumBottomSheet(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${album.itemCount} items",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -196,7 +201,7 @@ fun MoveToAlbumBottomSheet(
             onConfirm = { name ->
                 onAddAlbum(name)
                 isAddingNewAlbum = false
-            }
+            },
         )
     }
 }

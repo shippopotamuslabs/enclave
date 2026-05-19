@@ -1,8 +1,5 @@
 package com.browntowndev.pocketcrew.core.ui.component.sheet
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +47,7 @@ import kotlinx.coroutines.delay
 fun CustomAnimationPromptPane(
     onSend: (String) -> Unit,
     onDismiss: () -> Unit,
-    hazeState: HazeState
+    hazeState: HazeState,
 ) {
     var prompt by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -63,50 +60,56 @@ fun CustomAnimationPromptPane(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hazeEffect(
-                state = hazeState,
-                style = MaterialTheme.colorScheme.surface.let { color ->
-                    HazeStyle(
-                        tint = HazeTint(color.copy(alpha = 0.5f)),
-                        blurRadius = 30.dp
-                    )
-                }
-            )
-            .padding(WindowInsets.ime.asPaddingValues()) // Bleed to bottom including IME
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .hazeEffect(
+                    state = hazeState,
+                    style =
+                        MaterialTheme.colorScheme.surface.let { color ->
+                            HazeStyle(
+                                tint = HazeTint(color.copy(alpha = 0.5f)),
+                                blurRadius = 30.dp,
+                            )
+                        },
+                ).padding(WindowInsets.ime.asPaddingValues()), // Bleed to bottom including IME
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
                     placeholder = { Text("What should the animation do?", color = Color.White.copy(alpha = 0.6f)) },
                     textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.White.copy(alpha = 0.5f),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
-                        cursorColor = Color.White
-                    ),
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.White.copy(alpha = 0.5f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                            cursorColor = Color.White,
+                        ),
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = {
-                        if (prompt.isNotBlank()) {
-                            onSend(prompt)
-                        }
-                    }),
+                    keyboardActions =
+                        KeyboardActions(onSend = {
+                            if (prompt.isNotBlank()) {
+                                onSend(prompt)
+                            }
+                        }),
                     trailingIcon = {
                         IconButton(
                             onClick = {
@@ -114,24 +117,25 @@ fun CustomAnimationPromptPane(
                                     onSend(prompt)
                                 }
                             },
-                            enabled = prompt.isNotBlank()
+                            enabled = prompt.isNotBlank(),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "Send",
-                                tint = if (prompt.isNotBlank()) Color.White else Color.White.copy(alpha = 0.3f)
+                                tint = if (prompt.isNotBlank()) Color.White else Color.White.copy(alpha = 0.3f),
                             )
                         }
-                    }
+                    },
                 )
             }
-            
+
             // Background scrim click to dismiss
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(0.dp) // Invisible but could be expanded if needed
-                    .clickable(onClick = onDismiss)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(0.dp) // Invisible but could be expanded if needed
+                        .clickable(onClick = onDismiss),
             )
         }
     }

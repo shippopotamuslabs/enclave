@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Videocam
@@ -42,9 +41,10 @@ fun VideoThumbnail(
     val context = LocalContext.current
     val loadedBitmap by produceState<Bitmap?>(initialValue = null, key1 = videoUri) {
         if (videoUri != null && thumbnail == null) {
-            value = withContext(Dispatchers.IO) {
-                loadVideoFrame(videoUri, context)
-            }
+            value =
+                withContext(Dispatchers.IO) {
+                    loadVideoFrame(videoUri, context)
+                }
         }
     }
 
@@ -64,29 +64,33 @@ fun VideoThumbnail(
         )
     } else {
         val transition = rememberInfiniteTransition(label = "video_shimmer")
-        val progress = transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 1500,
-                    easing = LinearEasing,
-                ),
-                repeatMode = RepeatMode.Restart,
-            ),
-            label = "video_shimmer_progress",
-        )
+        val progress =
+            transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation =
+                            tween(
+                                durationMillis = 1500,
+                                easing = LinearEasing,
+                            ),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "video_shimmer_progress",
+            )
         val baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
 
         Box(
-            modifier = modifier
-                .background(Color.Black)
-                .shimmerEffect(
-                    progressState = progress,
-                    baseColor = baseColor,
-                    highlightColor = highlightColor,
-                ),
+            modifier =
+                modifier
+                    .background(Color.Black)
+                    .shimmerEffect(
+                        progressState = progress,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor,
+                    ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

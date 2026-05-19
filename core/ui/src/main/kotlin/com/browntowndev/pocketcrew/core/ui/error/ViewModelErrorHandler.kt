@@ -23,7 +23,7 @@ interface ViewModelErrorHandler {
         tag: String,
         message: String,
         throwable: Throwable,
-        userMessage: String = "An unexpected error occurred"
+        userMessage: String = "An unexpected error occurred",
     )
 
     /**
@@ -35,6 +35,6 @@ interface ViewModelErrorHandler {
     fun coroutineExceptionHandler(
         tag: String,
         message: String,
-        userMessage: String = "An unexpected error occurred"
+        userMessage: String = "An unexpected error occurred",
     ): CoroutineExceptionHandler
 }

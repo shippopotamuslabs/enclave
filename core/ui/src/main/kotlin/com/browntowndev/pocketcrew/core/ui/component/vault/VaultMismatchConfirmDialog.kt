@@ -36,10 +36,11 @@ fun VaultMismatchConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = { if (!isReconciling) onCancel() },
-        properties = DialogProperties(
-            dismissOnBackPress = !isReconciling,
-            dismissOnClickOutside = !isReconciling,
-        ),
+        properties =
+            DialogProperties(
+                dismissOnBackPress = !isReconciling,
+                dismissOnClickOutside = !isReconciling,
+            ),
         icon = {
             Icon(
                 imageVector = Icons.Default.WarningAmber,
@@ -61,8 +62,9 @@ fun VaultMismatchConfirmDialog(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    text = "Continuing will erase all local chats, memories, and studio media on this " +
-                        "device, then re-download everything from your account. This cannot be undone.",
+                    text =
+                        "Continuing will erase all local chats, memories, and studio media on this " +
+                            "device, then re-download everything from your account. This cannot be undone.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(

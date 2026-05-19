@@ -29,38 +29,43 @@ fun ShimmerText(
 ) {
     if (enabled) {
         val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-        val animatedOffset = infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1500, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-            label = "shimmerOffset",
-        )
+        val animatedOffset =
+            infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1000f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = 1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "shimmerOffset",
+            )
 
         val bandStrength = (1f - highlightColor.alpha).coerceIn(0f, 1f)
         Text(
             text = text,
             style = style.copy(color = baseColor),
-            modifier = modifier
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithCache {
-                    onDrawWithContent {
-                        drawContent()
-                        val offset = animatedOffset.value
-                        val brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = bandStrength),
-                                Color.Transparent,
-                            ),
-                            start = Offset(offset - 200f, 0f),
-                            end = Offset(offset, 0f),
-                        )
-                        drawRect(brush = brush, blendMode = BlendMode.DstOut)
-                    }
-                },
+            modifier =
+                modifier
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithCache {
+                        onDrawWithContent {
+                            drawContent()
+                            val offset = animatedOffset.value
+                            val brush =
+                                Brush.linearGradient(
+                                    colors =
+                                        listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = bandStrength),
+                                            Color.Transparent,
+                                        ),
+                                    start = Offset(offset - 200f, 0f),
+                                    end = Offset(offset, 0f),
+                                )
+                            drawRect(brush = brush, blendMode = BlendMode.DstOut)
+                        }
+                    },
         )
     } else {
         Text(

@@ -20,18 +20,18 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class VaultUnlockContentTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val authenticatedUser = VaultAuthUiState.Authenticated(
-        VaultUserUiState(
-            uid = "user-1",
-            displayName = "Ada",
-            email = "ada@example.com",
-            photoUrl = null,
-        ),
-    )
+    private val authenticatedUser =
+        VaultAuthUiState.Authenticated(
+            VaultUserUiState(
+                uid = "user-1",
+                displayName = "Ada",
+                email = "ada@example.com",
+                photoUrl = null,
+            ),
+        )
 
     @Test
     fun unlockingStateStaysVisibleWhenUnlockFlagDropsBeforeDismissal() {

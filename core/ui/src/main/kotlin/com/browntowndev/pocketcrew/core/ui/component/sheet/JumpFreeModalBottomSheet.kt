@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -59,39 +58,43 @@ fun JumpFreeModalBottomSheet(
     tonalElevation: Dp = BottomSheetDefaults.Elevation,
     scrimColor: Color = BottomSheetDefaults.ScrimColor,
     dragHandle: @Composable (() -> Unit)? = { BottomSheetDefaults.DragHandle() },
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     // Stabilize layout by intercepting nested scroll flings that reach the boundary.
     // This prevents the "jitter/jumping" behavior in fully expanded state.
-    val nestedScrollInterceptor = remember(sheetState) {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                // Only swallow upward flings if we are already at the top (Expanded).
-                // This prevents the "jitter/bounce" bug at the top boundary.
-                // We must allow flings in other states so the sheet can expand/collapse.
-                val isAtTop = sheetState.currentValue == SheetValue.Expanded
-                return if (source == NestedScrollSource.Fling && available.y < 0 && isAtTop) {
-                    available
-                } else {
-                    Offset.Zero
+    val nestedScrollInterceptor =
+        remember(sheetState) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    // Only swallow upward flings if we are already at the top (Expanded).
+                    // This prevents the "jitter/bounce" bug at the top boundary.
+                    // We must allow flings in other states so the sheet can expand/collapse.
+                    val isAtTop = sheetState.currentValue == SheetValue.Expanded
+                    return if (source == NestedScrollSource.Fling && available.y < 0 && isAtTop) {
+                        available
+                    } else {
+                        Offset.Zero
+                    }
                 }
-            }
 
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // Only swallow remaining upward velocity if we are already at the top.
-                val isAtTop = sheetState.currentValue == SheetValue.Expanded
-                return if (available.y < 0 && isAtTop) {
-                    available
-                } else {
-                    Velocity.Zero
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity {
+                    // Only swallow remaining upward velocity if we are already at the top.
+                    val isAtTop = sheetState.currentValue == SheetValue.Expanded
+                    return if (available.y < 0 && isAtTop) {
+                        available
+                    } else {
+                        Velocity.Zero
+                    }
                 }
             }
         }
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -103,12 +106,13 @@ fun JumpFreeModalBottomSheet(
         tonalElevation = tonalElevation,
         scrimColor = scrimColor,
         dragHandle = dragHandle,
-        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) }
+        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) },
     ) {
         Column(
-            modifier = Modifier
-                .navigationBarsPadding()
-                .imePadding()
+            modifier =
+                Modifier
+                    .navigationBarsPadding()
+                    .imePadding(),
         ) {
             content()
         }

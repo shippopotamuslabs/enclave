@@ -82,39 +82,45 @@ fun SimpleMarkdownText(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    val annotatedString = remember(text) {
-        parseSimpleMarkdown(text)
-    }
+    val annotatedString =
+        remember(text) {
+            parseSimpleMarkdown(text)
+        }
     Text(
         text = annotatedString,
-        style = LlmBodyTextStyle.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-        ),
+        style =
+            LlmBodyTextStyle.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+            ),
         modifier = modifier,
     )
 }
 
-private fun parseSimpleMarkdown(text: String): AnnotatedString {
-    return buildAnnotatedString {
+private fun parseSimpleMarkdown(text: String): AnnotatedString =
+    buildAnnotatedString {
         var currentIndex = 0
         val processedText = text
 
         val allMatches = mutableListOf<Pair<IntRange, () -> Unit>>()
 
         boldRegex.findAll(processedText).forEach { match ->
-            allMatches.add(match.range to {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(match.groupValues[1])
-                }
-            })
+            allMatches.add(
+                match.range to {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append(match.groupValues[1])
+                    }
+                },
+            )
         }
 
         codeRegex.findAll(processedText).forEach { match ->
-            allMatches.add(match.range to {
-                withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
-                    append(match.groupValues[1])
-                }
-            })
+            allMatches.add(
+                match.range to {
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
+                        append(match.groupValues[1])
+                    }
+                },
+            )
         }
 
         allMatches.sortBy { it.first.first }
@@ -131,4 +137,3 @@ private fun parseSimpleMarkdown(text: String): AnnotatedString {
             append(processedText.substring(currentIndex))
         }
     }
-}

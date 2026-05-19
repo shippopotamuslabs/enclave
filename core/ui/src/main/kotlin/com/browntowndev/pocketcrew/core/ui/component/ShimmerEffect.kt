@@ -20,40 +20,43 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 fun Modifier.shimmerEffect(
     progressState: State<Float>,
     baseColor: Color,
-    highlightColor: Color
-): Modifier = this.drawWithCache {
-    // 1. Create the brush once per size change.
-    // The brush remains static relative to its own coordinate system.
-    val brush = Brush.linearGradient(
-        colors = listOf(
-            baseColor,
-            highlightColor,
-            baseColor,
-        ),
-        // We define the brush to match the component size
-        start = Offset.Zero,
-        end = Offset(size.width, size.height)
-    )
-
-    onDrawBehind {
-        val width = size.width
-        val progress = progressState.value
-        
-        // 2. Animate by translating the canvas.
-        // We sweep from -width (gradient ends at 0) to width (gradient starts at width).
-        val xOffset = -width + (progress * 2 * width)
-
-        withTransform({
-            translate(left = xOffset)
-        }) {
-            // 3. Draw the cached brush. 
-            // We draw at -xOffset to ensure the rectangle ALWAYS covers the component's visible area (0..width)
-            // while the brush (gradient) moves relative to it because of the canvas translation.
-            drawRect(
-                brush = brush,
-                topLeft = Offset(x = -xOffset, y = 0f),
-                size = size
+    highlightColor: Color,
+): Modifier =
+    this.drawWithCache {
+        // 1. Create the brush once per size change.
+        // The brush remains static relative to its own coordinate system.
+        val brush =
+            Brush.linearGradient(
+                colors =
+                    listOf(
+                        baseColor,
+                        highlightColor,
+                        baseColor,
+                    ),
+                // We define the brush to match the component size
+                start = Offset.Zero,
+                end = Offset(size.width, size.height),
             )
+
+        onDrawBehind {
+            val width = size.width
+            val progress = progressState.value
+
+            // 2. Animate by translating the canvas.
+            // We sweep from -width (gradient ends at 0) to width (gradient starts at width).
+            val xOffset = -width + (progress * 2 * width)
+
+            withTransform({
+                translate(left = xOffset)
+            }) {
+                // 3. Draw the cached brush.
+                // We draw at -xOffset to ensure the rectangle ALWAYS covers the component's visible area (0..width)
+                // while the brush (gradient) moves relative to it because of the canvas translation.
+                drawRect(
+                    brush = brush,
+                    topLeft = Offset(x = -xOffset, y = 0f),
+                    size = size,
+                )
+            }
         }
     }
-}
