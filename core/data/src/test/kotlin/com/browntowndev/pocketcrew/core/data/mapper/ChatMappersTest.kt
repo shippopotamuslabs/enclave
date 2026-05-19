@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.mapper.chat.toDomain
+import com.browntowndev.pocketcrew.core.data.mapper.message.toDomain
+import com.browntowndev.pocketcrew.core.data.mapper.message.toEntity
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity

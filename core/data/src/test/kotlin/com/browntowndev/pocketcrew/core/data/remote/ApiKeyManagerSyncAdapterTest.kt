@@ -32,7 +32,7 @@ class ApiKeyManagerSyncAdapterTest {
         every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())
 
         dataSource =
-            FirestoreDataSource(
+            createTestFirestoreDataSource(
                 documentDao = mockk(relaxed = true),
                 firestore = firestore,
                 chatDao = mockk(relaxed = true),

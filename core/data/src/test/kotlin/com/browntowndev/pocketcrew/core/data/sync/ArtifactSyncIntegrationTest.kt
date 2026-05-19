@@ -29,6 +29,7 @@ import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
+import com.browntowndev.pocketcrew.core.data.remote.createTestFirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.repository.testSensitiveSelfHealer
@@ -119,7 +120,7 @@ class ArtifactSyncIntegrationTest {
             )
 
         dataSource =
-            FirestoreDataSource(
+            createTestFirestoreDataSource(
                 documentDao = mockk(relaxed = true),
                 firestore = firestore,
                 chatDao = chatDao,

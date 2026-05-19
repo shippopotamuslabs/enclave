@@ -139,8 +139,9 @@ data class ToolDefinition(
 
     @Suppress("UNCHECKED_CAST")
     fun <T : ToolParameters> decodeArguments(argumentsJson: String): T {
+        val normalized = ToolArgumentsJsonNormalizer.normalize(schema, argumentsJson)
         val serializer = json.serializersModule.serializer(parametersClass.java) as KSerializer<T>
-        return json.decodeFromString(serializer, argumentsJson)
+        return json.decodeFromString(serializer, normalized)
     }
 
     @Suppress("UNCHECKED_CAST")

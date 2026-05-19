@@ -26,4 +26,6 @@ internal interface EntitySyncAdapter<RoomT> {
     fun getEntityId(entity: RoomT): String
 
     fun shouldDelete(entity: RoomT): Boolean = false
+
+    suspend fun repairForSync(entity: RoomT): RoomT = entity
 }

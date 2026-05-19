@@ -178,7 +178,19 @@ object DataModule {
     fun provideChatDao(database: PocketCrewDatabase): ChatDao = database.chatDao()
 
     @Provides
-    fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+    fun provideMessageQueryDao(
+        database: PocketCrewDatabase,
+    ): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageQueryDao = database.messageQueryDao()
+
+    @Provides
+    fun provideMessageCommandDao(
+        database: PocketCrewDatabase,
+    ): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageCommandDao = database.messageCommandDao()
+
+    @Provides
+    fun provideMessageSyncCommandDao(
+        database: PocketCrewDatabase,
+    ): com.browntowndev.pocketcrew.core.data.local.dao.message.MessageSyncCommandDao = database.messageSyncCommandDao()
 
     @Provides
     fun provideMessageTranscriptSegmentDao(database: PocketCrewDatabase): MessageTranscriptSegmentDao =

@@ -38,15 +38,15 @@ class MessageRepositoryImplGetMessagesForChatTest {
         embeddingDao = mockk(relaxed = true)
         transactionProvider = mockk(relaxed = true)
         repository =
-            MessageRepositoryImpl(
-                syncTrigger,
-                messageDao,
-                messageVisionAnalysisDao,
-                chatSummaryDao,
-                embeddingDao,
-                transactionProvider,
-                testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
-                readRepairApplier,
+            createMessageRepositoryImpl(
+                syncTrigger = syncTrigger,
+                messageDao = messageDao,
+                messageVisionAnalysisDao = messageVisionAnalysisDao,
+                chatSummaryDao = chatSummaryDao,
+                embeddingDao = embeddingDao,
+                transactionProvider = transactionProvider,
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = readRepairApplier,
             )
     }
 
@@ -380,6 +380,29 @@ class MessageRepositoryImplGetMessagesForChatTest {
             // Then
             assertEquals(1, result.size)
             assertEquals("Only message", result[0].content.text)
+        }
+
+    @Test
+    fun `getMessagesForChat applies read repairs after decrypting rows`() =
+        runTest {
+            val chatId = ChatId("repair-chat")
+            val entity =
+                MessageWithFiles(
+                    message =
+                        MessageEntity(
+                            id = MessageId("1"),
+                            chatId = chatId,
+                            content = "PCENC:v1:aes-gcm:secret",
+                            role = Role.USER,
+                        ),
+                    files = emptyList(),
+                )
+            coEvery { messageDao.getMessagesByChatId(chatId) } returns listOf(entity)
+
+            val result = repository.getMessagesForChat(chatId)
+
+            assertEquals("secret", result.single().content.text)
+            coVerify { readRepairApplier.apply(any()) }
         }
 
     @Test
