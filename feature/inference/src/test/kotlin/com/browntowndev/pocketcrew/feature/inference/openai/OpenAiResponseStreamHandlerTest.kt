@@ -4,7 +4,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.openai.models.responses.ResponseRefusalDeltaEvent
@@ -21,7 +20,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OpenAiResponseStreamHandlerTest {
-
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val emittedEvents = mutableListOf<InferenceEvent>()
     private val emitEvent: suspend (InferenceEvent) -> Unit = { emittedEvents.add(it) }
@@ -106,17 +104,19 @@ class OpenAiResponseStreamHandlerTest {
     @Test
     fun `toStreamedResponse maps all state fields correctly`() {
         val handler = createHandler()
-        val state = StreamState(
-            emittedAny = true,
-        )
-        state.toolCallRequests += ToolCallRequest(
-            toolName = "search",
-            argumentsJson = """{"q":"test"}""",
-            provider = "TEST",
-            modelType = ModelType.THINKING,
-            chatId = null,
-            userMessageId = null,
-        )
+        val state =
+            StreamState(
+                emittedAny = true,
+            )
+        state.toolCallRequests +=
+            ToolCallRequest(
+                toolName = "search",
+                argumentsJson = """{"q":"test"}""",
+                provider = "TEST",
+                modelType = ModelType.THINKING,
+                chatId = null,
+                userMessageId = null,
+            )
         state.responseId = "resp_123"
         state.providerToolCallIds += "call_456"
         state.providerToolItemIds += "item_789"
@@ -159,11 +159,12 @@ class OpenAiResponseStreamHandlerTest {
 
             // First function call arrives via handleEvent
             val firstEvent = mockk<ResponseStreamEvent>(relaxed = true)
-            val firstCallDone = mockFunctionCallArgumentsDoneEvent(
-                itemId = "call_1",
-                name = "web_search",
-                arguments = """{"query":"first search"}"""
-            )
+            val firstCallDone =
+                mockFunctionCallArgumentsDoneEvent(
+                    itemId = "call_1",
+                    name = "web_search",
+                    arguments = """{"query":"first search"}""",
+                )
             every { firstEvent.isFunctionCallArgumentsDone() } returns true
             every { firstEvent.functionCallArgumentsDone() } returns java.util.Optional.of(firstCallDone)
 
@@ -172,11 +173,12 @@ class OpenAiResponseStreamHandlerTest {
 
             // Second function call arrives in the same response
             val secondEvent = mockk<ResponseStreamEvent>(relaxed = true)
-            val secondCallDone = mockFunctionCallArgumentsDoneEvent(
-                itemId = "call_2",
-                name = "attached_image_inspect",
-                arguments = """{"question":"describe this image"}"""
-            )
+            val secondCallDone =
+                mockFunctionCallArgumentsDoneEvent(
+                    itemId = "call_2",
+                    name = "attached_image_inspect",
+                    arguments = """{"question":"describe this image"}""",
+                )
             every { secondEvent.isFunctionCallArgumentsDone() } returns true
             every { secondEvent.functionCallArgumentsDone() } returns java.util.Optional.of(secondCallDone)
 
@@ -200,11 +202,12 @@ class OpenAiResponseStreamHandlerTest {
             val state = StreamState()
 
             val event = mockk<ResponseStreamEvent>(relaxed = true)
-            val functionCallDone = mockFunctionCallArgumentsDoneEvent(
-                itemId = "fc_1",
-                name = "web_search",
-                arguments = """{"query":"test"}"""
-            )
+            val functionCallDone =
+                mockFunctionCallArgumentsDoneEvent(
+                    itemId = "fc_1",
+                    name = "web_search",
+                    arguments = """{"query":"test"}""",
+                )
             every { event.isFunctionCallArgumentsDone() } returns true
             every { event.functionCallArgumentsDone() } returns java.util.Optional.of(functionCallDone)
 
@@ -260,11 +263,12 @@ class OpenAiResponseStreamHandlerTest {
             val state = StreamState()
 
             val event = mockk<ResponseStreamEvent>(relaxed = true)
-            val functionCallDone = mockFunctionCallArgumentsDoneEvent(
-                itemId = "call_1",
-                name = "web_search",
-                arguments = """{"query":"test"}"""
-            )
+            val functionCallDone =
+                mockFunctionCallArgumentsDoneEvent(
+                    itemId = "call_1",
+                    name = "web_search",
+                    arguments = """{"query":"test"}""",
+                )
             every { event.isFunctionCallArgumentsDone() } returns true
             every { event.functionCallArgumentsDone() } returns java.util.Optional.of(functionCallDone)
 

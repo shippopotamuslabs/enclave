@@ -15,22 +15,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class MediaInferenceModule {
+    @Binds
+    @Singleton
+    abstract fun bindImageGenerationPort(impl: ImageGenerationPortImpl): ImageGenerationPort
 
     @Binds
     @Singleton
-    abstract fun bindImageGenerationPort(
-        impl: ImageGenerationPortImpl
-    ): ImageGenerationPort
+    abstract fun bindVideoGenerationPort(impl: VideoGenerationPortImpl): VideoGenerationPort
 
     @Binds
     @Singleton
-    abstract fun bindVideoGenerationPort(
-        impl: VideoGenerationPortImpl
-    ): VideoGenerationPort
-
-    @Binds
-    @Singleton
-    abstract fun bindMusicGenerationPort(
-        impl: MusicGenerationPortImpl
-    ): MusicGenerationPort
+    abstract fun bindMusicGenerationPort(impl: MusicGenerationPortImpl): MusicGenerationPort
 }

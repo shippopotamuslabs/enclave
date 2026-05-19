@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
-import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort

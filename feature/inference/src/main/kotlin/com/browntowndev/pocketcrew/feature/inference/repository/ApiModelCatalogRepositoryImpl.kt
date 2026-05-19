@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.feature.inference.repository
 
 import android.util.Log
-import com.browntowndev.pocketcrew.feature.inference.anthropic.AnthropicClientProvider
-import com.browntowndev.pocketcrew.feature.inference.google.GoogleGenAiClientProvider
-import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiClientProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.pocketcrew.feature.inference.anthropic.AnthropicClientProvider
+import com.browntowndev.pocketcrew.feature.inference.google.GoogleGenAiClientProvider
+import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiClientProvider
 import com.google.genai.types.Model
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

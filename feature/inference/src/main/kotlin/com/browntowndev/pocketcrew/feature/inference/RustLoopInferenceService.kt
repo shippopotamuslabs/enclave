@@ -40,7 +40,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -72,190 +71,200 @@ class RustLoopInferenceService(
     private val rollingSummarizer: RollingSummarizer,
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
 ) : RustCompatibleInferenceService {
-
     private val conversationHistory = mutableListOf<ChatMessage>()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> =
-        sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
+    override fun sendPrompt(
+        prompt: String,
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
 
     override fun sendPrompt(
         prompt: String,
         options: GenerationOptions,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> = channelFlow {
-        try {
-            val history = buildHistory()
-            val initialMessages = history + listOf(ChatMessage(Role.USER, prompt))
-            val config = buildAgentLoopConfig(options)
-            val assistantText = StringBuilder()
+    ): Flow<InferenceEvent> =
+        channelFlow {
+            try {
+                val history = buildHistory()
+                val initialMessages = history + listOf(ChatMessage(Role.USER, prompt))
+                val config = buildAgentLoopConfig(options)
+                val assistantText = StringBuilder()
 
-            val host = object : AgentLoopHostCallbacks {
-                override suspend fun completeModelTurn(
-                    sessionMessages: List<AgentLoopMessage>,
-                    systemPrompt: String,
-                    toolsSchemaJson: String,
-                    allowToolCall: Boolean,
-                    contextReferences: List<AgentContextReference>,
-                    stateLedgerJson: String?,
-                    toolContextIndexJson: String?,
-                    fileContextIndexJson: String?,
-                    cacheHints: List<String>,
-                    onTextToken: suspend (String) -> Unit,
-                    onThinkingToken: suspend (String) -> Unit,
-                ): AgentModelTurnResult =
-                    inner.completeSingleTurn(
-                        sessionMessages = sessionMessages,
-                        systemPrompt = systemPrompt.withContextSidecars(
-                            contextReferences = contextReferences,
-                            stateLedgerJson = stateLedgerJson,
-                            toolContextIndexJson = toolContextIndexJson,
-                            fileContextIndexJson = fileContextIndexJson,
-                            cacheHints = cacheHints,
-                        ),
-                        availableTools = toolsForRequest(
-                            toolsSchemaJson = toolsSchemaJson,
-                            toolContextIndexJson = toolContextIndexJson,
-                            availableTools = options.availableTools,
-                            allowToolCall = allowToolCall,
-                        ),
-                        allowToolCall = allowToolCall,
-                        onTextToken = onTextToken,
-                        onThinkingToken = onThinkingToken,
-                        options = options,
-                    )
+                val host =
+                    object : AgentLoopHostCallbacks {
+                        override suspend fun completeModelTurn(
+                            sessionMessages: List<AgentLoopMessage>,
+                            systemPrompt: String,
+                            toolsSchemaJson: String,
+                            allowToolCall: Boolean,
+                            contextReferences: List<AgentContextReference>,
+                            stateLedgerJson: String?,
+                            toolContextIndexJson: String?,
+                            fileContextIndexJson: String?,
+                            cacheHints: List<String>,
+                            onTextToken: suspend (String) -> Unit,
+                            onThinkingToken: suspend (String) -> Unit,
+                        ): AgentModelTurnResult =
+                            inner.completeSingleTurn(
+                                sessionMessages = sessionMessages,
+                                systemPrompt =
+                                    systemPrompt.withContextSidecars(
+                                        contextReferences = contextReferences,
+                                        stateLedgerJson = stateLedgerJson,
+                                        toolContextIndexJson = toolContextIndexJson,
+                                        fileContextIndexJson = fileContextIndexJson,
+                                        cacheHints = cacheHints,
+                                    ),
+                                availableTools =
+                                    toolsForRequest(
+                                        toolsSchemaJson = toolsSchemaJson,
+                                        toolContextIndexJson = toolContextIndexJson,
+                                        availableTools = options.availableTools,
+                                        allowToolCall = allowToolCall,
+                                    ),
+                                allowToolCall = allowToolCall,
+                                onTextToken = onTextToken,
+                                onThinkingToken = onThinkingToken,
+                                options = options,
+                            )
 
-                override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
-                    coroutineScope {
-                        calls.map { call ->
-                            async(Dispatchers.IO) { executeOneTool(call, options) }
-                        }.awaitAll()
-                    }
-
-                override suspend fun onToolResult(
-                    toolName: String,
-                    argumentsJson: String,
-                    resultJson: String,
-                ) {
-                    emitToolSideEffects(toolName, argumentsJson, resultJson, options) { send(it) }
-                }
-
-                override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
-                    val messages = request.messagesToSummarize.map { it.toChatMessage() }
-                    val summaryModelType = resolveCompactionSummaryModel.invoke(
-                        activeTurnModelType = modelType,
-                        messagesToSummarize = messages,
-                    )
-                    loggingPort.debug(
-                        TAG,
-                        "compaction_summary provider=$provider activeTurn=$modelType " +
-                            "selectedModel=$summaryModelType messageCount=${messages.size} " +
-                            "trigger=${request.trigger.name}",
-                    )
-                    val summaryText =
-                        inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
-                            if (summaryService is RustCompatibleInferenceService) {
-                                val prompt = rollingSummarizer.buildAgentSummaryPrompt(
-                                    messages = messages,
-                                    instruction = request.instruction,
-                                    focusInstruction = request.focusInstruction,
-                                    historyRef = request.historyRef,
-                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                    trigger = request.trigger,
-                                )
-                                summaryService.completeSingleTurn(
-                                    sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
-                                    systemPrompt = "",
-                                    availableTools = emptyList(),
-                                    allowToolCall = false,
-                                    onTextToken = {},
-                                    onThinkingToken = {},
-                                    options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
-                                ).assistantText
-                            } else {
-                                rollingSummarizer.summarizeAgentRequest(
-                                    messages = messages,
-                                    service = summaryService,
-                                    instruction = request.instruction,
-                                    focusInstruction = request.focusInstruction,
-                                    historyRef = request.historyRef,
-                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                    trigger = request.trigger,
-                                )
+                        override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
+                            coroutineScope {
+                                calls
+                                    .map { call ->
+                                        async(Dispatchers.IO) { executeOneTool(call, options) }
+                                    }.awaitAll()
                             }
-                        }
-                    return AgentSummaryResult(
-                        summaryText = summaryText ?: "Summary unavailable.",
-                        lastMessageId = request.lastMessageId,
-                    )
-                }
-            }
 
-            val sessionContext = buildSessionContext(options)
-            agentLoopPort.execute(
-                initialMessages = initialMessages,
-                config = config,
-                sessionContext = sessionContext,
-                host = host,
-            ).collect { event ->
-                when (event) {
-                    is AgentLoopEvent.TextToken -> {
-                        assistantText.append(event.text)
-                        send(InferenceEvent.PartialResponse(event.text, modelType))
+                        override suspend fun onToolResult(
+                            toolName: String,
+                            argumentsJson: String,
+                            resultJson: String,
+                        ) {
+                            emitToolSideEffects(toolName, argumentsJson, resultJson, options) { send(it) }
+                        }
+
+                        override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
+                            val messages = request.messagesToSummarize.map { it.toChatMessage() }
+                            val summaryModelType =
+                                resolveCompactionSummaryModel.invoke(
+                                    activeTurnModelType = modelType,
+                                    messagesToSummarize = messages,
+                                )
+                            loggingPort.debug(
+                                TAG,
+                                "compaction_summary provider=$provider activeTurn=$modelType " +
+                                    "selectedModel=$summaryModelType messageCount=${messages.size} " +
+                                    "trigger=${request.trigger.name}",
+                            )
+                            val summaryText =
+                                inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
+                                    if (summaryService is RustCompatibleInferenceService) {
+                                        val prompt =
+                                            rollingSummarizer.buildAgentSummaryPrompt(
+                                                messages = messages,
+                                                instruction = request.instruction,
+                                                focusInstruction = request.focusInstruction,
+                                                historyRef = request.historyRef,
+                                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                                trigger = request.trigger,
+                                            )
+                                        summaryService
+                                            .completeSingleTurn(
+                                                sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
+                                                systemPrompt = "",
+                                                availableTools = emptyList(),
+                                                allowToolCall = false,
+                                                onTextToken = {},
+                                                onThinkingToken = {},
+                                                options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
+                                            ).assistantText
+                                    } else {
+                                        rollingSummarizer.summarizeAgentRequest(
+                                            messages = messages,
+                                            service = summaryService,
+                                            instruction = request.instruction,
+                                            focusInstruction = request.focusInstruction,
+                                            historyRef = request.historyRef,
+                                            stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                            trigger = request.trigger,
+                                        )
+                                    }
+                                }
+                            return AgentSummaryResult(
+                                summaryText = summaryText ?: "Summary unavailable.",
+                                lastMessageId = request.lastMessageId,
+                            )
+                        }
                     }
-                    is AgentLoopEvent.ThinkingToken -> send(InferenceEvent.Thinking(event.text, modelType))
-                    is AgentLoopEvent.ToolCallExecuted -> {}
-                    is AgentLoopEvent.TurnStarted -> {}
-                    is AgentLoopEvent.TurnCompleted -> {}
-                    is AgentLoopEvent.CompactionApplied ->
-                        send(
-                            InferenceEvent.CompactionApplied(
-                                tier = event.tier,
-                                tokensBefore = event.tokensBefore,
-                                tokensAfter = event.tokensAfter,
-                                modelType = modelType,
-                                trigger = event.trigger,
-                            ),
-                        )
-                    is AgentLoopEvent.ToolRepaired ->
-                        send(InferenceEvent.ToolRepaired(event.originalName, event.resolvedName, event.confidence, modelType))
-                    is AgentLoopEvent.KvCacheInvalidated ->
-                        loggingPort.info(TAG, "KV cache invalidated reason=${event.reason}")
-                    is AgentLoopEvent.PreCompact ->
-                        send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
-                            loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
+
+                val sessionContext = buildSessionContext(options)
+                agentLoopPort
+                    .execute(
+                        initialMessages = initialMessages,
+                        config = config,
+                        sessionContext = sessionContext,
+                        host = host,
+                    ).collect { event ->
+                        when (event) {
+                            is AgentLoopEvent.TextToken -> {
+                                assistantText.append(event.text)
+                                send(InferenceEvent.PartialResponse(event.text, modelType))
+                            }
+                            is AgentLoopEvent.ThinkingToken -> send(InferenceEvent.Thinking(event.text, modelType))
+                            is AgentLoopEvent.ToolCallExecuted -> {}
+                            is AgentLoopEvent.TurnStarted -> {}
+                            is AgentLoopEvent.TurnCompleted -> {}
+                            is AgentLoopEvent.CompactionApplied ->
+                                send(
+                                    InferenceEvent.CompactionApplied(
+                                        tier = event.tier,
+                                        tokensBefore = event.tokensBefore,
+                                        tokensAfter = event.tokensAfter,
+                                        modelType = modelType,
+                                        trigger = event.trigger,
+                                    ),
+                                )
+                            is AgentLoopEvent.ToolRepaired ->
+                                send(InferenceEvent.ToolRepaired(event.originalName, event.resolvedName, event.confidence, modelType))
+                            is AgentLoopEvent.KvCacheInvalidated ->
+                                loggingPort.info(TAG, "KV cache invalidated reason=${event.reason}")
+                            is AgentLoopEvent.PreCompact ->
+                                send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
+                                    loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
+                                }
+                            is AgentLoopEvent.PostCompact ->
+                                send(
+                                    InferenceEvent.PostCompact(
+                                        trigger = event.trigger,
+                                        summaryRef = event.summaryRef,
+                                        historyRef = event.historyRef,
+                                        modelType = modelType,
+                                    ),
+                                ).also {
+                                    loggingPort.debug(TAG, "post_compact trigger=${event.trigger} historyRef=${event.historyRef}")
+                                }
+                            is AgentLoopEvent.Finished -> {
+                                conversationHistory.add(ChatMessage(Role.USER, prompt))
+                                assistantText.toString().takeIf { it.isNotBlank() }?.let { text ->
+                                    conversationHistory.add(ChatMessage(Role.ASSISTANT, text))
+                                }
+                                if (closeConversation) closeSession()
+                                send(InferenceEvent.Finished(modelType))
+                            }
+                            is AgentLoopEvent.Failed ->
+                                send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
                         }
-                    is AgentLoopEvent.PostCompact ->
-                        send(
-                            InferenceEvent.PostCompact(
-                                trigger = event.trigger,
-                                summaryRef = event.summaryRef,
-                                historyRef = event.historyRef,
-                                modelType = modelType,
-                            ),
-                        ).also {
-                            loggingPort.debug(TAG, "post_compact trigger=${event.trigger} historyRef=${event.historyRef}")
-                        }
-                    is AgentLoopEvent.Finished -> {
-                        conversationHistory.add(ChatMessage(Role.USER, prompt))
-                        assistantText.toString().takeIf { it.isNotBlank() }?.let { text ->
-                            conversationHistory.add(ChatMessage(Role.ASSISTANT, text))
-                        }
-                        if (closeConversation) closeSession()
-                        send(InferenceEvent.Finished(modelType))
                     }
-                    is AgentLoopEvent.Failed ->
-                        send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
-                }
+            } catch (e: CancellationException) {
+                loggingPort.debug(TAG, "sendPrompt cancelled provider=$provider")
+                send(InferenceEvent.Finished(modelType))
+                throw e
+            } catch (e: Exception) {
+                loggingPort.error(TAG, "sendPrompt failed provider=$provider message=${e.message}", e)
+                send(InferenceEvent.Error(e, modelType))
             }
-        } catch (e: CancellationException) {
-            loggingPort.debug(TAG, "sendPrompt cancelled provider=$provider")
-            send(InferenceEvent.Finished(modelType))
-            throw e
-        } catch (e: Exception) {
-            loggingPort.error(TAG, "sendPrompt failed provider=$provider message=${e.message}", e)
-            send(InferenceEvent.Error(e, modelType))
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
@@ -291,50 +300,63 @@ class RustLoopInferenceService(
 
     private fun buildAgentLoopConfig(options: GenerationOptions): AgentLoopConfig =
         AgentLoopConfig(
-            agent = AgentLoopAgentConfig(
-                maxModelRequestsPerTurn = 2u,
-                enableLoopHooks = true,
-                enablePendingWorkGuard = true,
-            ),
-            capabilities = when (provider) {
-                "LLAMA" -> AgentLoopSessionCapabilities(
-                    summarizationAllowed = false,
-                    kvFixed = true,
-                    contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
-                    historyRewriteSupported = true,
-                    lifecycleHooksSupported = true,
-                )
-                else -> AgentLoopSessionCapabilities(
-                    contextPolicyTier = if ((options.contextWindow ?: DEFAULT_CONTEXT_WINDOW) >= HIGH_CONTEXT_WINDOW_THRESHOLD) {
-                        AgentLoopContextPolicyTier.HIGH_CONTEXT
-                    } else {
-                        AgentLoopContextPolicyTier.HOSTED_MUTABLE
-                    },
-                    toolSchemaDeferralSupported = true,
-                    fileBackedContextSupported = true,
-                    promptCacheSupported = true,
-                    lifecycleHooksSupported = true,
-                )
-            },
-            io = AgentLoopSessionIoParams(
-                provider = provider,
-                contextWindowTokens = (options.contextWindow ?: DEFAULT_CONTEXT_WINDOW).toUInt(),
-                toolsSchemaJson = serializeToolsSchema(options.availableTools),
-                systemPrompt = options.systemPrompt ?: "",
-            ),
+            agent =
+                AgentLoopAgentConfig(
+                    maxModelRequestsPerTurn = 2u,
+                    enableLoopHooks = true,
+                    enablePendingWorkGuard = true,
+                ),
+            capabilities =
+                when (provider) {
+                    "LLAMA" ->
+                        AgentLoopSessionCapabilities(
+                            summarizationAllowed = false,
+                            kvFixed = true,
+                            contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
+                            historyRewriteSupported = true,
+                            lifecycleHooksSupported = true,
+                        )
+                    else ->
+                        AgentLoopSessionCapabilities(
+                            contextPolicyTier =
+                                if ((options.contextWindow ?: DEFAULT_CONTEXT_WINDOW) >= HIGH_CONTEXT_WINDOW_THRESHOLD) {
+                                    AgentLoopContextPolicyTier.HIGH_CONTEXT
+                                } else {
+                                    AgentLoopContextPolicyTier.HOSTED_MUTABLE
+                                },
+                            toolSchemaDeferralSupported = true,
+                            fileBackedContextSupported = true,
+                            promptCacheSupported = true,
+                            lifecycleHooksSupported = true,
+                        )
+                },
+            io =
+                AgentLoopSessionIoParams(
+                    provider = provider,
+                    contextWindowTokens = (options.contextWindow ?: DEFAULT_CONTEXT_WINDOW).toUInt(),
+                    toolsSchemaJson = serializeToolsSchema(options.availableTools),
+                    systemPrompt = options.systemPrompt ?: "",
+                ),
         )
 
     private fun serializeToolsSchema(tools: List<ToolDefinition>): String {
         if (tools.isEmpty()) return "[]"
-        val array = buildJsonArray {
-            tools.forEach { tool ->
-                add(buildJsonObject {
-                    put("name", tool.name)
-                    put("description", tool.description)
-                })
+        val array =
+            buildJsonArray {
+                tools.forEach { tool ->
+                    add(
+                        buildJsonObject {
+                            put("name", tool.name)
+                            put("description", tool.description)
+                        },
+                    )
+                }
             }
-        }
-        return Json.encodeToString(kotlinx.serialization.json.JsonArray.serializer(), array)
+        return Json.encodeToString(
+            kotlinx.serialization.json.JsonArray
+                .serializer(),
+            array,
+        )
     }
 
     private fun toolsForRequest(
@@ -357,7 +379,8 @@ class RustLoopInferenceService(
     private fun toolNamesFromSchema(toolsSchemaJson: String): Set<String>? {
         if (toolsSchemaJson.isBlank()) return null
         return runCatching {
-            Json.parseToJsonElement(toolsSchemaJson)
+            Json
+                .parseToJsonElement(toolsSchemaJson)
                 .jsonArray
                 .mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
                 .toSet()
@@ -366,24 +389,29 @@ class RustLoopInferenceService(
 
     private fun toolNamesFromContextIndex(toolContextIndexJson: String): Set<String>? =
         runCatching {
-            Json.parseToJsonElement(toolContextIndexJson)
+            Json
+                .parseToJsonElement(toolContextIndexJson)
                 .jsonObject["advertised_tools"]
                 ?.jsonArray
                 ?.mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
                 ?.toSet()
         }.getOrNull()
 
-    private suspend fun executeOneTool(call: AgentToolCall, options: GenerationOptions): AgentToolResult =
+    private suspend fun executeOneTool(
+        call: AgentToolCall,
+        options: GenerationOptions,
+    ): AgentToolResult =
         try {
-            val request = ToolCallRequest(
-                toolName = call.name,
-                argumentsJson = call.argumentsJson,
-                provider = provider,
-                modelType = modelType,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-                assistantMessageId = options.assistantMessageId,
-            )
+            val request =
+                ToolCallRequest(
+                    toolName = call.name,
+                    argumentsJson = call.argumentsJson,
+                    provider = provider,
+                    modelType = modelType,
+                    chatId = options.chatId,
+                    userMessageId = options.userMessageId,
+                    assistantMessageId = options.assistantMessageId,
+                )
             val result = toolExecutor.execute(request)
             AgentToolResult(
                 callId = call.callId,
@@ -413,11 +441,13 @@ class RustLoopInferenceService(
                     "included_files",
                     buildJsonArray {
                         options.includedFiles.forEach { file ->
-                            add(buildJsonObject {
-                                put("path", file.path)
-                                put("token_estimate", file.tokenEstimate.toInt())
-                                put("content", file.content)
-                            })
+                            add(
+                                buildJsonObject {
+                                    put("path", file.path)
+                                    put("token_estimate", file.tokenEstimate.toInt())
+                                    put("content", file.content)
+                                },
+                            )
                         }
                     }.toString(),
                 )
@@ -436,31 +466,34 @@ class RustLoopInferenceService(
             return this
         }
 
-        val contextBlock = buildString {
-            appendLine(this@withContextSidecars)
-            appendLine()
-            appendLine("Context management sidecars:")
-            if (contextReferences.isNotEmpty()) {
-                appendLine("References:")
-                contextReferences.forEach { reference ->
-                    appendLine(
-                        "- ${reference.kind} ${reference.id}: " +
-                            "${reference.title}. ${reference.retrievalHint}",
-                    )
+        val contextBlock =
+            buildString {
+                appendLine(this@withContextSidecars)
+                appendLine()
+                appendLine("Context management sidecars:")
+                if (contextReferences.isNotEmpty()) {
+                    appendLine("References:")
+                    contextReferences.forEach { reference ->
+                        appendLine(
+                            "- ${reference.kind} ${reference.id}: " +
+                                "${reference.title}. ${reference.retrievalHint}",
+                        )
+                    }
                 }
+                stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
+                toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
+                fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
+                if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
             }
-            stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
-            toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
-            fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
-            if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
-        }
         return contextBlock.trimEnd()
     }
 
-    private fun AgentLoopMessage.toChatMessage(): ChatMessage =
-        ChatMessage(role = role, content = content)
+    private fun AgentLoopMessage.toChatMessage(): ChatMessage = ChatMessage(role = role, content = content)
 
-    private fun errorJson(call: AgentToolCall, throwable: Throwable): String =
+    private fun errorJson(
+        call: AgentToolCall,
+        throwable: Throwable,
+    ): String =
         buildJsonObject {
             put("error", "tool_execution_failed")
             put("tool", call.name)
@@ -485,20 +518,24 @@ class RustLoopInferenceService(
 
         if (toolName == ToolDefinition.APPEND_BLOCKS.name) {
             AppendBlocksToolResultParser.parseCompleteArtifact(resultJson)?.let { complete ->
-                val artifactId = runCatching {
-                    Json.parseToJsonElement(argumentsJson).jsonObject["artifact_id"]?.jsonPrimitive?.content
-                }.getOrNull() ?: return@let
+                val artifactId =
+                    runCatching {
+                        val args = Json.parseToJsonElement(argumentsJson).jsonObject
+                        args["artifactId"]?.jsonPrimitive?.content
+                            ?: args["artifact_id"]?.jsonPrimitive?.content
+                    }.getOrNull() ?: return@let
                 emit(
                     InferenceEvent.Artifacts(
-                        artifacts = listOf(
-                            ArtifactGenerationRequest(
-                                artifactId = artifactId,
-                                title = complete.title,
-                                content = complete.documentJson,
-                            )
-                        ),
+                        artifacts =
+                            listOf(
+                                ArtifactGenerationRequest(
+                                    artifactId = artifactId,
+                                    title = complete.title,
+                                    content = complete.documentJson,
+                                ),
+                            ),
                         modelType = modelType,
-                    )
+                    ),
                 )
             }
         }
@@ -516,7 +553,7 @@ class RustLoopInferenceService(
                         mediaTypes = mediaResult.types,
                         prompts = mediaResult.prompts,
                         modelType = modelType,
-                    )
+                    ),
                 )
             }
         }

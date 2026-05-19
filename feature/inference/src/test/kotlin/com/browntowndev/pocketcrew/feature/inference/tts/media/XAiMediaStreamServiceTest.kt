@@ -9,17 +9,17 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class XAiMediaStreamServiceTest {
-
     private val logger: LoggingPort = mockk(relaxed = true)
     private lateinit var service: XAiMediaStreamService
 
     @BeforeEach
     fun setUp() {
-        service = XAiMediaStreamService(
-            httpClient = mockk(),
-            apiKey = "xai-test",
-            logger = logger,
-        )
+        service =
+            XAiMediaStreamService(
+                httpClient = mockk(),
+                apiKey = "xai-test",
+                logger = logger,
+            )
     }
 
     @Test
@@ -29,9 +29,10 @@ class XAiMediaStreamServiceTest {
     }
 
     @Test
-    fun `service uses WebSocket streaming for audio deltas`() = runTest {
-        // Verify the service is designed to use WebSocket-based streaming
-        // with codec=mp3 for direct ExoPlayer consumption
-        assertTrue(service.usesWebSocketStreaming())
-    }
+    fun `service uses WebSocket streaming for audio deltas`() =
+        runTest {
+            // Verify the service is designed to use WebSocket-based streaming
+            // with codec=mp3 for direct ExoPlayer consumption
+            assertTrue(service.usesWebSocketStreaming())
+        }
 }

@@ -15,9 +15,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeBatch
-import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeField
 import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeFailure
 import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeFailureReason
+import com.browntowndev.pocketcrew.domain.model.inference.ToolEnvelopeField
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
@@ -38,8 +38,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.File
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -53,7 +51,6 @@ import kotlin.test.assertTrue
  * place.
  */
 class LlamaInferenceServiceImplPortContractTest {
-
     private lateinit var sessionManager: LlamaChatSessionManager
     private lateinit var loggingPort: LoggingPort
     private lateinit var localModelRepository: LocalModelRepositoryPort
@@ -97,15 +94,16 @@ class LlamaInferenceServiceImplPortContractTest {
             )
         coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("7")) } returns
             LocalModelAsset(
-                metadata = LocalModelMetadata(
-                    id = LocalModelId("99"),
-                    huggingFaceModelName = "test/llama",
-                    remoteFileName = "model.gguf",
-                    localFileName = "model.gguf",
-                    sha256 = "abc123",
-                    sizeInBytes = 1024L,
-                    modelFileFormat = ModelFileFormat.GGUF,
-                ),
+                metadata =
+                    LocalModelMetadata(
+                        id = LocalModelId("99"),
+                        huggingFaceModelName = "test/llama",
+                        remoteFileName = "model.gguf",
+                        localFileName = "model.gguf",
+                        sha256 = "abc123",
+                        sizeInBytes = 1024L,
+                        modelFileFormat = ModelFileFormat.GGUF,
+                    ),
                 configurations = emptyList(),
             )
         coEvery { sessionManager.initializeEngine(any()) } returns Unit
@@ -137,114 +135,129 @@ class LlamaInferenceServiceImplPortContractTest {
         )
 
     @Test
-    fun li01CompleteSingleTurnMapsPortSuccessesToAgentRawToolCalls() = runTest {
-        val placeholder = "TWO_ENVELOPE_TEXT"
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
-            GenerationEvent.Completed(placeholder),
-        )
+    fun li01CompleteSingleTurnMapsPortSuccessesToAgentRawToolCalls() =
+        runTest {
+            val placeholder = "TWO_ENVELOPE_TEXT"
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(
+                    GenerationEvent.Completed(placeholder),
+                )
 
-        fakePort.parseResponses[placeholder] = ToolEnvelopeBatch(
-            successes = listOf(
-                ToolEnvelopeField(
-                    toolName = "web_search",
-                    argumentsJson = """{"query":"q1"}""",
-                    repaired = false,
-                    repairs = emptyList(),
-                ),
-                ToolEnvelopeField(
-                    toolName = "web_extract",
-                    argumentsJson =
-                        """{"urls":["https://a.com"],"extract_depth":"basic","format":"markdown"}""",
-                    repaired = false,
-                    repairs = emptyList(),
-                ),
-            ),
-            failures = emptyList(),
-            visiblePrefix = "",
-            visibleSuffix = "",
-        )
+            fakePort.parseResponses[placeholder] =
+                ToolEnvelopeBatch(
+                    successes =
+                        listOf(
+                            ToolEnvelopeField(
+                                toolName = "web_search",
+                                argumentsJson = """{"query":"q1"}""",
+                                repaired = false,
+                                repairs = emptyList(),
+                            ),
+                            ToolEnvelopeField(
+                                toolName = "web_extract",
+                                argumentsJson =
+                                    """{"urls":["https://a.com"],"extract_depth":"basic","format":"markdown"}""",
+                                repaired = false,
+                                repairs = emptyList(),
+                            ),
+                        ),
+                    failures = emptyList(),
+                    visiblePrefix = "",
+                    visibleSuffix = "",
+                )
 
-        val service = createService()
-        val result = service.completeSingleTurn(
-            sessionMessages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello", metadataJson = "null"),
-            ),
-            systemPrompt = "System",
-            availableTools = emptyList(),
-            allowToolCall = true,
-            onTextToken = {},
-            onThinkingToken = {},
-            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
-        )
+            val service = createService()
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages =
+                        listOf(
+                            AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello", metadataJson = "null"),
+                        ),
+                    systemPrompt = "System",
+                    availableTools = emptyList(),
+                    allowToolCall = true,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+                )
 
-        assertEquals(placeholder, result.assistantText)
-        assertTrue(result.toolCalls.isEmpty())
-        assertEquals(AgentFinishReason.Stop, result.finishReason)
-        assertEquals(0, fakePort.parseCalls.size)
-    }
-
-    @Test
-    fun `FB-P-012 Llama text only output maps to Stop`() = runTest {
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
-            GenerationEvent.Completed("Local final answer"),
-        )
-        fakePort.parseResponses["Local final answer"] = ToolEnvelopeBatch(
-            successes = emptyList(),
-            failures = emptyList(),
-            visiblePrefix = "Local final answer",
-            visibleSuffix = "",
-        )
-        val service = createService()
-
-        val result = service.completeSingleTurn(
-            sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello")),
-            systemPrompt = "System",
-            availableTools = emptyList(),
-            allowToolCall = true,
-            onTextToken = {},
-            onThinkingToken = {},
-            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
-        )
-
-        assertEquals(AgentFinishReason.Stop, result.finishReason)
-        assertEquals("Local final answer", result.assistantText)
-        assertEquals(0, result.toolCalls.size)
-        assertEquals(0, requireNotNull(fakePort.parseResponses["Local final answer"]).successes.size)
-        assertEquals(0, requireNotNull(fakePort.parseResponses["Local final answer"]).failures.size)
-    }
+            assertEquals(placeholder, result.assistantText)
+            assertTrue(result.toolCalls.isEmpty())
+            assertEquals(AgentFinishReason.Stop, result.finishReason)
+            assertEquals(0, fakePort.parseCalls.size)
+        }
 
     @Test
-    fun `FB-P-013 Llama parser failure remains exceptional`() = runTest {
-        val malformed = "<|DSML|tool_calls>broken"
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
-            GenerationEvent.Completed(malformed),
-        )
-        fakePort.parseResponses[malformed] = ToolEnvelopeBatch(
-            successes = emptyList(),
-            failures = listOf(
-                ToolEnvelopeFailure(
-                    reason = ToolEnvelopeFailureReason.MalformedEnvelope,
-                    original = malformed,
-                ),
-            ),
-            visiblePrefix = "",
-            visibleSuffix = "",
-        )
-        val service = createService()
+    fun `FB-P-012 Llama text only output maps to Stop`() =
+        runTest {
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(
+                    GenerationEvent.Completed("Local final answer"),
+                )
+            fakePort.parseResponses["Local final answer"] =
+                ToolEnvelopeBatch(
+                    successes = emptyList(),
+                    failures = emptyList(),
+                    visiblePrefix = "Local final answer",
+                    visibleSuffix = "",
+                )
+            val service = createService()
 
-        val result = service.completeSingleTurn(
-            sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello")),
-            systemPrompt = "System",
-            availableTools = emptyList(),
-            allowToolCall = true,
-            onTextToken = {},
-            onThinkingToken = {},
-            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
-        )
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello")),
+                    systemPrompt = "System",
+                    availableTools = emptyList(),
+                    allowToolCall = true,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+                )
 
-        assertEquals(malformed, result.assistantText)
-        assertEquals(AgentFinishReason.Stop, result.finishReason)
-        assertTrue(result.toolCalls.isEmpty())
-        assertEquals(0, fakePort.parseCalls.size)
-    }
+            assertEquals(AgentFinishReason.Stop, result.finishReason)
+            assertEquals("Local final answer", result.assistantText)
+            assertEquals(0, result.toolCalls.size)
+            assertEquals(0, requireNotNull(fakePort.parseResponses["Local final answer"]).successes.size)
+            assertEquals(0, requireNotNull(fakePort.parseResponses["Local final answer"]).failures.size)
+        }
+
+    @Test
+    fun `FB-P-013 Llama parser failure remains exceptional`() =
+        runTest {
+            val malformed = "<|DSML|tool_calls>broken"
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(
+                    GenerationEvent.Completed(malformed),
+                )
+            fakePort.parseResponses[malformed] =
+                ToolEnvelopeBatch(
+                    successes = emptyList(),
+                    failures =
+                        listOf(
+                            ToolEnvelopeFailure(
+                                reason = ToolEnvelopeFailureReason.MalformedEnvelope,
+                                original = malformed,
+                            ),
+                        ),
+                    visiblePrefix = "",
+                    visibleSuffix = "",
+                )
+            val service = createService()
+
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello")),
+                    systemPrompt = "System",
+                    availableTools = emptyList(),
+                    allowToolCall = true,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+                )
+
+            assertEquals(malformed, result.assistantText)
+            assertEquals(AgentFinishReason.Stop, result.finishReason)
+            assertTrue(result.toolCalls.isEmpty())
+            assertEquals(0, fakePort.parseCalls.size)
+        }
 }

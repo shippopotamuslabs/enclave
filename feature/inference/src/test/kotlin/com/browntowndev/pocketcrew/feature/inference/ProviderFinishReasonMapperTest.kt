@@ -37,12 +37,13 @@ class ProviderFinishReasonMapperTest {
     @Test
     fun `FB-P-004 OpenAI Responses completed maps to Stop`() {
         assertTurn(
-            result = ProviderFinishReasonMapper.fromOpenAiResponses(
-                status = "completed",
-                incompleteReason = null,
-                responseId = "resp_done",
-                text = "Done",
-            ),
+            result =
+                ProviderFinishReasonMapper.fromOpenAiResponses(
+                    status = "completed",
+                    incompleteReason = null,
+                    responseId = "resp_done",
+                    text = "Done",
+                ),
             expectedReason = AgentFinishReason.Stop,
             expectedText = "Done",
         )
@@ -51,12 +52,13 @@ class ProviderFinishReasonMapperTest {
     @Test
     fun `FB-P-005 OpenAI Responses max output tokens maps to MaxTokens`() {
         assertTurn(
-            result = ProviderFinishReasonMapper.fromOpenAiResponses(
-                status = "incomplete",
-                incompleteReason = "max_output_tokens",
-                responseId = "resp_partial",
-                text = "Partial",
-            ),
+            result =
+                ProviderFinishReasonMapper.fromOpenAiResponses(
+                    status = "incomplete",
+                    incompleteReason = "max_output_tokens",
+                    responseId = "resp_partial",
+                    text = "Partial",
+                ),
             expectedReason = AgentFinishReason.MaxTokens,
             expectedText = "Partial",
         )

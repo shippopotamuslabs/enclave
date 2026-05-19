@@ -18,10 +18,11 @@ internal data class LocalToolResultDecision(
 )
 
 internal object LocalToolResultPolicy {
-
     fun buildContextWindowExceededToolError(toolName: String): String =
         @Suppress("MaxLineLength")
-        """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"IllegalStateException","message":"${escapeJson(CONTEXT_WINDOW_EXCEEDED_MESSAGE)}"}"""
+        """{"error":"tool_execution_failed","tool":"${escapeJson(
+            toolName,
+        )}","exception":"IllegalStateException","message":"${escapeJson(CONTEXT_WINDOW_EXCEEDED_MESSAGE)}"}"""
 
     fun evaluate(
         rawResultJson: String,
@@ -37,31 +38,34 @@ internal object LocalToolResultPolicy {
         val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
         val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
 
-        val resultJson = NativeToolResultFormatter.truncateToolResult(
-            resultJson = rawResultJson,
-            contextWindowTokens = contextWindowTokens,
-            estimatedUsedTokens = estimatedUsedTokens,
-            bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
-            tokenCounter = tokenCounter,
-            modelId = modelId,
-        )
+        val resultJson =
+            NativeToolResultFormatter.truncateToolResult(
+                resultJson = rawResultJson,
+                contextWindowTokens = contextWindowTokens,
+                estimatedUsedTokens = estimatedUsedTokens,
+                bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
+                tokenCounter = tokenCounter,
+                modelId = modelId,
+            )
         val hasErrorPayload = resultJsonLooksSoftFailure(resultJson)
 
-        val evaluation = ToolContextBudget.evaluate(
-            contextWindowTokens = contextWindowTokens,
-            systemPromptTokens = systemPromptTokens,
-            historyTokens = historyTokens,
-            transientToolResultTokens = transientToolResultTokens,
-            options = GenerationOptions(reasoningBudget = 0),
-            modelId = modelId,
-            tokenCounter = tokenCounter,
-        )
+        val evaluation =
+            ToolContextBudget.evaluate(
+                contextWindowTokens = contextWindowTokens,
+                systemPromptTokens = systemPromptTokens,
+                historyTokens = historyTokens,
+                transientToolResultTokens = transientToolResultTokens,
+                options = GenerationOptions(reasoningBudget = 0),
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+            )
 
-        val finalResult = if (evaluation.contextFull) {
-            resultJson + "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
-        } else {
-            resultJson
-        }
+        val finalResult =
+            if (evaluation.contextFull) {
+                resultJson + "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
+            } else {
+                resultJson
+            }
 
         return LocalToolResultDecision(
             finalResult = finalResult,

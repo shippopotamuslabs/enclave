@@ -24,58 +24,63 @@ class XaiVideoGenerationAdapterTest {
     private val adapter = XaiVideoGenerationAdapter(okHttpClient, pollDelayMillis = 0L)
 
     @Test
-    fun generateVideo_success_downloadsTemporaryVideoUrl() = runTest {
-        val requests = mutableListOf<Request>()
-        everyResponses(
-            requests = requests,
-            jsonResponse("""{"request_id":"request-1"}"""),
-            jsonResponse("""{"status":"done","video":{"url":"https://download.test/video.mp4"}}"""),
-            bytesResponse("mp4".toByteArray(), "video/mp4"),
-        )
+    fun generateVideo_success_downloadsTemporaryVideoUrl() =
+        runTest {
+            val requests = mutableListOf<Request>()
+            everyResponses(
+                requests = requests,
+                jsonResponse("""{"request_id":"request-1"}"""),
+                jsonResponse("""{"status":"done","video":{"url":"https://download.test/video.mp4"}}"""),
+                bytesResponse("mp4".toByteArray(), "video/mp4"),
+            )
 
-        val result = adapter.generateVideo(
-            prompt = "animate",
-            apiKey = "key",
-            modelId = "grok-imagine-video",
-            baseUrl = "https://xai.test/v1",
-            settings = VideoGenerationSettings(
-                aspectRatio = AspectRatio.SIXTEEN_NINE,
-                videoDuration = 10,
-                videoResolution = "720p",
-            ),
-            referenceImage = "png".toByteArray(),
-        )
+            val result =
+                adapter.generateVideo(
+                    prompt = "animate",
+                    apiKey = "key",
+                    modelId = "grok-imagine-video",
+                    baseUrl = "https://xai.test/v1",
+                    settings =
+                        VideoGenerationSettings(
+                            aspectRatio = AspectRatio.SIXTEEN_NINE,
+                            videoDuration = 10,
+                            videoResolution = "720p",
+                        ),
+                    referenceImage = "png".toByteArray(),
+                )
 
-        assertTrue(result.isSuccess)
-        assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
-        assertEquals("https://xai.test/v1/videos/generations", requests[0].url.toString())
-        assertEquals("https://xai.test/v1/videos/request-1", requests[1].url.toString())
-        assertEquals("https://download.test/video.mp4", requests[2].url.toString())
-        val body = requests[0].bodyString()
-        assertTrue(body.contains("\"model\":\"grok-imagine-video\""))
-        assertTrue(body.contains("\"image\":{\"url\":\"data:image/png;base64"))
-        assertTrue(body.contains("\"aspect_ratio\":\"16:9\""))
-    }
+            assertTrue(result.isSuccess)
+            assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
+            assertEquals("https://xai.test/v1/videos/generations", requests[0].url.toString())
+            assertEquals("https://xai.test/v1/videos/request-1", requests[1].url.toString())
+            assertEquals("https://download.test/video.mp4", requests[2].url.toString())
+            val body = requests[0].bodyString()
+            assertTrue(body.contains("\"model\":\"grok-imagine-video\""))
+            assertTrue(body.contains("\"image\":{\"url\":\"data:image/png;base64"))
+            assertTrue(body.contains("\"aspect_ratio\":\"16:9\""))
+        }
 
     @Test
-    fun generateVideo_expiredStatus_returnsFailure() = runTest {
-        everyResponses(
-            requests = mutableListOf(),
-            jsonResponse("""{"request_id":"request-1"}"""),
-            jsonResponse("""{"status":"expired"}"""),
-        )
+    fun generateVideo_expiredStatus_returnsFailure() =
+        runTest {
+            everyResponses(
+                requests = mutableListOf(),
+                jsonResponse("""{"request_id":"request-1"}"""),
+                jsonResponse("""{"status":"expired"}"""),
+            )
 
-        val result = adapter.generateVideo(
-            prompt = "animate",
-            apiKey = "key",
-            modelId = "grok-imagine-video",
-            baseUrl = null,
-            settings = VideoGenerationSettings(),
-        )
+            val result =
+                adapter.generateVideo(
+                    prompt = "animate",
+                    apiKey = "key",
+                    modelId = "grok-imagine-video",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(),
+                )
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("expired") == true)
-    }
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("expired") == true)
+        }
 
     private fun everyResponses(
         requests: MutableList<Request>,
@@ -90,7 +95,8 @@ class XaiVideoGenerationAdapterTest {
     }
 
     private fun jsonResponse(body: String): Response =
-        Response.Builder()
+        Response
+            .Builder()
             .request(Request.Builder().url("https://example.test").build())
             .protocol(Protocol.HTTP_1_1)
             .code(200)
@@ -98,8 +104,12 @@ class XaiVideoGenerationAdapterTest {
             .body(body.toResponseBody("application/json".toMediaType()))
             .build()
 
-    private fun bytesResponse(body: ByteArray, mediaType: String): Response =
-        Response.Builder()
+    private fun bytesResponse(
+        body: ByteArray,
+        mediaType: String,
+    ): Response =
+        Response
+            .Builder()
             .request(Request.Builder().url("https://example.test").build())
             .protocol(Protocol.HTTP_1_1)
             .code(200)

@@ -2,51 +2,60 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.anthropic.models.messages.MessageParam
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.File
+import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 
 class AnthropicRequestMapperTest {
-
     @Test
     fun `mapToMessageParams maps system prompt history and reasoning budget`() {
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = "claude-sonnet-4-20250514",
-            prompt = "How are you?",
-            history = listOf(
-                ChatMessage(DomainRole.SYSTEM, "You are a concise assistant."),
-                ChatMessage(DomainRole.USER, "Hello"),
-                ChatMessage(DomainRole.ASSISTANT, "Hi there!"),
-                ChatMessage(DomainRole.ASSISTANT, "Error: API Error (ANTHROPIC): 400: null"),
-            ),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                systemPrompt = "Use short answers.",
-                reasoningEffort = ApiReasoningEffort.HIGH,
-                temperature = 0.7f,
-                topP = 0.9f,
-                topK = 32,
-                maxTokens = 512,
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "How are you?",
+                history =
+                    listOf(
+                        ChatMessage(DomainRole.SYSTEM, "You are a concise assistant."),
+                        ChatMessage(DomainRole.USER, "Hello"),
+                        ChatMessage(DomainRole.ASSISTANT, "Hi there!"),
+                        ChatMessage(DomainRole.ASSISTANT, "Error: API Error (ANTHROPIC): 400: null"),
+                    ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        systemPrompt = "Use short answers.",
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                        temperature = 0.7f,
+                        topP = 0.9f,
+                        topK = 32,
+                        maxTokens = 512,
+                    ),
             )
-        )
 
         assertEquals("claude-sonnet-4-20250514", params.model().toString())
         assertEquals(
             listOf(MessageParam.Role.USER, MessageParam.Role.ASSISTANT, MessageParam.Role.USER),
-            params.messages().map { message -> message.role() }
+            params.messages().map { message -> message.role() },
         )
         assertEquals(
             "Use short answers.\n\nYou are a concise assistant.",
-            params.system().get().asString()
+            params.system().get().asString(),
         )
         assertTrue(params.thinking().get().isEnabled())
-        assertEquals(2048L, params.thinking().get().asEnabled().budgetTokens())
+        assertEquals(
+            2048L,
+            params
+                .thinking()
+                .get()
+                .asEnabled()
+                .budgetTokens(),
+        )
         assertEquals(0.7, params.temperature().get(), 0.0001)
         assertEquals(0.9, params.topP().get(), 0.0001)
         assertEquals(32L, params.topK().get())
@@ -56,35 +65,46 @@ class AnthropicRequestMapperTest {
 
     @Test
     fun `mapToMessageParams prefers explicit reasoning budget over effort mapping`() {
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = "claude-sonnet-4-20250514",
-            prompt = "Explain the plan.",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 4096,
-                reasoningEffort = ApiReasoningEffort.LOW,
-                maxTokens = 1024,
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "Explain the plan.",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 4096,
+                        reasoningEffort = ApiReasoningEffort.LOW,
+                        maxTokens = 1024,
+                    ),
             )
-        )
 
         assertTrue(params.thinking().get().isEnabled())
-        assertEquals(4096L, params.thinking().get().asEnabled().budgetTokens())
+        assertEquals(
+            4096L,
+            params
+                .thinking()
+                .get()
+                .asEnabled()
+                .budgetTokens(),
+        )
         assertEquals(1, params.messages().size)
         assertEquals(MessageParam.Role.USER, params.messages().first().role())
     }
 
     @Test
     fun `mapToMessageParams serializes web_search when tooling is enabled`() {
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = "claude-sonnet-4-20250514",
-            prompt = "Find recent Android agent news",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "Find recent Android agent news",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                    ),
             )
-        )
 
         assertTrue(params.toString().contains("web_search"))
         assertTrue(params.toString().contains("query"))
@@ -92,16 +112,18 @@ class AnthropicRequestMapperTest {
 
     @Test
     fun `mapToMessageParams serializes attached image inspect with question parameter`() {
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = "claude-sonnet-4-20250514",
-            prompt = "Inspect the image",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "Inspect the image",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+                    ),
             )
-        )
 
         assertTrue(params.toString().contains("attached_image_inspect"))
         assertTrue(params.toString().contains("question"))
@@ -109,19 +131,33 @@ class AnthropicRequestMapperTest {
 
     @Test
     fun `mapToMessageParams includes image blocks when image uris are present`() {
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = "claude-sonnet-4-20250514",
-            prompt = "Describe this",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                imageUris = listOf(createTempImageUri()),
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "Describe this",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        imageUris = listOf(createTempImageUri()),
+                    ),
             )
-        )
 
         assertEquals(1, params.messages().size)
-        assertTrue(params.messages().single().toString().contains("image"))
-        assertTrue(params.messages().single().toString().contains("base64"))
+        assertTrue(
+            params
+                .messages()
+                .single()
+                .toString()
+                .contains("image"),
+        )
+        assertTrue(
+            params
+                .messages()
+                .single()
+                .toString()
+                .contains("base64"),
+        )
     }
 
     private fun createTempImageUri(): String {

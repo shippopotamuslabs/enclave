@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.feature.inference.tts
 import com.browntowndev.pocketcrew.domain.model.inference.TtsAudioChunk
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -30,13 +29,13 @@ import java.util.Base64
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class XAiStreamingTtsServiceTest {
-
     private val mockLogger: LoggingPort = mockk(relaxed = true)
     private val realHttpClient = OkHttpClient.Builder().build()
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     private lateinit var service: XAiStreamingTtsService
 
@@ -53,29 +52,33 @@ class XAiStreamingTtsServiceTest {
     }
 
     @Test
-    fun `synthesizeSpeechStreaming returns a non-null Flow`() = runTest {
-        val flow = service.synthesizeSpeechStreaming("Hello", "echo", null)
-        assertNotNull(flow)
-    }
+    fun `synthesizeSpeechStreaming returns a non-null Flow`() =
+        runTest {
+            val flow = service.synthesizeSpeechStreaming("Hello", "echo", null)
+            assertNotNull(flow)
+        }
 
     @Test
-    fun `synthesizeSpeechStreaming with custom model returns a Flow`() = runTest {
-        val flow = service.synthesizeSpeechStreaming("Hello", "echo", "grok-2")
-        assertNotNull(flow)
-    }
+    fun `synthesizeSpeechStreaming with custom model returns a Flow`() =
+        runTest {
+            val flow = service.synthesizeSpeechStreaming("Hello", "echo", "grok-2")
+            assertNotNull(flow)
+        }
 
     @Test
-    fun `synthesizeSpeechStreaming with empty text returns a Flow`() = runTest {
-        val flow = service.synthesizeSpeechStreaming("", "echo", null)
-        assertNotNull(flow)
-    }
+    fun `synthesizeSpeechStreaming with empty text returns a Flow`() =
+        runTest {
+            val flow = service.synthesizeSpeechStreaming("", "echo", null)
+            assertNotNull(flow)
+        }
 
     @Test
-    fun `synthesizeSpeechStreaming with long text returns a Flow`() = runTest {
-        val longText = "Hello world. ".repeat(100)
-        val flow = service.synthesizeSpeechStreaming(longText, "echo", null)
-        assertNotNull(flow)
-    }
+    fun `synthesizeSpeechStreaming with long text returns a Flow`() =
+        runTest {
+            val longText = "Hello world. ".repeat(100)
+            val flow = service.synthesizeSpeechStreaming(longText, "echo", null)
+            assertNotNull(flow)
+        }
 
     // --- URL construction tests ---
 
@@ -111,10 +114,11 @@ class XAiStreamingTtsServiceTest {
         val base64Audio = Base64.getEncoder().encodeToString(audioData)
         val jsonMessage = """{"type":"audio.delta","delta":"$base64Audio"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("audio.delta", message.type)
         assertEquals(base64Audio, message.delta)
 
@@ -127,10 +131,11 @@ class XAiStreamingTtsServiceTest {
     fun `ServerMessage deserialization handles audio done`() {
         val jsonMessage = """{"type":"audio.done"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("audio.done", message.type)
         assertNull(message.delta)
     }
@@ -139,10 +144,11 @@ class XAiStreamingTtsServiceTest {
     fun `ServerMessage deserialization handles error with message`() {
         val jsonMessage = """{"type":"error","message":"Rate limit exceeded"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("error", message.type)
         assertEquals("Rate limit exceeded", message.message)
     }
@@ -151,10 +157,11 @@ class XAiStreamingTtsServiceTest {
     fun `ServerMessage deserialization handles error with trace_id`() {
         val jsonMessage = """{"type":"error","message":"Internal error","trace_id":"abc-123"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("error", message.type)
         assertEquals("Internal error", message.message)
         assertEquals("abc-123", message.trace_id)
@@ -165,10 +172,11 @@ class XAiStreamingTtsServiceTest {
         val jsonMessage = """{"type":"audio.delta","delta":"AQID","unknown_field":"value"}"""
 
         // Should not throw because ignoreUnknownKeys = true
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("audio.delta", message.type)
         assertEquals("AQID", message.delta)
     }
@@ -177,10 +185,11 @@ class XAiStreamingTtsServiceTest {
     fun `ServerMessage deserialization handles missing delta in audio delta`() {
         val jsonMessage = """{"type":"audio.delta"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("audio.delta", message.type)
         assertNull(message.delta)
     }
@@ -189,10 +198,11 @@ class XAiStreamingTtsServiceTest {
     fun `ServerMessage deserialization handles unknown message type`() {
         val jsonMessage = """{"type":"unknown.type","delta":"data"}"""
 
-        val message = json.decodeFromString(
-            XAiStreamingTtsServiceTest.ServerMessage.serializer(),
-            jsonMessage
-        )
+        val message =
+            json.decodeFromString(
+                XAiStreamingTtsServiceTest.ServerMessage.serializer(),
+                jsonMessage,
+            )
         assertEquals("unknown.type", message.type)
     }
 
@@ -200,14 +210,16 @@ class XAiStreamingTtsServiceTest {
 
     @Test
     fun `ClientMessage serialization produces correct text delta`() {
-        val clientMessage = XAiStreamingTtsServiceTest.ClientMessage(
-            type = "text.delta",
-            delta = "Hello world"
-        )
-        val jsonString = json.encodeToString(
-            XAiStreamingTtsServiceTest.ClientMessage.serializer(),
-            clientMessage
-        )
+        val clientMessage =
+            XAiStreamingTtsServiceTest.ClientMessage(
+                type = "text.delta",
+                delta = "Hello world",
+            )
+        val jsonString =
+            json.encodeToString(
+                XAiStreamingTtsServiceTest.ClientMessage.serializer(),
+                clientMessage,
+            )
 
         assertTrue(jsonString.contains("text.delta"))
         assertTrue(jsonString.contains("Hello world"))
@@ -215,13 +227,15 @@ class XAiStreamingTtsServiceTest {
 
     @Test
     fun `ClientMessage serialization produces correct text done`() {
-        val clientMessage = XAiStreamingTtsServiceTest.ClientMessage(
-            type = "text.done"
-        )
-        val jsonString = json.encodeToString(
-            XAiStreamingTtsServiceTest.ClientMessage.serializer(),
-            clientMessage
-        )
+        val clientMessage =
+            XAiStreamingTtsServiceTest.ClientMessage(
+                type = "text.done",
+            )
+        val jsonString =
+            json.encodeToString(
+                XAiStreamingTtsServiceTest.ClientMessage.serializer(),
+                clientMessage,
+            )
 
         assertTrue(jsonString.contains("text.done"))
     }
@@ -286,25 +300,26 @@ class XAiStreamingTtsServiceTest {
     // --- callbackFlow + trySend protocol tests ---
 
     @Test
-    fun `callbackFlow does not throw ClosedSendChannelException on cancelled flow`() = runTest {
-        // Create the flow but take only 1 item, then cancel
-        // This simulates a channel being closed after some data arrives
-        // The trySend approach should not throw ClosedSendChannelException
-        val flow = service.synthesizeSpeechStreaming("Hello", "echo", null)
+    fun `callbackFlow does not throw ClosedSendChannelException on cancelled flow`() =
+        runTest {
+            // Create the flow but take only 1 item, then cancel
+            // This simulates a channel being closed after some data arrives
+            // The trySend approach should not throw ClosedSendChannelException
+            val flow = service.synthesizeSpeechStreaming("Hello", "echo", null)
 
-        // Collecting from the flow should not throw even if the WebSocket fails
-        // (since the test environment doesn't have a real WebSocket server,
-        // the connection will fail, which triggers onFailure -> trySend(Error))
-        try {
-            flow.take(1).toList()
-        } catch (_: Exception) {
-            // Expected: connection will fail since there's no real server
-            // The key thing is that trySend doesn't throw ClosedSendChannelException
+            // Collecting from the flow should not throw even if the WebSocket fails
+            // (since the test environment doesn't have a real WebSocket server,
+            // the connection will fail, which triggers onFailure -> trySend(Error))
+            try {
+                flow.take(1).toList()
+            } catch (_: Exception) {
+                // Expected: connection will fail since there's no real server
+                // The key thing is that trySend doesn't throw ClosedSendChannelException
+            }
+
+            // No ClosedSendChannelException should be thrown
+            // If trySend were replaced by send/launch, this would throw
         }
-
-        // No ClosedSendChannelException should be thrown
-        // If trySend were replaced by send/launch, this would throw
-    }
 
     @Test
     fun `service with special characters in voice name constructs successfully`() {

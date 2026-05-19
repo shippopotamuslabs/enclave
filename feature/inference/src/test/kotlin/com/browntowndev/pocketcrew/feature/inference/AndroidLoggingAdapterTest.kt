@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class AndroidLoggingAdapterTest {
-
     private lateinit var adapter: AndroidLoggingAdapter
     private lateinit var crashlytics: FirebaseCrashlytics
 

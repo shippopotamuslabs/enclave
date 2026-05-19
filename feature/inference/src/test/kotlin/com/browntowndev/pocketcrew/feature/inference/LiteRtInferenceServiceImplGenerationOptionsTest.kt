@@ -14,8 +14,8 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test
  * Tests for [LiteRtInferenceServiceImpl.sendPrompt] with `GenerationOptions` overload.
  */
 class LiteRtInferenceServiceImplGenerationOptionsTest {
-
     private lateinit var mockConversationManager: ConversationManager
     private lateinit var mockConversation: LiteRtConversation
     private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
@@ -50,30 +49,34 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
     }
 
     @Test
-    fun `sendPrompt with GenerationOptions accepts call`() = runTest {
-        val responses = flowOf(ConversationResponse(text = "response"))
-        every { mockConversation.sendMessageAsync(any(), any()) } returns responses
+    fun `sendPrompt with GenerationOptions accepts call`() =
+        runTest {
+            val responses = flowOf(ConversationResponse(text = "response"))
+            every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.FAST)
-        val options = GenerationOptions(reasoningBudget = 2048)
-        // Actually collect the flow to exercise the implementation
-        val events = service.sendPrompt("hello", options, closeConversation = false).toList()
-        assertTrue(events.isNotEmpty(), "Flow must emit events, not throw NotImplementedError")
-    }
+            val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.FAST)
+            val options = GenerationOptions(reasoningBudget = 2048)
+            // Actually collect the flow to exercise the implementation
+            val events = service.sendPrompt("hello", options, closeConversation = false).toList()
+            assertTrue(events.isNotEmpty(), "Flow must emit events, not throw NotImplementedError")
+        }
 
     @Test
-    fun `sendPrompt with image uris forwards multimodal options to conversation`() = runTest {
-        val options = GenerationOptions(
-            reasoningBudget = 0,
-            imageUris = listOf("file:///tmp/test-image.jpg"),
-        )
-        val optionSlot = slot<GenerationOptions>()
-        val responses = flowOf(ConversationResponse(text = "response"))
-        every { mockConversation.sendMessageAsync(any(), capture(optionSlot)) } returns responses
+    fun `sendPrompt with image uris forwards multimodal options to conversation`() =
+        runTest {
+            val options =
+                GenerationOptions(
+                    reasoningBudget = 0,
+                    imageUris = listOf("file:///tmp/test-image.jpg"),
+                )
+            val optionSlot = slot<GenerationOptions>()
+            val responses = flowOf(ConversationResponse(text = "response"))
+            every { mockConversation.sendMessageAsync(any(), capture(optionSlot)) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.VISION)
-        service.sendPrompt("describe", options, closeConversation = false).toList()
+            val service =
+                LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.VISION)
+            service.sendPrompt("describe", options, closeConversation = false).toList()
 
-        assertEquals(listOf("file:///tmp/test-image.jpg"), optionSlot.captured.imageUris)
-    }
+            assertEquals(listOf("file:///tmp/test-image.jpg"), optionSlot.captured.imageUris)
+        }
 }

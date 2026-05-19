@@ -16,111 +16,117 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class GoogleTtsServiceTest {
-
     @Test
-    fun `synthesizeSpeech uses Gemini SDK for Gemini voices`() = runBlocking {
-        val models = mockk<Models>(relaxed = true)
+    fun `synthesizeSpeech uses Gemini SDK for Gemini voices`() =
+        runBlocking {
+            val models = mockk<Models>(relaxed = true)
 
-        val voice = "Puck"
-        val text = "Hello"
-        val modelId = "gemini-3.1-flash-tts-preview"
-        val expectedAudio = byteArrayOf(1, 2, 3)
+            val voice = "Puck"
+            val text = "Hello"
+            val modelId = "gemini-3.1-flash-tts-preview"
+            val expectedAudio = byteArrayOf(1, 2, 3)
 
-        val response = GenerateContentResponse.builder()
-            .candidates(
-                listOf(
-                    Candidate.builder()
-                        .content(
-                            Content.builder()
-                                .parts(
-                                    listOf(
-                                        Part.builder()
-                                            .inlineData(
-                                                Blob.builder()
-                                                    .data(expectedAudio)
-                                                    .mimeType("audio/mpeg")
-                                                    .build()
-                                            )
-                                            .build()
-                                    )
-                                )
-                                .build()
-                        )
-                        .build()
-                )
+            val response =
+                GenerateContentResponse
+                    .builder()
+                    .candidates(
+                        listOf(
+                            Candidate
+                                .builder()
+                                .content(
+                                    Content
+                                        .builder()
+                                        .parts(
+                                            listOf(
+                                                Part
+                                                    .builder()
+                                                    .inlineData(
+                                                        Blob
+                                                            .builder()
+                                                            .data(expectedAudio)
+                                                            .mimeType("audio/mpeg")
+                                                            .build(),
+                                                    ).build(),
+                                            ),
+                                        ).build(),
+                                ).build(),
+                        ),
+                    ).build()
+
+            every {
+                models.generateContent(any<String>(), any<String>(), any<GenerateContentConfig>())
+            } returns response
+
+            val service = GoogleTtsService { models }
+            val result = service.synthesizeSpeech(text, voice, modelId)
+
+            assertTrue(result.isSuccess, "Result should be success: ${result.exceptionOrNull()}")
+            val audioBytes = result.getOrNull()!!
+            // Gemini TTS output is wrapped in a WAV/RIFF header (44 bytes) before returning
+            assertTrue(
+                audioBytes.size >= 44 + expectedAudio.size,
+                "Output should contain WAV header + PCM data",
             )
-            .build()
-
-        every {
-            models.generateContent(any<String>(), any<String>(), any<GenerateContentConfig>())
-        } returns response
-
-        val service = GoogleTtsService { models }
-        val result = service.synthesizeSpeech(text, voice, modelId)
-
-        assertTrue(result.isSuccess, "Result should be success: ${result.exceptionOrNull()}")
-        val audioBytes = result.getOrNull()!!
-        // Gemini TTS output is wrapped in a WAV/RIFF header (44 bytes) before returning
-        assertTrue(
-            audioBytes.size >= 44 + expectedAudio.size,
-            "Output should contain WAV header + PCM data"
-        )
-        assertEquals("RIFF", String(audioBytes.copyOfRange(0, 4), Charsets.US_ASCII))
-        assertEquals("WAVE", String(audioBytes.copyOfRange(8, 12), Charsets.US_ASCII))
-        assertArrayEquals(expectedAudio, audioBytes.copyOfRange(44, audioBytes.size))
-    }
-
-    @Test
-    fun `synthesizeSpeech falls back to Puck for legacy Cloud TTS voice format`() = runBlocking {
-        val models = mockk<Models>(relaxed = true)
-        val expectedAudio = byteArrayOf(4, 5, 6)
-        val actualVoiceArg = mutableListOf<String>()
-
-        every {
-            models.generateContent(any<String>(), any<String>(), any<GenerateContentConfig>())
-        } answers {
-            val configArg = arg<GenerateContentConfig>(2)
-            val voiceName = configArg.speechConfig()
-                .flatMap { it.voiceConfig() }
-                .flatMap { it.prebuiltVoiceConfig() }
-                .map { it.voiceName().orElse("unknown") }
-                .orElse("unknown")
-            actualVoiceArg.add(voiceName)
-            GenerateContentResponse.builder()
-                .candidates(
-                    listOf(
-                        Candidate.builder()
-                            .content(
-                                Content.builder()
-                                    .parts(
-                                        listOf(
-                                            Part.builder()
-                                                .inlineData(
-                                                    Blob.builder()
-                                                        .data(expectedAudio)
-                                                        .mimeType("audio/mpeg")
-                                                        .build()
-                                                )
-                                                .build()
-                                        )
-                                    )
-                                    .build()
-                            )
-                            .build()
-                    )
-                )
-                .build()
+            assertEquals("RIFF", String(audioBytes.copyOfRange(0, 4), Charsets.US_ASCII))
+            assertEquals("WAVE", String(audioBytes.copyOfRange(8, 12), Charsets.US_ASCII))
+            assertArrayEquals(expectedAudio, audioBytes.copyOfRange(44, audioBytes.size))
         }
 
-        val service = GoogleTtsService { models }
-        val result = service.synthesizeSpeech("Hello", "en-US:en-US-Neural2-D", "gemini-3.1-flash-tts-preview")
+    @Test
+    fun `synthesizeSpeech falls back to Puck for legacy Cloud TTS voice format`() =
+        runBlocking {
+            val models = mockk<Models>(relaxed = true)
+            val expectedAudio = byteArrayOf(4, 5, 6)
+            val actualVoiceArg = mutableListOf<String>()
 
-        assertTrue(result.isSuccess, "Result should be success: ${result.exceptionOrNull()}")
-        assertEquals("Puck", actualVoiceArg.first())
-        val audioBytes = result.getOrNull()!!
-        assertEquals("RIFF", String(audioBytes.copyOfRange(0, 4), Charsets.US_ASCII))
-        assertArrayEquals(expectedAudio, audioBytes.copyOfRange(44, audioBytes.size))
-    }
+            every {
+                models.generateContent(any<String>(), any<String>(), any<GenerateContentConfig>())
+            } answers {
+                val configArg = arg<GenerateContentConfig>(2)
+                val voiceName =
+                    configArg
+                        .speechConfig()
+                        .flatMap { it.voiceConfig() }
+                        .flatMap { it.prebuiltVoiceConfig() }
+                        .map { it.voiceName().orElse("unknown") }
+                        .orElse("unknown")
+                actualVoiceArg.add(voiceName)
+                GenerateContentResponse
+                    .builder()
+                    .candidates(
+                        listOf(
+                            Candidate
+                                .builder()
+                                .content(
+                                    Content
+                                        .builder()
+                                        .parts(
+                                            listOf(
+                                                Part
+                                                    .builder()
+                                                    .inlineData(
+                                                        Blob
+                                                            .builder()
+                                                            .data(expectedAudio)
+                                                            .mimeType("audio/mpeg")
+                                                            .build(),
+                                                    ).build(),
+                                            ),
+                                        ).build(),
+                                ).build(),
+                        ),
+                    ).build()
+            }
+
+            val service = GoogleTtsService { models }
+            val result = service.synthesizeSpeech("Hello", "en-US:en-US-Neural2-D", "gemini-3.1-flash-tts-preview")
+
+            assertTrue(result.isSuccess, "Result should be success: ${result.exceptionOrNull()}")
+            assertEquals("Puck", actualVoiceArg.first())
+            val audioBytes = result.getOrNull()!!
+            assertEquals("RIFF", String(audioBytes.copyOfRange(0, 4), Charsets.US_ASCII))
+            assertArrayEquals(expectedAudio, audioBytes.copyOfRange(44, audioBytes.size))
+        }
 
     @Test
     fun `wrapPcmInWav produces a valid WAV header`() {
@@ -139,7 +145,10 @@ class GoogleTtsServiceTest {
         assertArrayEquals(pcmData, wavBytes.copyOfRange(44, wavBytes.size))
 
         // Verify little-endian fmt values
-        val buffer = java.nio.ByteBuffer.wrap(wavBytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val buffer =
+            java.nio.ByteBuffer
+                .wrap(wavBytes)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
         assertEquals(1, buffer.getShort(20).toInt()) // AudioFormat: PCM
         assertEquals(1, buffer.getShort(22).toInt()) // NumChannels: mono
         assertEquals(24000, buffer.getInt(24)) // SampleRate

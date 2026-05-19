@@ -11,53 +11,78 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class XaiRequestMapperTest {
-
     @Test
     fun `mapToResponseParams omits max output tokens for xai multi agent model`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent-0309",
-            prompt = "How are you?",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                maxTokens = 100
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent-0309",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        maxTokens = 100,
+                    ),
             )
-        )
 
         assertFalse(params.maxOutputTokens().isPresent)
     }
 
     @Test
     fun `mapToResponseParams never sends instructions and preserves system messages in input`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent",
-            prompt = "hello",
-            history = listOf(
-                ChatMessage(Role.SYSTEM, "You are direct."),
-                ChatMessage(Role.USER, "prior user")
-            ),
-            options = GenerationOptions(reasoningBudget = 0)
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent",
+                prompt = "hello",
+                history =
+                    listOf(
+                        ChatMessage(Role.SYSTEM, "You are direct."),
+                        ChatMessage(Role.USER, "prior user"),
+                    ),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
 
         assertFalse(params.instructions().isPresent)
-        assertTrue(params.input().get().toString().contains("role=system"))
-        assertTrue(params.input().get().toString().contains("You are direct."))
+        assertTrue(
+            params
+                .input()
+                .get()
+                .toString()
+                .contains("role=system"),
+        )
+        assertTrue(
+            params
+                .input()
+                .get()
+                .toString()
+                .contains("You are direct."),
+        )
     }
 
     @Test
     fun `mapToResponseParams includes effort only reasoning for multi agent mode`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.XHIGH
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.XHIGH,
+                    ),
             )
-        )
 
         assertTrue(params.reasoning().isPresent)
-        assertEquals("xhigh", params.reasoning().get().effort().get().toString())
+        assertEquals(
+            "xhigh",
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .get()
+                .toString(),
+        )
     }
 
     @Test
@@ -69,46 +94,52 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToResponseParams removes reasoning effort for grok 4 reasoning family`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4-fast-reasoning",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.HIGH,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4-fast-reasoning",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                    ),
+            )
 
         assertFalse(params.reasoning().isPresent)
     }
 
     @Test
     fun `mapToResponseParams allows reasoning effort for grok 3 mini`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-3-mini",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.HIGH,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-3-mini",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                    ),
+            )
 
         assertTrue(params.reasoning().isPresent)
     }
 
     @Test
     fun `mapToChatCompletionParams removes reasoning effort for grok 3`() {
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-3",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.HIGH,
-                maxTokens = 100,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                        maxTokens = 100,
+                    ),
+            )
 
         assertFalse(params.reasoningEffort().isPresent)
         assertTrue(params.maxCompletionTokens().isPresent)
@@ -120,16 +151,18 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToChatCompletionParams removes reasoning effort for grok 4 non reasoning family`() {
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.LOW,
-                maxTokens = 100,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4-1-fast-non-reasoning",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.LOW,
+                        maxTokens = 100,
+                    ),
+            )
 
         assertFalse(params.reasoningEffort().isPresent)
         assertTrue(params.maxCompletionTokens().isPresent)
@@ -138,61 +171,69 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToResponseParams removes reasoning effort for grok 4 non reasoning family`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.LOW,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4-1-fast-non-reasoning",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.LOW,
+                    ),
+            )
 
         assertFalse(params.reasoning().isPresent)
     }
 
     @Test
     fun `mapToResponseParams removes reasoning effort for grok 420 family`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-reasoning",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.LOW,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-reasoning",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.LOW,
+                    ),
+            )
 
         assertFalse(params.reasoning().isPresent)
     }
 
     @Test
     fun `mapToResponseParams never sends max tokens for multi agent suffix model`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent-0309",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                maxTokens = 200,
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent-0309",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        maxTokens = 200,
+                    ),
+            )
 
         assertFalse(params.maxOutputTokens().isPresent)
     }
 
     @Test
     fun `mapToResponseParams does not send xai tool planner overrides`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                    ),
+            )
 
         assertFalse(params.maxToolCalls().isPresent)
         assertFalse(params.parallelToolCalls().isPresent)
@@ -200,20 +241,22 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToResponseParams sends xai compatible non strict tool schema`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.20-multi-agent",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                    ),
+            )
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
         // Client tools are stripped for multi-agent in mapToResponseParams but NOT in mapToChatCompletionParams (Wait, checking code...)
-        // Actually, it is stripped in mapToResponseParams too. 
+        // Actually, it is stripped in mapToResponseParams too.
         // My previous edit to the test was correct in principle but code has it stripped.
         assertFalse(toolsPayload.contains("\"function\"")) // Client-side tools use the "function" type
         assertTrue(toolsPayload.contains("web_search"))
@@ -222,16 +265,18 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToChatCompletionParams sends xai compatible non strict tool schema`() {
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-3",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.WEB_SEARCH),
-            ),
-        )
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                    ),
+            )
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
         assertTrue(toolsPayload.contains("web_search"))
@@ -239,12 +284,13 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToChatCompletionParams never sends logprobs for grok 420 family`() {
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-4.20-reasoning",
-            prompt = "hello",
-            history = emptyList(),
-            options = GenerationOptions(reasoningBudget = 0),
-        )
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4.20-reasoning",
+                prompt = "hello",
+                history = emptyList(),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
 
         assertFalse(params.logprobs().isPresent)
     }
@@ -268,19 +314,22 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToResponseParams includes image uris in user message`() {
-        val tempFile = java.io.File.createTempFile("test", ".png").apply {
-            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
-            deleteOnExit()
-        }
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "what is in this image?",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                imageUris = listOf(tempFile.toURI().toString())
+        val tempFile =
+            java.io.File.createTempFile("test", ".png").apply {
+                writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+                deleteOnExit()
+            }
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4-1-fast-non-reasoning",
+                prompt = "what is in this image?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        imageUris = listOf(tempFile.toURI().toString()),
+                    ),
             )
-        )
 
         val input = params.input().orElseThrow().toString()
         assertTrue(input.contains("what is in this image?"))
@@ -290,19 +339,22 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToChatCompletionParams includes image uris in user message`() {
-        val tempFile = java.io.File.createTempFile("test", ".png").apply {
-            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
-            deleteOnExit()
-        }
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "describe image",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                imageUris = listOf(tempFile.toURI().toString())
+        val tempFile =
+            java.io.File.createTempFile("test", ".png").apply {
+                writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+                deleteOnExit()
+            }
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4-1-fast-non-reasoning",
+                prompt = "describe image",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        imageUris = listOf(tempFile.toURI().toString()),
+                    ),
             )
-        )
 
         val chatBody = params.toString()
         assertTrue(chatBody.contains("describe image"))
@@ -312,43 +364,48 @@ class XaiRequestMapperTest {
 
     @Test
     fun `mapToResponseParams sets store to false`() {
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-3",
-            prompt = "test",
-            history = emptyList(),
-            options = GenerationOptions(reasoningBudget = 0)
-        )
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-3",
+                prompt = "test",
+                history = emptyList(),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
 
         assertFalse(params.store().get())
     }
 
     @Test
     fun `mapToChatCompletionParams sets store to false`() {
-        val params = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = "grok-3",
-            prompt = "test",
-            history = emptyList(),
-            options = GenerationOptions(reasoningBudget = 0)
-        )
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-3",
+                prompt = "test",
+                history = emptyList(),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
 
         assertFalse(params.store().get())
     }
 
     @Test
     fun `mapToResponseParams sets store to false when images are present`() {
-        val tempFile = java.io.File.createTempFile("test", ".png").apply {
-            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
-            deleteOnExit()
-        }
-        val params = XaiRequestMapper.mapToResponseParams(
-            modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "what is in this image?",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                imageUris = listOf(tempFile.toURI().toString())
+        val tempFile =
+            java.io.File.createTempFile("test", ".png").apply {
+                writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+                deleteOnExit()
+            }
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4-1-fast-non-reasoning",
+                prompt = "what is in this image?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        imageUris = listOf(tempFile.toURI().toString()),
+                    ),
             )
-        )
 
         assertFalse(params.store().get())
     }

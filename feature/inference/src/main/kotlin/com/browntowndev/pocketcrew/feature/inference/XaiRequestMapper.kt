@@ -7,18 +7,14 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.openai.core.JsonValue
-import com.openai.models.FunctionDefinition
-import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
 import com.openai.models.chat.completions.ChatCompletionContentPartText
-import com.openai.models.chat.completions.ChatCompletionFunctionTool
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
-import com.openai.models.responses.FunctionTool
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
@@ -35,12 +31,14 @@ object XaiRequestMapper {
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): ChatCompletionCreateParams {
         val sanitizedOptions = sanitizeChatOptions(modelId, options)
-        val builder = ChatCompletionCreateParams.builder()
-            .model(modelId)
-            .store(false)
+        val builder =
+            ChatCompletionCreateParams
+                .builder()
+                .model(modelId)
+                .store(false)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
@@ -48,23 +46,31 @@ object XaiRequestMapper {
             when (msg.role) {
                 Role.SYSTEM -> {
                     @Suppress("MaxLineLength")
-                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
+                    messages.add(
+                        ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()),
+                    )
                 }
                 Role.USER -> {
                     @Suppress("MaxLineLength")
-                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
+                    messages.add(
+                        ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()),
+                    )
                 }
                 Role.ASSISTANT -> {
                     @Suppress("MaxLineLength")
-                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
+                    messages.add(
+                        ChatCompletionMessageParam.ofAssistant(
+                            ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build(),
+                        ),
+                    )
                 }
             }
         }
 
         messages.add(
             ChatCompletionMessageParam.ofUser(
-                buildChatCompletionUserMessage(prompt, options.imageUris)
-            )
+                buildChatCompletionUserMessage(prompt, options.imageUris),
+            ),
         )
         builder.messages(messages)
 
@@ -72,9 +78,9 @@ object XaiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         sanitizedOptions.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
-        
+
         val toolsPayload = mutableListOf<Map<String, Any>>()
-        
+
         // Add native tools for models that support them (e.g., grok-4.20 family)
         if (modelId.startsWith("grok-4.20")) {
             toolsPayload.add(mapOf("type" to "web_search"))
@@ -99,41 +105,47 @@ object XaiRequestMapper {
         return builder.build()
     }
 
-
     fun mapToResponseParams(
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): ResponseCreateParams {
         val sanitizedOptions = sanitizeResponseOptions(modelId, options)
-        val builder = ResponseCreateParams.builder()
-            .model(modelId)
-            .store(false)
+        val builder =
+            ResponseCreateParams
+                .builder()
+                .model(modelId)
+                .store(false)
 
         val provider = options.apiProvider
         val optModelId = options.modelId
-        val parameterSupport = if (provider != null && optModelId != null) {
-            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
-        } else null
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
 
         val messages = mutableListOf<ResponseInputItem>()
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            val role = when (msg.role) {
-                Role.USER -> ResponseInputItem.Message.Role.of("user")
-                Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
-                Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
-            }
+            val role =
+                when (msg.role) {
+                    Role.USER -> ResponseInputItem.Message.Role.of("user")
+                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
+                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
+                }
 
             messages.add(
                 ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
+                    ResponseInputItem.Message
+                        .builder()
                         .role(role)
                         .addInputTextContent(sanitizedContent)
-                        .build()
-                )
+                        .build(),
+                ),
             )
         }
 
@@ -150,9 +162,9 @@ object XaiRequestMapper {
         if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
             sanitizedOptions.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
         }
-        
+
         val toolsPayload = mutableListOf<Map<String, Any>>()
-        
+
         // Add native tools for models that support them (e.g., grok-4.20 family)
         if (modelId.startsWith("grok-4.20")) {
             toolsPayload.add(mapOf("type" to "web_search"))
@@ -176,19 +188,15 @@ object XaiRequestMapper {
         return builder.build()
     }
 
+    fun isMultiAgentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
-    fun isMultiAgentModel(modelId: String): Boolean =
-        ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
+    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean = !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
-    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean =
-        !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
-
-    fun isChatReasoningContentModel(modelId: String): Boolean =
-        ApiProviderModelPolicy.isXaiChatReasoningContentModel(modelId)
+    fun isChatReasoningContentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiChatReasoningContentModel(modelId)
 
     private fun sanitizeResponseOptions(
         modelId: String,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): SanitizedXaiRequestOptions =
         SanitizedXaiRequestOptions(
             reasoningEffort = sanitizeReasoningEffort(modelId, options.reasoningEffort),
@@ -197,7 +205,7 @@ object XaiRequestMapper {
 
     private fun sanitizeChatOptions(
         modelId: String,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): SanitizedXaiRequestOptions =
         SanitizedXaiRequestOptions(
             reasoningEffort = sanitizeReasoningEffort(modelId, options.reasoningEffort),
@@ -206,7 +214,7 @@ object XaiRequestMapper {
 
     private fun sanitizeReasoningEffort(
         modelId: String,
-        reasoningEffort: ApiReasoningEffort?
+        reasoningEffort: ApiReasoningEffort?,
     ): ApiReasoningEffort? {
         if (reasoningEffort == null) {
             return null
@@ -231,10 +239,11 @@ object XaiRequestMapper {
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
 
     private fun ToolDefinition.toChatCompletionToolMap(): Map<String, Any> {
-        val parametersMap = mutableMapOf<String, Any>(
-            "type" to "object",
-            "properties" to schema.properties.toMap()
-        )
+        val parametersMap =
+            mutableMapOf<String, Any>(
+                "type" to "object",
+                "properties" to schema.properties.toMap(),
+            )
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
         }
@@ -247,20 +256,22 @@ object XaiRequestMapper {
 
         return mapOf(
             "type" to "function",
-            "function" to mapOf(
-                "name" to name,
-                "description" to description,
-                "parameters" to parametersMap,
-                "strict" to false
-            )
+            "function" to
+                mapOf(
+                    "name" to name,
+                    "description" to description,
+                    "parameters" to parametersMap,
+                    "strict" to false,
+                ),
         )
     }
 
     private fun ToolDefinition.toResponseToolPayloadMap(): Map<String, Any> {
-        val parametersMap = mutableMapOf<String, Any>(
-            "type" to "object",
-            "properties" to schema.properties.toMap()
-        )
+        val parametersMap =
+            mutableMapOf<String, Any>(
+                "type" to "object",
+                "properties" to schema.properties.toMap(),
+            )
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
         }
@@ -276,7 +287,7 @@ object XaiRequestMapper {
             "name" to name,
             "description" to description,
             "parameters" to parametersMap,
-            "strict" to false
+            "strict" to false,
         )
     }
 
@@ -288,11 +299,12 @@ object XaiRequestMapper {
         return map
     }
 
-    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any {
-        return when (this) {
+    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any =
+        when (this) {
             is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) content
-                else {
+                if (isString) {
+                    content
+                } else {
                     content.toBooleanStrictOrNull()
                         ?: content.toLongOrNull()
                         ?: content.toDoubleOrNull()
@@ -302,43 +314,47 @@ object XaiRequestMapper {
             is kotlinx.serialization.json.JsonObject -> toMap()
             is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
         }
-    }
 
     private fun buildChatCompletionUserMessage(
         prompt: String,
         imageUris: List<String>,
     ): ChatCompletionUserMessageParam {
         if (imageUris.isEmpty()) {
-            return ChatCompletionUserMessageParam.builder()
+            return ChatCompletionUserMessageParam
+                .builder()
                 .content(prompt)
                 .build()
         }
 
-        val parts = buildList {
-            add(
-                ChatCompletionContentPart.ofText(
-                    ChatCompletionContentPartText.builder()
-                        .text(prompt)
-                        .build()
-                )
-            )
-            ImagePayloads.fromUris(imageUris).forEach { payload ->
-                ImagePayloads.validate(payload)
+        val parts =
+            buildList {
                 add(
-                    ChatCompletionContentPart.ofImageUrl(
-                        ChatCompletionContentPartImage.builder()
-                            .imageUrl(
-                                ChatCompletionContentPartImage.ImageUrl.builder()
-                                    .url(payload.dataUrl)
-                                    .build()
-                            )
-                            .build()
-                    )
+                    ChatCompletionContentPart.ofText(
+                        ChatCompletionContentPartText
+                            .builder()
+                            .text(prompt)
+                            .build(),
+                    ),
                 )
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ChatCompletionContentPart.ofImageUrl(
+                            ChatCompletionContentPartImage
+                                .builder()
+                                .imageUrl(
+                                    ChatCompletionContentPartImage.ImageUrl
+                                        .builder()
+                                        .url(payload.dataUrl)
+                                        .build(),
+                                ).build(),
+                        ),
+                    )
+                }
             }
-        }
 
-        return ChatCompletionUserMessageParam.builder()
+        return ChatCompletionUserMessageParam
+            .builder()
             .contentOfArrayOfContentParts(parts)
             .build()
     }
@@ -347,17 +363,20 @@ object XaiRequestMapper {
         prompt: String,
         imageUris: List<String>,
     ): ResponseInputItem.Message {
-        val builder = ResponseInputItem.Message.builder()
-            .role(ResponseInputItem.Message.Role.of("user"))
-            .addInputTextContent(prompt)
+        val builder =
+            ResponseInputItem.Message
+                .builder()
+                .role(ResponseInputItem.Message.Role.of("user"))
+                .addInputTextContent(prompt)
 
         ImagePayloads.fromUris(imageUris).forEach { payload ->
             ImagePayloads.validate(payload)
             builder.addContent(
-                ResponseInputImage.builder()
+                ResponseInputImage
+                    .builder()
                     .detail(ResponseInputImage.Detail.AUTO)
                     .imageUrl(payload.dataUrl)
-                    .build()
+                    .build(),
             )
         }
 

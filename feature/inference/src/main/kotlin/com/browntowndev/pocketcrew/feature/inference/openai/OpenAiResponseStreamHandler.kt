@@ -30,7 +30,6 @@ internal class OpenAiResponseStreamHandler(
     private val assistantMessageId: MessageId?,
     private val emitEvent: suspend (InferenceEvent) -> Unit,
 ) {
-
     /**
      * Dispatches a [ResponseStreamEvent] to the appropriate handler method and returns
      * the updated [StreamState].
@@ -43,62 +42,63 @@ internal class OpenAiResponseStreamHandler(
     suspend fun handleEvent(
         event: ResponseStreamEvent,
         state: StreamState,
-    ): StreamState = when {
-        event.isOutputTextDelta() -> handleOutputTextDelta(event, state)
-        event.isOutputTextDone() -> handleOutputTextDone(event, state)
-        event.isReasoningTextDelta() -> handleReasoningTextDelta(event, state)
-        event.isReasoningTextDone() -> handleReasoningTextDone(event, state)
-        event.isReasoningSummaryTextDelta() -> handleReasoningSummaryTextDelta(event, state)
-        event.isReasoningSummaryTextDone() -> handleReasoningSummaryTextDone(event, state)
-        event.isRefusalDelta() -> handleRefusalDelta(event, state)
-        event.isRefusalDone() -> handleRefusalDone(event, state)
-        event.isFunctionCallArgumentsDone() -> handleFunctionCallArgumentsDone(event, state)
-        event.isOutputItemAdded() -> handleOutputItemAdded(event, state)
-        event.isOutputItemDone() -> handleOutputItemDone(event, state)
-        event.isCompleted() -> handleCompleted(event, state)
-        event.isIncomplete() -> handleIncomplete(event, state)
-        event.isFailed() -> handleFailed(event, state)
-        event.isError() -> handleError(event, state)
-        event.isCreated() -> state
-        event.isInProgress() -> state
-        event.isQueued() -> state
-        event.isContentPartAdded() -> state
-        event.isContentPartDone() -> state
-        event.isReasoningSummaryPartAdded() -> state
-        event.isReasoningSummaryPartDone() -> state
-        event.isFunctionCallArgumentsDelta() -> state
-        event.isCustomToolCallInputDelta() -> state
-        event.isCustomToolCallInputDone() -> state
-        event.isOutputTextAnnotationAdded() -> state
-        event.isAudioDelta() -> state
-        event.isAudioDone() -> state
-        event.isAudioTranscriptDelta() -> state
-        event.isAudioTranscriptDone() -> state
-        event.isWebSearchCallCompleted() -> state
-        event.isWebSearchCallInProgress() -> state
-        event.isWebSearchCallSearching() -> state
-        event.isFileSearchCallCompleted() -> state
-        event.isFileSearchCallInProgress() -> state
-        event.isFileSearchCallSearching() -> state
-        event.isCodeInterpreterCallCodeDelta() -> state
-        event.isCodeInterpreterCallCodeDone() -> state
-        event.isCodeInterpreterCallCompleted() -> state
-        event.isCodeInterpreterCallInProgress() -> state
-        event.isCodeInterpreterCallInterpreting() -> state
-        event.isImageGenerationCallCompleted() -> state
-        event.isImageGenerationCallGenerating() -> state
-        event.isImageGenerationCallInProgress() -> state
-        event.isImageGenerationCallPartialImage() -> state
-        event.isMcpCallArgumentsDelta() -> state
-        event.isMcpCallArgumentsDone() -> state
-        event.isMcpCallCompleted() -> state
-        event.isMcpCallFailed() -> state
-        event.isMcpCallInProgress() -> state
-        event.isMcpListToolsCompleted() -> state
-        event.isMcpListToolsFailed() -> state
-        event.isMcpListToolsInProgress() -> state
-        else -> handleUnexpectedStreamEvent(event, state)
-    }
+    ): StreamState =
+        when {
+            event.isOutputTextDelta() -> handleOutputTextDelta(event, state)
+            event.isOutputTextDone() -> handleOutputTextDone(event, state)
+            event.isReasoningTextDelta() -> handleReasoningTextDelta(event, state)
+            event.isReasoningTextDone() -> handleReasoningTextDone(event, state)
+            event.isReasoningSummaryTextDelta() -> handleReasoningSummaryTextDelta(event, state)
+            event.isReasoningSummaryTextDone() -> handleReasoningSummaryTextDone(event, state)
+            event.isRefusalDelta() -> handleRefusalDelta(event, state)
+            event.isRefusalDone() -> handleRefusalDone(event, state)
+            event.isFunctionCallArgumentsDone() -> handleFunctionCallArgumentsDone(event, state)
+            event.isOutputItemAdded() -> handleOutputItemAdded(event, state)
+            event.isOutputItemDone() -> handleOutputItemDone(event, state)
+            event.isCompleted() -> handleCompleted(event, state)
+            event.isIncomplete() -> handleIncomplete(event, state)
+            event.isFailed() -> handleFailed(event, state)
+            event.isError() -> handleError(event, state)
+            event.isCreated() -> state
+            event.isInProgress() -> state
+            event.isQueued() -> state
+            event.isContentPartAdded() -> state
+            event.isContentPartDone() -> state
+            event.isReasoningSummaryPartAdded() -> state
+            event.isReasoningSummaryPartDone() -> state
+            event.isFunctionCallArgumentsDelta() -> state
+            event.isCustomToolCallInputDelta() -> state
+            event.isCustomToolCallInputDone() -> state
+            event.isOutputTextAnnotationAdded() -> state
+            event.isAudioDelta() -> state
+            event.isAudioDone() -> state
+            event.isAudioTranscriptDelta() -> state
+            event.isAudioTranscriptDone() -> state
+            event.isWebSearchCallCompleted() -> state
+            event.isWebSearchCallInProgress() -> state
+            event.isWebSearchCallSearching() -> state
+            event.isFileSearchCallCompleted() -> state
+            event.isFileSearchCallInProgress() -> state
+            event.isFileSearchCallSearching() -> state
+            event.isCodeInterpreterCallCodeDelta() -> state
+            event.isCodeInterpreterCallCodeDone() -> state
+            event.isCodeInterpreterCallCompleted() -> state
+            event.isCodeInterpreterCallInProgress() -> state
+            event.isCodeInterpreterCallInterpreting() -> state
+            event.isImageGenerationCallCompleted() -> state
+            event.isImageGenerationCallGenerating() -> state
+            event.isImageGenerationCallInProgress() -> state
+            event.isImageGenerationCallPartialImage() -> state
+            event.isMcpCallArgumentsDelta() -> state
+            event.isMcpCallArgumentsDone() -> state
+            event.isMcpCallCompleted() -> state
+            event.isMcpCallFailed() -> state
+            event.isMcpCallInProgress() -> state
+            event.isMcpListToolsCompleted() -> state
+            event.isMcpListToolsFailed() -> state
+            event.isMcpListToolsInProgress() -> state
+            else -> handleUnexpectedStreamEvent(event, state)
+        }
 
     /**
      * Attempts to recover from a stream termination exception. Returns the current state
@@ -115,7 +115,7 @@ internal class OpenAiResponseStreamHandler(
         }
         loggingPort.warning(
             tag,
-            "Responses stream ended unexpectedly while $context; recovering with streamed output provider=$provider model=$modelId"
+            "Responses stream ended unexpectedly while $context; recovering with streamed output provider=$provider model=$modelId",
         )
         return state
     }
@@ -138,11 +138,12 @@ internal class OpenAiResponseStreamHandler(
     ): StreamState {
         val outputTextDelta = event.outputTextDelta().get()
         val text = outputTextDelta.delta()
-        val key = streamPartKey(
-            itemId = outputTextDelta.itemId(),
-            outputIndex = outputTextDelta.outputIndex(),
-            contentIndex = outputTextDelta.contentIndex(),
-        )
+        val key =
+            streamPartKey(
+                itemId = outputTextDelta.itemId(),
+                outputIndex = outputTextDelta.outputIndex(),
+                contentIndex = outputTextDelta.contentIndex(),
+            )
         appendStreamDelta(state.outputTextByPart, key, text)
         state.streamedAssistantMessage.append(text)
         state.emittedAny = true
@@ -156,20 +157,22 @@ internal class OpenAiResponseStreamHandler(
         state: StreamState,
     ): StreamState {
         val outputTextDone = event.outputTextDone().get()
-        val key = streamPartKey(
-            itemId = outputTextDone.itemId(),
-            outputIndex = outputTextDone.outputIndex(),
-            contentIndex = outputTextDone.contentIndex(),
-        )
-        val fallbackText = resolveNovelStreamText(
-            parts = state.outputTextByPart,
-            key = key,
-            finalizedText = outputTextDone.text(),
-        )
+        val key =
+            streamPartKey(
+                itemId = outputTextDone.itemId(),
+                outputIndex = outputTextDone.outputIndex(),
+                contentIndex = outputTextDone.contentIndex(),
+            )
+        val fallbackText =
+            resolveNovelStreamText(
+                parts = state.outputTextByPart,
+                key = key,
+                finalizedText = outputTextDone.text(),
+            )
         if (fallbackText.isNotEmpty()) {
             loggingPort.debug(
                 tag,
-                "Responses stream emitted output_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                "Responses stream emitted output_text.done fallback model=$modelId key=$key chars=${fallbackText.length}",
             )
             state.streamedAssistantMessage.append(fallbackText)
             state.emittedAny = true
@@ -184,11 +187,12 @@ internal class OpenAiResponseStreamHandler(
     ): StreamState {
         val reasoningTextDelta = event.reasoningTextDelta().get()
         val text = reasoningTextDelta.delta()
-        val key = streamPartKey(
-            itemId = reasoningTextDelta.itemId(),
-            outputIndex = reasoningTextDelta.outputIndex(),
-            contentIndex = reasoningTextDelta.contentIndex(),
-        )
+        val key =
+            streamPartKey(
+                itemId = reasoningTextDelta.itemId(),
+                outputIndex = reasoningTextDelta.outputIndex(),
+                contentIndex = reasoningTextDelta.contentIndex(),
+            )
         appendStreamDelta(state.reasoningTextByPart, key, text)
         state.emittedAny = true
         state.reasoningTextDeltaCount++
@@ -201,20 +205,22 @@ internal class OpenAiResponseStreamHandler(
         state: StreamState,
     ): StreamState {
         val reasoningTextDone = event.reasoningTextDone().get()
-        val key = streamPartKey(
-            itemId = reasoningTextDone.itemId(),
-            outputIndex = reasoningTextDone.outputIndex(),
-            contentIndex = reasoningTextDone.contentIndex(),
-        )
-        val fallbackText = resolveNovelStreamText(
-            parts = state.reasoningTextByPart,
-            key = key,
-            finalizedText = reasoningTextDone.text(),
-        )
+        val key =
+            streamPartKey(
+                itemId = reasoningTextDone.itemId(),
+                outputIndex = reasoningTextDone.outputIndex(),
+                contentIndex = reasoningTextDone.contentIndex(),
+            )
+        val fallbackText =
+            resolveNovelStreamText(
+                parts = state.reasoningTextByPart,
+                key = key,
+                finalizedText = reasoningTextDone.text(),
+            )
         if (fallbackText.isNotEmpty()) {
             loggingPort.debug(
                 tag,
-                "Responses stream emitted reasoning_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                "Responses stream emitted reasoning_text.done fallback model=$modelId key=$key chars=${fallbackText.length}",
             )
             state.emittedAny = true
             emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
@@ -228,10 +234,11 @@ internal class OpenAiResponseStreamHandler(
     ): StreamState {
         val reasoningSummaryTextDelta = event.reasoningSummaryTextDelta().get()
         val text = reasoningSummaryTextDelta.delta()
-        val key = streamItemKey(
-            itemId = reasoningSummaryTextDelta.itemId(),
-            outputIndex = reasoningSummaryTextDelta.outputIndex(),
-        )
+        val key =
+            streamItemKey(
+                itemId = reasoningSummaryTextDelta.itemId(),
+                outputIndex = reasoningSummaryTextDelta.outputIndex(),
+            )
         appendStreamDelta(state.reasoningSummaryByPart, key, text)
         state.emittedAny = true
         state.reasoningSummaryDeltaCount++
@@ -244,19 +251,21 @@ internal class OpenAiResponseStreamHandler(
         state: StreamState,
     ): StreamState {
         val reasoningSummaryTextDone = event.reasoningSummaryTextDone().get()
-        val key = streamItemKey(
-            itemId = reasoningSummaryTextDone.itemId(),
-            outputIndex = reasoningSummaryTextDone.outputIndex(),
-        )
-        val fallbackText = resolveNovelStreamText(
-            parts = state.reasoningSummaryByPart,
-            key = key,
-            finalizedText = reasoningSummaryTextDone.text(),
-        )
+        val key =
+            streamItemKey(
+                itemId = reasoningSummaryTextDone.itemId(),
+                outputIndex = reasoningSummaryTextDone.outputIndex(),
+            )
+        val fallbackText =
+            resolveNovelStreamText(
+                parts = state.reasoningSummaryByPart,
+                key = key,
+                finalizedText = reasoningSummaryTextDone.text(),
+            )
         if (fallbackText.isNotEmpty()) {
             loggingPort.debug(
                 tag,
-                "Responses stream emitted reasoning_summary_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                "Responses stream emitted reasoning_summary_text.done fallback model=$modelId key=$key chars=${fallbackText.length}",
             )
             state.emittedAny = true
             emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
@@ -270,11 +279,12 @@ internal class OpenAiResponseStreamHandler(
     ): StreamState {
         val refusalTextDelta = event.refusalDelta().get()
         val text = refusalTextDelta.delta()
-        val key = streamPartKey(
-            itemId = refusalTextDelta.itemId(),
-            outputIndex = refusalTextDelta.outputIndex(),
-            contentIndex = refusalTextDelta.contentIndex(),
-        )
+        val key =
+            streamPartKey(
+                itemId = refusalTextDelta.itemId(),
+                outputIndex = refusalTextDelta.outputIndex(),
+                contentIndex = refusalTextDelta.contentIndex(),
+            )
         appendStreamDelta(state.refusalTextByPart, key, text)
         state.streamedAssistantMessage.append(text)
         state.emittedAny = true
@@ -288,20 +298,22 @@ internal class OpenAiResponseStreamHandler(
         state: StreamState,
     ): StreamState {
         val refusalTextDone = event.refusalDone().get()
-        val key = streamPartKey(
-            itemId = refusalTextDone.itemId(),
-            outputIndex = refusalTextDone.outputIndex(),
-            contentIndex = refusalTextDone.contentIndex(),
-        )
-        val fallbackText = resolveNovelStreamText(
-            parts = state.refusalTextByPart,
-            key = key,
-            finalizedText = refusalTextDone.refusal(),
-        )
+        val key =
+            streamPartKey(
+                itemId = refusalTextDone.itemId(),
+                outputIndex = refusalTextDone.outputIndex(),
+                contentIndex = refusalTextDone.contentIndex(),
+            )
+        val fallbackText =
+            resolveNovelStreamText(
+                parts = state.refusalTextByPart,
+                key = key,
+                finalizedText = refusalTextDone.refusal(),
+            )
         if (fallbackText.isNotEmpty()) {
             loggingPort.debug(
                 tag,
-                "Responses stream emitted refusal.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                "Responses stream emitted refusal.done fallback model=$modelId key=$key chars=${fallbackText.length}",
             )
             state.streamedAssistantMessage.append(fallbackText)
             state.emittedAny = true
@@ -316,33 +328,36 @@ internal class OpenAiResponseStreamHandler(
     ): StreamState {
         val functionCallDone = event.functionCallArgumentsDone().get()
         val cachedFunctionCall = state.capturedFunctionCallByKey[functionCallDone.itemId()]
-        val toolName = runCatching { functionCallDone.name() }
-            .getOrElse { error ->
-                cachedFunctionCall?.toolName?.let { return@getOrElse it }
-                loggingPort.warning(
-                    tag,
-                    @Suppress("MaxLineLength")
-                    "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}"
-                )
-                ToolDefinition.WEB_SEARCH.name
-            }
-        val argumentsJson = runCatching { functionCallDone.arguments() }
-            .getOrElse { error ->
-                cachedFunctionCall?.argumentsJson?.let { return@getOrElse it }
-                throw IllegalStateException(
-                    "Function call done event missing arguments provider=$provider model=$modelId",
-                    error
-                )
-            }
-        state.toolCallRequests += ToolCallRequest(
-            toolName = toolName,
-            argumentsJson = argumentsJson,
-            provider = provider,
-            modelType = modelType,
-            chatId = chatId,
-            userMessageId = userMessageId,
-            assistantMessageId = assistantMessageId,
-        )
+        val toolName =
+            runCatching { functionCallDone.name() }
+                .getOrElse { error ->
+                    cachedFunctionCall?.toolName?.let { return@getOrElse it }
+                    loggingPort.warning(
+                        tag,
+                        @Suppress("MaxLineLength")
+                        "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}",
+                    )
+                    ToolDefinition.WEB_SEARCH.name
+                }
+        val argumentsJson =
+            runCatching { functionCallDone.arguments() }
+                .getOrElse { error ->
+                    cachedFunctionCall?.argumentsJson?.let { return@getOrElse it }
+                    throw IllegalStateException(
+                        "Function call done event missing arguments provider=$provider model=$modelId",
+                        error,
+                    )
+                }
+        state.toolCallRequests +=
+            ToolCallRequest(
+                toolName = toolName,
+                argumentsJson = argumentsJson,
+                provider = provider,
+                modelType = modelType,
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+            )
         state.providerToolCallIds += cachedFunctionCall?.callId ?: functionCallDone.itemId()
         state.providerToolItemIds += cachedFunctionCall?.itemId ?: functionCallDone.itemId()
         return state
@@ -368,11 +383,16 @@ internal class OpenAiResponseStreamHandler(
         event: ResponseStreamEvent,
         state: StreamState,
     ): StreamState {
-        state.responseId = event.completed().get().response().id()
+        state.responseId =
+            event
+                .completed()
+                .get()
+                .response()
+                .id()
         loggingPort.debug(
             tag,
             @Suppress("MaxLineLength")
-            "Responses stream completed model=$modelId outputTextDeltas=${state.outputTextDeltaCount} reasoningTextDeltas=${state.reasoningTextDeltaCount} reasoningSummaryDeltas=${state.reasoningSummaryDeltaCount} refusalTextDeltas=${state.refusalTextDeltaCount}"
+            "Responses stream completed model=$modelId outputTextDeltas=${state.outputTextDeltaCount} reasoningTextDeltas=${state.reasoningTextDeltaCount} reasoningSummaryDeltas=${state.reasoningSummaryDeltaCount} refusalTextDeltas=${state.refusalTextDeltaCount}",
         )
         return state
     }
@@ -388,7 +408,7 @@ internal class OpenAiResponseStreamHandler(
         loggingPort.debug(
             tag,
             @Suppress("MaxLineLength")
-            "Responses stream incomplete model=$modelId responseId=${state.responseId} incompleteDetails=$details"
+            "Responses stream incomplete model=$modelId responseId=${state.responseId} incompleteDetails=$details",
         )
         return state
     }
@@ -398,11 +418,16 @@ internal class OpenAiResponseStreamHandler(
         state: StreamState,
     ): StreamState {
         val failedEvent = event.failed().get()
-        val errorMsg = failedEvent.response().error().map { it.message() }.orElse("Unknown API error")
+        val errorMsg =
+            failedEvent
+                .response()
+                .error()
+                .map { it.message() }
+                .orElse("Unknown API error")
         if (shouldRecoverFromStreamTermination(state.emittedAny, errorMsg)) {
             loggingPort.warning(
                 tag,
-                "Responses stream reported recoverable API failure after partial output provider=$provider model=$modelId error=$errorMsg"
+                "Responses stream reported recoverable API failure after partial output provider=$provider model=$modelId error=$errorMsg",
             )
             return state
         }
@@ -418,7 +443,7 @@ internal class OpenAiResponseStreamHandler(
         if (shouldRecoverFromStreamTermination(state.emittedAny, errorMsg)) {
             loggingPort.warning(
                 tag,
-                "Responses stream reported recoverable stream error after partial output provider=$provider model=$modelId error=$errorMsg"
+                "Responses stream reported recoverable stream error after partial output provider=$provider model=$modelId error=$errorMsg",
             )
             return state
         }
@@ -433,13 +458,15 @@ internal class OpenAiResponseStreamHandler(
         loggingPort.warning(
             tag,
             @Suppress("MaxLineLength")
-            "Responses stream unrecognized event (update handler for new SDK event?) model=$modelId summary=$summary"
+            "Responses stream unrecognized event (update handler for new SDK event?) model=$modelId summary=$summary",
         )
         return state
     }
 
-    private fun truncateForLog(text: String, maxLen: Int = 400): String =
-        if (text.length <= maxLen) text else text.take(maxLen) + "…"
+    private fun truncateForLog(
+        text: String,
+        maxLen: Int = 400,
+    ): String = if (text.length <= maxLen) text else text.take(maxLen) + "…"
 
     // ── Stream text helpers ─────────────────────────────────────────────────
 
@@ -475,11 +502,16 @@ internal class OpenAiResponseStreamHandler(
         return finalizedText.drop(commonPrefixLength)
     }
 
-    private fun streamPartKey(itemId: String, outputIndex: Long, contentIndex: Long): String =
-        "$itemId:$outputIndex:$contentIndex"
+    private fun streamPartKey(
+        itemId: String,
+        outputIndex: Long,
+        contentIndex: Long,
+    ): String = "$itemId:$outputIndex:$contentIndex"
 
-    private fun streamItemKey(itemId: String, outputIndex: Long): String =
-        "$itemId:$outputIndex"
+    private fun streamItemKey(
+        itemId: String,
+        outputIndex: Long,
+    ): String = "$itemId:$outputIndex"
 
     // ── Error recovery ──────────────────────────────────────────────────────
 
@@ -503,12 +535,13 @@ internal class OpenAiResponseStreamHandler(
         if (!item.isFunctionCall()) return
         val functionCall = item.asFunctionCall()
         val itemId = functionCall.id().orElse(functionCall.callId())
-        val captured = CapturedFunctionCall(
-            itemId = itemId,
-            callId = functionCall.callId(),
-            toolName = functionCall.name(),
-            argumentsJson = functionCall.arguments(),
-        )
+        val captured =
+            CapturedFunctionCall(
+                itemId = itemId,
+                callId = functionCall.callId(),
+                toolName = functionCall.name(),
+                argumentsJson = functionCall.arguments(),
+            )
         sink[itemId] = captured
         sink[functionCall.callId()] = captured
     }

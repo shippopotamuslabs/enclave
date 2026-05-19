@@ -16,7 +16,10 @@ interface LiteRtConversation {
      * @param options Per-request generation options (e.g., reasoning budget).
      * @return A flow emitting response segments from the streaming response.
      */
-    fun sendMessageAsync(message: String, options: GenerationOptions? = null): Flow<ConversationResponse>
+    fun sendMessageAsync(
+        message: String,
+        options: GenerationOptions? = null,
+    ): Flow<ConversationResponse>
 
     /**
      * Cancels the current ongoing generation on the LiteRT Conversation.
@@ -33,5 +36,5 @@ interface LiteRtConversation {
  */
 data class ConversationResponse(
     val text: String = "",
-    val thought: String = ""
+    val thought: String = "",
 )

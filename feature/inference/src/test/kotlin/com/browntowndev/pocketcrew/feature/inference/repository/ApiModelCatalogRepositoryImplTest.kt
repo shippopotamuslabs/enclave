@@ -7,11 +7,11 @@ import com.anthropic.models.models.ModelCapabilities
 import com.anthropic.models.models.ModelInfo
 import com.anthropic.models.models.ModelListPage
 import com.anthropic.services.blocking.ModelService
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.feature.inference.anthropic.AnthropicClientProvider
 import com.browntowndev.pocketcrew.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiClientProvider
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.google.genai.types.Model
 import io.mockk.every
 import io.mockk.mockk

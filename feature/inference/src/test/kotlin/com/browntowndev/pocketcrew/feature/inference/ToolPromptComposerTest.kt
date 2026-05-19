@@ -5,7 +5,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ToolPromptComposerTest {
-
     @Test
     fun localToolContract_includesSearchToolByDefault() {
         val contract = ToolPromptComposer.localToolContract(includeImageInspectTool = false)

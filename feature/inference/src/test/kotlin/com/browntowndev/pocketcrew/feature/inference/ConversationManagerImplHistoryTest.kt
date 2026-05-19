@@ -17,12 +17,11 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertNull
 
 class ConversationManagerImplHistoryTest {
-
     private val context = mockk<Context>(relaxed = true)
     private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
     private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
@@ -38,13 +37,14 @@ class ConversationManagerImplHistoryTest {
         every { Log.d(any(), any()) } returns 0
         every { Log.i(any(), any()) } returns 0
 
-        manager = ConversationManagerImpl(
-            context = context,
-            localModelRepository = localModelRepository,
-            activeModelProvider = activeModelProvider,
-            loggingPort = loggingPort,
-            toolExecutor = toolExecutor,
-        )
+        manager =
+            ConversationManagerImpl(
+                context = context,
+                localModelRepository = localModelRepository,
+                activeModelProvider = activeModelProvider,
+                loggingPort = loggingPort,
+                toolExecutor = toolExecutor,
+            )
     }
 
     @AfterEach
@@ -53,52 +53,62 @@ class ConversationManagerImplHistoryTest {
     }
 
     @Test
-    fun `setHistory identifies turn 2 as a continuation when starting from empty history`() = runTest {
-        // Given
-        val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
-        setPrivateField(manager, "conversation", mockLiteRtConversation)
-        
-        // Initial state is empty history
-        setPrivateField(manager, "history", emptyList<ChatMessage>())
+    fun `setHistory identifies turn 2 as a continuation when starting from empty history`() =
+        runTest {
+            // Given
+            val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
+            setPrivateField(manager, "conversation", mockLiteRtConversation)
 
-        // When turn 2 history is set (initial user message + assistant response)
-        val turn2History = listOf(
-            ChatMessage(Role.USER, "Hello"),
-            ChatMessage(Role.ASSISTANT, "Hi there!")
-        )
-        manager.setHistory(turn2History)
+            // Initial state is empty history
+            setPrivateField(manager, "history", emptyList<ChatMessage>())
 
-        // Then
-        verify(exactly = 1) { 
-            Log.d("ConversationManager", match { it.contains("History is a continuation. Reusing conversation.") })
+            // When turn 2 history is set (initial user message + assistant response)
+            val turn2History =
+                listOf(
+                    ChatMessage(Role.USER, "Hello"),
+                    ChatMessage(Role.ASSISTANT, "Hi there!"),
+                )
+            manager.setHistory(turn2History)
+
+            // Then
+            verify(exactly = 1) {
+                Log.d("ConversationManager", match { it.contains("History is a continuation. Reusing conversation.") })
+            }
+            verify(exactly = 0) {
+                Log.d("ConversationManager", match { it.contains("History discontinuity detected") })
+            }
         }
-        verify(exactly = 0) { 
-            Log.d("ConversationManager", match { it.contains("History discontinuity detected") })
-        }
-    }
 
     @Test
-    fun `setHistory closes native conversation when rehydrated history is still empty`() = runTest {
-        val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
-        setPrivateField(manager, "conversation", mockLiteRtConversation)
-        setPrivateField(manager, "history", emptyList<ChatMessage>())
+    fun `setHistory closes native conversation when rehydrated history is still empty`() =
+        runTest {
+            val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
+            setPrivateField(manager, "conversation", mockLiteRtConversation)
+            setPrivateField(manager, "history", emptyList<ChatMessage>())
 
-        manager.setHistory(emptyList())
+            manager.setHistory(emptyList())
 
-        verify(exactly = 1) {
-            Log.d("ConversationManager", match { it.contains("Empty rehydrated history requires native conversation reset") })
+            verify(exactly = 1) {
+                Log.d("ConversationManager", match { it.contains("Empty rehydrated history requires native conversation reset") })
+            }
+            verify(exactly = 1) { mockLiteRtConversation.close() }
+            assertNull(getPrivateField(manager, "conversation"))
         }
-        verify(exactly = 1) { mockLiteRtConversation.close() }
-        assertNull(getPrivateField(manager, "conversation"))
-    }
 
-    private fun setPrivateField(obj: Any, fieldName: String, value: Any?) {
+    private fun setPrivateField(
+        obj: Any,
+        fieldName: String,
+        value: Any?,
+    ) {
         val field = obj.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         field.set(obj, value)
     }
 
-    private fun getPrivateField(obj: Any, fieldName: String): Any? {
+    private fun getPrivateField(
+        obj: Any,
+        fieldName: String,
+    ): Any? {
         val field = obj.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         return field.get(obj)

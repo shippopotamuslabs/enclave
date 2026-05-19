@@ -19,7 +19,6 @@ import java.io.File
  * Devices with 128-bit SVE (like Tensor G3) should use NEON for stability.
  */
 object SveDetector {
-
     private const val TAG = "SveDetector"
 
     // SVE minimum beneficial vector length: 32 bytes = 256-bit
@@ -62,8 +61,8 @@ object SveDetector {
      * Read SVE vector length from kernel sysfs.
      * Returns null if unable to read (SELinux / permissions / not SVE hardware).
      */
-    private fun readSveVectorLength(): Int? {
-        return try {
+    private fun readSveVectorLength(): Int? =
+        try {
             val file = File("/proc/sys/abi/sve_default_vector_length")
             if (file.exists() && file.canRead()) {
                 file.readText().trim().toIntOrNull()
@@ -74,13 +73,12 @@ object SveDetector {
             Log.d(TAG, "Could not read SVE vector length: ${e.message}")
             null
         }
-    }
 
     /**
      * Check if CPU supports SVE by parsing /proc/cpuinfo.
      */
-    private fun cpuHasSveFeature(): Boolean {
-        return try {
+    private fun cpuHasSveFeature(): Boolean =
+        try {
             val cpuInfo = File("/proc/cpuinfo").readText().lowercase()
             // Regex ensures we match 'sve' or 'sve2' as whole words (not part of another word)
             Regex("\\bsve2?\\b").containsMatchIn(cpuInfo)
@@ -88,7 +86,6 @@ object SveDetector {
             Log.d(TAG, "Could not read cpuinfo: ${e.message}")
             false
         }
-    }
 
     /**
      * Check if device is known to have problematic (128-bit) SVE implementation.

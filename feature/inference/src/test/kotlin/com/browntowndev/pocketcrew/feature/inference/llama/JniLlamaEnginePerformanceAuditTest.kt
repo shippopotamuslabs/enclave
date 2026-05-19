@@ -23,41 +23,45 @@ class JniLlamaEnginePerformanceAuditTest {
     }
 
     @Test
-    fun `initialize uses tiered context window from config`() = runTest {
-        val config = LlamaModelConfig(
-            modelPath = "/tmp/model.gguf",
-            systemPrompt = "test",
-            sampling = LlamaSamplingConfig(
-                contextWindow = 4096,
-                maxTokens = 1024,
-                temperature = 0.7f,
-                topK = 40,
-                topP = 0.9f,
-                minP = 0.05f,
-                batchSize = 512,
-                gpuLayers = 32,
-                repeatPenalty = 1.1f,
-                thinkingEnabled = false
-            )
-        )
+    fun `initialize uses tiered context window from config`() =
+        runTest {
+            val config =
+                LlamaModelConfig(
+                    modelPath = "/tmp/model.gguf",
+                    systemPrompt = "test",
+                    sampling =
+                        LlamaSamplingConfig(
+                            contextWindow = 4096,
+                            maxTokens = 1024,
+                            temperature = 0.7f,
+                            topK = 40,
+                            topP = 0.9f,
+                            minP = 0.05f,
+                            batchSize = 512,
+                            gpuLayers = 32,
+                            repeatPenalty = 1.1f,
+                            thinkingEnabled = false,
+                        ),
+                )
 
-        try {
-            engine.initialize(config)
-        } catch (e: Exception) {
-            // Expected — native libs not available in unit tests
+            try {
+                engine.initialize(config)
+            } catch (e: Exception) {
+                // Expected — native libs not available in unit tests
+            }
+
+            verify { gpuProfiler.detectOptimalBackend() }
         }
-
-        verify { gpuProfiler.detectOptimalBackend() }
-    }
 
     @Test
-    fun `resetConversation clears KV cache as requested`() = runTest {
-        try {
-            engine.resetConversation("new system prompt")
-        } catch (e: Exception) {
-            // Expected — native libs not available in unit tests
+    fun `resetConversation clears KV cache as requested`() =
+        runTest {
+            try {
+                engine.resetConversation("new system prompt")
+            } catch (e: Exception) {
+                // Expected — native libs not available in unit tests
+            }
         }
-    }
 
     @Test
     fun `checkAndCompressContext reports native context usage without mutating KV positions`() {

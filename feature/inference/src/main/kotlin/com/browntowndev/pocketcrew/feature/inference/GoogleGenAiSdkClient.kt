@@ -7,7 +7,6 @@ import com.google.genai.Models
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.GenerateContentConfig
-import com.google.genai.types.GenerateContentResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -26,7 +25,7 @@ interface GoogleGenAiSdkClient {
         contents: List<Content>,
         config: GenerateContentConfig,
         allowToolCall: Boolean = false,
-        emitEvent: suspend (InferenceEvent) -> Unit
+        emitEvent: suspend (InferenceEvent) -> Unit,
     ): GoogleSdkResult
 }
 
@@ -35,7 +34,6 @@ internal class GoogleGenAiSdkClientImpl(
     private val modelType: ModelType,
     private val loggingPort: LoggingPort,
 ) : GoogleGenAiSdkClient {
-
     companion object {
         private const val TAG = "GoogleGenAiSdkClient"
     }
@@ -48,7 +46,7 @@ internal class GoogleGenAiSdkClientImpl(
         contents: List<Content>,
         config: GenerateContentConfig,
         allowToolCall: Boolean,
-        emitEvent: suspend (InferenceEvent) -> Unit
+        emitEvent: suspend (InferenceEvent) -> Unit,
     ): GoogleSdkResult {
         logRequestDetails(modelId, contents)
 
@@ -105,7 +103,10 @@ internal class GoogleGenAiSdkClientImpl(
         )
     }
 
-    private fun logRequestDetails(modelId: String, contents: List<Content>) {
+    private fun logRequestDetails(
+        modelId: String,
+        contents: List<Content>,
+    ) {
         var totalTextLength = 0
         var imageCount = 0
         val imageDetails = mutableListOf<String>()
@@ -128,7 +129,7 @@ internal class GoogleGenAiSdkClientImpl(
 
         loggingPort.info(
             TAG,
-            "Gemini SDK Request: model=$modelId, promptTextLen=$totalTextLength, images=$imageCount, details=$imageDetails"
+            "Gemini SDK Request: model=$modelId, promptTextLen=$totalTextLength, images=$imageCount, details=$imageDetails",
         )
     }
 }

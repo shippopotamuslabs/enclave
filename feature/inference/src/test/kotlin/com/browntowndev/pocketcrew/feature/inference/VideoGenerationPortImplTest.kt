@@ -13,7 +13,6 @@ import com.browntowndev.pocketcrew.feature.inference.media.VideoGenerationPortIm
 import com.browntowndev.pocketcrew.feature.inference.media.XaiVideoGenerationAdapter
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
@@ -31,94 +30,101 @@ class VideoGenerationPortImplTest {
 
     @BeforeEach
     fun setup() {
-        port = VideoGenerationPortImpl(
-            apiKeyProvider = apiKeyProvider,
-            studioRepository = studioRepository,
-            openAiAdapter = openAiAdapter,
-            googleAdapter = googleAdapter,
-            xaiAdapter = xaiAdapter,
-        )
+        port =
+            VideoGenerationPortImpl(
+                apiKeyProvider = apiKeyProvider,
+                studioRepository = studioRepository,
+                openAiAdapter = openAiAdapter,
+                googleAdapter = googleAdapter,
+                xaiAdapter = xaiAdapter,
+            )
         coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
         coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
     }
 
     @Test
-    fun generateVideo_missingApiKey_returnsFailure() = runTest {
-        coEvery { apiKeyProvider.getApiKey("alias") } returns null
+    fun generateVideo_missingApiKey_returnsFailure() =
+        runTest {
+            coEvery { apiKeyProvider.getApiKey("alias") } returns null
 
-        val result = port.generateVideo("prompt", provider(ApiProvider.OPENAI), VideoGenerationSettings())
+            val result = port.generateVideo("prompt", provider(ApiProvider.OPENAI), VideoGenerationSettings())
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("API key not found") == true)
-    }
-
-    @Test
-    fun generateVideo_openAiProvider_loadsReferenceAndUsesDefaults() = runTest {
-        coEvery {
-            openAiAdapter.generateVideo(any(), any(), any(), any(), any(), any())
-        } returns Result.success("mp4".toByteArray())
-
-        val result = port.generateVideo(
-            prompt = "prompt",
-            provider = provider(ApiProvider.OPENAI, modelName = null),
-            settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
-        )
-
-        assertTrue(result.isSuccess)
-        assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
-        coVerify {
-            openAiAdapter.generateVideo(
-                prompt = "prompt",
-                apiKey = "key",
-                modelId = "sora-2",
-                baseUrl = null,
-                settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
-                referenceImage = match { it.contentEquals("png".toByteArray()) },
-            )
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("API key not found") == true)
         }
-    }
 
     @Test
-    fun generateVideo_googleProvider_routesToGoogleAdapter() = runTest {
-        coEvery {
-            googleAdapter.generateVideo(any(), any(), any(), any(), any())
-        } returns Result.success("google".toByteArray())
+    fun generateVideo_openAiProvider_loadsReferenceAndUsesDefaults() =
+        runTest {
+            coEvery {
+                openAiAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+            } returns Result.success("mp4".toByteArray())
 
-        val result = port.generateVideo("prompt", provider(ApiProvider.GOOGLE), VideoGenerationSettings())
+            val result =
+                port.generateVideo(
+                    prompt = "prompt",
+                    provider = provider(ApiProvider.OPENAI, modelName = null),
+                    settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
+                )
 
-        assertTrue(result.isSuccess)
-        assertArrayEquals("google".toByteArray(), result.getOrThrow())
-        coVerify {
-            googleAdapter.generateVideo(
-                prompt = "prompt",
-                apiKey = "key",
-                modelId = "custom-model",
-                baseUrl = null,
-                settings = VideoGenerationSettings(),
-            )
+            assertTrue(result.isSuccess)
+            assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
+            coVerify {
+                openAiAdapter.generateVideo(
+                    prompt = "prompt",
+                    apiKey = "key",
+                    modelId = "sora-2",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
+                    referenceImage = match { it.contentEquals("png".toByteArray()) },
+                )
+            }
         }
-    }
 
     @Test
-    fun generateVideo_xaiProvider_routesToXaiAdapter() = runTest {
-        coEvery {
-            xaiAdapter.generateVideo(any(), any(), any(), any(), any(), any())
-        } returns Result.success("xai".toByteArray())
+    fun generateVideo_googleProvider_routesToGoogleAdapter() =
+        runTest {
+            coEvery {
+                googleAdapter.generateVideo(any(), any(), any(), any(), any())
+            } returns Result.success("google".toByteArray())
 
-        val result = port.generateVideo("prompt", provider(ApiProvider.XAI), VideoGenerationSettings())
+            val result = port.generateVideo("prompt", provider(ApiProvider.GOOGLE), VideoGenerationSettings())
 
-        assertTrue(result.isSuccess)
-        assertArrayEquals("xai".toByteArray(), result.getOrThrow())
-        coVerify { xaiAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null) }
-    }
+            assertTrue(result.isSuccess)
+            assertArrayEquals("google".toByteArray(), result.getOrThrow())
+            coVerify {
+                googleAdapter.generateVideo(
+                    prompt = "prompt",
+                    apiKey = "key",
+                    modelId = "custom-model",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(),
+                )
+            }
+        }
 
     @Test
-    fun generateVideo_unsupportedProvider_returnsFailure() = runTest {
-        val result = port.generateVideo("prompt", provider(ApiProvider.ANTHROPIC), VideoGenerationSettings())
+    fun generateVideo_xaiProvider_routesToXaiAdapter() =
+        runTest {
+            coEvery {
+                xaiAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+            } returns Result.success("xai".toByteArray())
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is UnsupportedOperationException)
-    }
+            val result = port.generateVideo("prompt", provider(ApiProvider.XAI), VideoGenerationSettings())
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals("xai".toByteArray(), result.getOrThrow())
+            coVerify { xaiAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null) }
+        }
+
+    @Test
+    fun generateVideo_unsupportedProvider_returnsFailure() =
+        runTest {
+            val result = port.generateVideo("prompt", provider(ApiProvider.ANTHROPIC), VideoGenerationSettings())
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is UnsupportedOperationException)
+        }
 
     private fun provider(
         provider: ApiProvider,

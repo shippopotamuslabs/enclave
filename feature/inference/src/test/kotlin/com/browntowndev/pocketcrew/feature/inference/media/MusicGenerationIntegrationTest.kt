@@ -14,56 +14,59 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MusicGenerationIntegrationTest {
-
     private val apiKeyProvider = mockk<com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort>()
     private val googleAdapter = mockk<GoogleMusicGenerationAdapter>()
     private val musicPort = MusicGenerationPortImpl(apiKeyProvider, googleAdapter)
 
     @Test
-    fun `generateMusic delegates to Google adapter when provider is Google`() = runTest {
-        // Given
-        val prompt = "test music"
-        val settings = MusicGenerationSettings()
-        val provider = MediaProviderAsset(
-            id = MediaProviderId("google"),
-            displayName = "Google",
-            provider = ApiProvider.GOOGLE,
-            capability = MediaCapability.MUSIC,
-            credentialAlias = "google-alias"
-        )
-        val expectedBytes = "music bytes".toByteArray()
+    fun `generateMusic delegates to Google adapter when provider is Google`() =
+        runTest {
+            // Given
+            val prompt = "test music"
+            val settings = MusicGenerationSettings()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("google"),
+                    displayName = "Google",
+                    provider = ApiProvider.GOOGLE,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "google-alias",
+                )
+            val expectedBytes = "music bytes".toByteArray()
 
-        coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
-        coEvery { googleAdapter.generateMusic(prompt, "test-key", any(), any()) } returns Result.success(expectedBytes)
+            coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
+            coEvery { googleAdapter.generateMusic(prompt, "test-key", any(), any()) } returns Result.success(expectedBytes)
 
-        // When
-        val result = musicPort.generateMusic(prompt, provider, settings)
+            // When
+            val result = musicPort.generateMusic(prompt, provider, settings)
 
-        // Then
-        assertTrue(result.isSuccess)
-        assertArrayEquals(expectedBytes, result.getOrNull())
-    }
+            // Then
+            assertTrue(result.isSuccess)
+            assertArrayEquals(expectedBytes, result.getOrNull())
+        }
 
     @Test
-    fun `generateMusic returns failure for unsupported provider`() = runTest {
-        // Given
-        val prompt = "test music"
-        val settings = MusicGenerationSettings()
-        val provider = MediaProviderAsset(
-            id = MediaProviderId("openai"),
-            displayName = "OpenAI",
-            provider = ApiProvider.OPENAI,
-            capability = MediaCapability.MUSIC,
-            credentialAlias = "openai-alias"
-        )
+    fun `generateMusic returns failure for unsupported provider`() =
+        runTest {
+            // Given
+            val prompt = "test music"
+            val settings = MusicGenerationSettings()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("openai"),
+                    displayName = "OpenAI",
+                    provider = ApiProvider.OPENAI,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "openai-alias",
+                )
 
-        coEvery { apiKeyProvider.getApiKey("openai-alias") } returns "test-key"
+            coEvery { apiKeyProvider.getApiKey("openai-alias") } returns "test-key"
 
-        // When
-        val result = musicPort.generateMusic(prompt, provider, settings)
+            // When
+            val result = musicPort.generateMusic(prompt, provider, settings)
 
-        // Then
-        assertTrue(result.isFailure)
-        assertEquals("Music generation not supported for provider: OPENAI", result.exceptionOrNull()?.message)
-    }
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals("Music generation not supported for provider: OPENAI", result.exceptionOrNull()?.message)
+        }
 }
