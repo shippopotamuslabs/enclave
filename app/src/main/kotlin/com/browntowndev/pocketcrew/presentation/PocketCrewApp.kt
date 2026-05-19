@@ -1,25 +1,3 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
-
 package com.browntowndev.pocketcrew.presentation
 
 import android.content.Intent
