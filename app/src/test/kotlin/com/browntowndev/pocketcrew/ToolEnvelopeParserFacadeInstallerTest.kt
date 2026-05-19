@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class ToolEnvelopeParserFacadeInstallerTest {
-
     @AfterEach
     fun resetToolEnvelopeParserPort() {
         ToolEnvelopeParser.portProvider = null
@@ -33,21 +32,25 @@ class ToolEnvelopeParserFacadeInstallerTest {
         override fun parse(raw: String): ToolEnvelopeBatch {
             parseCalls.add(raw)
             return ToolEnvelopeBatch(
-                successes = listOf(
-                    ToolEnvelopeField(
-                        toolName = "web_search",
-                        argumentsJson = """{"query":"android"}""",
-                        repaired = false,
-                        repairs = emptyList(),
+                successes =
+                    listOf(
+                        ToolEnvelopeField(
+                            toolName = "web_search",
+                            argumentsJson = """{"query":"android"}""",
+                            repaired = false,
+                            repairs = emptyList(),
+                        ),
                     ),
-                ),
                 failures = emptyList(),
                 visiblePrefix = "",
                 visibleSuffix = "",
             )
         }
 
-        override fun coerceProviderArguments(toolName: String, argsJson: String): ToolEnvelopeField =
+        override fun coerceProviderArguments(
+            toolName: String,
+            argsJson: String,
+        ): ToolEnvelopeField =
             ToolEnvelopeField(
                 toolName = toolName,
                 argumentsJson = argsJson,
@@ -57,7 +60,6 @@ class ToolEnvelopeParserFacadeInstallerTest {
 
         override fun hasLocalToolContract(systemPrompt: String?): Boolean = false
 
-        override fun buildToolResultMessage(resultJson: String): String =
-            "<tool_result>$resultJson</tool_result>"
+        override fun buildToolResultMessage(resultJson: String): String = "<tool_result>$resultJson</tool_result>"
     }
 }

@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class BiometricPromptCoordinatorTest {
-
     @Test
     fun tryStartPrompt_enabledAndIdle_startsPrompt() {
         val coordinator = BiometricPromptCoordinator()

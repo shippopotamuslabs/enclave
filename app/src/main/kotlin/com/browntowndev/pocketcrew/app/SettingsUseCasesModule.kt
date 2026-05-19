@@ -6,10 +6,10 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUse
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCasesImpl
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCases
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDataControlsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDataControlsUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMediaUseCases

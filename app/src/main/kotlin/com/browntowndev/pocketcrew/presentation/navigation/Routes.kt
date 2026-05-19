@@ -8,6 +8,7 @@ object Routes {
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
     const val STUDIO = "studio"
+
     @Suppress("MaxLineLength")
     const val STUDIO_WITH_ARGS =
         "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}" +
@@ -26,23 +27,34 @@ object Routes {
 
     fun studioWithEditAsset(assetId: String): String = "$STUDIO?editAssetId=$assetId"
 
-    fun studioWithAnimateAsset(assetId: String, autoAnimate: Boolean = false, prompt: String? = null): String {
-        return "$STUDIO?animateAssetId=$assetId&autoAnimate=$autoAnimate" + 
+    fun studioWithAnimateAsset(
+        assetId: String,
+        autoAnimate: Boolean = false,
+        prompt: String? = null,
+    ): String =
+        "$STUDIO?animateAssetId=$assetId&autoAnimate=$autoAnimate" +
             if (prompt != null) "&animatePrompt=$prompt" else ""
-    }
 
-    fun studioDetailWithAnimateAsset(assetId: String, autoAnimate: Boolean = false, prompt: String? = null): String {
-        return "studio_detail?assetId=$assetId&autoAnimate=$autoAnimate" +
+    fun studioDetailWithAnimateAsset(
+        assetId: String,
+        autoAnimate: Boolean = false,
+        prompt: String? = null,
+    ): String =
+        "studio_detail?assetId=$assetId&autoAnimate=$autoAnimate" +
             if (prompt != null) "&animatePrompt=$prompt" else ""
-    }
 
-    fun studioWithRehydration(ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>): String {
+    fun studioWithRehydration(
+        ids: List<String>,
+        uris: List<String>,
+        types: List<String>,
+        prompts: List<String>,
+    ): String {
         val json = kotlinx.serialization.json.Json
         val encodedIds = android.net.Uri.encode(json.encodeToString(ids))
         val encodedUris = android.net.Uri.encode(json.encodeToString(uris))
         val encodedTypes = android.net.Uri.encode(json.encodeToString(types))
         val encodedPrompts = android.net.Uri.encode(json.encodeToString(prompts))
-        
+
         return "$STUDIO?rehydrateIds=$encodedIds&rehydrateUris=$encodedUris&rehydrateTypes=$encodedTypes&rehydratePrompts=$encodedPrompts"
     }
 }

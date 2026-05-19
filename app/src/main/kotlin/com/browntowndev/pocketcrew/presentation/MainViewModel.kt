@@ -25,13 +25,13 @@ import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.crypto.Cipher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.crypto.Cipher
 import javax.inject.Inject
 
 /**
@@ -107,9 +107,10 @@ class MainViewModel
         private fun initializeApp() {
             viewModelScope.launch {
                 val isLocked = !cryptoManager.hasCachedKey()
-                val isBioPossible = isLocked &&
-                    biometricPort.isBiometricAvailable() &&
-                    biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                val isBioPossible =
+                    isLocked &&
+                        biometricPort.isBiometricAvailable() &&
+                        biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
                 loggingPort.debug(TAG, "initializeApp: isLocked=$isLocked, isBioPossible=$isBioPossible")
 
@@ -178,7 +179,10 @@ class MainViewModel
             }
         }
 
-        fun unlockVault(password: String, enableBiometric: Boolean = false) {
+        fun unlockVault(
+            password: String,
+            enableBiometric: Boolean = false,
+        ) {
             if ((startupState.value as? AppStartupState.Ready)?.isUnlocking == true) return
 
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to unlock vault", "Failed to unlock")) {
@@ -321,15 +325,20 @@ class MainViewModel
             return vaultMetadataPort.getVaultVerificationData()?.takeIf { it.isNotBlank() }
         }
 
-        private suspend fun persistWrappedDek(wrappedBase64: String, salt: String) {
+        private suspend fun persistWrappedDek(
+            wrappedBase64: String,
+            salt: String,
+        ) {
             vaultMetadataPort.saveWrappedDek(wrappedBase64)
-            runCatching { cloudSyncPort.uploadVaultMetadata(
-                com.browntowndev.pocketcrew.domain.model.security.VaultMetadata(
-                    salt = salt,
-                    verification = null,
-                    wrappedDek = wrappedBase64,
-                ),
-            ) }
+            runCatching {
+                cloudSyncPort.uploadVaultMetadata(
+                    com.browntowndev.pocketcrew.domain.model.security.VaultMetadata(
+                        salt = salt,
+                        verification = null,
+                        wrappedDek = wrappedBase64,
+                    ),
+                )
+            }
         }
 
         private suspend fun ensureVerificationStored(existing: String?) {
@@ -359,7 +368,8 @@ class MainViewModel
             }
             when (outcome) {
                 is VaultReconciliationOutcome.AlreadyMatching,
-                is VaultReconciliationOutcome.NoLocalVault -> {
+                is VaultReconciliationOutcome.NoLocalVault,
+                -> {
                     startCloudSyncAndListen(initialUpload = true)
                 }
                 is VaultReconciliationOutcome.NoCloudVault -> {
@@ -522,8 +532,7 @@ class MainViewModel
             startCloudSyncAndListen(initialUpload = false)
         }
 
-        fun getBiometricEncryptCipher(): Cipher? =
-            biometricManager.getEncryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+        fun getBiometricEncryptCipher(): Cipher? = biometricManager.getEncryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
         /**
          * Persists the currently cached DEK behind the biometric-bound AndroidKeyStore key.
@@ -538,11 +547,12 @@ class MainViewModel
                     }
                     return@launch
                 }
-                val result = biometricManager.storeSecureBytesWithCipher(
-                    VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
-                    dek,
-                    cipher,
-                )
+                val result =
+                    biometricManager.storeSecureBytesWithCipher(
+                        VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
+                        dek,
+                        cipher,
+                    )
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
                         val bioPossibleNow =
@@ -573,8 +583,7 @@ class MainViewModel
             }
         }
 
-        fun getBiometricDecryptCipher(): Cipher? =
-            biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+        fun getBiometricDecryptCipher(): Cipher? = biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
 
         /**
          * Biometric unlock restores the local DEK cache after proving it still decrypts the
@@ -597,10 +606,11 @@ class MainViewModel
                 }
 
                 try {
-                    val dek = biometricManager.decryptBytesWithCipher(
-                        VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
-                        cipher,
-                    )
+                    val dek =
+                        biometricManager.decryptBytesWithCipher(
+                            VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
+                            cipher,
+                        )
                     if (dek == null) {
                         loggingPort.error(TAG, "unlockWithBiometricCipher: Failed to unwrap DEK")
                         invalidateStaleBiometricUnlock(
