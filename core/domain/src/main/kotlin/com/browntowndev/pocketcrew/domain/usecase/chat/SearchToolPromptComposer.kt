@@ -239,7 +239,8 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
 
                     if (includeMusic) {
                         append(
-                            "- Use '${ToolDefinition.GENERATE_MUSIC.name}' to generate music, beats, or soundtracks from text descriptions.\n",
+                            "- Use '${ToolDefinition.GENERATE_MUSIC.name}' to generate music, beats, " +
+                                "or soundtracks from text descriptions.\n",
                         )
                         append("To generate music:\n")
                         append(ToolDefinition.GENERATE_MUSIC.toExample(strategy))

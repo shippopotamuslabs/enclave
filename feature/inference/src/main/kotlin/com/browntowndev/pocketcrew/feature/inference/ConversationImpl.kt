@@ -60,7 +60,8 @@ class ConversationImpl
 
                     Log.d(
                         TAG,
-                        "sendMessageAsync reasoningBudget=${options?.reasoningBudget ?: 0}, enable_thinking_present=${extraContext != null}",
+                        "sendMessageAsync reasoningBudget=${options?.reasoningBudget ?: 0}, " +
+                            "enable_thinking_present=${extraContext != null}",
                     )
 
                     conversation.sendMessageAsync(userMessage, extraContext ?: emptyMap()).collect { partialResult ->
