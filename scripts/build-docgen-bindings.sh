@@ -26,6 +26,8 @@ export PATH="$TOOLCHAIN/bin:$PATH"
 
 # Set environment variables for cargo
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/${TARGET_ARCH}${ANDROID_API}-clang"
+# 16 KB page-size alignment (required for Android 15+ / Play policy; match build-agent-bindings.sh)
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=16384 ${CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS:-}"
 export AR="$TOOLCHAIN/bin/llvm-ar"
 
 echo "Building docgen_core for $TARGET_ARCH from submodule $RUST_ROOT..."
@@ -47,6 +49,14 @@ cargo run --release --bin uniffi-bindgen generate \
 # Copy .so to jniLibs
 echo "Copying library to jniLibs..."
 mkdir -p "$PROJECT_ROOT/core/docgen/src/main/jniLibs/arm64-v8a"
-cp "$RUST_ROOT/target/$TARGET_ARCH/release/libdocgen_core.so" "$PROJECT_ROOT/core/docgen/src/main/jniLibs/arm64-v8a/"
+cp "$RUST_ROOT/target/$TARGET_ARCH/release/libdocgen_core.so" \
+    "$PROJECT_ROOT/core/docgen/src/main/jniLibs/arm64-v8a/"
+
+JNI_LIB="$PROJECT_ROOT/core/docgen/src/main/jniLibs/arm64-v8a/libdocgen_core.so"
+if ! readelf --program-headers --wide "$JNI_LIB" | awk '/ LOAD / { if ($NF != "0x4000") exit 1 } END { exit 0 }'; then
+    echo "ERROR: $JNI_LIB is not 16 KB page-size aligned (expected LOAD Align 0x4000)."
+    echo "Ensure CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS includes max-page-size=16384."
+    exit 1
+fi
 
 echo "Android build and binding generation complete."
