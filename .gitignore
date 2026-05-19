@@ -98,3 +98,5 @@ functions/node_modules/
 .worktrees/
 
 node_modules/
+build_output.txt
+.antigravitycli/
