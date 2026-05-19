@@ -143,16 +143,15 @@ class SettingsViewModelEventTest {
             )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
         val localModelsDelegate =
-            SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
+            SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, errorHandler)
         val apiProvidersDelegate =
-            SettingsApiProvidersDelegate(
-                settingsUseCases.apiProviders,
-                settingsUseCases.tts,
-                settingsUseCases.media,
-                deletionHelper,
-                apiModelAssetUiMapper,
-                ttsProviderAssetUiMapper,
-                errorHandler,
+            createSettingsApiProvidersDelegate(
+                apiProviderUseCases = settingsUseCases.apiProviders,
+                ttsUseCases = settingsUseCases.tts,
+                mediaUseCases = settingsUseCases.media,
+                deletionHelper = deletionHelper,
+                apiModelAssetUiMapper = apiModelAssetUiMapper,
+                errorHandler = errorHandler,
             )
         val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)

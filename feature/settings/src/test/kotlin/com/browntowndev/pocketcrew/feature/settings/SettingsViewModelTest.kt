@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -240,16 +241,15 @@ class SettingsViewModelTest {
         val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler)
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val localModelsDelegate =
-            SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, localModelAssetUiMapper, errorHandler)
+            SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, errorHandler)
         val apiProvidersDelegate =
-            SettingsApiProvidersDelegate(
-                settingsUseCases.apiProviders,
-                settingsUseCases.tts,
-                settingsUseCases.media,
-                deletionHelper,
-                apiModelAssetUiMapper,
-                ttsProviderAssetUiMapper,
-                errorHandler,
+            createSettingsApiProvidersDelegate(
+                apiProviderUseCases = settingsUseCases.apiProviders,
+                ttsUseCases = settingsUseCases.tts,
+                mediaUseCases = settingsUseCases.media,
+                deletionHelper = deletionHelper,
+                apiModelAssetUiMapper = apiModelAssetUiMapper,
+                errorHandler = errorHandler,
             )
         val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
@@ -963,5 +963,16 @@ class SettingsViewModelTest {
                     },
                 )
             }
+        }
+
+    @Test
+    fun `onShowByokSheet toggles api providers sheet visibility`() =
+        runTest {
+            assertFalse(viewModel.uiState.value.home.isApiProvidersSheetOpen)
+
+            viewModel.onShowByokSheet(show = true)
+
+            assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
+            assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
         }
 }

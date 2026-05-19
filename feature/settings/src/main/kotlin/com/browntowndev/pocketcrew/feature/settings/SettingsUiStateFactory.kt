@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
@@ -16,6 +17,9 @@ import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
 internal data class SheetVisibilityState(
@@ -109,6 +113,35 @@ internal data class DeletionTransientState(
     val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
 )
 
+internal data class SettingsUiStateSources(
+    val persistedSettings: Flow<SettingsData>,
+    val localAssets: Flow<List<LocalModelAsset>>,
+    val apiAssets: Flow<List<ApiModelAsset>>,
+    val ttsAssets: Flow<List<TtsProviderAsset>>,
+    val mediaAssets: Flow<List<MediaProviderAsset>>,
+    val defaultModels: Flow<List<DefaultModelAssignment>>,
+    val authState: Flow<AuthState>,
+    val sheetVisibility: StateFlow<SheetVisibilityState>,
+    val memories: Flow<List<StoredMemory>>,
+    val feedbackText: StateFlow<String>,
+    val localModelsState: StateFlow<LocalModelsTransientState>,
+    val apiState: StateFlow<ApiProvidersTransientState>,
+    val ttsState: StateFlow<TtsProvidersTransientState>,
+    val mediaState: StateFlow<MediaProvidersTransientState>,
+    val searchSkillState: StateFlow<SearchSkillTransientState>,
+    val assignmentsState: StateFlow<AssignmentDialogTransientState>,
+    val deletionState: StateFlow<DeletionTransientState>,
+    val memoriesState: StateFlow<MemoriesTransientState>,
+    val dataControlsState: StateFlow<DataControlsTransientState>,
+    val currentTavilyApiKey: StateFlow<String>,
+    val currentExaApiKey: StateFlow<String>,
+    val currentXApiKey: StateFlow<String>,
+    val xSearchState: StateFlow<XSearchTransientState>,
+    val isReindexing: Flow<Boolean>,
+    val reindexProgress: Flow<Float>,
+    val vaultReauthSheet: StateFlow<VaultReauthSheetState>,
+)
+
 class SettingsUiStateFactory
     @Inject
     constructor(
@@ -119,12 +152,48 @@ class SettingsUiStateFactory
         private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
         private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
     ) {
+        internal fun observeUiState(sources: SettingsUiStateSources): Flow<SettingsUiState> =
+            combine(
+                observeRepositorySlice(sources),
+                observeEditorSlice(sources),
+                observeSearchAndVaultSlice(sources),
+            ) { repository, editor, searchAndVault ->
+                create(
+                    persistedSettings = repository.persistedSettings,
+                    localAssets = repository.localAssets,
+                    apiAssets = repository.apiAssets,
+                    ttsAssets = repository.ttsAssets,
+                    mediaAssets = repository.mediaAssets,
+                    defaultModels = repository.defaultModels,
+                    authState = repository.authState,
+                    sheetVisibility = editor.sheetVisibility,
+                    memories = editor.memories,
+                    feedbackText = editor.feedbackText,
+                    localModelsState = editor.localModelsState,
+                    apiState = editor.apiState,
+                    ttsState = editor.ttsState,
+                    mediaState = editor.mediaState,
+                    searchSkillState = editor.searchSkillState,
+                    assignmentsState = editor.assignmentsState,
+                    deletionState = editor.deletionState,
+                    memoriesState = editor.memoriesState,
+                    dataControlsState = editor.dataControlsState,
+                    currentTavilyApiKey = searchAndVault.currentTavilyApiKey,
+                    currentExaApiKey = searchAndVault.currentExaApiKey,
+                    currentXApiKey = searchAndVault.currentXApiKey,
+                    xSearchState = searchAndVault.xSearchState,
+                    isReindexing = searchAndVault.isReindexing,
+                    reindexProgress = searchAndVault.reindexProgress,
+                    vaultReauthSheet = searchAndVault.vaultReauthSheet,
+                )
+            }
+
         @Suppress("LongParameterList", "CyclomaticComplexMethod")
         internal fun create(
             persistedSettings: SettingsData,
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
-            ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
+            ttsAssets: List<TtsProviderAsset>,
             mediaAssets: List<MediaProviderAsset>,
             defaultModels: List<DefaultModelAssignment>,
             authState: AuthState,
@@ -509,6 +578,136 @@ class SettingsUiStateFactory
                 else -> false
             }
 
+        private fun observeRepositorySlice(sources: SettingsUiStateSources): Flow<SettingsRepositorySlice> =
+            with(sources) {
+                combine(
+                    combine(persistedSettings, localAssets, apiAssets, ttsAssets, mediaAssets) {
+                            persistedSettings,
+                            localAssets,
+                            apiAssets,
+                            ttsAssets,
+                            mediaAssets,
+                        ->
+                        SettingsRepositoryAssetsSlice(
+                            persistedSettings = persistedSettings,
+                            localAssets = localAssets,
+                            apiAssets = apiAssets,
+                            ttsAssets = ttsAssets,
+                            mediaAssets = mediaAssets,
+                        )
+                    },
+                    combine(defaultModels, authState) { defaultModels, authState ->
+                        SettingsRepositoryMetaSlice(
+                            defaultModels = defaultModels,
+                            authState = authState,
+                        )
+                    },
+                ) { assets, meta ->
+                    SettingsRepositorySlice(
+                        persistedSettings = assets.persistedSettings,
+                        localAssets = assets.localAssets,
+                        apiAssets = assets.apiAssets,
+                        ttsAssets = assets.ttsAssets,
+                        mediaAssets = assets.mediaAssets,
+                        defaultModels = meta.defaultModels,
+                        authState = meta.authState,
+                    )
+                }
+            }
+
+        private fun observeEditorSlice(sources: SettingsUiStateSources): Flow<SettingsEditorSlice> =
+            with(sources) {
+                combine(
+                    combine(sheetVisibility, memories, feedbackText, localModelsState, apiState) {
+                            sheetVisibility,
+                            memories,
+                            feedbackText,
+                            localModelsState,
+                            apiState,
+                        ->
+                        SettingsEditorPrimarySlice(
+                            sheetVisibility = sheetVisibility,
+                            memories = memories,
+                            feedbackText = feedbackText,
+                            localModelsState = localModelsState,
+                            apiState = apiState,
+                        )
+                    },
+                    combine(ttsState, mediaState, searchSkillState, assignmentsState, deletionState) {
+                            ttsState,
+                            mediaState,
+                            searchSkillState,
+                            assignmentsState,
+                            deletionState,
+                        ->
+                        SettingsEditorSecondarySlice(
+                            ttsState = ttsState,
+                            mediaState = mediaState,
+                            searchSkillState = searchSkillState,
+                            assignmentsState = assignmentsState,
+                            deletionState = deletionState,
+                        )
+                    },
+                    combine(memoriesState, dataControlsState) { memoriesState, dataControlsState ->
+                        SettingsEditorTertiarySlice(
+                            memoriesState = memoriesState,
+                            dataControlsState = dataControlsState,
+                        )
+                    },
+                ) { primary, secondary, tertiary ->
+                    SettingsEditorSlice(
+                        sheetVisibility = primary.sheetVisibility,
+                        memories = primary.memories,
+                        feedbackText = primary.feedbackText,
+                        localModelsState = primary.localModelsState,
+                        apiState = primary.apiState,
+                        ttsState = secondary.ttsState,
+                        mediaState = secondary.mediaState,
+                        searchSkillState = secondary.searchSkillState,
+                        assignmentsState = secondary.assignmentsState,
+                        deletionState = secondary.deletionState,
+                        memoriesState = tertiary.memoriesState,
+                        dataControlsState = tertiary.dataControlsState,
+                    )
+                }
+            }
+
+        private fun observeSearchAndVaultSlice(sources: SettingsUiStateSources): Flow<SettingsSearchAndVaultSlice> =
+            with(sources) {
+                combine(
+                    combine(currentTavilyApiKey, currentExaApiKey, currentXApiKey, xSearchState) {
+                            currentTavilyApiKey,
+                            currentExaApiKey,
+                            currentXApiKey,
+                            xSearchState,
+                        ->
+                        SettingsSearchKeysSlice(
+                            currentTavilyApiKey = currentTavilyApiKey,
+                            currentExaApiKey = currentExaApiKey,
+                            currentXApiKey = currentXApiKey,
+                            xSearchState = xSearchState,
+                        )
+                    },
+                    combine(isReindexing, reindexProgress, vaultReauthSheet) { isReindexing, reindexProgress, vaultReauthSheet ->
+                        SettingsVaultSlice(
+                            isReindexing = isReindexing,
+                            reindexProgress = reindexProgress,
+                            vaultReauthSheet = vaultReauthSheet,
+                        )
+                    },
+                ) { searchKeys, vault ->
+                    SettingsSearchAndVaultSlice(
+                        currentTavilyApiKey = searchKeys.currentTavilyApiKey,
+                        currentExaApiKey = searchKeys.currentExaApiKey,
+                        currentXApiKey = searchKeys.currentXApiKey,
+                        xSearchState = searchKeys.xSearchState,
+                        isReindexing = vault.isReindexing,
+                        reindexProgress = vault.reindexProgress,
+                        vaultReauthSheet = vault.vaultReauthSheet,
+                    )
+                }
+            }
+
         private fun emptyAssignment(modelType: ModelType): DefaultModelAssignmentUi =
             DefaultModelAssignmentUi(
                 modelType = modelType,
@@ -532,6 +731,88 @@ class SettingsUiStateFactory
                 email = email,
                 photoUrl = photoUrl,
             )
+
+        private data class SettingsRepositoryAssetsSlice(
+            val persistedSettings: SettingsData,
+            val localAssets: List<LocalModelAsset>,
+            val apiAssets: List<ApiModelAsset>,
+            val ttsAssets: List<TtsProviderAsset>,
+            val mediaAssets: List<MediaProviderAsset>,
+        )
+
+        private data class SettingsRepositoryMetaSlice(
+            val defaultModels: List<DefaultModelAssignment>,
+            val authState: AuthState,
+        )
+
+        private data class SettingsRepositorySlice(
+            val persistedSettings: SettingsData,
+            val localAssets: List<LocalModelAsset>,
+            val apiAssets: List<ApiModelAsset>,
+            val ttsAssets: List<TtsProviderAsset>,
+            val mediaAssets: List<MediaProviderAsset>,
+            val defaultModels: List<DefaultModelAssignment>,
+            val authState: AuthState,
+        )
+
+        private data class SettingsEditorPrimarySlice(
+            val sheetVisibility: SheetVisibilityState,
+            val memories: List<StoredMemory>,
+            val feedbackText: String,
+            val localModelsState: LocalModelsTransientState,
+            val apiState: ApiProvidersTransientState,
+        )
+
+        private data class SettingsEditorSecondarySlice(
+            val ttsState: TtsProvidersTransientState,
+            val mediaState: MediaProvidersTransientState,
+            val searchSkillState: SearchSkillTransientState,
+            val assignmentsState: AssignmentDialogTransientState,
+            val deletionState: DeletionTransientState,
+        )
+
+        private data class SettingsEditorTertiarySlice(
+            val memoriesState: MemoriesTransientState,
+            val dataControlsState: DataControlsTransientState,
+        )
+
+        private data class SettingsEditorSlice(
+            val sheetVisibility: SheetVisibilityState,
+            val memories: List<StoredMemory>,
+            val feedbackText: String,
+            val localModelsState: LocalModelsTransientState,
+            val apiState: ApiProvidersTransientState,
+            val ttsState: TtsProvidersTransientState,
+            val mediaState: MediaProvidersTransientState,
+            val searchSkillState: SearchSkillTransientState,
+            val assignmentsState: AssignmentDialogTransientState,
+            val deletionState: DeletionTransientState,
+            val memoriesState: MemoriesTransientState,
+            val dataControlsState: DataControlsTransientState,
+        )
+
+        private data class SettingsSearchKeysSlice(
+            val currentTavilyApiKey: String,
+            val currentExaApiKey: String,
+            val currentXApiKey: String,
+            val xSearchState: XSearchTransientState,
+        )
+
+        private data class SettingsVaultSlice(
+            val isReindexing: Boolean,
+            val reindexProgress: Float,
+            val vaultReauthSheet: VaultReauthSheetState,
+        )
+
+        private data class SettingsSearchAndVaultSlice(
+            val currentTavilyApiKey: String,
+            val currentExaApiKey: String,
+            val currentXApiKey: String,
+            val xSearchState: XSearchTransientState,
+            val isReindexing: Boolean,
+            val reindexProgress: Float,
+            val vaultReauthSheet: VaultReauthSheetState,
+        )
 
         private companion object {
             val VISIBLE_MODEL_ASSIGNMENT_TYPES =

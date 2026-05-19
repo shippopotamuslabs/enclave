@@ -1,25 +1,3 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
-
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.lifecycle.ViewModel
@@ -44,12 +22,12 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Suppress("TooManyFunctions")
 @HiltViewModel
 internal class SettingsViewModel
     @Inject
@@ -69,33 +47,6 @@ internal class SettingsViewModel
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
-
-            private const val ARG_PERSISTED_SETTINGS = 0
-            private const val ARG_LOCAL_ASSETS = 1
-            private const val ARG_API_ASSETS = 2
-            private const val ARG_TTS_ASSETS = 3
-            private const val ARG_MEDIA_ASSETS = 4
-            private const val ARG_DEFAULT_MODELS = 5
-            private const val ARG_AUTH_STATE = 6
-            private const val ARG_SHEET_VISIBILITY = 7
-            private const val ARG_MEMORIES = 8
-            private const val ARG_FEEDBACK_TEXT = 9
-            private const val ARG_LOCAL_MODELS_STATE = 10
-            private const val ARG_API_STATE = 11
-            private const val ARG_TTS_STATE = 12
-            private const val ARG_MEDIA_STATE = 13
-            private const val ARG_SEARCH_SKILL_STATE = 14
-            private const val ARG_ASSIGNMENTS_STATE = 15
-            private const val ARG_DELETION_STATE = 16
-            private const val ARG_MEMORIES_STATE = 17
-            private const val ARG_CURRENT_TAVILY_API_KEY = 18
-            private const val ARG_CURRENT_EXA_API_KEY = 19
-            private const val ARG_CURRENT_X_API_KEY = 20
-            private const val ARG_X_SEARCH_STATE = 21
-            private const val ARG_IS_REINDEXING = 22
-            private const val ARG_REINDEX_PROGRESS = 23
-            private const val ARG_DATA_CONTROLS_STATE = 24
-            private const val ARG_VAULT_REAUTH_SHEET = 25
         }
 
         private val _sheetVisibility = MutableStateFlow(SheetVisibilityState())
@@ -123,87 +74,52 @@ internal class SettingsViewModel
         val currentXApiKey: StateFlow<String> = _currentXApiKey
         val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
-        private val preferencesUseCases = settingsUseCases.preferences
         private val localModelUseCases = settingsUseCases.localModels
-        private val apiProviderUseCases = settingsUseCases.apiProviders
-        private val ttsUseCases = settingsUseCases.tts
-        private val mediaUseCases = settingsUseCases.media
         private val assignmentUseCases = settingsUseCases.assignments
         private val memoriesUseCases = settingsUseCases.memories
-        private val authUseCases = settingsUseCases.auth
 
         private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
-        private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
-        private val ttsAssetsFlow = ttsUseCases.getTtsProviders()
-        private val mediaAssetsFlow = mediaUseCases.getMediaProviders()
         private val memoriesFlow =
             memoriesUseCases.getAllMemoriesFlow().map { memories ->
                 memories.map { StoredMemory(it.id, it.content, it.category) }
             }
 
         val uiState: StateFlow<SettingsUiState> =
-            combine(
-                preferencesUseCases.getSettings(),
-                localModelAssetsFlow,
-                apiModelAssetsFlow,
-                ttsAssetsFlow,
-                mediaAssetsFlow,
-                assignmentUseCases.getDefaultModels(),
-                authUseCases.getAuthState(),
-                _sheetVisibility,
-                memoriesFlow,
-                _feedbackText,
-                _localModelsState,
-                _apiState,
-                _ttsState,
-                _mediaState,
-                _searchSkillState,
-                _assignmentState,
-                _deletionState,
-                _memoriesState,
-                _currentTavilyApiKey,
-                _currentExaApiKey,
-                _currentXApiKey,
-                _xSearchState,
-                embeddingProgressPort.isReindexing,
-                embeddingProgressPort.progress,
-                _dataControlsState,
-                _vaultReauthSheet,
-            ) { args ->
-                @Suppress("UNCHECKED_CAST")
-                settingsUiStateFactory.create(
-                    persistedSettings = args[ARG_PERSISTED_SETTINGS] as com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
-                    localAssets = args[ARG_LOCAL_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
-                    apiAssets = args[ARG_API_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
-                    ttsAssets = args[ARG_TTS_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
-                    mediaAssets = args[ARG_MEDIA_ASSETS] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
-                    defaultModels = args[ARG_DEFAULT_MODELS] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
-                    authState = args[ARG_AUTH_STATE] as com.browntowndev.pocketcrew.domain.port.auth.AuthState,
-                    sheetVisibility = args[ARG_SHEET_VISIBILITY] as SheetVisibilityState,
-                    memories = args[ARG_MEMORIES] as List<StoredMemory>,
-                    feedbackText = args[ARG_FEEDBACK_TEXT] as String,
-                    localModelsState = args[ARG_LOCAL_MODELS_STATE] as LocalModelsTransientState,
-                    apiState = args[ARG_API_STATE] as ApiProvidersTransientState,
-                    ttsState = args[ARG_TTS_STATE] as TtsProvidersTransientState,
-                    mediaState = args[ARG_MEDIA_STATE] as MediaProvidersTransientState,
-                    searchSkillState = args[ARG_SEARCH_SKILL_STATE] as SearchSkillTransientState,
-                    assignmentsState = args[ARG_ASSIGNMENTS_STATE] as AssignmentDialogTransientState,
-                    deletionState = args[ARG_DELETION_STATE] as DeletionTransientState,
-                    memoriesState = args[ARG_MEMORIES_STATE] as MemoriesTransientState,
-                    dataControlsState = args[ARG_DATA_CONTROLS_STATE] as DataControlsTransientState,
-                    currentTavilyApiKey = args[ARG_CURRENT_TAVILY_API_KEY] as String,
-                    currentExaApiKey = args[ARG_CURRENT_EXA_API_KEY] as String,
-                    currentXApiKey = args[ARG_CURRENT_X_API_KEY] as String,
-                    xSearchState = args[ARG_X_SEARCH_STATE] as XSearchTransientState,
-                    isReindexing = args[ARG_IS_REINDEXING] as Boolean,
-                    reindexProgress = args[ARG_REINDEX_PROGRESS] as Float,
-                    vaultReauthSheet = args[ARG_VAULT_REAUTH_SHEET] as VaultReauthSheetState,
+            settingsUiStateFactory
+                .observeUiState(
+                    SettingsUiStateSources(
+                        persistedSettings = settingsUseCases.preferences.getSettings(),
+                        localAssets = localModelAssetsFlow,
+                        apiAssets = settingsUseCases.apiProviders.getApiModelAssets(),
+                        ttsAssets = settingsUseCases.tts.getTtsProviders(),
+                        mediaAssets = settingsUseCases.media.getMediaProviders(),
+                        defaultModels = assignmentUseCases.getDefaultModels(),
+                        authState = settingsUseCases.auth.getAuthState(),
+                        sheetVisibility = _sheetVisibility,
+                        memories = memoriesFlow,
+                        feedbackText = _feedbackText,
+                        localModelsState = _localModelsState,
+                        apiState = _apiState,
+                        ttsState = _ttsState,
+                        mediaState = _mediaState,
+                        searchSkillState = _searchSkillState,
+                        assignmentsState = _assignmentState,
+                        deletionState = _deletionState,
+                        memoriesState = _memoriesState,
+                        dataControlsState = _dataControlsState,
+                        currentTavilyApiKey = _currentTavilyApiKey,
+                        currentExaApiKey = _currentExaApiKey,
+                        currentXApiKey = _currentXApiKey,
+                        xSearchState = _xSearchState,
+                        isReindexing = embeddingProgressPort.isReindexing,
+                        reindexProgress = embeddingProgressPort.progress,
+                        vaultReauthSheet = _vaultReauthSheet,
+                    ),
+                ).stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    initialValue = SettingsUiState(),
                 )
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.Eagerly,
-                initialValue = SettingsUiState(),
-            )
 
         init {
             localModelsDelegate.observeActiveLocalModels(viewModelScope, localModelAssetsFlow, _localModelsState)
