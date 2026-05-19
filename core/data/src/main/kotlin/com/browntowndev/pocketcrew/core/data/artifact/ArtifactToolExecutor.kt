@@ -244,9 +244,15 @@ class ArtifactToolExecutor
                         for (f in embedding) buffer.putFloat(f)
                         val vectorBlob = buffer.array()
 
+                        documentDao.deleteBlockEmbedding(
+                            androidx.sqlite.db.SimpleSQLiteQuery(
+                                "DELETE FROM artifact_block_embeddings WHERE id = ?",
+                                arrayOf(compositeId),
+                            ),
+                        )
                         documentDao.insertBlockEmbedding(
                             androidx.sqlite.db.SimpleSQLiteQuery(
-                                "INSERT OR REPLACE INTO artifact_block_embeddings(id, vector) VALUES (?, ?)",
+                                "INSERT INTO artifact_block_embeddings(id, vector) VALUES (?, ?)",
                                 arrayOf(compositeId, vectorBlob),
                             ),
                         )
@@ -262,10 +268,9 @@ class ArtifactToolExecutor
                     "Document complete. Total blocks: ${currentBlocks.size}. PDF/Word export is now available."
                 } else {
                     "Appended ${params.blocks.size} blocks. Total so far: ${currentBlocks.size}. " +
-                        "Please continue generating the next section. " +
-                        "REMINDER: when the document is fully written, call append_blocks again with " +
-                        "isComplete:true (and blocks empty if nothing remains to add); " +
-                        "otherwise the user will see no finished document."
+                        "Continue appending remaining sections. " +
+                        "When the document is fully written, include the final blocks AND set isComplete:true " +
+                        "in the same call — do not make a separate empty-blocks finalization call."
                 }
 
             return ToolExecutionResult(

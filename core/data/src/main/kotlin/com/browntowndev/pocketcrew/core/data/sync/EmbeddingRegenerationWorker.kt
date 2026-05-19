@@ -186,9 +186,15 @@ class EmbeddingRegenerationWorker
                         val embedding = embeddingEngine.getEmbedding(blockText)
                         val vectorBlob = floatArrayToByteArray(embedding)
 
+                        documentDao.deleteBlockEmbedding(
+                            androidx.sqlite.db.SimpleSQLiteQuery(
+                                "DELETE FROM artifact_block_embeddings WHERE id = ?",
+                                arrayOf(compositeId),
+                            ),
+                        )
                         documentDao.insertBlockEmbedding(
                             androidx.sqlite.db.SimpleSQLiteQuery(
-                                "INSERT OR REPLACE INTO artifact_block_embeddings(id, vector) VALUES (?, ?)",
+                                "INSERT INTO artifact_block_embeddings(id, vector) VALUES (?, ?)",
                                 arrayOf(compositeId, vectorBlob),
                             ),
                         )

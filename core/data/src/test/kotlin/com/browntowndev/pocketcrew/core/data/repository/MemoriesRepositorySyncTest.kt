@@ -35,6 +35,8 @@ class MemoriesRepositorySyncTest {
                 embeddingEngine = embeddingEngine,
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
                 readRepairApplier = readRepairApplier,
+                cleanupDao = mockk(relaxed = true),
+                transactionProvider = mockk(relaxed = true),
             )
     }
 

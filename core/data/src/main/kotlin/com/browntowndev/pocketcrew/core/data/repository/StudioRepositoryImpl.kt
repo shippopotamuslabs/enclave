@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import android.content.Context
+import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
@@ -30,6 +31,7 @@ class StudioRepositoryImpl
         private val studioMediaDao: StudioMediaDao,
         private val studioAlbumDao: StudioAlbumDao,
         private val transactionProvider: TransactionProvider,
+        private val cleanupDao: CleanupDao,
         private val syncTrigger: CloudSyncTrigger,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
@@ -99,7 +101,10 @@ class StudioRepositoryImpl
                 }
             }
 
-            val newId = java.util.UUID.randomUUID().toString()
+            val newId =
+                java.util.UUID
+                    .randomUUID()
+                    .toString()
             val plain =
                 StudioMediaEntity(
                     id = newId,
@@ -201,6 +206,14 @@ class StudioRepositoryImpl
             triggerSync()
         }
 
+        override suspend fun deleteAllMedia() {
+            transactionProvider.runInTransaction {
+                cleanupDao.deleteStudioMedia()
+                cleanupDao.deleteStudioAlbums()
+            }
+            syncTrigger.triggerCloudMediaPurge()
+        }
+
         override suspend fun getMediaById(id: String): StudioMediaAsset? {
             val repairs = mutableListOf<SensitiveRoomReadRepair>()
             val out = studioMediaDao.getMediaById(id)?.toDomain(repairs)
@@ -209,7 +222,10 @@ class StudioRepositoryImpl
         }
 
         override suspend fun createAlbum(name: String): String {
-            val id = java.util.UUID.randomUUID().toString()
+            val id =
+                java.util.UUID
+                    .randomUUID()
+                    .toString()
             val plain = StudioAlbumEntity(id = id, name = name.trim(), pendingSync = 1)
             studioAlbumDao.insertAlbum(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
             triggerSync()

@@ -37,14 +37,15 @@ class ChatRepositoryImplTest {
     private lateinit var messageDao: MessageDao
     private lateinit var tavilySourceDao: WebSearchSourceDao
     private lateinit var messageTranscriptSegmentDao: MessageTranscriptSegmentDao
-    private lateinit var documentDao: DocumentDao
-    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
-    private lateinit var healer: SensitivePersistenceSelfHealer
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
     private lateinit var repository: ChatRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val cleanupDao = mockk<com.browntowndev.pocketcrew.core.data.local.CleanupDao>(relaxed = true)
+    private lateinit var documentDao: DocumentDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+    private lateinit var healer: SensitivePersistenceSelfHealer
 
-    private val testDate = Date(1700_000_000_000L)
+    private val testDate = java.util.Date(1700_000_000_000L)
 
     @BeforeEach
     fun setup() {
@@ -70,6 +71,7 @@ class ChatRepositoryImplTest {
                 tavilySourceDao,
                 documentDao,
                 transactionProvider,
+                cleanupDao,
                 healer,
                 readRepairApplier,
             )

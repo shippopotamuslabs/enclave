@@ -28,7 +28,14 @@ class TtsProviderRepositoryImplTest {
 
     @BeforeEach
     fun setUp() {
-        repository = TtsProviderRepositoryImpl(syncTrigger, ttsProviderDao, apiKeyManager, testSensitiveSelfHealer(FakeLocalDataEncryptionService()), readRepairApplier)
+        repository =
+            TtsProviderRepositoryImpl(
+                syncTrigger,
+                ttsProviderDao,
+                apiKeyManager,
+                testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier,
+            )
     }
 
     @Test

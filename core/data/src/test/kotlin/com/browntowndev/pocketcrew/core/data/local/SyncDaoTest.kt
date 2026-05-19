@@ -73,6 +73,37 @@ class SyncDaoTest {
         }
 
     @Test
+    fun `ChatDao deleteOrphanedPlaceholders removes only created sentinel rows`() =
+        runTest {
+            val placeholderId = ChatId("placeholder-chat")
+            val realId = ChatId("real-chat")
+            chatDao.upsert(
+                ChatEntity(
+                    id = placeholderId,
+                    name = "Syncing...",
+                    created = Date(0),
+                    lastModified = Date(0),
+                    pinned = false,
+                ),
+            )
+            chatDao.upsert(
+                ChatEntity(
+                    id = realId,
+                    name = "Real chat",
+                    created = Date(1_000L),
+                    lastModified = Date(2_000L),
+                    pinned = false,
+                ),
+            )
+
+            val removed = chatDao.deleteOrphanedPlaceholders()
+
+            assertEquals(1, removed)
+            assertEquals(null, chatDao.getChatById(placeholderId))
+            assertEquals(realId, chatDao.getChatById(realId)?.id)
+        }
+
+    @Test
     fun `MessageDao getClaimedForSync returns only claimed rows`() =
         runTest {
             val chatId = ChatId("chat-1")

@@ -94,6 +94,9 @@ interface DocumentDao {
     suspend fun getAllIds(): List<String>
 
     @RawQuery
+    suspend fun deleteBlockEmbedding(query: SupportSQLiteQuery): Int
+
+    @RawQuery
     suspend fun insertBlockEmbedding(query: SupportSQLiteQuery): Long
 
     @RawQuery

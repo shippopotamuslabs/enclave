@@ -79,9 +79,10 @@ class SettingsRepositoryImpl
                                     SystemPromptOption.CONCISE
                                 }
                             } ?: SystemPromptOption.CONCISE,
-                        customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY]?.let { stored ->
-                            localEncryption.decryptString(stored, customPromptTextAad())
-                        } ?: "",
+                        customPromptText =
+                            preferences[CUSTOM_PROMPT_TEXT_KEY]?.let { stored ->
+                                localEncryption.decryptString(stored, customPromptTextAad())
+                            } ?: "",
                         allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
                         searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
                         searchProvider =
@@ -266,5 +267,4 @@ class SettingsRepositoryImpl
                 preferences[BACKGROUND_INFERENCE_ENABLED_KEY] = enabled
             }
         }
-
     }

@@ -55,8 +55,7 @@ class MessageFileCloudSyncWorker
                                     it,
                                     AadContext("MessageFileEntity", "content", file.id).toBytes(),
                                 )
-                            }
-                            .orEmpty()
+                            }.orEmpty()
                     val stagingRemoteUrl =
                         file.stagingRemoteUrl?.let {
                             localEncryption.decryptString(

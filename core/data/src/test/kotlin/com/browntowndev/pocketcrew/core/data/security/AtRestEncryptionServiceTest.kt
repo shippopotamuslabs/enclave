@@ -69,11 +69,15 @@ class AtRestEncryptionServiceTest {
     // S2: parseEnvelope accepts minimal valid Base64 payload (28 bytes: 12 IV + 16 ciphertext)
     @Test
     fun parseEnvelope_minimalValidPayload_returnsOk() {
-        val raw28 = ByteArray(28).also { arr ->
-            for (i in 0..11) arr[i] = 0x00
-            for (i in 12..27) arr[i] = 0x01
-        }
-        val encoded = java.util.Base64.getEncoder().encodeToString(raw28)
+        val raw28 =
+            ByteArray(28).also { arr ->
+                for (i in 0..11) arr[i] = 0x00
+                for (i in 12..27) arr[i] = 0x01
+            }
+        val encoded =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(raw28)
         val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$encoded"
         val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
         assertTrue(result is EnvelopeParse.Ok)
@@ -109,7 +113,10 @@ class AtRestEncryptionServiceTest {
     @Test
     fun parseEnvelope_tooShortPayload_returnsMalformedPayloadTooShort() {
         val short27 = ByteArray(27) { 0x05.toByte() }
-        val encoded = java.util.Base64.getEncoder().encodeToString(short27)
+        val encoded =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(short27)
         val stored = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}$encoded"
         val result = (service as CryptoAtRestEncryptionService).parseEnvelope(stored)
         assertTrue(result is EnvelopeParse.Malformed)
@@ -169,9 +176,15 @@ class AtRestEncryptionServiceTest {
 
         override fun hasCachedKey(): Boolean = unlocked.value
 
-        override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> = encryptBytes(plaintext.toByteArray(), aad)
+        override fun encrypt(
+            plaintext: String,
+            aad: ByteArray?,
+        ): Result<ByteArray> = encryptBytes(plaintext.toByteArray(), aad)
 
-        override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> =
+        override fun encryptBytes(
+            data: ByteArray,
+            aad: ByteArray?,
+        ): Result<ByteArray> =
             if (hasCachedKey()) {
                 // Envelope parsing requires a decoded payload of at least 28 bytes (12 IV + 16 GCM tag block).
                 val out = ByteArray(28)
@@ -186,9 +199,15 @@ class AtRestEncryptionServiceTest {
                 Result.failure(IllegalStateException("locked"))
             }
 
-        override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> = decryptBytes(ciphertext, aad).map { String(it) }
+        override fun decrypt(
+            ciphertext: ByteArray,
+            aad: ByteArray?,
+        ): Result<String> = decryptBytes(ciphertext, aad).map { String(it) }
 
-        override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
+        override fun decryptBytes(
+            ciphertext: ByteArray,
+            aad: ByteArray?,
+        ): Result<ByteArray> {
             if (!hasCachedKey()) return Result.failure(IllegalStateException("locked"))
             if (ciphertext.size < 28) return Result.failure(IllegalStateException("short ciphertext"))
             val ct = ciphertext.copyOfRange(12, 28)

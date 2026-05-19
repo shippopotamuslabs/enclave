@@ -489,7 +489,14 @@ class ApiModelRepositoryImplTest {
 
         override fun isEncrypted(stored: String): Boolean = false
 
-        override fun encryptString(plaintext: String, aad: ByteArray): String = throw IllegalStateException("Encryption session locked")
-        override fun decryptString(stored: String, aad: ByteArray): String = throw IllegalStateException("Encryption session locked")
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = throw IllegalStateException("Encryption session locked")
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = throw IllegalStateException("Encryption session locked")
     }
 }

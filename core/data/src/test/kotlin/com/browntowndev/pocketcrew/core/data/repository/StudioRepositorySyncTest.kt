@@ -36,6 +36,7 @@ class StudioRepositorySyncTest {
                 studioMediaDao = studioMediaDao,
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
+                cleanupDao = mockk(relaxed = true),
                 syncTrigger = syncTrigger,
                 healer = healer,
                 readRepairApplier = readRepairApplier,

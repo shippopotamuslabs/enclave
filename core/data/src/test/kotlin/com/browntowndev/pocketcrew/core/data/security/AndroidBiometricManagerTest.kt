@@ -27,7 +27,11 @@ class AndroidBiometricManagerTest {
     @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        context
+            .getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
         loggingPort = mockk(relaxed = true)
         subject = AndroidBiometricManager(context, loggingPort)
     }
@@ -35,14 +39,22 @@ class AndroidBiometricManagerTest {
     @Test
     fun hasSecureValue_falseUntilDataKeyWritten() {
         assertFalse(subject.hasSecureValue("my_key"))
-        context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE).edit().putString("my_key_data", "x").commit()
+        context
+            .getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("my_key_data", "x")
+            .commit()
         assertTrue(subject.hasSecureValue("my_key"))
     }
 
     @Test
     fun clearSecureValue_removesDataAndIv() {
         val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("k_data", "enc").putString("k_iv", "iv").commit()
+        prefs
+            .edit()
+            .putString("k_data", "enc")
+            .putString("k_iv", "iv")
+            .commit()
         assertTrue(subject.hasSecureValue("k"))
         subject.clearSecureValue("k")
         assertFalse(subject.hasSecureValue("k"))

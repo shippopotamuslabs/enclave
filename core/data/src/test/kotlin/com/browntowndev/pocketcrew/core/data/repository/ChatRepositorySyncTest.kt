@@ -47,6 +47,7 @@ class ChatRepositorySyncTest {
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
+                cleanupDao = mockk(relaxed = true),
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
                 readRepairApplier = readRepairApplier,
             )

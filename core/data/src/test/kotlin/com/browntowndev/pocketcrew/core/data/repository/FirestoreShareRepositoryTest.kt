@@ -269,7 +269,7 @@ class FirestoreShareRepositoryTest {
                     .first()
                     .fileAttachments
                     .first()
-                .name,
+                    .name,
             )
         }
 

@@ -27,6 +27,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
@@ -73,6 +74,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -126,6 +128,7 @@ class FirestoreDataSource
         private val listenerRegistrations = mutableListOf<ListenerRegistration>()
         private val listenerMutex = Mutex()
         private val syncMutex = Mutex()
+        private val purgeInProgress = AtomicBoolean(false)
 
         private interface EntitySyncAdapter<RoomT> {
             val collectionPath: String
@@ -207,6 +210,7 @@ class FirestoreDataSource
             messageId: MessageId,
             chatId: ChatId,
         ) {
+            if (purgeInProgress.get()) return
             if (chatId.value.isBlank()) return
             if (messageId.value.isBlank()) return
             val chat = chatDao.getChatById(chatId)
@@ -291,95 +295,97 @@ class FirestoreDataSource
             }
 
         private val messageSyncAdapter =
-            object : EntitySyncAdapter<MessageEntity> {
+            object : EntitySyncAdapter<MessageWithFiles> {
                 override val collectionPath: String = "messages"
 
                 override suspend fun claimPending() = messageDao.claimPending()
 
-                override suspend fun getClaimedForSync() = messageDao.getClaimedForSync().map { it.message }
+                override suspend fun getClaimedForSync() = messageDao.getClaimedForSync()
 
-                override suspend fun markSynced(entities: List<MessageEntity>) = messageDao.markSynced(entities.map { it.id })
+                override suspend fun markSynced(entities: List<MessageWithFiles>) = messageDao.markSynced(entities.map { it.message.id })
 
-                override fun getEntityId(entity: MessageEntity): String = entity.id.value
+                override fun getEntityId(entity: MessageWithFiles): String = entity.message.id.value
 
-                override suspend fun toFirestore(local: MessageEntity): Map<String, Any?> {
+                override suspend fun toFirestore(local: MessageWithFiles): Map<String, Any?> {
+                    val entity = local.message
                     val msgData =
                         mutableMapOf<String, Any?>(
-                            "chat_id" to local.chatId.value,
-                            "content" to local.content.encryptedForFirestore(collectionPath, local.id.value, "content"),
-                            "role" to local.role.apiValue,
-                            "message_state" to local.messageState.apiValue,
-                            "updated_at" to local.updatedAt,
-                            "deleted" to local.deleted,
+                            "chat_id" to entity.chatId.value,
+                            "content" to entity.content.encryptedForFirestore(collectionPath, entity.id.value, "content"),
+                            "role" to entity.role.apiValue,
+                            "message_state" to entity.messageState.apiValue,
+                            "updated_at" to entity.updatedAt,
+                            "deleted" to entity.deleted,
                         )
-                    local.createdAt?.let { msgData["created_at"] = it }
-                    local.modelType?.let { msgData["model_type"] = it.name }
-                    local.userMessageId?.let { msgData["user_message_id"] = it.value }
-                    local.imageUrisJson?.let {
-                        msgData["image_uris_json"] = it.encryptedForFirestore(collectionPath, local.id.value, "image_uris_json")
+                    entity.createdAt?.let { msgData["created_at"] = it }
+                    entity.modelType?.let { msgData["model_type"] = it.name }
+                    entity.userMessageId?.let { msgData["user_message_id"] = it.value }
+                    entity.imageUrisJson?.let {
+                        msgData["image_uris_json"] = it.encryptedForFirestore(collectionPath, entity.id.value, "image_uris_json")
                     }
-                    local.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
-                    local.thinkingRaw?.let {
-                        msgData["thinking_raw"] = it.encryptedForFirestore(collectionPath, local.id.value, "thinking_raw")
+                    entity.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
+                    entity.thinkingRaw?.let {
+                        msgData["thinking_raw"] = it.encryptedForFirestore(collectionPath, entity.id.value, "thinking_raw")
                     }
-                    local.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
-                    local.thinkingEndTime?.let { msgData["thinking_end_time"] = it }
-                    local.pipelineStep?.let { msgData["pipeline_step"] = it.name }
-                    local.artifactsJson?.let {
-                        msgData["artifacts_json"] = it.encryptedForFirestore(collectionPath, local.id.value, "artifacts_json")
+                    entity.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
+                    entity.thinkingEndTime?.let { msgData["thinking_end_time"] = it }
+                    entity.pipelineStep?.let { msgData["pipeline_step"] = it.name }
+                    entity.artifactsJson?.let {
+                        msgData["artifacts_json"] = it.encryptedForFirestore(collectionPath, entity.id.value, "artifacts_json")
                     }
-                    local.generatedMediaUrisJson?.let {
+                    entity.generatedMediaUrisJson?.let {
                         msgData["generated_media_uris_json"] =
-                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_uris_json")
+                            it.encryptedForFirestore(collectionPath, entity.id.value, "generated_media_uris_json")
                     }
-                    local.generatedMediaAssetIdsJson?.let {
+                    entity.generatedMediaAssetIdsJson?.let {
                         msgData["generated_media_asset_ids_json"] =
-                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_asset_ids_json")
+                            it.encryptedForFirestore(collectionPath, entity.id.value, "generated_media_asset_ids_json")
                     }
-                    local.generatedMediaTypesJson?.let { msgData["generated_media_types_json"] = it }
-                    local.generatedMediaPromptsJson?.let {
+                    entity.generatedMediaTypesJson?.let { msgData["generated_media_types_json"] = it }
+                    entity.generatedMediaPromptsJson?.let {
                         msgData["generated_media_prompts_json"] =
-                            it.encryptedForFirestore(collectionPath, local.id.value, "generated_media_prompts_json")
+                            it.encryptedForFirestore(collectionPath, entity.id.value, "generated_media_prompts_json")
                     }
 
                     return msgData
                 }
 
-                override fun fromFirestore(doc: DocumentSnapshot): MessageEntity? = messageEntityFromDoc(doc)
+                override fun fromFirestore(doc: DocumentSnapshot): MessageWithFiles? =
+                    messageEntityFromDoc(doc)?.let { MessageWithFiles(it, emptyList()) }
 
                 override suspend fun upsertLocal(
-                    entity: MessageEntity,
+                    entity: MessageWithFiles,
                     doc: DocumentSnapshot,
                     overwrite: Boolean,
                 ) {
-                    val existing = messageDao.getMessageById(entity.id)?.message
-                    if (existing == null || entity.updatedAt > existing.updatedAt) {
-                        ensurePlaceholderMessage(entity.id, entity.chatId)
+                    val existing = messageDao.getMessageById(entity.message.id)
+                    if (overwrite || existing == null || entity.message.updatedAt > existing.message.updatedAt) {
+                        ensurePlaceholderMessage(entity.message.id, entity.message.chatId)
 
                         // Preserve local artifacts_json until Task 4 migration is complete
                         val merged =
-                            entity.copy(
-                                artifactsJson = if (entity.artifactsJson.isNullOrBlank()) existing?.artifactsJson else entity.artifactsJson,
+                            entity.message.copy(
+                                artifactsJson = if (entity.message.artifactsJson.isNullOrBlank()) existing?.message?.artifactsJson else entity.message.artifactsJson,
                                 pendingSync = 0,
                             )
                         messageDao.upsert(merged)
 
-                        val hash = entity.content.sha256()
-                        val existingMeta = embeddingDao.getEmbeddingMetadata(entity.id.value)
+                        val hash = entity.message.content.sha256()
+                        val existingMeta = embeddingDao.getEmbeddingMetadata(entity.message.id.value)
                         if (existingMeta?.contentHash != hash) {
-                            embeddingCoordinator.enqueueMessage(entity.id.value)
+                            embeddingCoordinator.enqueueMessage(entity.message.id.value)
                         }
-                    } else if (entity.updatedAt == existing.updatedAt) {
+                    } else if (entity.message.updatedAt == existing?.message?.updatedAt) {
                         val merged =
-                            entity.copy(
-                                artifactsJson = if (entity.artifactsJson.isNullOrBlank()) existing.artifactsJson else entity.artifactsJson,
+                            entity.message.copy(
+                                artifactsJson = if (entity.message.artifactsJson.isNullOrBlank()) existing.message.artifactsJson else entity.message.artifactsJson,
                                 pendingSync = 0,
                             )
-                        if (merged != existing.copy(pendingSync = 0)) {
+                        if (merged != existing.message.copy(pendingSync = 0)) {
                             messageDao.upsert(merged)
                         }
                     } else {
-                        loggingPort.debug(TAG, "Message ${entity.id.value} local is newer or same age, skipping remote update")
+                        loggingPort.debug(TAG, "Message ${entity.message.id.value} local is newer or same age, skipping remote update")
                     }
                 }
 
@@ -1489,6 +1495,8 @@ class FirestoreDataSource
                     val userId = userIdProvider() ?: return@withLock
                     loggingPort.debug(TAG, "startListening: Starting listeners for UID: $userId")
 
+                    cleanupOrphanedPlaceholderChats()
+
                     adapters.forEach { adapter ->
                         val listener =
                             firestore
@@ -1930,6 +1938,71 @@ class FirestoreDataSource
                 }
             }
 
+        override suspend fun deleteAllChatsFromCloud(): Result<Unit> =
+            withCloudPurge {
+                val userId = userIdProvider() ?: return@withCloudPurge Result.failure(IllegalStateException("Not signed in"))
+                val collections =
+                    listOf(
+                        "chats",
+                        "messages",
+                        "documents",
+                        "chat_summaries",
+                        "message_transcript_segments",
+                        "message_vision_analysis",
+                        "message_files",
+                        "web_search_sources",
+                    )
+                for (collection in collections) {
+                    deleteAllDocumentsInFirestoreCollection(parentPath = "users/$userId", segment = collection)
+                }
+                Result.success(Unit)
+            }
+
+        override suspend fun deleteAllMediaFromCloud(): Result<Unit> =
+            withCloudPurge {
+                val userId = userIdProvider() ?: return@withCloudPurge Result.failure(IllegalStateException("Not signed in"))
+                val collections = listOf("studio_gallery", "studio_albums")
+                for (collection in collections) {
+                    deleteAllDocumentsInFirestoreCollection(parentPath = "users/$userId", segment = collection)
+                }
+                Result.success(Unit)
+            }
+
+        override suspend fun deleteAllMemoriesFromCloud(): Result<Unit> =
+            withCloudPurge {
+                val userId = userIdProvider() ?: return@withCloudPurge Result.failure(IllegalStateException("Not signed in"))
+                deleteAllDocumentsInFirestoreCollection(parentPath = "users/$userId", segment = "memories")
+                Result.success(Unit)
+            }
+
+        override suspend fun deleteAllArtifactsFromCloud(): Result<Unit> =
+            withCloudPurge {
+                val userId = userIdProvider() ?: return@withCloudPurge Result.failure(IllegalStateException("Not signed in"))
+                deleteAllDocumentsInFirestoreCollection(parentPath = "users/$userId", segment = "documents")
+                Result.success(Unit)
+            }
+
+        private suspend fun <T> withCloudPurge(block: suspend () -> Result<T>): Result<T> =
+            syncMutex.withLock {
+                purgeInProgress.set(true)
+                try {
+                    block()
+                } catch (e: Exception) {
+                    Result.failure(e)
+                } finally {
+                    purgeInProgress.set(false)
+                    cleanupOrphanedPlaceholderChats()
+                }
+            }
+
+        private suspend fun cleanupOrphanedPlaceholderChats() {
+            if (purgeInProgress.get()) return
+            val removed = chatDao.deleteOrphanedPlaceholders()
+            if (removed > 0) {
+                loggingPort.debug(TAG, "Removed $removed orphaned placeholder chat(s)")
+            }
+        }
+
         private suspend fun deleteAllDocumentsInFirestoreCollection(
             parentPath: String,
             segment: String,
@@ -1970,9 +2043,7 @@ class FirestoreDataSource
                         "message_id" to local.messageId.value,
                         "chat_id" to
                             messageDao
-                                .getMessageById(local.messageId)
-                                ?.message
-                                ?.chatId
+                                .getMessageChatIdById(local.messageId)
                                 ?.value,
                         "json" to local.json.encryptedForFirestore(collectionPath, local.id, "json"),
                         "title" to local.title.encryptedForFirestore(collectionPath, local.id, "title"),

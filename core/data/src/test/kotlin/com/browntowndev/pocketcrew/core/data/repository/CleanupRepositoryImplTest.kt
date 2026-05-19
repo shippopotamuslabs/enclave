@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -14,12 +15,13 @@ class CleanupRepositoryImplTest {
     private val database = mockk<PocketCrewDatabase>()
     private val cleanupDao = mockk<CleanupDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
     private lateinit var cleanupRepository: CleanupRepositoryImpl
 
     @BeforeEach
     fun setup() {
         every { database.cleanupDao() } returns cleanupDao
-        cleanupRepository = CleanupRepositoryImpl(database, apiKeyManager)
+        cleanupRepository = CleanupRepositoryImpl(database, apiKeyManager, syncTrigger)
     }
 
     @Test
@@ -37,11 +39,12 @@ class CleanupRepositoryImplTest {
         }
 
     @Test
-    fun `deleteAllArtifacts deletes documents only`() =
+    fun `deleteAllArtifacts deletes documents and triggers cloud purge`() =
         runTest {
             cleanupRepository.deleteAllArtifacts()
 
             coVerify { cleanupDao.deleteDocuments() }
+            verify { syncTrigger.triggerCloudArtifactsPurge() }
             coVerify(exactly = 0) { cleanupDao.clearUserData() }
         }
 }

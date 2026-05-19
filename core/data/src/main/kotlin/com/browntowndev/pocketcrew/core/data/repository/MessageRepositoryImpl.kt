@@ -27,16 +27,15 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
-import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.mapper.toDomain
+import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.security.SensitiveEntityFieldEncryptors
 import com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepair
 import com.browntowndev.pocketcrew.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.pocketcrew.core.data.mapper.toDomain
-import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
@@ -227,8 +226,10 @@ class MessageRepositoryImpl
         ): ResolvedImageTarget? {
             val repairs = mutableListOf<SensitiveRoomReadRepair>()
             val currentUserMessage =
-                messageDao.getMessageById(currentUserMessageId)
-                    ?.let { decryptMessageWithFiles(it, repairs) }?.toDomain()
+                messageDao
+                    .getMessageById(currentUserMessageId)
+                    ?.let { decryptMessageWithFiles(it, repairs) }
+                    ?.toDomain()
             if (currentUserMessage != null && currentUserMessage.content.imageUris.isNotEmpty()) {
                 readRepairApplier.apply(repairs)
                 return ResolvedImageTarget(

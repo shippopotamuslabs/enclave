@@ -48,6 +48,9 @@ data class MessageWithFiles(
 
 @Dao
 abstract class MessageDao {
+    @Query("SELECT chat_id FROM message WHERE id = :id AND deleted = 0")
+    abstract suspend fun getMessageChatIdById(id: MessageId): ChatId?
+
     @Transaction
     @Query("SELECT * FROM message WHERE id = :id AND deleted = 0")
     abstract suspend fun getMessageById(id: MessageId): MessageWithFiles?

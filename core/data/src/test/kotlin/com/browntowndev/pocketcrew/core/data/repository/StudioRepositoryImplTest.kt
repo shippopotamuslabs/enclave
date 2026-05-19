@@ -54,6 +54,7 @@ class StudioRepositoryImplTest {
                 studioMediaDao = studioMediaDao,
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
+                cleanupDao = mockk(relaxed = true),
                 syncTrigger = syncTrigger,
                 healer = healer,
                 readRepairApplier = readRepairApplier,
@@ -173,6 +174,7 @@ class StudioRepositoryImplTest {
                     studioMediaDao = studioMediaDao,
                     studioAlbumDao = studioAlbumDao,
                     transactionProvider = transactionProvider,
+                    cleanupDao = mockk(relaxed = true),
                     syncTrigger = syncTrigger,
                     healer = healer,
                     readRepairApplier = readRepairApplier,
@@ -257,7 +259,14 @@ class StudioRepositoryImplTest {
         runTest {
             coEvery { studioMediaDao.insertMedia(any()) } returns Unit
             coEvery { studioMediaDao.getMediaById(any()) } returns
-                StudioMediaEntity(id = "uuid-1", prompt = "PCENC:v1:aes-gcm:prompt", mediaUri = "PCENC:v1:aes-gcm:uri", mediaType = "IMAGE", createdAt = 1L, albumId = null)
+                StudioMediaEntity(
+                    id = "uuid-1",
+                    prompt = "PCENC:v1:aes-gcm:prompt",
+                    mediaUri = "PCENC:v1:aes-gcm:uri",
+                    mediaType = "IMAGE",
+                    createdAt = 1L,
+                    albumId = null,
+                )
 
             repository.saveMedia("uri", "prompt", "IMAGE", albumId = DEFAULT_GALLERY_ALBUM_ID)
 

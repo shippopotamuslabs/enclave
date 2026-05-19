@@ -14,27 +14,34 @@ class CryptoAtRestEncryptionService
     constructor(
         private val cryptoManager: CryptoManagerPort,
     ) : LocalDataEncryptionService {
-        override fun encryptString(plaintext: String, aad: ByteArray): String {
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String {
             requireUnlocked()
             if (isEncrypted(plaintext)) return plaintext
             val ciphertext = cryptoManager.encrypt(plaintext, aad).getOrThrow()
             return "$ENVELOPE_PREFIX${cryptoManager.encodeBase64(ciphertext)}"
         }
 
-        override fun decryptString(stored: String, aad: ByteArray): String {
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String {
             requireUnlocked()
             if (!isEncrypted(stored)) return stored
             val envelope = parseEnvelope(stored)
-            val payload = when (envelope) {
-                is EnvelopeParse.Ok -> {
-                    val combined = ByteArray(IV_LENGTH + envelope.ciphertext.size)
-                    System.arraycopy(envelope.iv, 0, combined, 0, IV_LENGTH)
-                    System.arraycopy(envelope.ciphertext, 0, combined, IV_LENGTH, envelope.ciphertext.size)
-                    combined
+            val payload =
+                when (envelope) {
+                    is EnvelopeParse.Ok -> {
+                        val combined = ByteArray(IV_LENGTH + envelope.ciphertext.size)
+                        System.arraycopy(envelope.iv, 0, combined, 0, IV_LENGTH)
+                        System.arraycopy(envelope.ciphertext, 0, combined, IV_LENGTH, envelope.ciphertext.size)
+                        combined
+                    }
+                    is EnvelopeParse.Malformed -> throw MalformedEnvelopeException(envelope.reason)
+                    EnvelopeParse.NotEnveloped -> return stored
                 }
-                is EnvelopeParse.Malformed -> throw MalformedEnvelopeException(envelope.reason)
-                EnvelopeParse.NotEnveloped -> return stored
-            }
             return cryptoManager.decrypt(payload, aad).getOrThrow()
         }
 
@@ -56,7 +63,9 @@ class CryptoAtRestEncryptionService
 
             val decoded =
                 try {
-                    java.util.Base64.getDecoder().decode(payload)
+                    java.util.Base64
+                        .getDecoder()
+                        .decode(payload)
                 } catch (_: IllegalArgumentException) {
                     return EnvelopeParse.Malformed(MalformedEnvelopeReason.INVALID_BASE64)
                 }

@@ -156,12 +156,13 @@ fun MessageEntity.toDomain(
         modelType = modelType,
         webSearchSources = webSearchSources.map { it.toDomain() },
         transcriptSegments = transcriptSegments,
-        updatedAt = displayUpdatedAt ?: maxDisplayUpdatedAt(
-            messageUpdatedAt = updatedAt,
-            webSearchSources = webSearchSources,
-            files = files,
-            documents = documents,
-        ),
+        updatedAt =
+            displayUpdatedAt ?: maxDisplayUpdatedAt(
+                messageUpdatedAt = updatedAt,
+                webSearchSources = webSearchSources,
+                files = files,
+                documents = documents,
+            ),
     )
 }
 

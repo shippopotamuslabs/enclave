@@ -5,8 +5,8 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
-import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Task
