@@ -11,33 +11,27 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class HistoryViewModelStub(
     private val getAllChatsUseCase: GetAllChatsUseCase,
-    private val settingsUseCases: SettingsUseCases
+    private val settingsUseCases: SettingsUseCases,
 ) {
-    val uiState: StateFlow<HistoryUiState> = MutableStateFlow(
-        HistoryUiState(
-            pinnedChats = emptyList(),
-            otherChats = emptyList(),
-            isLoading = true
+    val uiState: StateFlow<HistoryUiState> =
+        MutableStateFlow(
+            HistoryUiState(
+                pinnedChats = emptyList(),
+                otherChats = emptyList(),
+                isLoading = true,
+            ),
         )
-    )
 
-    fun deleteChat(id: Long) {
-        throw NotImplementedError("deleteChat not yet implemented - TDD Red Phase")
-    }
+    fun deleteChat(id: Long): Unit = throw NotImplementedError("deleteChat not yet implemented - TDD Red Phase")
 
-    fun renameChat(id: Long, newName: String) {
-        throw NotImplementedError("renameChat not yet implemented - TDD Red Phase")
-    }
+    fun renameChat(
+        id: Long,
+        newName: String,
+    ): Unit = throw NotImplementedError("renameChat not yet implemented - TDD Red Phase")
 
-    fun pinChat(id: Long) {
-        throw NotImplementedError("pinChat not yet implemented - TDD Red Phase")
-    }
+    fun pinChat(id: Long): Unit = throw NotImplementedError("pinChat not yet implemented - TDD Red Phase")
 
-    fun unpinChat(id: Long) {
-        throw NotImplementedError("unpinChat not yet implemented - TDD Red Phase")
-    }
+    fun unpinChat(id: Long): Unit = throw NotImplementedError("unpinChat not yet implemented - TDD Red Phase")
 
-    fun togglePinStatus(id: Long) {
-        throw NotImplementedError("togglePinStatus not yet implemented - TDD Red Phase")
-    }
+    fun togglePinStatus(id: Long): Unit = throw NotImplementedError("togglePinStatus not yet implemented - TDD Red Phase")
 }

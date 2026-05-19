@@ -62,16 +62,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.component.shimmerEffect
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
-import com.browntowndev.pocketcrew.core.ui.R as CoreR
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.core.ui.R as CoreR
 
 private sealed interface HistoryOptionsState {
     data object Hidden : HistoryOptionsState
-    data class Sheet(val chat: HistoryChat) : HistoryOptionsState
-    data class Dialog(val chat: HistoryChat) : HistoryOptionsState
+
+    data class Sheet(
+        val chat: HistoryChat,
+    ) : HistoryOptionsState
+
+    data class Dialog(
+        val chat: HistoryChat,
+    ) : HistoryOptionsState
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,7 +95,7 @@ fun HistoryScreen(
     onRenameChat: (ChatId, String) -> Unit,
     onPinChat: (ChatId) -> Unit,
     onUnpinChat: (ChatId) -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
 ) {
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
@@ -100,15 +106,17 @@ fun HistoryScreen(
     val shimmerHighlightColor = colorScheme.onSurface.copy(alpha = 0.15f)
 
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerProgress = infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerProgress"
-    )
+    val shimmerProgress =
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "shimmerProgress",
+        )
 
     Scaffold(
         topBar = {
@@ -116,23 +124,25 @@ fun HistoryScreen(
                 searchQuery = searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
                 onBackClick = onBackClick,
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
             )
-        }
+        },
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
             item {
                 NavigationButtonGroup(
                     onNewChatClick = onNewChatClick,
                     onStudioClick = onStudioClick,
                     onGalleryClick = onGalleryClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                 )
             }
 
@@ -141,7 +151,7 @@ fun HistoryScreen(
                     HistoryChatSkeletonItem(
                         progressState = shimmerProgress,
                         baseColor = shimmerBaseColor,
-                        highlightColor = shimmerHighlightColor
+                        highlightColor = shimmerHighlightColor,
                     )
                 }
             } else {
@@ -151,13 +161,13 @@ fun HistoryScreen(
                     }
                     items(
                         items = uiState.pinnedChats,
-                        key = { it.id.value }
+                        key = { it.id.value },
                     ) { chat ->
                         if (chat.isSyncing) {
                             HistoryChatSkeletonItem(
                                 progressState = shimmerProgress,
                                 baseColor = shimmerBaseColor,
-                                highlightColor = shimmerHighlightColor
+                                highlightColor = shimmerHighlightColor,
                             )
                         } else {
                             HistoryChatItem(
@@ -165,7 +175,7 @@ fun HistoryScreen(
                                 onClick = { onChatClick(chat.id) },
                                 onShowOptions = {
                                     optionsState = HistoryOptionsState.Sheet(chat)
-                                }
+                                },
                             )
                         }
                     }
@@ -177,13 +187,13 @@ fun HistoryScreen(
                     }
                     items(
                         items = uiState.otherChats,
-                        key = { it.id.value }
+                        key = { it.id.value },
                     ) { chat ->
                         if (chat.isSyncing) {
                             HistoryChatSkeletonItem(
                                 progressState = shimmerProgress,
                                 baseColor = shimmerBaseColor,
-                                highlightColor = shimmerHighlightColor
+                                highlightColor = shimmerHighlightColor,
                             )
                         } else {
                             HistoryChatItem(
@@ -191,7 +201,7 @@ fun HistoryScreen(
                                 onClick = { onChatClick(chat.id) },
                                 onShowOptions = {
                                     optionsState = HistoryOptionsState.Sheet(chat)
-                                }
+                                },
                             )
                         }
                     }
@@ -204,13 +214,13 @@ fun HistoryScreen(
         is HistoryOptionsState.Hidden -> {}
         is HistoryOptionsState.Sheet -> {
             JumpFreeModalBottomSheet(
-                onDismissRequest = { 
+                onDismissRequest = {
                     if (optionsState is HistoryOptionsState.Sheet) {
-                        optionsState = HistoryOptionsState.Hidden 
+                        optionsState = HistoryOptionsState.Hidden
                     }
                 },
                 sheetState = sheetState,
-                modifier = Modifier.testTag("ChatOptionsBottomSheet")
+                modifier = Modifier.testTag("ChatOptionsBottomSheet"),
             ) {
                 ChatOptionsContent(
                     isPinned = state.chat.isPinned,
@@ -228,7 +238,7 @@ fun HistoryScreen(
                     onPin = {
                         onPinChat(state.chat.id)
                         optionsState = HistoryOptionsState.Hidden
-                    }
+                    },
                 )
             }
         }
@@ -241,7 +251,7 @@ fun HistoryScreen(
                 onDismiss = {
                     optionsState = HistoryOptionsState.Hidden
                 },
-                modifier = Modifier.testTag("DeleteConfirmationDialog")
+                modifier = Modifier.testTag("DeleteConfirmationDialog"),
             )
         }
     }
@@ -252,13 +262,13 @@ private fun NavigationButtonGroup(
     onNewChatClick: () -> Unit,
     onStudioClick: () -> Unit,
     onGalleryClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp
+        tonalElevation = 2.dp,
     ) {
         Column {
             // New Chat Button (Top)
@@ -268,14 +278,14 @@ private fun NavigationButtonGroup(
                 onClick = onNewChatClick,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
             )
-            
+
             HorizontalDivider(
                 thickness = 2.dp,
-                color = MaterialTheme.colorScheme.background
+                color = MaterialTheme.colorScheme.background,
             )
-            
+
             // Studio Button (Middle)
             NavigationButton(
                 text = "Studio",
@@ -283,12 +293,12 @@ private fun NavigationButtonGroup(
                 onClick = onStudioClick,
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(0.dp)
+                shape = RoundedCornerShape(0.dp),
             )
-            
+
             HorizontalDivider(
                 thickness = 2.dp,
-                color = MaterialTheme.colorScheme.background
+                color = MaterialTheme.colorScheme.background,
             )
 
             // Gallery Button (Bottom)
@@ -298,7 +308,7 @@ private fun NavigationButtonGroup(
                 onClick = onGalleryClick,
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp),
             )
         }
     }
@@ -311,19 +321,21 @@ private fun NavigationButton(
     onClick: () -> Unit,
     containerColor: Color,
     contentColor: Color,
-    shape: RoundedCornerShape
+    shape: RoundedCornerShape,
 ) {
     Button(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp),
         shape = shape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = containerColor,
+                contentColor = contentColor,
+            ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -338,7 +350,7 @@ private fun NavigationButton(
                 text = text,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
+                fontSize = 18.sp,
             )
         }
     }
@@ -348,14 +360,14 @@ private fun NavigationButton(
 fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
                 text = "Delete Chat?",
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
@@ -364,10 +376,11 @@ fun DeleteConfirmationDialog(
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                ),
-                modifier = Modifier.testTag("ConfirmDeleteButton")
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                modifier = Modifier.testTag("ConfirmDeleteButton"),
             ) {
                 Text("Delete")
             }
@@ -375,15 +388,16 @@ fun DeleteConfirmationDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.testTag("CancelDeleteButton")
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                modifier = Modifier.testTag("CancelDeleteButton"),
             ) {
                 Text("Cancel")
             }
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -393,7 +407,7 @@ private fun SectionHeader(text: String) {
         text = text,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary
+        color = MaterialTheme.colorScheme.primary,
     )
 }
 
@@ -402,41 +416,42 @@ private fun SectionHeader(text: String) {
 private fun HistoryChatItem(
     chat: HistoryChat,
     onClick: () -> Unit,
-    onShowOptions: () -> Unit
+    onShowOptions: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onShowOptions
-            )
-        .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onShowOptions,
+                ).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = 4.dp)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 4.dp),
         ) {
             Text(
                 text = chat.name,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = chat.lastMessageDateTime,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        
+
         IconButton(onClick = onShowOptions) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "Options",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -449,57 +464,63 @@ private fun HistoryChatSkeletonItem(
     highlightColor: Color,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(vertical = 4.dp)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 4.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(20.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect(
-                        progressState = progressState,
-                        baseColor = baseColor,
-                        highlightColor = highlightColor
-                    )
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect(
+                            progressState = progressState,
+                            baseColor = baseColor,
+                            highlightColor = highlightColor,
+                        ),
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.4f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect(
-                        progressState = progressState,
-                        baseColor = baseColor,
-                        highlightColor = highlightColor
-                    )
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .shimmerEffect(
+                            progressState = progressState,
+                            baseColor = baseColor,
+                            highlightColor = highlightColor,
+                        ),
             )
         }
 
         Spacer(modifier = Modifier.width(16.dp))
 
         Box(
-            modifier = Modifier
-                .size(48.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(48.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .shimmerEffect(
-                        progressState = progressState,
-                        baseColor = baseColor,
-                        highlightColor = highlightColor
-                    )
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .shimmerEffect(
+                            progressState = progressState,
+                            baseColor = baseColor,
+                            highlightColor = highlightColor,
+                        ),
             )
         }
     }
@@ -511,36 +532,37 @@ private fun ChatOptionsContent(
     onDelete: () -> Unit,
     onRename: () -> Unit,
     onUnpin: () -> Unit,
-    onPin: () -> Unit
+    onPin: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 32.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
     ) {
         BottomSheetOption(
             icon = Icons.Default.Delete,
             text = "Delete",
             contentColor = MaterialTheme.colorScheme.error,
             onClick = onDelete,
-            modifier = Modifier.testTag("DeleteOption")
+            modifier = Modifier.testTag("DeleteOption"),
         )
         BottomSheetOption(
             icon = Icons.Default.Edit,
             text = "Rename",
-            onClick = onRename
+            onClick = onRename,
         )
         if (isPinned) {
             BottomSheetOption(
                 icon = Icons.Outlined.PushPin,
                 text = "Unpin",
-                onClick = onUnpin
+                onClick = onUnpin,
             )
         } else {
             BottomSheetOption(
                 icon = Icons.Default.PushPin,
                 text = "Pin",
-                onClick = onPin
+                onClick = onPin,
             )
         }
     }
@@ -552,20 +574,22 @@ private fun BottomSheetOption(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit
+    icon: @Composable () -> Unit,
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+        colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             icon()
             Spacer(modifier = Modifier.width(16.dp))
@@ -580,7 +604,7 @@ private fun BottomSheetOption(
     text: String,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     BottomSheetOption(text, contentColor, onClick, modifier) {
         Icon(painter = painter, contentDescription = null)
@@ -593,7 +617,7 @@ private fun BottomSheetOption(
     text: String,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     BottomSheetOption(text, contentColor, onClick, modifier) {
         Icon(imageVector = icon, contentDescription = null)
@@ -618,7 +642,7 @@ private fun PreviewHistoryScreenLoading() {
             onRenameChat = { _, _ -> },
             onPinChat = {},
             onUnpinChat = {},
-            onSettingsClick = {}
+            onSettingsClick = {},
         )
     }
 }

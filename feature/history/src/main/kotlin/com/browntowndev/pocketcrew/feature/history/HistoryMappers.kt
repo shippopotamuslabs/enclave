@@ -9,15 +9,14 @@ import java.util.Locale
 /**
  * Maps domain Chat model to presentation HistoryChat model.
  */
-fun Chat.toHistoryChat(): HistoryChat {
-    return HistoryChat(
+fun Chat.toHistoryChat(): HistoryChat =
+    HistoryChat(
         id = id,
         name = name,
         lastMessageDateTime = formatLastModified(lastModified),
         isPinned = pinned,
-        isSyncing = isSyncing
+        isSyncing = isSyncing,
     )
-}
 
 /**
  * Formats a Date to a human-readable string for display in the history list.
@@ -46,17 +45,23 @@ private fun formatLastModified(date: Date): String {
     }
 }
 
-private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+private fun isSameDay(
+    cal1: Calendar,
+    cal2: Calendar,
+): Boolean =
+    cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
         cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-}
 
-private fun isYesterday(date: Calendar, today: Calendar): Boolean {
+private fun isYesterday(
+    date: Calendar,
+    today: Calendar,
+): Boolean {
     val yesterday = today.clone() as Calendar
     yesterday.add(Calendar.DAY_OF_YEAR, -1)
     return isSameDay(date, yesterday)
 }
 
-private fun isSameYear(cal1: Calendar, cal2: Calendar): Boolean {
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
-}
+private fun isSameYear(
+    cal1: Calendar,
+    cal2: Calendar,
+): Boolean = cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)

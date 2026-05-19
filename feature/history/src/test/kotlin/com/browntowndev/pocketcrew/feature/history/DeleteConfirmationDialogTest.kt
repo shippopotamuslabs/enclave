@@ -14,7 +14,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class DeleteConfirmationDialogTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -24,7 +23,7 @@ class DeleteConfirmationDialogTest {
             PocketCrewTheme {
                 DeleteConfirmationDialog(
                     onConfirm = {},
-                    onDismiss = {}
+                    onDismiss = {},
                 )
             }
         }
@@ -42,7 +41,7 @@ class DeleteConfirmationDialogTest {
             PocketCrewTheme {
                 DeleteConfirmationDialog(
                     onConfirm = { confirmClicked = true },
-                    onDismiss = {}
+                    onDismiss = {},
                 )
             }
         }
@@ -58,7 +57,7 @@ class DeleteConfirmationDialogTest {
             PocketCrewTheme {
                 DeleteConfirmationDialog(
                     onConfirm = {},
-                    onDismiss = { dismissClicked = true }
+                    onDismiss = { dismissClicked = true },
                 )
             }
         }
