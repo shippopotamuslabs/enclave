@@ -115,10 +115,9 @@ class ChatViewModelActionsTest {
         every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
 
         chatViewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 savedStateHandle = SavedStateHandle(),
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
@@ -133,6 +132,7 @@ class ChatViewModelActionsTest {
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
 
@@ -316,26 +316,24 @@ class ChatViewModelActionsTest {
         }
 
     @Test
-    fun `getShieldReason returns null when inference not blocked`() =
+    fun `uiState isGlobalInferenceBlocked reflects lock manager`() =
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            assertNull(chatViewModel.getShieldReason())
+            assertFalse(chatViewModel.uiState.value.isGlobalInferenceBlocked)
             collectJob.cancel()
         }
 
     @Test
-    fun `getShieldReason returns message when inference is blocked`() =
+    fun `uiState isGlobalInferenceBlocked true when inference blocked`() =
         runTest {
             every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(true)
 
-            // Recreate VM with blocked inference
             chatViewModel =
-                ChatViewModel(
+                ChatViewModelTestSupport.createViewModel(
                     settingsUseCases = settingsUseCases,
                     chatUseCases = chatUseCases,
-                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     savedStateHandle = SavedStateHandle(),
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
@@ -350,12 +348,13 @@ class ChatViewModelActionsTest {
                     shareChatUseCase = shareChatUseCase,
                     chatRepository = mockk(relaxed = true),
                     exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            assertEquals("Inference is currently blocked", chatViewModel.getShieldReason())
+            assertTrue(chatViewModel.uiState.value.isGlobalInferenceBlocked)
             collectJob.cancel()
         }
 
@@ -449,17 +448,4 @@ class ChatViewModelActionsTest {
             collectJob.cancel()
         }
 
-    @Test
-    fun `onShieldTap does not crash`() =
-        runTest {
-            // onShieldTap is a no-op stub, just verify it doesn't throw
-            chatViewModel.onShieldTap()
-        }
-
-    @Test
-    fun `onAttach does not crash`() =
-        runTest {
-            // onAttach is a no-op stub, just verify it doesn't throw
-            chatViewModel.onAttach()
-        }
 }

@@ -1,25 +1,3 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
-
 package com.browntowndev.pocketcrew.feature.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
@@ -69,11 +47,7 @@ internal class ChatMessageProjector {
         activeKey: ActiveChatTurnKey?,
     ): ChatMessageProjectionResult {
         val memo = memoResult
-        if (memo != null &&
-            dbMessages === memoDbMessages &&
-            activeSnapshot === memoSnapshot &&
-            activeKey == memoKey
-        ) {
+        if (memo != null && matchesMemo(dbMessages, activeSnapshot, activeKey)) {
             return memo
         }
 
@@ -84,6 +58,15 @@ internal class ChatMessageProjector {
         memoResult = result
         return result
     }
+
+    private fun matchesMemo(
+        dbMessages: List<Message>,
+        activeSnapshot: AccumulatedMessages?,
+        activeKey: ActiveChatTurnKey?,
+    ): Boolean =
+        dbMessages === memoDbMessages &&
+            activeSnapshot === memoSnapshot &&
+            activeKey == memoKey
 
     private fun buildResult(
         dbMessages: List<Message>,

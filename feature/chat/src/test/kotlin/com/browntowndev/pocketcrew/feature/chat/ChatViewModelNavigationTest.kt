@@ -74,10 +74,9 @@ class ChatViewModelNavigationTest {
             SavedStateHandle().apply {
                 if (chatId != null) set("chatId", chatId)
             }
-        return ChatViewModel(
+        return ChatViewModelTestSupport.createViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
-            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
             cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
@@ -92,6 +91,7 @@ class ChatViewModelNavigationTest {
             shareChatUseCase = shareChatUseCase,
             chatRepository = mockk(relaxed = true),
             exportArtifactDocumentsUseCase = mockk(relaxed = true),
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
         )
     }
 

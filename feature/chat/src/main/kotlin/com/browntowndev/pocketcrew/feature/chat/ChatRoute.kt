@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.pocketcrew.feature.chat.artifactexport.ArtifactExportWizardContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,9 +90,8 @@ fun ChatRoute(
             onFileSelected = viewModel::onFileSelected,
             onClearFile = viewModel::clearSelectedFile,
             onShieldTap = {
-                val reason = viewModel.getShieldReason()
-                if (reason != null) {
-                    onShowSnackbar("Procedural harm blocked – $reason", null)
+                if (uiState.isGlobalInferenceBlocked) {
+                    onShowSnackbar("Procedural harm blocked – Inference is currently blocked", null)
                 }
             },
             onMicClick = viewModel::onMicClick,

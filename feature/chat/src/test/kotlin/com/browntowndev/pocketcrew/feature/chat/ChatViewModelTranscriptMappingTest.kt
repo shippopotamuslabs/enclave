@@ -39,11 +39,16 @@ class ChatViewModelTranscriptMappingTest {
         every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
         every { settingsUseCases.assignments.getDefaultModels() } returns flowOf(emptyList())
 
+        val assignmentUseCases = mockk<com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases>()
+        val getDefaultModelsUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase>()
+        every { settingsUseCases.assignments } returns assignmentUseCases
+        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
+        every { getDefaultModelsUseCase() } returns kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
         viewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = mockk(relaxed = true),
                 savedStateHandle = SavedStateHandle(),
                 cancelInferenceUseCase = mockk(relaxed = true),
                 inferenceLockManager = mockk(relaxed = true),
@@ -51,13 +56,13 @@ class ChatViewModelTranscriptMappingTest {
                 activeModelProvider = mockk(relaxed = true),
                 toolExecutionEventPort = mockk(relaxed = true),
                 errorHandler = mockk(relaxed = true),
-                loggingPort = mockk(relaxed = true),
                 activeChatTurnSnapshotPort = mockk(relaxed = true),
                 playbackController = mockk(relaxed = true),
                 studioRepository = mockk(relaxed = true),
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = mockk(relaxed = true),
             )
     }
 

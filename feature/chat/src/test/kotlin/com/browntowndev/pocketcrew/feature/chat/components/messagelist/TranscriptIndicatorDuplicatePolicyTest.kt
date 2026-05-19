@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.feature.chat.components
+package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi

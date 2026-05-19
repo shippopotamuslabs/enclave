@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
+import com.browntowndev.pocketcrew.feature.chat.components.messagebubble.MessageBubble
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,5 +67,34 @@ class MessageBubbleTest {
 
         composeTestRule.onNodeWithContentDescription("Collapse message").performClick()
         composeTestRule.onNodeWithContentDescription("Expand message").assertIsDisplayed()
+    }
+
+    @Test
+    fun `code fence message shows copy code control`() {
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                MessageBubble(
+                    message =
+                        ChatMessage(
+                            id = MessageId("3"),
+                            chatId = ChatId("c1"),
+                            role = MessageRole.User,
+                            content =
+                                ContentUi(
+                                    text =
+                                        """
+                                        ```
+                                        fun main() {}
+                                        ```
+                                        """.trimIndent(),
+                                ),
+                            formattedTimestamp = "10:02 AM",
+                        ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Copy code").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Expand message").assertDoesNotExist()
     }
 }

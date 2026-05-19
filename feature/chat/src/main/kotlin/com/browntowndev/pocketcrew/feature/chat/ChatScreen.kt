@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.components.InputBar
-import com.browntowndev.pocketcrew.feature.chat.components.MessageList
+import com.browntowndev.pocketcrew.feature.chat.components.messagelist.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShareBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
 import com.browntowndev.pocketcrew.feature.chat.components.StreamingResponseHapticEffect

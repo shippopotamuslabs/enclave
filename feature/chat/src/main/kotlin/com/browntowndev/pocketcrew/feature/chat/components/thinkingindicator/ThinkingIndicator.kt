@@ -1,26 +1,5 @@
-@file:Suppress(
-    "MaxLineLength",
-    "MagicNumber",
-    "UnusedPrivateProperty",
-    "UnusedParameter",
-    "TooManyFunctions",
-    "ComplexCondition",
-    "LargeClass",
-    "CyclomaticComplexMethod",
-    "SwallowedException",
-    "InstanceOfCheckForException",
-    "ThrowsCount",
-    "NestedBlockDepth",
-    "ReturnCount",
-    "LoopWithTooManyJumpStatements",
-    "FunctionNaming",
-    "LongMethod",
-    "MatchingDeclarationName",
-    "UnusedPrivateMember",
-    "LongParameterList",
-)
+package com.browntowndev.pocketcrew.feature.chat.components.thinkingindicator
 
-package com.browntowndev.pocketcrew.feature.chat.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -36,33 +15,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
+import com.browntowndev.pocketcrew.feature.chat.components.DynamicThinkingAnimation
 
-/**
- * Redesigned Thinking Indicator that matches the Grok-style thinking indicator.
- *
- * Features:
- * - Dynamic molten-lava orb with constantly swirling animation
- * - "Thinking" text with elapsed time counter
- * - Chevron that rotates 90° when tapped to reveal details in bottom sheet
- *
- * @param thinkingRaw Raw thinking text as markdown
- * @param modifier Modifier for the composable
- * @param modelDisplayName Display name of the model
- * @param isExpanded Whether the details are expanded (chevron rotation)
- * @param onToggleDetails Callback when the indicator is tapped to toggle details bottom sheet
- */
 @Composable
 fun ThinkingIndicator(
     modifier: Modifier = Modifier,
@@ -82,7 +45,6 @@ fun ThinkingIndicator(
                 .padding(top = 8.dp, bottom = 8.dp)
                 .fillMaxWidth(),
     ) {
-        // Header Row: Orb + "Thinking" text + elapsed time + chevron
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier =
@@ -91,14 +53,12 @@ fun ThinkingIndicator(
                     .offset(x = (-11).dp)
                     .clickable { onToggleDetails() },
         ) {
-            // Dynamic molten-lava orb
             DynamicThinkingAnimation(
                 modifier = Modifier.size(46.dp),
             )
 
             Spacer(modifier = Modifier.width(5.dp))
 
-            // "Thinking - Xs" text with shimmer
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f),
@@ -125,7 +85,6 @@ fun ThinkingIndicator(
                 )
 
                 Spacer(Modifier.width(6.dp))
-                // Chevron that rotates when tapped
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "Expand thinking details",
@@ -140,45 +99,9 @@ fun ThinkingIndicator(
     }
 }
 
-/**
- * Formats elapsed seconds into a human-readable string.
- */
 private fun formatElapsedTime(seconds: Int): String =
     when {
         seconds < 60 -> "${seconds}s"
         seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
         else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
     }
-
-// --- Previews ---
-
-@Composable
-private fun PreviewTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            content()
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF121212)
-@Composable
-fun ThinkingIndicator_EmptyPreview() {
-    PreviewTheme {
-        ThinkingIndicator(
-            elapsedSeconds = 0,
-            modifier = Modifier.padding(16.dp),
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF121212)
-@Composable
-fun ThinkingIndicator_WithContentPreview() {
-    PreviewTheme {
-        ThinkingIndicator(
-            elapsedSeconds = 42,
-            modifier = Modifier.padding(16.dp),
-        )
-    }
-}

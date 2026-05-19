@@ -85,10 +85,9 @@ class ChatViewModelShareTest {
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
         viewModel =
-            ChatViewModel(
+            ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 savedStateHandle = savedStateHandle,
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
@@ -103,6 +102,7 @@ class ChatViewModelShareTest {
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
 
