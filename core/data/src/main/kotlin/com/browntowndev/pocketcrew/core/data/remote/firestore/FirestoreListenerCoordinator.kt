@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.remote.firestore
 
+import android.database.sqlite.SQLiteConstraintException
 import com.browntowndev.pocketcrew.core.data.remote.EntitySyncAdapter
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
@@ -19,6 +20,15 @@ internal class FirestoreListenerCoordinator(
 ) {
     private val listenerRegistrations = mutableListOf<ListenerRegistration>()
     private val listenerMutex = Mutex()
+    private val processMutex = Mutex()
+    private val retryQueue =
+        PendingDocumentRetryQueue { key, cause ->
+            ctx.loggingPort.error(
+                FirestoreSyncContext.TAG,
+                "Dropping Firestore document after exhausted retries: $key",
+                cause,
+            )
+        }
 
     fun startListening() {
         externalScope.launch {
@@ -86,22 +96,35 @@ internal class FirestoreListenerCoordinator(
         adapter: EntitySyncAdapter<T>,
         documentChange: DocumentChange,
     ) {
-        try {
-            processDocumentChange(adapter, documentChange)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: Exception) {
-            val wrapped =
-                FirestoreDocumentProcessingException(
-                    collectionPath = adapter.collectionPath,
-                    documentId = documentChange.document.id,
-                    cause = failure,
+        // Serialize across all adapter listeners so DB writes apply in arrival order. This
+        // gives the retry queue a fair shot at re-running buffered children right after the
+        // parent row commits, instead of racing concurrent listener coroutines.
+        processMutex.withLock {
+            val key = "${adapter.collectionPath}/${documentChange.document.id}"
+            try {
+                processDocumentChange(adapter, documentChange)
+                retryQueue.drain()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (fk: SQLiteConstraintException) {
+                ctx.loggingPort.debug(
+                    FirestoreSyncContext.TAG,
+                    "Buffering $key for retry: parent row not yet present (${fk.message})",
                 )
-            ctx.loggingPort.error(
-                FirestoreSyncContext.TAG,
-                wrapped.message ?: "Firestore document processing failed",
-                wrapped,
-            )
+                retryQueue.enqueue(key) { processDocumentChange(adapter, documentChange) }
+            } catch (failure: Exception) {
+                val wrapped =
+                    FirestoreDocumentProcessingException(
+                        collectionPath = adapter.collectionPath,
+                        documentId = documentChange.document.id,
+                        cause = failure,
+                    )
+                ctx.loggingPort.error(
+                    FirestoreSyncContext.TAG,
+                    wrapped.message ?: "Firestore document processing failed",
+                    wrapped,
+                )
+            }
         }
     }
 
