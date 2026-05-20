@@ -12,8 +12,10 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -173,8 +175,42 @@ class ChatMessageProjectorTest {
         )
     }
 
-    // ---------------------------------------------------------------------------
-    // helpers
+    @Test
+    fun `project recomputes handoffReady on memo hit when active key changes meaning`() {
+        val previousAssistantId = MessageId("assistant-prev")
+        val newAssistantId = MessageId("assistant-new")
+        val previousKey = ActiveChatTurnKey(chatId, previousAssistantId)
+        val newKey = ActiveChatTurnKey(chatId, newAssistantId)
+        val dbMessages =
+            listOf(
+                dbMessage(previousAssistantId, state = MessageState.COMPLETE),
+                dbMessage(newAssistantId, state = MessageState.PROCESSING),
+            )
+        val staleSnapshot =
+            makeSnapshot(
+                id = previousAssistantId,
+                content = "previous answer",
+            ).let { snapshot ->
+                AccumulatedMessages(
+                    messages =
+                        mapOf(
+                            previousAssistantId to
+                                snapshot.messages.getValue(previousAssistantId).copy(
+                                    messageState = MessageState.COMPLETE,
+                                    isComplete = true,
+                                ),
+                        ),
+                )
+            }
+
+        val first = projector.project(dbMessages, staleSnapshot, previousKey)
+        assertTrue(first.handoffReady)
+
+        val second = projector.project(dbMessages, staleSnapshot, newKey)
+
+        assertFalse(second.handoffReady)
+    }
+
     // ---------------------------------------------------------------------------
 
     private fun dbMessage(
@@ -206,6 +242,19 @@ class ChatMessageProjectorTest {
             thinkingRaw = "",
             isComplete = false,
         )
+
+    @Test
+    fun `project invalidates cached message when db content changes without snapshot`() {
+        val msgId = MessageId("msg-1")
+        val initialDb = dbMessage(msgId, state = MessageState.GENERATING).copy(content = Content("visible"))
+        val updatedDb = initialDb.copy(content = Content("visible answer"))
+
+        val first = projector.project(listOf(initialDb), null, null)
+        val second = projector.project(listOf(updatedDb), null, null)
+
+        assertNotSame(first.messages.single(), second.messages.single())
+        assertEquals("visible answer", second.messages.single().content.text)
+    }
 
     @Test
     fun `project merges completed snapshot artifacts onto generating db row`() {

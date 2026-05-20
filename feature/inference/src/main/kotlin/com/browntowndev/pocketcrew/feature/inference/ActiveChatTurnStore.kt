@@ -221,8 +221,21 @@ private fun MessageSnapshot.mergeWith(incoming: MessageSnapshot): MessageSnapsho
     val mergedMediaTypes = generatedMediaTypes.mergeDistinct(incoming.generatedMediaTypes)
     val mergedMediaPrompts = generatedMediaPrompts.mergeDistinct(incoming.generatedMediaPrompts)
 
+    val merged =
+        incoming.copy(
+            artifacts = mergedArtifacts,
+            generatedMediaUris = mergedMediaUris,
+            generatedMediaAssetIds = mergedMediaAssetIds,
+            generatedMediaTypes = mergedMediaTypes,
+            generatedMediaPrompts = mergedMediaPrompts,
+        )
+
+    if (merged.isLiveSnapshot()) {
+        return merged
+    }
+
     return when {
-        incoming.matchesWith(
+        merged.matchesWith(
             other = this,
             artifacts = mergedArtifacts,
             generatedMediaUris = mergedMediaUris,
@@ -230,23 +243,13 @@ private fun MessageSnapshot.mergeWith(incoming: MessageSnapshot): MessageSnapsho
             generatedMediaTypes = mergedMediaTypes,
             generatedMediaPrompts = mergedMediaPrompts,
         ) -> this
-        incoming.hasSameListReferences(
-            artifacts = mergedArtifacts,
-            generatedMediaUris = mergedMediaUris,
-            generatedMediaAssetIds = mergedMediaAssetIds,
-            generatedMediaTypes = mergedMediaTypes,
-            generatedMediaPrompts = mergedMediaPrompts,
-        ) -> incoming
-        else ->
-            incoming.copy(
-                artifacts = mergedArtifacts,
-                generatedMediaUris = mergedMediaUris,
-                generatedMediaAssetIds = mergedMediaAssetIds,
-                generatedMediaTypes = mergedMediaTypes,
-                generatedMediaPrompts = mergedMediaPrompts,
-            )
+        else -> merged
     }
 }
+
+/** Active turn still streaming — presentation fields must not be pinned to a prior snapshot. */
+private fun MessageSnapshot.isLiveSnapshot(): Boolean =
+    !isComplete && messageState != MessageState.COMPLETE
 
 private fun List<ArtifactGenerationRequest>.mergeArtifacts(incoming: List<ArtifactGenerationRequest>): List<ArtifactGenerationRequest> {
     if (incoming.isEmpty()) return this
@@ -294,16 +297,3 @@ private fun MessageSnapshot.matchesWith(
         generatedMediaTypes == other.generatedMediaTypes &&
         generatedMediaPrompts == other.generatedMediaPrompts &&
         transcriptSegments == other.transcriptSegments
-
-private fun MessageSnapshot.hasSameListReferences(
-    artifacts: List<ArtifactGenerationRequest>,
-    generatedMediaUris: List<String>,
-    generatedMediaAssetIds: List<String>,
-    generatedMediaTypes: List<String>,
-    generatedMediaPrompts: List<String>,
-): Boolean =
-    this.artifacts === artifacts &&
-        this.generatedMediaUris === generatedMediaUris &&
-        this.generatedMediaAssetIds === generatedMediaAssetIds &&
-        this.generatedMediaTypes === generatedMediaTypes &&
-        this.generatedMediaPrompts === generatedMediaPrompts

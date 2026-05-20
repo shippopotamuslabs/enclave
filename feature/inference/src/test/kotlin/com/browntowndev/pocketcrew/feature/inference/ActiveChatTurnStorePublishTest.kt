@@ -6,6 +6,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import kotlinx.coroutines.test.runTest
@@ -37,13 +39,15 @@ class ActiveChatTurnStorePublishTest {
         }
 
     @Test
-    fun `publish with no effective existing message changes preserves MessageSnapshot reference`() =
+    fun `publish with no effective terminal message changes preserves MessageSnapshot reference`() =
         runTest {
             val store = ActiveChatTurnStore()
             val existing =
                 snapshot(
                     id = MessageId("A"),
                     content = "A",
+                    isComplete = true,
+                    messageState = MessageState.COMPLETE,
                     artifacts = listOf(artifact()),
                     generatedMediaUris = listOf("content://media/1"),
                     generatedMediaAssetIds = listOf("media-1"),
@@ -56,11 +60,52 @@ class ActiveChatTurnStorePublishTest {
             store.publish(
                 key,
                 AccumulatedMessages(
-                    messages = mapOf(MessageId("A") to snapshot(id = MessageId("A"), content = "A")),
+                    messages =
+                        mapOf(
+                            MessageId("A") to
+                                snapshot(
+                                    id = MessageId("A"),
+                                    content = "A",
+                                    isComplete = true,
+                                    messageState = MessageState.COMPLETE,
+                                ),
+                        ),
                 ),
             )
 
             assertSame(prior, store.snapshotValue(key)?.messages?.get(MessageId("A")))
+        }
+
+    @Test
+    fun `live publish with new transcript replaces prior snapshot`() =
+        runTest {
+            val store = ActiveChatTurnStore()
+            val prior =
+                snapshot(
+                    id = MessageId("A"),
+                    content = "",
+                    messageState = MessageState.PROCESSING,
+                )
+            val updated =
+                snapshot(
+                    id = MessageId("A"),
+                    content = "",
+                    messageState = MessageState.THINKING,
+                    transcriptSegments =
+                        listOf(
+                            MessageTranscriptSegment.Thinking(
+                                ordinal = 0,
+                                text = "planning",
+                            ),
+                        ),
+                )
+
+            store.publish(key, AccumulatedMessages(messages = mapOf(MessageId("A") to prior)))
+            store.publish(key, AccumulatedMessages(messages = mapOf(MessageId("A") to updated)))
+
+            val current = checkNotNull(store.snapshotValue(key)?.messages?.get(MessageId("A")))
+            assertEquals(MessageState.THINKING, current.messageState)
+            assertEquals(1, current.transcriptSegments.size)
         }
 
     @Test
@@ -100,6 +145,9 @@ class ActiveChatTurnStorePublishTest {
     private fun snapshot(
         id: MessageId,
         content: String,
+        isComplete: Boolean = false,
+        messageState: MessageState = MessageState.GENERATING,
+        transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
         artifacts: List<ArtifactGenerationRequest> = emptyList(),
         generatedMediaUris: List<String> = emptyList(),
         generatedMediaAssetIds: List<String> = emptyList(),
@@ -111,6 +159,9 @@ class ActiveChatTurnStorePublishTest {
             modelType = ModelType.FAST,
             content = content,
             thinkingRaw = "",
+            isComplete = isComplete,
+            messageState = messageState,
+            transcriptSegments = transcriptSegments,
             artifacts = artifacts,
             generatedMediaUris = generatedMediaUris,
             generatedMediaAssetIds = generatedMediaAssetIds,

@@ -137,6 +137,30 @@ class ChatGenerationAccumulatorManagerTest {
         }
 
     @Test
+    fun `processing state does not downgrade active thinking`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.ThinkingLive("hmm", ModelType.FAST))
+            val afterProcessing =
+                manager
+                    .reduce(MessageGenerationState.Processing(ModelType.FAST))
+                    .messages
+                    .getValue(MessageId("assistant"))
+
+            assertEquals(MessageState.THINKING, afterProcessing.messageState)
+            val segment = afterProcessing.transcriptSegments.single() as MessageTranscriptSegment.Thinking
+            assertEquals("hmm", segment.text)
+        }
+
+    @Test
     fun `crew mode creates distinct assistant messages per model step`() =
         runTest {
             val chatRepository = mockk<ChatRepository>()

@@ -2,9 +2,11 @@ package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -12,8 +14,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,7 +88,6 @@ fun MessageList(
             latestUserMessageIndex = latestUserMessageIndex,
             latestUserMessageId = latestUserMessageId,
             listState = listState,
-            suppressScrollAnchor = suppressScrollAnchor,
             activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeToolCallBanner,
             hasTtsProviderAssigned = hasTtsProviderAssigned,
@@ -104,7 +105,6 @@ private fun MessageListContent(
     latestUserMessageIndex: Int,
     latestUserMessageId: MessageId?,
     listState: LazyListState,
-    suppressScrollAnchor: MutableState<Boolean>,
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
@@ -121,39 +121,17 @@ private fun MessageListContent(
             )
         val density = LocalDensity.current
         val targetMinHeightPx = with(density) { activeInteractionMinHeight.toPx() }
-        val lazyItemSpacingPx = with(density) { 12.dp.toPx() }
+        val userToColumnSpacingPx = with(density) { 12.dp.toPx() }
 
         var activeUserHeightPx by remember(latestUserMessageId) { mutableIntStateOf(0) }
-        val activeAssistantHeightsPx =
-            remember(latestUserMessageId) { mutableStateMapOf<MessageId, Int>() }
 
-        val activeAssistantCount =
-            if (latestUserMessageIndex != -1) {
-                messages.size - latestUserMessageIndex - 1
-            } else {
-                0
-            }
-
-        val activeAssistantTailHeightPx =
-            messageListActiveAssistantTailHeightPx(
-                assistantHeightsPx = activeAssistantHeightsPx.values,
-                lazyItemSpacingPx = lazyItemSpacingPx,
-            )
-
-        val fillerHeightPx =
-            messageListActiveViewportFillerHeightPx(
+        val activeTurnColumnMinHeightPx =
+            messageListActiveTurnColumnMinHeightPx(
                 targetMinHeightPx = targetMinHeightPx,
                 userHeightPx = activeUserHeightPx,
-                assistantTailHeightPx = activeAssistantTailHeightPx,
-                lazyItemSpacingPx = lazyItemSpacingPx,
-                activeAssistantCount = activeAssistantCount,
+                userToColumnSpacingPx = userToColumnSpacingPx,
             )
-
-        MessageListScrollAnchorEffect(
-            listState = listState,
-            fillerHeightPx = fillerHeightPx,
-            suppressScrollAnchor = suppressScrollAnchor,
-        )
+        val activeTurnColumnMinHeight = with(density) { activeTurnColumnMinHeightPx.toDp() }
 
         val totalItems =
             messageListTotalLazyItems(
@@ -203,30 +181,29 @@ private fun MessageListContent(
                     )
                 }
 
-                item(key = "active_viewport_filler_$latestUserMessageId") {
-                    MessageListActiveViewportFiller(heightPx = fillerHeightPx)
-                }
-
-                val assistantStartIndex = latestUserMessageIndex + 1
-                items(
-                    count = activeAssistantCount,
-                    key = { offset -> "active_assistant_${messages[assistantStartIndex + offset].id}" },
-                ) { offset ->
-                    val messageIndex = assistantStartIndex + offset
-                    val message = messages[messageIndex]
-                    MessageListItem(
-                        message = message,
-                        activeIndicatorMessageId = activeIndicatorMessageId,
-                        activeToolCallBanner = activeToolCallBanner,
-                        hasTtsProviderAssigned = hasTtsProviderAssigned,
-                        chatMode = chatMode,
-                        callbacks = callbacks,
-                        isPreview = isPreview,
+                item(key = "active_assistants_$latestUserMessageId") {
+                    Column(
                         modifier =
-                            Modifier.onSizeChanged { size ->
-                                activeAssistantHeightsPx[message.id] = size.height
-                            },
-                    )
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = activeTurnColumnMinHeight),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val assistantStartIndex = latestUserMessageIndex + 1
+                        for (i in assistantStartIndex until messages.size) {
+                            key(messages[i].id) {
+                                MessageListItem(
+                                    message = messages[i],
+                                    activeIndicatorMessageId = activeIndicatorMessageId,
+                                    activeToolCallBanner = activeToolCallBanner,
+                                    hasTtsProviderAssigned = hasTtsProviderAssigned,
+                                    chatMode = chatMode,
+                                    callbacks = callbacks,
+                                    isPreview = isPreview,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

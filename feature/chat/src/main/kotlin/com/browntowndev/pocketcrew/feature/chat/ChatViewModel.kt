@@ -9,11 +9,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -22,12 +19,14 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.domain.util.throttleLatest
+import com.browntowndev.pocketcrew.feature.chat.delegates.ActiveTurnSnapshotCoordinator
+import com.browntowndev.pocketcrew.feature.chat.delegates.ActiveTurnSnapshotState
 import com.browntowndev.pocketcrew.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatUiStateReducer
 import com.browntowndev.pocketcrew.feature.chat.delegates.InferenceOrchestrator
+import com.browntowndev.pocketcrew.feature.chat.delegates.maybeAcknowledgeCompletedTurn
 import com.browntowndev.pocketcrew.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.TtsController
@@ -39,17 +38,21 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -67,7 +70,7 @@ class ChatViewModel
         private val savedStateHandle: SavedStateHandle,
         inferenceLockManager: InferenceLockManager,
         private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
-        private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+        private val activeTurnSnapshotCoordinator: ActiveTurnSnapshotCoordinator,
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
         private val studioRepository: StudioRepositoryPort,
@@ -124,70 +127,11 @@ class ChatViewModel
                         chatUseCases.getChat(id)
                     }
                 }.distinctUntilChangedBy { messages -> messages.dbMessagesFingerprint() }
-
-        private val activeTurnCandidateFlow =
-            combine(
-                activeChatIdFlow,
-                dbMessagesFlow,
-                inferenceOrchestrator.requestedTurnKey,
-            ) { chatId, messages, requestedTurnKey ->
-                val incompleteKey =
-                    chatId?.let { id ->
-                        messages
-                            .lastOrNull { message ->
-                                message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
-                            }?.let { message -> ActiveChatTurnKey(id, message.id) }
-                    }
-                val requestedKey =
-                    requestedTurnKey?.takeIf { key ->
-                        key.chatId == chatId
-                    }
-                ActiveTurnCandidate(
-                    chatId = chatId,
-                    messages = messages,
-                    key = requestedKey ?: incompleteKey,
-                )
-            }
-
-        private val activeTurnKeyFlow =
-            combine(
-                activeTurnCandidateFlow,
-                inferenceOrchestrator.acknowledgedTurnKeys,
-            ) { candidate, acknowledgedKeys ->
-                candidate to acknowledgedKeys
-            }.scan(null as ActiveChatTurnKey?) { currentKey, (candidate, acknowledgedKeys) ->
-                val candidateKey = candidate.key?.takeUnless { key -> key in acknowledgedKeys }
-                when {
-                    currentKey != null && currentKey in acknowledgedKeys -> null
-                    candidateKey != null -> candidateKey
-                    currentKey != null &&
-                        candidate.chatId == currentKey.chatId &&
-                        candidate.messages.any { message ->
-                            message.id == currentKey.assistantMessageId &&
-                                message.messageState == MessageState.COMPLETE
-                        } -> currentKey
-                    else -> null
-                }
-            }.distinctUntilChanged()
-                .stateIn(
+                .shareIn(
                     scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
-                    initialValue = null,
+                    started = SharingStarted.Eagerly,
+                    replay = 1,
                 )
-
-        private val activeTurnSnapshotFlow =
-            activeTurnKeyFlow.flatMapLatest { key ->
-                if (key == null) {
-                    flowOf(ActiveTurnSnapshotState(key = null, snapshot = null))
-                } else {
-                    activeChatTurnSnapshotPort
-                        .observe(key)
-                        .map { snapshot ->
-                            ActiveTurnSnapshotState(key = key, snapshot = snapshot)
-                        }.throttleLatest(16L)
-                        .distinctUntilChanged()
-                }
-            }
 
         private val uiInputsFlow =
             combine(
@@ -233,12 +177,12 @@ class ChatViewModel
                 (ephemeral + persisted).associateBy { it.id }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
-        val uiState: StateFlow<ChatUiState> =
+        private val uiReduceOutputFlow =
             combine(
                 uiInputsWithPolicyFlow,
                 inferenceLockManager.isInferenceBlocked,
                 dbMessagesFlow,
-                activeTurnSnapshotFlow,
+                activeTurnSnapshotCoordinator.state,
                 ttsPlaybackFlow,
                 studioMediaFlow,
                 chatShareCoordinator.shareState,
@@ -288,19 +232,49 @@ class ChatViewModel
                             modelDisplayNames = modelDisplayNames,
                         ),
                     )
-                reduceResult.acknowledgedTurnKey?.let { key ->
-                    if (key !in inferenceOrchestrator.acknowledgedTurnKeys.value) {
-                        inferenceOrchestrator.acknowledgeTurn(key)
-                    }
-                }
-                reduceResult.uiState
-            }.stateIn(
+                UiReduceOutput(
+                    uiState = reduceResult.uiState,
+                    handoffTurnKey = reduceResult.acknowledgedTurnKey,
+                    dbMessages = dbMessages,
+                    activeSnapshot = activeTurnSnapshotState.snapshot,
+                )
+            }.shareIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
-                initialValue = ChatUiState(),
+                replay = 1,
             )
 
+        val uiState: StateFlow<ChatUiState> =
+            uiReduceOutputFlow
+                .map { output -> output.uiState }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
+                    initialValue = ChatUiState(),
+                )
+
         init {
+            activeTurnSnapshotCoordinator.start(
+                scope = viewModelScope,
+                chatIdFlow = activeChatIdFlow,
+                dbMessagesFlow = dbMessagesFlow,
+                requestedTurnKeyFlow = inferenceOrchestrator.requestedTurnKey,
+                acknowledgedTurnKeysFlow = inferenceOrchestrator.acknowledgedTurnKeys,
+            )
+
+            uiReduceOutputFlow
+                .mapNotNull { output -> output.handoffTurnKey?.let { key -> output to key } }
+                .distinctUntilChangedBy { (_, key) -> key }
+                .onEach { (output, key) ->
+                    maybeAcknowledgeCompletedTurn(
+                        key = key,
+                        dbMessages = output.dbMessages,
+                        activeSnapshot = output.activeSnapshot,
+                        acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
+                        onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
+                    )
+                }.launchIn(viewModelScope)
+
             viewModelScope.launch {
                 val names = mutableMapOf<ModelType, String>()
                 for (type in ModelType.entries) {
@@ -317,7 +291,7 @@ class ChatViewModel
                 scope = viewModelScope,
                 currentChatId = { inferenceOrchestrator.currentChatId.value },
                 initialChatId = initialChatId,
-                activeTurnKey = { activeTurnKeyFlow.value },
+                activeTurnKey = { activeTurnSnapshotCoordinator.retainedTurnKey.value },
                 onExtractingUrl = { url -> markWebSearchSourceExtracted(url) },
             )
         }
@@ -426,9 +400,9 @@ class ChatViewModel
 
         fun createNewChat() {
             speechInputCoordinator.stopListening()
-            activeTurnKeyFlow.value?.let { key ->
+            activeTurnSnapshotCoordinator.retainedTurnKey.value?.let { key ->
                 viewModelScope.launch {
-                    activeChatTurnSnapshotPort.clear(key)
+                    activeTurnSnapshotCoordinator.clearTurn(key)
                     inferenceOrchestrator.acknowledgeTurn(key)
                 }
             }
@@ -511,9 +485,9 @@ class ChatViewModel
             chatMessageUiMapper.map(message, _modelDisplayNames.value)
 
         private fun markWebSearchSourceExtracted(url: String) {
-            val key = activeTurnKeyFlow.value ?: return
+            val key = activeTurnSnapshotCoordinator.retainedTurnKey.value ?: return
             viewModelScope.launch {
-                activeChatTurnSnapshotPort.markWebSearchSourcesExtracted(
+                activeTurnSnapshotCoordinator.markWebSearchSourcesExtracted(
                     key = key,
                     urls = listOf(url),
                 )
@@ -540,15 +514,11 @@ class ChatViewModel
             val attachmentPolicy: com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicy,
         )
 
-        private data class ActiveTurnCandidate(
-            val chatId: ChatId?,
-            val messages: List<Message>,
-            val key: ActiveChatTurnKey?,
-        )
-
-        private data class ActiveTurnSnapshotState(
-            val key: ActiveChatTurnKey?,
-            val snapshot: AccumulatedMessages?,
+        private data class UiReduceOutput(
+            val uiState: ChatUiState,
+            val handoffTurnKey: ActiveChatTurnKey?,
+            val dbMessages: List<Message>,
+            val activeSnapshot: AccumulatedMessages?,
         )
 
         private companion object {

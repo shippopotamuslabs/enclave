@@ -42,7 +42,7 @@ class ChatMessageUiMapper
             modelDisplayNames: Map<ModelType, String>,
         ): ChatMessage {
             cache[message.id]?.let { entry ->
-                if (entry.sourceMessage === message && entry.modelDisplayNames === modelDisplayNames) {
+                if (entry.sourceMessage == message && entry.modelDisplayNames === modelDisplayNames) {
                     return entry.chatMessage
                 }
             }
@@ -69,7 +69,12 @@ class ChatMessageUiMapper
                             pipelineStep = message.content.pipelineStep,
                             imageUris = message.content.imageUris,
                             webSearchSources = message.webSearchSources,
-                            artifacts = message.content.artifacts.map { it.toArtifactCardUiModel() },
+                            artifacts =
+                                if (message.messageState == MessageState.COMPLETE) {
+                                    message.content.artifacts.map { it.toArtifactCardUiModel() }
+                                } else {
+                                    emptyList()
+                                },
                             fileAttachments = message.content.fileAttachments,
                             generatedMediaUris = message.content.generatedMediaUris,
                             generatedMediaAssetIds = message.content.generatedMediaAssetIds,
@@ -94,6 +99,7 @@ class ChatMessageUiMapper
         private fun mapTranscriptSegmentsToUi(message: Message): List<TranscriptSegmentUi> {
             val segments = message.transcriptSegments
             if (segments.isEmpty()) return emptyList()
+            val isMessageComplete = message.messageState == MessageState.COMPLETE
             val lastThinkingIndex = segments.indexOfLast { it is MessageTranscriptSegment.Thinking }
             val lastAnswerIndex = segments.indexOfLast { it is MessageTranscriptSegment.AssistantText }
             val durationOverrides = distributeThinkingDurationFromAggregate(message, segments)
@@ -108,14 +114,20 @@ class ChatMessageUiMapper
                             text = seg.text,
                             durationSeconds = durationSeconds,
                             thinkingStartTimeMs = seg.thinkingStartTime,
-                            isStreaming = index == lastThinkingIndex && message.messageState == MessageState.THINKING,
+                            isStreaming =
+                                !isMessageComplete &&
+                                    index == lastThinkingIndex &&
+                                    seg.thinkingEndTime == null,
                         )
                     }
                     is MessageTranscriptSegment.AssistantText ->
                         TranscriptSegmentUi.AnswerBlock(
                             ordinal = seg.ordinal,
                             text = seg.text,
-                            isStreaming = index == lastAnswerIndex && message.messageState == MessageState.GENERATING,
+                            isStreaming =
+                                !isMessageComplete &&
+                                    index == lastAnswerIndex &&
+                                    message.messageState == MessageState.GENERATING,
                         )
                 }
             }
@@ -183,15 +195,13 @@ class ChatMessageUiMapper
 
             return when (message.messageState) {
                 MessageState.ENGINE_LOADING -> IndicatorState.EngineLoading
-                MessageState.PROCESSING -> IndicatorState.Processing
-                MessageState.THINKING -> {
-                    val duration = aggregateThinkingDurationSeconds(message)
-                    IndicatorState.Thinking(
-                        thinkingRaw = message.thinkingRaw ?: "",
-                        thinkingDurationSeconds = duration ?: 0L,
-                        thinkingStartTime = message.thinkingStartTime ?: 0L,
-                    )
-                }
+                MessageState.PROCESSING ->
+                    if (message.hasOpenThinkingTranscriptSegment()) {
+                        thinkingIndicatorState(message)
+                    } else {
+                        IndicatorState.Processing
+                    }
+                MessageState.THINKING -> thinkingIndicatorState(message)
                 MessageState.GENERATING -> {
                     val raw = message.thinkingRaw
                     val duration = aggregateThinkingDurationSeconds(message)
@@ -233,5 +243,19 @@ class ChatMessageUiMapper
             if (timestamp == null || timestamp == 0L) return ""
             val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
             return sdf.format(Date(timestamp))
+        }
+
+        private fun Message.hasOpenThinkingTranscriptSegment(): Boolean {
+            val last = transcriptSegments.lastOrNull() as? MessageTranscriptSegment.Thinking ?: return false
+            return last.thinkingEndTime == null
+        }
+
+        private fun thinkingIndicatorState(message: Message): IndicatorState.Thinking {
+            val duration = aggregateThinkingDurationSeconds(message)
+            return IndicatorState.Thinking(
+                thinkingRaw = message.thinkingRaw ?: "",
+                thinkingDurationSeconds = duration ?: 0L,
+                thinkingStartTime = message.thinkingStartTime ?: 0L,
+            )
         }
     }

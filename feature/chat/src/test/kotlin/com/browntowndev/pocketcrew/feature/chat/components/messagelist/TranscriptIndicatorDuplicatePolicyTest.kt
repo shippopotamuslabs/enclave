@@ -86,6 +86,26 @@ class TranscriptIndicatorDuplicatePolicyTest {
     }
 
     @Test
+    fun `processing strip hidden when transcript segments exist`() {
+        assertFalse(
+            messageListShowsTopLevelStatusIndicator(
+                indicatorState = IndicatorState.Processing,
+                hasTranscriptSegments = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `processing strip shown when transcript empty`() {
+        assertTrue(
+            messageListShowsTopLevelStatusIndicator(
+                indicatorState = IndicatorState.Processing,
+                hasTranscriptSegments = false,
+            ),
+        )
+    }
+
+    @Test
     fun `top thinking not shown for non thinking states`() {
         assertFalse(
             transcriptLayoutShowsTopThinkingIndicator(

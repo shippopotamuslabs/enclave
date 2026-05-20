@@ -129,6 +129,7 @@ private fun MessageListItemIndicators(
         indicatorState = indicatorState,
         chatMode = chatMode,
         suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
+        hasTranscriptSegments = suppressDuplicateThoughtForHeader,
         reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
         elapsedSeconds = elapsedSeconds,
         isThinkingSheetVisible = isThinkingSheetVisible,
@@ -153,6 +154,7 @@ private fun MessageListIndicatorBody(
     indicatorState: IndicatorState,
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
+    hasTranscriptSegments: Boolean,
     reserveCrewGeneratingSlot: Boolean,
     elapsedSeconds: Int,
     isThinkingSheetVisible: Boolean,
@@ -160,7 +162,9 @@ private fun MessageListIndicatorBody(
 ) {
     when (indicatorState) {
         is IndicatorState.EngineLoading -> {
-            EngineLoadingIndicator(modelDisplayName = modelDisplayName)
+            if (messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)) {
+                EngineLoadingIndicator(modelDisplayName = modelDisplayName)
+            }
         }
         is IndicatorState.Thinking -> {
             if (transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)) {
@@ -172,7 +176,9 @@ private fun MessageListIndicatorBody(
             }
         }
         is IndicatorState.Processing -> {
-            ProcessingIndicator()
+            if (messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)) {
+                ProcessingIndicator()
+            }
         }
         is IndicatorState.Generating -> {
             GeneratingIndicatorSection(
