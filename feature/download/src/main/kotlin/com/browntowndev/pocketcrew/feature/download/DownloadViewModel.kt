@@ -366,7 +366,8 @@ class DownloadViewModel
                                 if (shouldLog) {
                                     Log.d(
                                         TAG,
-                                        "[TRACE] observeWorkProgress: Calling updateFromProgressUpdate with status=${progressUpdate.status}",
+                                        "[TRACE] observeWorkProgress: Calling updateFromProgressUpdate " +
+                                            "with status=${progressUpdate.status}",
                                     )
                                 }
                                 modelDownloadOrchestrator.updateFromProgressUpdate(progressUpdate)
