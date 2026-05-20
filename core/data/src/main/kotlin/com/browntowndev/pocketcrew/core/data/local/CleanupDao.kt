@@ -22,9 +22,10 @@ interface CleanupDao {
         deleteMemories()
         deleteStudioMedia()
         deleteStudioAlbums()
+        // default_models RESTRICT-deletes to local/api configs and tts/media providers — wipe first.
+        deleteAllDefaultModels()
         deleteApiCredentials()
         deleteApiModelConfigurations()
-        deleteApiDefaultModels()
         deleteLocalModelConfigurations()
         deleteLocalModels()
         deleteTtsProviders()
@@ -72,8 +73,8 @@ interface CleanupDao {
     @Query("DELETE FROM api_model_configurations")
     suspend fun deleteApiModelConfigurations()
 
-    @Query("DELETE FROM default_models WHERE api_config_id IS NOT NULL")
-    suspend fun deleteApiDefaultModels()
+    @Query("DELETE FROM default_models")
+    suspend fun deleteAllDefaultModels()
 
     @Query("DELETE FROM local_model_configurations")
     suspend fun deleteLocalModelConfigurations()

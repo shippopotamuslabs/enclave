@@ -7,8 +7,8 @@ import coil3.ImageLoader
 import com.browntowndev.pocketcrew.core.docgen.RustDocGenSchemaProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
-import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
+import com.browntowndev.pocketcrew.sync.CloudSyncAuthListener
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import dagger.hilt.android.HiltAndroidApp
@@ -55,20 +55,12 @@ class PocketCrewApplication :
         applicationScope.launch {
             combine(authManager.authState, cryptoManager.isVaultUnlocked) { authState, isUnlocked ->
                 authState to isUnlocked
-            }.collect { (authState, _) ->
-                when (authState) {
-                    is AuthState.Authenticated -> {
-                        // Always start listening when authenticated to get non-encrypted data (configs).
-                        // If the vault was previously locked and is now unlocked, restart listeners
-                        // to ensure initial snapshots of encrypted collections are re-processed.
-                        cloudSyncPort.stopListening()
-                        cloudSyncPort.startListening()
-                    }
-                    is AuthState.Unauthenticated -> {
-                        cloudSyncPort.stopListening()
-                    }
-                    else -> Unit
-                }
+            }.collect { (authState, isUnlocked) ->
+                CloudSyncAuthListener.onAuthAndVaultStateChanged(
+                    authState = authState,
+                    isVaultUnlocked = isUnlocked,
+                    cloudSyncPort = cloudSyncPort,
+                )
             }
         }
     }

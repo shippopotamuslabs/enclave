@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
@@ -23,6 +24,7 @@ class SyncDaoTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
+    private lateinit var firestoreSyncPlaceholderDao: FirestoreSyncPlaceholderDao
 
     @BeforeEach
     fun setup() {
@@ -35,6 +37,7 @@ class SyncDaoTest {
                 .build()
         chatDao = database.chatDao()
         messageDao = database.messageDao()
+        firestoreSyncPlaceholderDao = database.firestoreSyncPlaceholderDao()
     }
 
     @AfterEach
@@ -101,6 +104,39 @@ class SyncDaoTest {
             assertEquals(1, removed)
             assertEquals(null, chatDao.getChatById(placeholderId))
             assertEquals(realId, chatDao.getChatById(realId)?.id)
+        }
+
+    @Test
+    fun `ChatDao deleteOrphanedPlaceholders keeps placeholder chats that already have messages`() =
+        runTest {
+            val placeholderId = ChatId("placeholder-with-message")
+            val chat =
+                ChatEntity(
+                    id = placeholderId,
+                    name = "Syncing...",
+                    created = Date(0),
+                    lastModified = Date(0),
+                    pinned = false,
+                )
+            val messageId = MessageId("msg-placeholder")
+            firestoreSyncPlaceholderDao.insertPlaceholderChatAndMessage(
+                chatEntity = chat,
+                messageEntity =
+                    MessageEntity(
+                        id = messageId,
+                        chatId = placeholderId,
+                        content = "Syncing...",
+                        role = Role.USER,
+                        messageState = MessageState.COMPLETE,
+                        createdAt = 0L,
+                    ),
+            )
+
+            val removed = chatDao.deleteOrphanedPlaceholders()
+
+            assertEquals(0, removed)
+            assertEquals(placeholderId, chatDao.getChatById(placeholderId)?.id)
+            assertEquals(messageId, messageDao.getMessageById(messageId)?.message?.id)
         }
 
     @Test

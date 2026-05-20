@@ -3,10 +3,16 @@ package com.browntowndev.pocketcrew.feature.download
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import io.mockk.every
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -98,6 +104,54 @@ class DownloadViewModelUiModelTest {
 
         // Then
         assertEquals("Vision + Draft One", uiModel.displayName)
+    }
+
+    @Test
+    fun `toUiModel uses utility display name when model types are empty`() {
+        val whisperSha = "whisper-sha256"
+        val utilityAsset =
+            LocalModelAsset(
+                metadata =
+                    LocalModelMetadata(
+                        id = LocalModelId("whisper"),
+                        huggingFaceModelName = "ggerganov/whisper.cpp",
+                        remoteFileName = "ggml-base.en.bin",
+                        localFileName = "ggml-base.en.bin",
+                        sha256 = whisperSha,
+                        sizeInBytes = 147_964_211L,
+                        modelFileFormat = ModelFileFormat.BIN,
+                        utilityType = UtilityType.WHISPER,
+                    ),
+                configurations = emptyList(),
+            )
+        val modelsResult =
+            mockk<DownloadModelsResult> {
+                every { utilityAssets } returns listOf(utilityAsset)
+            }
+        val progress =
+            FileProgress(
+                filename = "ggml-base.en.bin",
+                sha256 = whisperSha,
+                bytesDownloaded = 0,
+                totalBytes = 147_964_211L,
+                status = FileStatus.QUEUED,
+                modelTypes = emptyList(),
+            )
+
+        val viewModel =
+            DownloadViewModel(
+                modelDownloadOrchestrator = mockk(relaxed = true),
+                downloadWorkRepository = mockk(relaxed = true),
+                progressParser = mockk(relaxed = true),
+                errorHandler = mockk(relaxed = true),
+                modelsResult = modelsResult,
+                initialErrorMessage = null,
+                autoStartDownloads = false,
+            )
+
+        val uiModel = with(viewModel) { progress.toUiModel() }
+
+        assertEquals("Speech Recognition", uiModel.displayName)
     }
 
     @Test

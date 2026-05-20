@@ -395,7 +395,7 @@ class ChatViewModel
                 )
                 return
             }
-            inferenceOrchestrator.stopInference()
+            inferenceOrchestrator.stopInference(viewModelScope)
             toolExecutionBannerCoordinator.clearBanner()
         }
 

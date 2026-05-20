@@ -8,6 +8,8 @@ import com.browntowndev.pocketcrew.domain.usecase.security.AdoptCloudVaultUseCas
 import com.browntowndev.pocketcrew.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
@@ -32,6 +34,8 @@ class SettingsGeneralDelegateTest {
     private val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
     private val bootstrapCloudVaultFromLocalUseCase = mockk<BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
     private val createVaultUseCase = mockk<CreateVaultUseCase>()
+    private val unlockVaultFromStoredMetadataUseCase = mockk<UnlockVaultFromStoredMetadataUseCase>()
+    private val startCloudSyncListeningUseCase = mockk<StartCloudSyncListeningUseCase>()
     private val cryptoManager = mockk<CryptoManagerPort>()
     private val vaultMetadataPort = mockk<VaultMetadataPort>()
     private val cloudSyncPort = mockk<CloudSyncPort>()
@@ -53,11 +57,30 @@ class SettingsGeneralDelegateTest {
                 adoptCloudVaultUseCase = adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase = createVaultUseCase,
+                unlockVaultFromStoredMetadataUseCase = unlockVaultFromStoredMetadataUseCase,
+                startCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
                 cryptoManager = cryptoManager,
                 vaultMetadataPort = vaultMetadataPort,
                 cloudSyncPort = cloudSyncPort,
             )
     }
+
+    @Test
+    fun `google sign-in clears cached dek and stops cloud listeners before re-auth sheet`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            coEvery { authUseCases.loginWithGoogle() } returns Result.success(mockk(relaxed = true))
+            every { cryptoManager.clearKey() } returns Unit
+            every { cloudSyncPort.stopListening() } returns Unit
+
+            delegate.onLoginWithGoogle(this, "Settings", sheet)
+            advanceUntilIdle()
+
+            assertEquals(VaultReauthSheetState.EnterPassword(), sheet.value)
+            verify(exactly = 1) { cryptoManager.clearKey() }
+            verify(exactly = 1) { cloudSyncPort.stopListening() }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+        }
 
     @Test
     fun `no cloud vault and no local vault creates the first vault`() =
@@ -95,5 +118,29 @@ class SettingsGeneralDelegateTest {
             coVerify(exactly = 1) { cloudSyncPort.uploadVaultMetadata(any()) }
             verify(exactly = 1) { cloudSyncPort.startListening() }
             coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
+        }
+
+    @Test
+    fun `already matching unlocks vault before starting cloud sync`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            val salt = ByteArray(16) { 0x11 }
+            val wrappedDek = ByteArray(32) { 0x22 }
+
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            coEvery { vaultMetadataPort.getVaultSalt() } returns "salt-b64"
+            coEvery { vaultMetadataPort.getWrappedDek() } returns "wrapped-b64"
+            every { cryptoManager.decodeBase64("salt-b64") } returns salt
+            every { cryptoManager.decodeBase64("wrapped-b64") } returns wrappedDek
+            coEvery { unlockVaultFromStoredMetadataUseCase("password") } returns Result.success(Unit)
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns Result.success(Unit)
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+
+            assertEquals(VaultReauthSheetState.Hidden, sheet.value)
+            coVerify(exactly = 1) { unlockVaultFromStoredMetadataUseCase("password") }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
         }
 }

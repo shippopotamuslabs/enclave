@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.usecase.security.AdoptCloudVaultUseCas
 import com.browntowndev.pocketcrew.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
@@ -87,6 +88,7 @@ class MainViewModel
         private val detectVaultReconciliationStateUseCase: DetectVaultReconciliationStateUseCase,
         private val adoptCloudVaultUseCase: AdoptCloudVaultUseCase,
         private val bootstrapCloudVaultFromLocalUseCase: BootstrapCloudVaultFromLocalUseCase,
+        private val startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
     ) : ViewModel() {
@@ -157,9 +159,13 @@ class MainViewModel
         ) {
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
+                val vaultLockedNow = !cryptoManager.hasCachedKey()
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
-                        it.copy(authState = vaultAuthUiState)
+                        it.copy(
+                            authState = vaultAuthUiState,
+                            isVaultLocked = vaultLockedNow,
+                        )
                     } else {
                         AppStartupState.Ready(
                             authState = vaultAuthUiState,
@@ -176,6 +182,24 @@ class MainViewModel
         fun loginWithGoogle() {
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to sign in with Google", "Failed to sign in")) {
                 loginWithGoogleUseCase().getOrThrow()
+                pendingVaultReconciliationPayload = null
+                // Same contract as Settings sign-in: drop any cached DEK and defer cloud sync until
+                // the user unlocks with their vault password and reconciliation completes.
+                cryptoManager.clearKey()
+                cloudSyncPort.stopListening()
+                _startupState.update {
+                    if (it is AppStartupState.Ready) {
+                        it.copy(
+                            isVaultLocked = true,
+                            isBiometricUnlockPossible = false,
+                            vaultErrorMessage = null,
+                            pendingVaultReconciliation = null,
+                            cloudSyncDeferred = true,
+                        )
+                    } else {
+                        it
+                    }
+                }
             }
         }
 
@@ -232,7 +256,18 @@ class MainViewModel
 
                     loggingPort.debug(TAG, "unlockVault: Vault unlocked successfully")
 
-                    initializeModelsIfNeeded()
+                    val isAuthenticated =
+                        (startupState.value as? AppStartupState.Ready)?.authState is VaultAuthUiState.Authenticated
+                    if (isAuthenticated) {
+                        // Reconcile before touching model defaults — Room may still hold ciphertext
+                        // from a different DEK until sync/adoption completes.
+                        reconcileWithCloudIfNeeded(password)
+                    }
+
+                    val readyAfterReconcile = startupState.value as? AppStartupState.Ready
+                    if (readyAfterReconcile?.pendingVaultReconciliation == null) {
+                        initializeModelsIfNeeded()
+                    }
 
                     val requestBiometricEnrollment = shouldRequestBiometricEnrollment(enableBiometric)
                     if (requestBiometricEnrollment) {
@@ -252,10 +287,6 @@ class MainViewModel
                         _startupState.update {
                             if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it
                         }
-                    }
-
-                    if ((startupState.value as? AppStartupState.Ready)?.authState is VaultAuthUiState.Authenticated) {
-                        reconcileWithCloudIfNeeded(password)
                     }
 
                     if (requestBiometricEnrollment) {
@@ -410,10 +441,10 @@ class MainViewModel
         }
 
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean) {
-            if (initialUpload) {
-                runCatching { cloudSyncPort.syncAllLocalDataToCloud() }
+            startCloudSyncListeningUseCase(uploadLocalFirst = initialUpload)
+            _startupState.update {
+                if (it is AppStartupState.Ready) it.copy(cloudSyncDeferred = false) else it
             }
-            cloudSyncPort.startListening()
         }
 
         /**
@@ -459,6 +490,7 @@ class MainViewModel
                 // Skip syncAllLocalDataToCloud — Room is empty after clearAllData; nothing to push.
                 pendingVaultReconciliationPayload = null
                 cloudSyncPort.startListening()
+                initializeModelsIfNeeded()
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
                         it.copy(pendingVaultReconciliation = null, cloudSyncDeferred = false)

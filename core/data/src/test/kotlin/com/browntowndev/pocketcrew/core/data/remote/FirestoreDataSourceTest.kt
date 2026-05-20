@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
+import com.browntowndev.pocketcrew.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
@@ -70,6 +71,7 @@ class FirestoreDataSourceTest {
     private val embeddingDao = mockk<com.browntowndev.pocketcrew.core.data.local.EmbeddingDao>(relaxed = true)
     private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
     private val documentDao = mockk<DocumentDao>(relaxed = true)
+    private val firestoreSyncPlaceholderDao = mockk<FirestoreSyncPlaceholderDao>(relaxed = true)
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
@@ -109,6 +111,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 chatSummaryDao = chatSummaryDao,
                 embeddingDao = embeddingDao,
+                firestoreSyncPlaceholderDao = firestoreSyncPlaceholderDao,
                 localEncryption = FakeLocalDataEncryptionService(),
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
@@ -430,10 +433,15 @@ class FirestoreDataSourceTest {
                 advanceUntilIdle()
 
                 coVerify {
-                    chatDao.insertIfAbsent(
-                        match {
-                            it.id.value == "chat-1" && it.created.time == 0L && it.name == "PCENC:v1:aes-gcm:Syncing..."
-                        },
+                    firestoreSyncPlaceholderDao.insertPlaceholderChatAndMessage(
+                        chatEntity =
+                            match {
+                                it.id.value == "chat-1" && it.created.time == 0L && it.name == "PCENC:v1:aes-gcm:Syncing..."
+                            },
+                        messageEntity =
+                            match {
+                                it.id.value == "msg-1" && it.chatId.value == "chat-1" && it.content == "PCENC:v1:aes-gcm:Syncing..."
+                            },
                     )
                     messageDao.upsert(
                         match {
@@ -1433,6 +1441,7 @@ class FirestoreDataSourceTest {
                     chatSummaryDao = chatSummaryDao,
                     embeddingCoordinator = embeddingCoordinator,
                     embeddingDao = embeddingDao,
+                    firestoreSyncPlaceholderDao = firestoreSyncPlaceholderDao,
                     localEncryption = FakeLocalDataEncryptionService(),
                 )
 
@@ -1467,10 +1476,12 @@ class FirestoreDataSourceTest {
                 listenerSlot.captured.onEvent(snapshot, null)
 
                 coVerify {
-                    messageDao.insertIfAbsent(
-                        match {
-                            it.id.value == "msg-1" && it.content == "PCENC:v1:aes-gcm:Syncing..."
-                        },
+                    firestoreSyncPlaceholderDao.insertPlaceholderChatAndMessage(
+                        chatEntity = any(),
+                        messageEntity =
+                            match {
+                                it.id.value == "msg-1" && it.content == "PCENC:v1:aes-gcm:Syncing..."
+                            },
                     )
                     messageVisionAnalysisDao.upsert(
                         match {

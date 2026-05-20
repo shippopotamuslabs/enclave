@@ -49,6 +49,14 @@ class DownloadViewModel
             private const val THROTTLE_MS = 5000L
         }
 
+        private val utilityDisplayNameBySha256: Map<String, String> =
+            modelsResult.utilityAssets
+                .mapNotNull { asset ->
+                    asset.metadata.utilityType?.let { utilityType ->
+                        asset.metadata.sha256 to utilityType.displayName()
+                    }
+                }.toMap()
+
         @AssistedFactory
         interface Factory {
             fun create(
@@ -83,7 +91,7 @@ class DownloadViewModel
                         names.joinToString(" + ")
                     }
                 } else {
-                    filename
+                    utilityDisplayNameBySha256[sha256] ?: filename
                 }
             return FileProgressUiModel(
                 filename = filename,

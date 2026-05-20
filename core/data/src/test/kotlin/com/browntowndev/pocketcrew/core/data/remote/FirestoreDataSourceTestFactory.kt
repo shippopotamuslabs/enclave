@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
+import com.browntowndev.pocketcrew.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
@@ -57,6 +58,7 @@ internal fun createTestFirestoreDataSource(
     chatSummaryDao: ChatSummaryDao = mockk(relaxed = true),
     documentDao: DocumentDao = mockk(relaxed = true),
     embeddingDao: EmbeddingDao = mockk(relaxed = true),
+    firestoreSyncPlaceholderDao: FirestoreSyncPlaceholderDao = mockk(relaxed = true),
     apiKeyManager: ApiKeyManager = mockk(relaxed = true),
     cryptoManager: CryptoManagerPort = mockk(relaxed = true),
     loggingPort: LoggingPort = mockk(relaxed = true),
@@ -82,6 +84,7 @@ internal fun createTestFirestoreDataSource(
                     webSearchSourceDao = webSearchSourceDao,
                     documentDao = documentDao,
                     embeddingDao = embeddingDao,
+                    firestoreSyncPlaceholderDao = firestoreSyncPlaceholderDao,
                 ),
             configSyncDaos =
                 ConfigSyncDaos(
@@ -131,6 +134,7 @@ internal fun testFirestoreSyncDaos(
     chatSummaryDao: ChatSummaryDao = mockk(relaxed = true),
     documentDao: DocumentDao = mockk(relaxed = true),
     embeddingDao: EmbeddingDao = mockk(relaxed = true),
+    firestoreSyncPlaceholderDao: FirestoreSyncPlaceholderDao = mockk(relaxed = true),
 ): FirestoreSyncDaos =
     FirestoreSyncDaos.from(
         chatSyncDaos =
@@ -144,6 +148,7 @@ internal fun testFirestoreSyncDaos(
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 embeddingDao = embeddingDao,
+                firestoreSyncPlaceholderDao = firestoreSyncPlaceholderDao,
             ),
         configSyncDaos =
             ConfigSyncDaos(

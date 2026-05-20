@@ -73,4 +73,6 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun cleanupDao(): CleanupDao
 
     abstract fun documentDao(): DocumentDao
+
+    abstract fun firestoreSyncPlaceholderDao(): FirestoreSyncPlaceholderDao
 }

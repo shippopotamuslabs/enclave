@@ -47,7 +47,9 @@ class DefaultModelRepositoryImpl
 
         override fun observeDefaults(): Flow<List<DefaultModelAssignment>> =
             defaultModelsDao.observeAllWithDetails().map { views ->
-                views.map { it.toDomain() }
+                views.mapNotNull { view ->
+                    runCatching { view.toDomain() }.getOrNull()
+                }
             }
 
         override suspend fun setDefault(
@@ -87,7 +89,7 @@ class DefaultModelRepositoryImpl
                     displayName = model?.huggingFaceModelName
                     providerName = "Local"
                     presetName =
-                        decryptField(
+                        decryptFieldOrNull(
                             stored = config.displayName,
                             owner = "LocalModelConfigurationEntity",
                             field = "displayName",
@@ -100,7 +102,7 @@ class DefaultModelRepositoryImpl
                     val creds = apiCredentialsDao.getById(config.apiCredentialsId)
                     if (creds != null) {
                         displayName =
-                            decryptField(
+                            decryptFieldOrNull(
                                 stored = creds.displayName,
                                 owner = "ApiCredentialsEntity",
                                 field = "displayName",
@@ -108,7 +110,7 @@ class DefaultModelRepositoryImpl
                             )
                         providerName = creds.provider.displayName
                         presetName =
-                            decryptField(
+                            decryptFieldOrNull(
                                 stored = config.displayName,
                                 owner = "ApiModelConfigurationEntity",
                                 field = "displayName",
@@ -120,7 +122,7 @@ class DefaultModelRepositoryImpl
                 val ttsProvider = ttsProviderDao.getTtsProvider(entity.ttsProviderId.value)
                 if (ttsProvider != null) {
                     displayName =
-                        decryptField(
+                        decryptFieldOrNull(
                             stored = ttsProvider.displayName,
                             owner = "TtsProviderEntity",
                             field = "displayName",
@@ -128,7 +130,7 @@ class DefaultModelRepositoryImpl
                         )
                     providerName = ttsProvider.provider.displayName
                     presetName =
-                        decryptField(
+                        decryptFieldOrNull(
                             stored = ttsProvider.voiceName,
                             owner = "TtsProviderEntity",
                             field = "voiceName",
@@ -139,7 +141,7 @@ class DefaultModelRepositoryImpl
                 val mediaProvider = mediaProviderDao.getMediaProvider(entity.mediaProviderId.value)
                 if (mediaProvider != null) {
                     displayName =
-                        decryptField(
+                        decryptFieldOrNull(
                             stored = mediaProvider.displayName,
                             owner = "MediaProviderEntity",
                             field = "displayName",
@@ -175,7 +177,7 @@ class DefaultModelRepositoryImpl
                         apiConfigId != null ->
                             apiCredentialsId?.let { credId ->
                                 apiAssetName?.let {
-                                    decryptField(
+                                    decryptFieldOrNull(
                                         stored = it,
                                         owner = "ApiCredentialsEntity",
                                         field = "displayName",
@@ -185,7 +187,7 @@ class DefaultModelRepositoryImpl
                             }
                         ttsProviderId != null ->
                             ttsAssetName?.let {
-                                decryptField(
+                                decryptFieldOrNull(
                                     stored = it,
                                     owner = "TtsProviderEntity",
                                     field = "displayName",
@@ -194,7 +196,7 @@ class DefaultModelRepositoryImpl
                             }
                         mediaProviderId != null ->
                             mediaAssetName?.let {
-                                decryptField(
+                                decryptFieldOrNull(
                                     stored = it,
                                     owner = "MediaProviderEntity",
                                     field = "displayName",
@@ -207,7 +209,7 @@ class DefaultModelRepositoryImpl
                     when {
                         localConfigId != null ->
                             localPresetName?.let {
-                                decryptField(
+                                decryptFieldOrNull(
                                     stored = it,
                                     owner = "LocalModelConfigurationEntity",
                                     field = "displayName",
@@ -216,7 +218,7 @@ class DefaultModelRepositoryImpl
                             }
                         apiConfigId != null ->
                             apiPresetName?.let {
-                                decryptField(
+                                decryptFieldOrNull(
                                     stored = it,
                                     owner = "ApiModelConfigurationEntity",
                                     field = "displayName",
@@ -225,7 +227,7 @@ class DefaultModelRepositoryImpl
                             }
                         ttsProviderId != null ->
                             ttsVoiceName?.let {
-                                decryptField(
+                                decryptFieldOrNull(
                                     stored = it,
                                     owner = "TtsProviderEntity",
                                     field = "voiceName",
@@ -251,4 +253,15 @@ class DefaultModelRepositoryImpl
             field: String,
             entityId: String,
         ): String = localEncryption.decryptString(stored, AadContext(owner, field, entityId).toBytes())
+
+        /** Used by [observeDefaults] so Room emissions cannot crash collectors while locked or mid-reconciliation. */
+        private fun decryptFieldOrNull(
+            stored: String,
+            owner: String,
+            field: String,
+            entityId: String,
+        ): String? =
+            runCatching {
+                decryptField(stored, owner, field, entityId)
+            }.getOrNull()
     }

@@ -9,6 +9,7 @@ import io.mockk.mockk
 internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
     var lastEncryptAad: ByteArray? = null
     var lastDecryptAad: ByteArray? = null
+    var forceDecryptFailure: Boolean = false
 
     override fun encryptString(
         plaintext: String,
@@ -22,6 +23,9 @@ internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
         stored: String,
         aad: ByteArray,
     ): String {
+        if (forceDecryptFailure) {
+            throw javax.crypto.AEADBadTagException()
+        }
         lastDecryptAad = aad
         return stored.removePrefix(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
     }
