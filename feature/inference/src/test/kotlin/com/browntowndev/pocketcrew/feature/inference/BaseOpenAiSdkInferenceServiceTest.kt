@@ -180,6 +180,87 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
+    fun etr_k_01_complete_single_turn_maps_canonical_raw_tool_calls_to_sdk() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(""),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-etr-01",
+                            role = Role.ASSISTANT,
+                            content = "I'll search.",
+                            metadataJson =
+                                """{"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"query\":\"rust\"}"}]}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = capturedParams!!.messages()
+            assertEquals(1, messages.size)
+            assertTrue(messages[0].isAssistant())
+            val toolCalls = messages[0].asAssistant().toolCalls()
+            assertTrue(toolCalls.isPresent)
+            assertEquals(1, toolCalls.get().size)
+            val functionCall = toolCalls.get()[0].asFunction()
+            assertEquals("web_search", functionCall.function().name())
+            assertEquals("call_1", functionCall.id())
+            assertEquals("""{"query":"rust"}""", functionCall.function().arguments())
+        }
+
+    @Test
+    fun etr_k_02_complete_single_turn_replays_arguments_json_verbatim() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(""),
+                )
+            val expectedArgs = """{"artifactId":"art-1","blocks":[],"isComplete":false}"""
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-etr-02",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson =
+                                """{"raw_tool_calls":[{"id":"call_ab","name":"append_blocks","arguments_json":"{\"artifactId\":\"art-1\",\"blocks\":[],\"isComplete\":false}"}]}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val functionCall =
+                capturedParams!!
+                    .messages()[0]
+                    .asAssistant()
+                    .toolCalls()
+                    .get()[0]
+                    .asFunction()
+            assertEquals(expectedArgs, functionCall.function().arguments())
+        }
+
+    @Test
     fun `toOpenAiChatParam maps raw_tool_calls metadata to assistant message with tool calls`() =
         runTest {
             var capturedParams: ChatCompletionCreateParams? = null
