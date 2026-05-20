@@ -4,8 +4,10 @@ import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 
 /**
- * Application-level policy for when encrypted Firestore sync may run. Extracted for unit tests
- * of [com.browntowndev.pocketcrew.PocketCrewApplication] listener wiring.
+ * Application-level policy for when encrypted Firestore sync must stop. Listener **start** is
+ * owned by [com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase]
+ * so unlock/adopt paths do not race this gate. Extracted for unit tests of
+ * [com.browntowndev.pocketcrew.PocketCrewApplication] wiring.
  */
 object CloudSyncAuthListener {
     fun onAuthAndVaultStateChanged(
@@ -15,9 +17,8 @@ object CloudSyncAuthListener {
     ) {
         when (authState) {
             is AuthState.Authenticated -> {
-                cloudSyncPort.stopListening()
-                if (isVaultUnlocked) {
-                    cloudSyncPort.startListening()
+                if (!isVaultUnlocked) {
+                    cloudSyncPort.stopListening()
                 }
             }
             is AuthState.Unauthenticated -> {

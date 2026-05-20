@@ -489,7 +489,7 @@ class MainViewModel
                 }
                 // Skip syncAllLocalDataToCloud — Room is empty after clearAllData; nothing to push.
                 pendingVaultReconciliationPayload = null
-                cloudSyncPort.startListening()
+                startCloudSyncListeningUseCase(uploadLocalFirst = false)
                 initializeModelsIfNeeded()
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
