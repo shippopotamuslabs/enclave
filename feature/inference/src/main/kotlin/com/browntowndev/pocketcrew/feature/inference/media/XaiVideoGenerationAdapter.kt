@@ -34,37 +34,57 @@ class XaiVideoGenerationAdapter(
         baseUrl: String?,
         settings: GenerationSettings,
         referenceImage: ByteArray? = null,
-    ): Result<ByteArray> = withContext(Dispatchers.IO) {
-        runCatching {
-            val videoSettings = settings as? VideoGenerationSettings
-                ?: throw IllegalArgumentException("Settings must be VideoGenerationSettings")
-            val rootUrl = baseUrl?.trimEnd('/') ?: DEFAULT_BASE_URL
-            val requestId = executeJson(
-                request = Request.Builder()
-                    .url("$rootUrl/videos/generations")
-                    .header("Authorization", "Bearer $apiKey")
-                    .post(createRequestBody(prompt, modelId, videoSettings, referenceImage))
-                    .build(),
-            ).string("request_id")
-            val videoUrl = pollUntilComplete(rootUrl, apiKey, requestId)
-            executeBytes(Request.Builder().url(videoUrl).get().build())
+    ): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val videoSettings =
+                    settings as? VideoGenerationSettings
+                        ?: throw IllegalArgumentException("Settings must be VideoGenerationSettings")
+                val rootUrl = baseUrl?.trimEnd('/') ?: DEFAULT_BASE_URL
+                val requestId =
+                    executeJson(
+                        request =
+                            Request
+                                .Builder()
+                                .url("$rootUrl/videos/generations")
+                                .header("Authorization", "Bearer $apiKey")
+                                .post(createRequestBody(prompt, modelId, videoSettings, referenceImage))
+                                .build(),
+                    ).string("request_id")
+                val videoUrl = pollUntilComplete(rootUrl, apiKey, requestId)
+                executeBytes(
+                    Request
+                        .Builder()
+                        .url(videoUrl)
+                        .get()
+                        .build(),
+                )
+            }
         }
-    }
 
     @Suppress("ThrowsCount")
-    private suspend fun pollUntilComplete(rootUrl: String, apiKey: String, requestId: String): String {
+    private suspend fun pollUntilComplete(
+        rootUrl: String,
+        apiKey: String,
+        requestId: String,
+    ): String {
         repeat(MAX_POLL_ATTEMPTS) {
-            val response = executeJson(
-                request = Request.Builder()
-                    .url("$rootUrl/videos/$requestId")
-                    .header("Authorization", "Bearer $apiKey")
-                    .get()
-                    .build(),
-            )
+            val response =
+                executeJson(
+                    request =
+                        Request
+                            .Builder()
+                            .url("$rootUrl/videos/$requestId")
+                            .header("Authorization", "Bearer $apiKey")
+                            .get()
+                            .build(),
+                )
             when (val status = response.string("status")) {
                 "done" -> {
-                    return response["video"]?.jsonObject
-                        ?.get("url")?.jsonPrimitive
+                    return response["video"]
+                        ?.jsonObject
+                        ?.get("url")
+                        ?.jsonPrimitive
                         ?.contentOrNull
                         ?: throw IllegalStateException("No xAI video result URL")
                 }
@@ -81,17 +101,18 @@ class XaiVideoGenerationAdapter(
         settings: VideoGenerationSettings,
         referenceImage: ByteArray?,
     ): RequestBody {
-        val request = buildJsonObject {
-            put("model", modelId)
-            put("prompt", prompt)
-            put("duration", settings.videoDuration)
-            put("aspect_ratio", settings.aspectRatio.ratio)
-            put("resolution", settings.videoResolution)
-            if (referenceImage != null) {
-                val dataUri = "data:image/png;base64,${Base64.getEncoder().encodeToString(referenceImage)}"
-                put("image", buildJsonObject { put("url", dataUri) })
+        val request =
+            buildJsonObject {
+                put("model", modelId)
+                put("prompt", prompt)
+                put("duration", settings.videoDuration)
+                put("aspect_ratio", settings.aspectRatio.ratio)
+                put("resolution", settings.videoResolution)
+                if (referenceImage != null) {
+                    val dataUri = "data:image/png;base64,${Base64.getEncoder().encodeToString(referenceImage)}"
+                    put("image", buildJsonObject { put("url", dataUri) })
+                }
             }
-        }
         return request.toString().toRequestBody("application/json".toMediaType())
     }
 

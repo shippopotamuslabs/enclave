@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -36,12 +35,17 @@ object OpenRouterRequestMapper {
     ): ChatCompletionCreateParams {
         val provider = options.apiProvider
         val optModelId = options.modelId
-        val parameterSupport = if (provider != null && optModelId != null) {
-            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
-        } else null
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
 
-        val builder = ChatCompletionCreateParams.builder()
-            .model(optModelId ?: modelId)
+        val builder =
+            ChatCompletionCreateParams
+                .builder()
+                .model(optModelId ?: modelId)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
         val systemMessages = mutableListOf<String>()
@@ -62,19 +66,21 @@ object OpenRouterRequestMapper {
 
         val finalSystemPrompt = systemMessages.joinToString("\n\n").takeIf { it.isNotBlank() }
         if (finalSystemPrompt != null) {
-            messages.add(0, 
+            messages.add(
+                0,
                 ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam.builder()
+                    ChatCompletionSystemMessageParam
+                        .builder()
                         .content(finalSystemPrompt)
-                        .build()
-                )
+                        .build(),
+                ),
             )
         }
 
         messages.add(
             ChatCompletionMessageParam.ofUser(
-                buildChatCompletionUserMessage(prompt, options.imageUris)
-            )
+                buildChatCompletionUserMessage(prompt, options.imageUris),
+            ),
         )
 
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
@@ -104,10 +110,12 @@ object OpenRouterRequestMapper {
         prompt: String,
         history: List<ChatMessage>,
         options: GenerationOptions,
-        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration()
+        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     ): ResponseCreateParams {
-        val builder = ResponseCreateParams.builder()
-            .model(modelId)
+        val builder =
+            ResponseCreateParams
+                .builder()
+                .model(modelId)
 
         val messages = mutableListOf<ResponseInputItem>()
         val systemMessages = mutableListOf<String>()
@@ -119,18 +127,20 @@ object OpenRouterRequestMapper {
             }
 
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            val role = when (msg.role) {
-                Role.USER -> ResponseInputItem.Message.Role.of("user")
-                Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
-                Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
-            }
+            val role =
+                when (msg.role) {
+                    Role.USER -> ResponseInputItem.Message.Role.of("user")
+                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
+                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
+                }
             messages.add(
                 ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
+                    ResponseInputItem.Message
+                        .builder()
                         .role(role)
                         .addInputTextContent(sanitizedContent)
-                        .build()
-                )
+                        .build(),
+                ),
             )
         }
 
@@ -159,27 +169,28 @@ object OpenRouterRequestMapper {
 
     fun applyRoutingDefaults(
         builder: ResponseCreateParams.Builder,
-        routing: OpenRouterRoutingConfiguration
+        routing: OpenRouterRoutingConfiguration,
     ) {
         applyOpenRouterRoutingDefaults(builder, routing)
     }
 
     private fun applyOpenRouterRoutingDefaults(
         builder: ChatCompletionCreateParams.Builder,
-        routing: OpenRouterRoutingConfiguration
+        routing: OpenRouterRoutingConfiguration,
     ) {
         builder.additionalBodyProperties(
             mapOf(
-                "provider" to JsonValue.from(
-                    mapOf(
-                        "sort" to routing.providerSort.wireValue,
-                        "allow_fallbacks" to routing.allowFallbacks,
-                        "require_parameters" to routing.requireParameters,
-                        "data_collection" to routing.dataCollectionPolicy.wireValue,
-                        "zdr" to routing.zeroDataRetention,
-                    )
-                )
-            )
+                "provider" to
+                    JsonValue.from(
+                        mapOf(
+                            "sort" to routing.providerSort.wireValue,
+                            "allow_fallbacks" to routing.allowFallbacks,
+                            "require_parameters" to routing.requireParameters,
+                            "data_collection" to routing.dataCollectionPolicy.wireValue,
+                            "zdr" to routing.zeroDataRetention,
+                        ),
+                    ),
+            ),
         )
     }
 
@@ -210,42 +221,48 @@ object OpenRouterRequestMapper {
 
     private fun applyOpenRouterRoutingDefaults(
         builder: ResponseCreateParams.Builder,
-        routing: OpenRouterRoutingConfiguration
+        routing: OpenRouterRoutingConfiguration,
     ) {
         builder.additionalBodyProperties(
             mapOf(
-                "provider" to JsonValue.from(
-                    mapOf(
-                        "sort" to routing.providerSort.wireValue,
-                        "allow_fallbacks" to routing.allowFallbacks,
-                        "require_parameters" to routing.requireParameters,
-                        "data_collection" to routing.dataCollectionPolicy.wireValue,
-                        "zdr" to routing.zeroDataRetention,
-                    )
-                )
-            )
+                "provider" to
+                    JsonValue.from(
+                        mapOf(
+                            "sort" to routing.providerSort.wireValue,
+                            "allow_fallbacks" to routing.allowFallbacks,
+                            "require_parameters" to routing.requireParameters,
+                            "data_collection" to routing.dataCollectionPolicy.wireValue,
+                            "zdr" to routing.zeroDataRetention,
+                        ),
+                    ),
+            ),
         )
     }
 
-    private fun toContent(message: ChatMessage): ChatCompletionMessageParam {
-        return when (message.role) {
-            Role.USER -> ChatCompletionMessageParam.ofUser(
-                ChatCompletionUserMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
-            Role.ASSISTANT -> ChatCompletionMessageParam.ofAssistant(
-                ChatCompletionAssistantMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
-            Role.SYSTEM -> ChatCompletionMessageParam.ofSystem(
-                ChatCompletionSystemMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
+    private fun toContent(message: ChatMessage): ChatCompletionMessageParam =
+        when (message.role) {
+            Role.USER ->
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.ASSISTANT ->
+                ChatCompletionMessageParam.ofAssistant(
+                    ChatCompletionAssistantMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.SYSTEM ->
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
         }
-    }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
@@ -260,11 +277,13 @@ object OpenRouterRequestMapper {
     }
 
     private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
-        val paramsBuilder = FunctionParameters.builder()
-            .putAdditionalProperty("type", JsonValue.from("object"))
-            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-            .putAdditionalProperty("required", JsonValue.from(schema.required))
-            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        val paramsBuilder =
+            FunctionParameters
+                .builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                .putAdditionalProperty("required", JsonValue.from(schema.required))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) {
                 paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
@@ -275,24 +294,27 @@ object OpenRouterRequestMapper {
                 paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
             }
         }
-        return ChatCompletionFunctionTool.builder()
+        return ChatCompletionFunctionTool
+            .builder()
             .function(
-                FunctionDefinition.builder()
+                FunctionDefinition
+                    .builder()
                     .name(name)
                     .description(description)
                     .parameters(paramsBuilder.build())
                     .strict(false)
-                    .build()
-            )
-            .build()
+                    .build(),
+            ).build()
     }
 
     private fun ToolDefinition.toResponsesTool(): FunctionTool {
-        val paramsBuilder = FunctionTool.Parameters.builder()
-            .putAdditionalProperty("type", JsonValue.from("object"))
-            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-            .putAdditionalProperty("required", JsonValue.from(schema.required))
-            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        val paramsBuilder =
+            FunctionTool.Parameters
+                .builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                .putAdditionalProperty("required", JsonValue.from(schema.required))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) {
                 paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
@@ -303,7 +325,8 @@ object OpenRouterRequestMapper {
                 paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
             }
         }
-        return FunctionTool.builder()
+        return FunctionTool
+            .builder()
             .name(name)
             .description(description)
             .parameters(paramsBuilder.build())
@@ -319,11 +342,12 @@ object OpenRouterRequestMapper {
         return map
     }
 
-    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any {
-        return when (this) {
+    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any =
+        when (this) {
             is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) content
-                else {
+                if (isString) {
+                    content
+                } else {
                     content.toBooleanStrictOrNull()
                         ?: content.toLongOrNull()
                         ?: content.toDoubleOrNull()
@@ -334,43 +358,47 @@ object OpenRouterRequestMapper {
             is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
             else -> Any()
         }
-    }
 
     private fun buildChatCompletionUserMessage(
         prompt: String,
         imageUris: List<String>,
     ): ChatCompletionUserMessageParam {
         if (imageUris.isEmpty()) {
-            return ChatCompletionUserMessageParam.builder()
+            return ChatCompletionUserMessageParam
+                .builder()
                 .content(prompt)
                 .build()
         }
 
-        val parts = buildList {
-            add(
-                ChatCompletionContentPart.ofText(
-                    ChatCompletionContentPartText.builder()
-                        .text(prompt)
-                        .build()
-                )
-            )
-            ImagePayloads.fromUris(imageUris).forEach { payload ->
-                ImagePayloads.validate(payload)
+        val parts =
+            buildList {
                 add(
-                    ChatCompletionContentPart.ofImageUrl(
-                        ChatCompletionContentPartImage.builder()
-                            .imageUrl(
-                                ChatCompletionContentPartImage.ImageUrl.builder()
-                                    .url(payload.dataUrl)
-                                    .build()
-                            )
-                            .build()
-                    )
+                    ChatCompletionContentPart.ofText(
+                        ChatCompletionContentPartText
+                            .builder()
+                            .text(prompt)
+                            .build(),
+                    ),
                 )
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ChatCompletionContentPart.ofImageUrl(
+                            ChatCompletionContentPartImage
+                                .builder()
+                                .imageUrl(
+                                    ChatCompletionContentPartImage.ImageUrl
+                                        .builder()
+                                        .url(payload.dataUrl)
+                                        .build(),
+                                ).build(),
+                        ),
+                    )
+                }
             }
-        }
 
-        return ChatCompletionUserMessageParam.builder()
+        return ChatCompletionUserMessageParam
+            .builder()
             .contentOfArrayOfContentParts(parts)
             .build()
     }
@@ -379,21 +407,23 @@ object OpenRouterRequestMapper {
         prompt: String,
         imageUris: List<String>,
     ): ResponseInputItem.Message {
-        val builder = ResponseInputItem.Message.builder()
-            .role(ResponseInputItem.Message.Role.of("user"))
-            .addInputTextContent(prompt)
+        val builder =
+            ResponseInputItem.Message
+                .builder()
+                .role(ResponseInputItem.Message.Role.of("user"))
+                .addInputTextContent(prompt)
 
         ImagePayloads.fromUris(imageUris).forEach { payload ->
             ImagePayloads.validate(payload)
             builder.addContent(
-                ResponseInputImage.builder()
+                ResponseInputImage
+                    .builder()
                     .detail(ResponseInputImage.Detail.AUTO)
                     .imageUrl(payload.dataUrl)
-                    .build()
+                    .build(),
             )
         }
 
         return builder.build()
     }
-
 }

@@ -26,31 +26,34 @@ class ConversationManagerImplPolicyBridgeTest {
     private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
 
     @Test
-    fun shouldAllowTool_falseGatesLiteRtDispatch() = runTest {
-        val manager = createManager(policy = FakeAgentPolicyPort(allowTools = false))
+    fun shouldAllowTool_falseGatesLiteRtDispatch() =
+        runTest {
+            val manager = createManager(policy = FakeAgentPolicyPort(allowTools = false))
 
-        val result = manager.executeToolSafelyForTest(liteRtSearchRequest())
+            val result = manager.executeToolSafelyForTest(liteRtSearchRequest())
 
-        assertTrue(result.contains("Context window exceeded"))
-        coVerify(exactly = 0) { toolExecutor.execute(any()) }
-    }
+            assertTrue(result.contains("Context window exceeded"))
+            coVerify(exactly = 0) { toolExecutor.execute(any()) }
+        }
 
     @Test
-    fun resultJsonLooksSoftFailure_incrementsStreakForLaterGate() = runTest {
-        val policy = FakeAgentPolicyPort(maxAllowedStreak = 1u)
-        val manager = createManager(policy)
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "web_search",
-            resultJson = """{"status":"error","message":"provider failed"}""",
-        )
+    fun resultJsonLooksSoftFailure_incrementsStreakForLaterGate() =
+        runTest {
+            val policy = FakeAgentPolicyPort(maxAllowedStreak = 1u)
+            val manager = createManager(policy)
+            coEvery { toolExecutor.execute(any()) } returns
+                ToolExecutionResult(
+                    toolName = "web_search",
+                    resultJson = """{"status":"error","message":"provider failed"}""",
+                )
 
-        val firstResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
-        val secondResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
+            val firstResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
+            val secondResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
 
-        assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
-        assertTrue(secondResult.contains("Context window exceeded"))
-        coVerify(exactly = 1) { toolExecutor.execute(any()) }
-    }
+            assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
+            assertTrue(secondResult.contains("Context window exceeded"))
+            coVerify(exactly = 1) { toolExecutor.execute(any()) }
+        }
 
     private fun createManager(policy: AgentPolicyPort): ConversationManagerImpl =
         ConversationManagerImpl(
@@ -74,16 +77,21 @@ class ConversationManagerImplPolicyBridgeTest {
         private val allowTools: Boolean = true,
         private val maxAllowedStreak: UInt = UInt.MAX_VALUE,
     ) : AgentPolicyPort {
-        override fun repairTool(name: String, argsJson: String): AgentPolicyRepairResult =
-            AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
+        override fun repairTool(
+            name: String,
+            argsJson: String,
+        ): AgentPolicyRepairResult = AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
 
-        override fun truncateResult(json: String, budgetBytes: ULong): String =
-            json.take(budgetBytes.toInt())
+        override fun truncateResult(
+            json: String,
+            budgetBytes: ULong,
+        ): String = json.take(budgetBytes.toInt())
 
-        override fun shouldAllowTool(softFailureStreak: UInt, maxStreak: UInt): Boolean =
-            allowTools && softFailureStreak < maxAllowedStreak
+        override fun shouldAllowTool(
+            softFailureStreak: UInt,
+            maxStreak: UInt,
+        ): Boolean = allowTools && softFailureStreak < maxAllowedStreak
 
-        override fun resultJsonLooksSoftFailure(json: String): Boolean =
-            json.contains("\"status\":\"error\"")
+        override fun resultJsonLooksSoftFailure(json: String): Boolean = json.contains("\"status\":\"error\"")
     }
 }

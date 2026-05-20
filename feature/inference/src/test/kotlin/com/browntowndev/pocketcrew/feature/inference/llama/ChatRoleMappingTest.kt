@@ -1,14 +1,13 @@
 package com.browntowndev.pocketcrew.feature.inference.llama
 
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for ChatRole mapping from domain Role.
  */
 class ChatRoleMappingTest {
-
     // ========== Role Mapping Tests ==========
 
     @Test

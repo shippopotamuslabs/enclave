@@ -4,22 +4,37 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
 import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 
 internal object ProviderFinishReasonMapper {
-    fun fromOpenAiChat(finishReason: String, text: String): AgentModelTurnResult =
-        textOnlyTurn(text, finishReason.toOpenAiChatReason())
+    fun fromOpenAiChat(
+        finishReason: String,
+        text: String,
+    ): AgentModelTurnResult = textOnlyTurn(text, finishReason.toOpenAiChatReason())
 
-    fun fromOpenAiResponses(status: String, incompleteReason: String?, responseId: String, text: String): AgentModelTurnResult =
-        textOnlyTurn(text, status.toOpenAiResponsesReason(incompleteReason, responseId))
+    fun fromOpenAiResponses(
+        status: String,
+        incompleteReason: String?,
+        responseId: String,
+        text: String,
+    ): AgentModelTurnResult = textOnlyTurn(text, status.toOpenAiResponsesReason(incompleteReason, responseId))
 
-    fun fromAnthropic(stopReason: String, text: String): AgentModelTurnResult =
-        textOnlyTurn(text, stopReason.toAnthropicReason())
+    fun fromAnthropic(
+        stopReason: String,
+        text: String,
+    ): AgentModelTurnResult = textOnlyTurn(text, stopReason.toAnthropicReason())
 
-    fun fromGoogle(finishReason: String, text: String): AgentModelTurnResult =
-        textOnlyTurn(text, finishReason.toGoogleReason())
+    fun fromGoogle(
+        finishReason: String,
+        text: String,
+    ): AgentModelTurnResult = textOnlyTurn(text, finishReason.toGoogleReason())
 
-    fun fromOpenAiChatStream(finishReason: String, text: String): AgentModelTurnResult =
-        fromOpenAiChat(finishReason = finishReason, text = text)
+    fun fromOpenAiChatStream(
+        finishReason: String,
+        text: String,
+    ): AgentModelTurnResult = fromOpenAiChat(finishReason = finishReason, text = text)
 
-    private fun textOnlyTurn(text: String, finishReason: AgentFinishReason): AgentModelTurnResult =
+    private fun textOnlyTurn(
+        text: String,
+        finishReason: AgentFinishReason,
+    ): AgentModelTurnResult =
         AgentModelTurnResult(
             assistantText = text,
             toolCalls = emptyList(),
@@ -39,11 +54,12 @@ internal object ProviderFinishReasonMapper {
     ): AgentFinishReason =
         when (lowercase()) {
             "completed" -> AgentFinishReason.Stop
-            "incomplete" -> when (incompleteReason?.lowercase()) {
-                "max_output_tokens" -> AgentFinishReason.MaxTokens
-                null -> AgentFinishReason.Other("incomplete:$responseId")
-                else -> AgentFinishReason.Other(incompleteReason)
-            }
+            "incomplete" ->
+                when (incompleteReason?.lowercase()) {
+                    "max_output_tokens" -> AgentFinishReason.MaxTokens
+                    null -> AgentFinishReason.Other("incomplete:$responseId")
+                    else -> AgentFinishReason.Other(incompleteReason)
+                }
             else -> AgentFinishReason.Other(this)
         }
 

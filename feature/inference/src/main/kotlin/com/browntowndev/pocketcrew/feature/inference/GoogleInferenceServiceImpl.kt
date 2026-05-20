@@ -20,7 +20,6 @@ import com.google.genai.types.FunctionCallingConfigMode
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ToolConfig
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -28,9 +27,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.util.concurrent.CopyOnWriteArrayList
 
 class GoogleInferenceServiceImpl(
     private val sdkClient: GoogleGenAiSdkClient,
@@ -39,9 +38,9 @@ class GoogleInferenceServiceImpl(
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+    @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
-
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "GoogleInferenceService"
@@ -51,49 +50,51 @@ class GoogleInferenceServiceImpl(
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
-        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
-    }
+    override fun sendPrompt(
+        prompt: String,
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
 
     override fun sendPrompt(
         prompt: String,
         options: GenerationOptions,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> = flow {
-        try {
-            require(options.imageUris.size <= 3600) {
-                "Google API supports a maximum of 3600 images per request."
-            }
-            val requestHistory = buildRequestHistory(options)
-            loggingPort.debug(
-                TAG,
-                @Suppress("MaxLineLength")
-                "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
-            )
-            executePrompt(prompt, options, requestHistory) { emit(it) }
+    ): Flow<InferenceEvent> =
+        flow {
+            try {
+                require(options.imageUris.size <= 3600) {
+                    "Google API supports a maximum of 3600 images per request."
+                }
+                val requestHistory = buildRequestHistory(options)
+                loggingPort.debug(
+                    TAG,
+                    @Suppress("MaxLineLength")
+                    "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}",
+                )
+                executePrompt(prompt, options, requestHistory) { emit(it) }
 
-            conversationHistory.add(ChatMessage(Role.USER, prompt))
-            if (closeConversation) {
-                closeSession()
+                conversationHistory.add(ChatMessage(Role.USER, prompt))
+                if (closeConversation) {
+                    closeSession()
+                }
+            } catch (e: CancellationException) {
+                loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
+                emit(InferenceEvent.Finished(modelType))
+                throw e
+            } catch (e: IllegalArgumentException) {
+                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            } catch (e: IllegalStateException) {
+                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: "Unknown error"
+                loggingPort.error(TAG, "API request failed. exception=${e::class.java.simpleName} message=$errorMsg", e)
+                emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
             }
-        } catch (e: CancellationException) {
-            loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
-            emit(InferenceEvent.Finished(modelType))
-            throw e
-        } catch (e: IllegalArgumentException) {
-            loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
-            emit(InferenceEvent.Error(e, modelType))
-            return@flow
-        } catch (e: IllegalStateException) {
-            loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
-            emit(InferenceEvent.Error(e, modelType))
-            return@flow
-        } catch (e: Exception) {
-            val errorMsg = e.message ?: "Unknown error"
-            loggingPort.error(TAG, "API request failed. exception=${e::class.java.simpleName} message=$errorMsg", e)
-            emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     private suspend fun executePrompt(
         prompt: String,
@@ -103,27 +104,30 @@ class GoogleInferenceServiceImpl(
     ) {
         logImagePayloads(options)
 
-        val request = GoogleRequestMapper.mapToGenerateContentRequest(
-            prompt = prompt,
-            history = requestHistory,
-            options = options,
-        )
+        val request =
+            GoogleRequestMapper.mapToGenerateContentRequest(
+                prompt = prompt,
+                history = requestHistory,
+                options = options,
+            )
 
         loggingPort.info(
             TAG,
-            "Using Google GenAI SDK. model=$modelId reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}"
+            "Using Google GenAI SDK. model=$modelId reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}",
         )
         loggingPort.debug(
             TAG,
             @Suppress("MaxLineLength")
-            "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
+            "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(
+                request.config.toString(),
+            )}",
         )
 
         sdkClient.generateContentStream(
             modelId = modelId,
             contents = request.contents,
             config = request.config,
-            emitEvent = emitEvent
+            emitEvent = emitEvent,
         )
         emitEvent(InferenceEvent.Finished(modelType))
     }
@@ -158,32 +162,42 @@ class GoogleInferenceServiceImpl(
         val contents = mutableListOf<Content>()
 
         sessionMessages.forEach { msg ->
-            val metadata = if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
-                runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
-            } else null
+            val metadata =
+                if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
+                    runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
+                } else {
+                    null
+                }
 
             when (msg.role) {
                 Role.SYSTEM -> {} // handled via systemInstruction in config
-                Role.USER -> contents.add(
-                    Content.builder().role("user").parts(listOf(Part.fromText(msg.content))).build()
-                )
+                Role.USER ->
+                    contents.add(
+                        Content
+                            .builder()
+                            .role("user")
+                            .parts(listOf(Part.fromText(msg.content)))
+                            .build(),
+                    )
                 Role.ASSISTANT -> {
                     if (msg.id.startsWith("compact-summary-")) {
                         contents.add(
-                            Content.builder()
+                            Content
+                                .builder()
                                 .role("user")
                                 .parts(listOf(Part.fromText("[Conversation summary]\n${msg.content}")))
-                                .build()
+                                .build(),
                         )
                         return@forEach
                     }
                     val callId = metadata?.get("call_id")?.jsonPrimitive?.content
                     if (callId != null) {
                         contents.add(
-                            Content.builder()
+                            Content
+                                .builder()
                                 .role("user")
                                 .parts(listOf(buildFunctionResponsePart(callId, msg.content)))
-                                .build()
+                                .build(),
                         )
                         return@forEach
                     }
@@ -195,16 +209,24 @@ class GoogleInferenceServiceImpl(
                             val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
                             val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
                             val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-                            val args = runCatching {
-                                @Suppress("UNCHECKED_CAST")
-                                com.fasterxml.jackson.databind.ObjectMapper()
-                                    .readValue(argsJson, Map::class.java) as Map<String, Any>
-                            }.getOrElse { emptyMap() }
+                            val args =
+                                runCatching {
+                                    @Suppress("UNCHECKED_CAST")
+                                    com.fasterxml.jackson.databind
+                                        .ObjectMapper()
+                                        .readValue(argsJson, Map::class.java) as Map<String, Any>
+                                }.getOrElse { emptyMap() }
                             parts.add(Part.fromFunctionCall(callName, args))
                         }
                     }
                     if (parts.isNotEmpty()) {
-                        contents.add(Content.builder().role("model").parts(parts).build())
+                        contents.add(
+                            Content
+                                .builder()
+                                .role("model")
+                                .parts(parts)
+                                .build(),
+                        )
                     }
                 }
             }
@@ -221,41 +243,45 @@ class GoogleInferenceServiceImpl(
         if (allowToolCall && availableTools.isNotEmpty()) {
             configBuilder.tools(availableTools.map { it.toGoogleTool() })
             configBuilder.toolConfig(
-                ToolConfig.builder()
+                ToolConfig
+                    .builder()
                     .functionCallingConfig(
-                        FunctionCallingConfig.builder().mode(FunctionCallingConfigMode.Known.AUTO).build()
-                    )
-                    .build()
+                        FunctionCallingConfig.builder().mode(FunctionCallingConfigMode.Known.AUTO).build(),
+                    ).build(),
             )
         }
 
-        val textGate = ToolStreamGateSession(
-            port = toolStreamGatePort,
-            allowToolCall = allowToolCall,
-        )
-        val result = sdkClient.generateContentStream(
-            modelId = modelId,
-            contents = contents,
-            config = configBuilder.build(),
-            allowToolCall = allowToolCall,
-            emitEvent = { event ->
-                when (event) {
-                    is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                    else -> {}
-                }
-            },
-        )
+        val accumulatedText = StringBuilder()
+        val result =
+            sdkClient.generateContentStream(
+                modelId = modelId,
+                contents = contents,
+                config = configBuilder.build(),
+                allowToolCall = allowToolCall,
+                emitEvent = { event ->
+                    when (event) {
+                        is InferenceEvent.PartialResponse -> {
+                            accumulatedText.append(event.chunk)
+                            onTextToken(event.chunk)
+                        }
+                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                        else -> {}
+                    }
+                },
+            )
 
-        val toolCalls = result.functionCall?.let { fc ->
-            val name = fc.name().orElse(null) ?: return@let null
-            val argsJson = toolEnvelopeParserPort.coerceProviderArguments(
-                toolName = name,
-                argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
-            ).argumentsJson
-            listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
-        } ?: emptyList()
-        val bufferedText = textGate.finish(hasNativeToolCalls = toolCalls.isNotEmpty(), onTextToken)
+        val toolCalls =
+            result.functionCall?.let { fc ->
+                val name = fc.name().orElse(null) ?: return@let null
+                val argsJson =
+                    toolEnvelopeParserPort
+                        .coerceProviderArguments(
+                            toolName = name,
+                            argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
+                        ).argumentsJson
+                listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
+            } ?: emptyList()
+        val bufferedText = accumulatedText.toString()
 
         return AgentModelTurnResult(
             assistantText = bufferedText.takeIf { it.isNotBlank() },
@@ -282,7 +308,7 @@ class GoogleInferenceServiceImpl(
         loggingPort.debug(
             TAG,
             @Suppress("MaxLineLength")
-            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
+            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}",
         )
         return historyWithSystemPrompt
     }
@@ -309,23 +335,25 @@ class GoogleInferenceServiceImpl(
         if (options.imageUris.isEmpty()) {
             return
         }
-        val payloads = runCatching {
-            ImagePayloads.fromUris(options.imageUris)
-        }.getOrElse { error ->
-            loggingPort.error(
-                TAG,
-                "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
-                error,
-            )
-            return
-        }
+        val payloads =
+            runCatching {
+                ImagePayloads.fromUris(options.imageUris)
+            }.getOrElse { error ->
+                loggingPort.error(
+                    TAG,
+                    "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
+                    error,
+                )
+                return
+            }
 
-        val details = payloads.joinToString(separator = "; ") { payload ->
-            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
-        }
+        val details =
+            payloads.joinToString(separator = "; ") { payload ->
+                "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+            }
         loggingPort.info(
             TAG,
-            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details"
+            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details",
         )
     }
 }

@@ -5,7 +5,6 @@ package com.browntowndev.pocketcrew.feature.inference
  * Supports both web search and image inspection tools.
  */
 class ToolPromptComposer {
-
     fun compose(
         baseSystemPrompt: String?,
         includeSearchTool: Boolean = true,

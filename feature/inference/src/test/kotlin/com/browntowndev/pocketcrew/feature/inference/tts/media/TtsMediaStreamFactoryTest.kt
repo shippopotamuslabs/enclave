@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference.tts.media
 
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.domain.port.media.TtsMediaStreamFactoryPort
 import com.browntowndev.pocketcrew.feature.inference.AndroidLoggingAdapter
 import com.browntowndev.pocketcrew.feature.inference.GoogleGenAiClientProviderPort
 import com.browntowndev.pocketcrew.feature.inference.OpenAiClientProviderPort
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class TtsMediaStreamFactoryTest {
-
     private val httpClient: OkHttpClient = OkHttpClient()
     private val openAiClientProvider: OpenAiClientProviderPort = mockk()
     private val googleClientProvider: GoogleGenAiClientProviderPort = mockk()
@@ -23,12 +21,13 @@ class TtsMediaStreamFactoryTest {
 
     @BeforeEach
     fun setUp() {
-        factory = TtsMediaStreamFactory(
-            httpClient = httpClient,
-            openAiClientProvider = openAiClientProvider,
-            googleClientProvider = googleClientProvider,
-            logger = logger,
-        )
+        factory =
+            TtsMediaStreamFactory(
+                httpClient = httpClient,
+                openAiClientProvider = openAiClientProvider,
+                googleClientProvider = googleClientProvider,
+                logger = logger,
+            )
     }
 
     @Test

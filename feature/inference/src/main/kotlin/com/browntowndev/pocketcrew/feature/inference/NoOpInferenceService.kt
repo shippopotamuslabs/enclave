@@ -15,26 +15,35 @@ import javax.inject.Singleton
  * Instead of crashing, it emits an error event when a prompt is sent.
  */
 @Singleton
-class NoOpInferenceService @Inject constructor(
-    private val modelType: ModelType
-) : LlmInferencePort {
+class NoOpInferenceService
+    @Inject
+    constructor(
+        private val modelType: ModelType,
+    ) : LlmInferencePort {
+        override fun sendPrompt(
+            prompt: String,
+            closeConversation: Boolean,
+        ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
-        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
-    }
+        override suspend fun setHistory(messages: List<ChatMessage>) {
+            // No-op
+        }
 
-    override suspend fun setHistory(messages: List<ChatMessage>) {
-        // No-op
-    }
+        override suspend fun closeSession() {
+            // No-op
+        }
 
-    override suspend fun closeSession() {
-        // No-op
+        override fun sendPrompt(
+            prompt: String,
+            options: GenerationOptions,
+            closeConversation: Boolean,
+        ): Flow<InferenceEvent> =
+            flow {
+                emit(
+                    InferenceEvent.Error(
+                        cause = IllegalStateException("${modelType.displayName()} model is not available. Please download it first."),
+                        modelType = modelType,
+                    ),
+                )
+            }
     }
-
-    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        emit(InferenceEvent.Error(
-            cause = IllegalStateException("${modelType.displayName()} model is not available. Please download it first."),
-            modelType = modelType
-        ))
-    }
-}

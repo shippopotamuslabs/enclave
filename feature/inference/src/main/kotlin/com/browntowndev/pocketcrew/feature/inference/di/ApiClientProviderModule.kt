@@ -15,22 +15,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ApiClientProviderModule {
+    @Binds
+    @Singleton
+    abstract fun bindOpenAiClientProvider(impl: OpenAiInferenceClientProvider): OpenAiClientProviderPort
 
     @Binds
     @Singleton
-    abstract fun bindOpenAiClientProvider(
-        impl: OpenAiInferenceClientProvider,
-    ): OpenAiClientProviderPort
+    abstract fun bindAnthropicClientProvider(impl: AnthropicInferenceClientProvider): AnthropicClientProviderPort
 
     @Binds
     @Singleton
-    abstract fun bindAnthropicClientProvider(
-        impl: AnthropicInferenceClientProvider,
-    ): AnthropicClientProviderPort
-
-    @Binds
-    @Singleton
-    abstract fun bindGoogleGenAiClientProvider(
-        impl: GoogleGenAiInferenceClientProvider,
-    ): GoogleGenAiClientProviderPort
+    abstract fun bindGoogleGenAiClientProvider(impl: GoogleGenAiInferenceClientProvider): GoogleGenAiClientProviderPort
 }

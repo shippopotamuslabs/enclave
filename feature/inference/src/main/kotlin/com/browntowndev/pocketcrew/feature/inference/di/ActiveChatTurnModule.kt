@@ -13,7 +13,5 @@ import javax.inject.Singleton
 abstract class ActiveChatTurnModule {
     @Binds
     @Singleton
-    abstract fun bindActiveChatTurnSnapshotPort(
-        store: ActiveChatTurnStore,
-    ): ActiveChatTurnSnapshotPort
+    abstract fun bindActiveChatTurnSnapshotPort(store: ActiveChatTurnStore): ActiveChatTurnSnapshotPort
 }

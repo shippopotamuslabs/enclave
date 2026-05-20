@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
@@ -36,16 +35,21 @@ object OpenAiRequestMapper {
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): ChatCompletionCreateParams {
         val provider = options.apiProvider
         val optModelId = options.modelId
-        val parameterSupport = if (provider != null && optModelId != null) {
-            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
-        } else null
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
 
-        val builder = ChatCompletionCreateParams.builder()
-            .model(optModelId ?: modelId)
+        val builder =
+            ChatCompletionCreateParams
+                .builder()
+                .model(optModelId ?: modelId)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
         val systemMessages = mutableListOf<String>()
@@ -69,17 +73,18 @@ object OpenAiRequestMapper {
             messages.add(
                 0,
                 ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam.builder()
+                    ChatCompletionSystemMessageParam
+                        .builder()
                         .content(finalSystemPrompt)
-                        .build()
-                )
+                        .build(),
+                ),
             )
         }
 
         messages.add(
             ChatCompletionMessageParam.ofUser(
-                buildChatCompletionUserMessage(prompt, options.imageUris)
-            )
+                buildChatCompletionUserMessage(prompt, options.imageUris),
+            ),
         )
 
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
@@ -107,10 +112,12 @@ object OpenAiRequestMapper {
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): ResponseCreateParams {
-        val builder = ResponseCreateParams.builder()
-            .model(modelId)
+        val builder =
+            ResponseCreateParams
+                .builder()
+                .model(modelId)
 
         val messages = mutableListOf<ResponseInputItem>()
         val systemMessages = mutableListOf<String>()
@@ -122,18 +129,20 @@ object OpenAiRequestMapper {
             }
 
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            val role = when (msg.role) {
-                Role.USER -> ResponseInputItem.Message.Role.of("user")
-                Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
-                Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
-            }
+            val role =
+                when (msg.role) {
+                    Role.USER -> ResponseInputItem.Message.Role.of("user")
+                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
+                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
+                }
             messages.add(
                 ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
+                    ResponseInputItem.Message
+                        .builder()
                         .role(role)
                         .addInputTextContent(sanitizedContent)
-                        .build()
-                )
+                        .build(),
+                ),
             )
         }
 
@@ -166,127 +175,153 @@ object OpenAiRequestMapper {
         appendStopToolsWarning: Boolean,
     ): ResponseCreateParams {
         // Truncate large tool results when context window is known
-        val truncationAvailableTokens = options.contextWindow?.let { cw ->
-            val budget = ContextWindowPlanner.budgetFor(
-                contextWindowTokens = cw,
-                options = options,
-                modelId = initialResponse.responseId ?: "",
-                tokenCounter = JTokkitTokenCounter,
-            )
-            val usedTokens = ContextWindowPlanner.estimatePromptTokens(
-                history = history,
-                systemPrompt = null,
-                currentPrompt = prompt,
-                toolResultPayloads = results.map { it.second },
-                modelId = initialResponse.responseId ?: "",
-                tokenCounter = JTokkitTokenCounter,
-            ) ?: 0
-            (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
-        }
+        val truncationAvailableTokens =
+            options.contextWindow?.let { cw ->
+                val budget =
+                    ContextWindowPlanner.budgetFor(
+                        contextWindowTokens = cw,
+                        options = options,
+                        modelId = initialResponse.responseId ?: "",
+                        tokenCounter = JTokkitTokenCounter,
+                    )
+                val usedTokens =
+                    ContextWindowPlanner.estimatePromptTokens(
+                        history = history,
+                        systemPrompt = null,
+                        currentPrompt = prompt,
+                        toolResultPayloads = results.map { it.second },
+                        modelId = initialResponse.responseId ?: "",
+                        tokenCounter = JTokkitTokenCounter,
+                    ) ?: 0
+                (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
+            }
         val builder = currentParams.toBuilder()
-        val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
-            currentParams.input().get().asResponse().toMutableList()
-        } else {
-            mutableListOf()
-        }
+        val inputItems =
+            if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
+                currentParams
+                    .input()
+                    .get()
+                    .asResponse()
+                    .toMutableList()
+            } else {
+                mutableListOf()
+            }
 
         initialResponse.assistantMessageText
             .takeIf { it.isNotBlank() }
             ?.let { assistantText ->
-                inputItems += ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
-                        .role(ResponseInputItem.Message.Role.of("assistant"))
-                        .addInputTextContent(assistantText)
-                        .build()
-                )
+                inputItems +=
+                    ResponseInputItem.ofMessage(
+                        ResponseInputItem.Message
+                            .builder()
+                            .role(ResponseInputItem.Message.Role.of("assistant"))
+                            .addInputTextContent(assistantText)
+                            .build(),
+                    )
             }
 
         // Map results back to their corresponding function calls in the initial response
         results.forEach { (toolCall, resultJson) ->
-            val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
-                NativeToolResultFormatter.truncateForApiContext(
-                    resultJson = resultJson,
-                    availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
-                    tokenCounter = JTokkitTokenCounter,
-                    modelId = initialResponse.responseId ?: "",
-                )
-            } else {
-                resultJson
-            }
+            val truncatedResult =
+                if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
+                    NativeToolResultFormatter.truncateForApiContext(
+                        resultJson = resultJson,
+                        availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
+                        tokenCounter = JTokkitTokenCounter,
+                        modelId = initialResponse.responseId ?: "",
+                    )
+                } else {
+                    resultJson
+                }
             val index = initialResponse.functionCalls.indexOf(toolCall)
 
-            val callId = if (index != -1) {
-                initialResponse.providerToolCallIds.getOrElse(index) {
-                    throw IllegalStateException("Missing function call id at index $index for follow-up")
+            val callId =
+                if (index != -1) {
+                    initialResponse.providerToolCallIds.getOrElse(index) {
+                        throw IllegalStateException("Missing function call id at index $index for follow-up")
+                    }
+                } else {
+                    "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
                 }
-            } else {
-                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
-            }
 
-            val functionItemId = if (index != -1) {
-                initialResponse.providerToolItemIds.getOrElse(index) {
-                    "fc_${callId}"
+            val functionItemId =
+                if (index != -1) {
+                    initialResponse.providerToolItemIds.getOrElse(index) {
+                        "fc_$callId"
+                    }
+                } else {
+                    "fc_$callId"
                 }
-            } else {
-                "fc_${callId}"
-            }
 
-            inputItems += ResponseInputItem.ofFunctionCall(
-                ResponseFunctionToolCall.builder()
-                    .id(functionItemId)
-                    .callId(callId)
-                    .name(toolCall.toolName)
-                    .arguments(toolCall.argumentsJson)
-                    .build()
-            )
-            inputItems += ResponseInputItem.ofFunctionCallOutput(
-                ResponseInputItem.FunctionCallOutput.builder()
-                    .id("fco_${callId}")
-                    .callId(callId)
-                    .output(truncatedResult)
-                    .build()
-            )
+            inputItems +=
+                ResponseInputItem.ofFunctionCall(
+                    ResponseFunctionToolCall
+                        .builder()
+                        .id(functionItemId)
+                        .callId(callId)
+                        .name(toolCall.toolName)
+                        .arguments(toolCall.argumentsJson)
+                        .build(),
+                )
+            inputItems +=
+                ResponseInputItem.ofFunctionCallOutput(
+                    ResponseInputItem.FunctionCallOutput
+                        .builder()
+                        .id("fco_$callId")
+                        .callId(callId)
+                        .output(truncatedResult)
+                        .build(),
+                )
         }
 
         if (appendStopToolsWarning) {
-            inputItems += ResponseInputItem.ofMessage(
-                ResponseInputItem.Message.builder()
-                    .role(ResponseInputItem.Message.Role.of("user"))
-                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
-                    .build()
-            )
+            inputItems +=
+                ResponseInputItem.ofMessage(
+                    ResponseInputItem.Message
+                        .builder()
+                        .role(ResponseInputItem.Message.Role.of("user"))
+                        .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
+                        .build(),
+                )
         }
 
         builder.inputOfResponse(inputItems)
         return builder.build()
     }
 
-    private fun toContent(message: ChatMessage): ChatCompletionMessageParam {
-        return when (message.role) {
-            Role.USER -> ChatCompletionMessageParam.ofUser(
-                ChatCompletionUserMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
-            Role.ASSISTANT -> ChatCompletionMessageParam.ofAssistant(
-                ChatCompletionAssistantMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
-            Role.SYSTEM -> ChatCompletionMessageParam.ofSystem(
-                ChatCompletionSystemMessageParam.builder()
-                    .content(ImagePayloads.stripBase64DataUris(message.content))
-                    .build()
-            )
+    private fun toContent(message: ChatMessage): ChatCompletionMessageParam =
+        when (message.role) {
+            Role.USER ->
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.ASSISTANT ->
+                ChatCompletionMessageParam.ofAssistant(
+                    ChatCompletionAssistantMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.SYSTEM ->
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
         }
-    }
 
     private fun ToolDefinition.toResponsesTool(): FunctionTool {
-        val paramsBuilder = FunctionTool.Parameters.builder()
-            .putAdditionalProperty("type", JsonValue.from("object"))
-            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
-            .putAdditionalProperty("required", JsonValue.from(schema.required))
-            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        val paramsBuilder =
+            FunctionTool.Parameters
+                .builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
+                .putAdditionalProperty("required", JsonValue.from(schema.required))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
             if (defs is kotlinx.serialization.json.JsonObject) {
                 paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toJsonMap()))
@@ -297,7 +332,8 @@ object OpenAiRequestMapper {
                 paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toJsonMap()))
             }
         }
-        return FunctionTool.builder()
+        return FunctionTool
+            .builder()
             .name(name)
             .description(description)
             .parameters(paramsBuilder.build())
@@ -313,36 +349,41 @@ object OpenAiRequestMapper {
         imageUris: List<String>,
     ): ChatCompletionUserMessageParam {
         if (imageUris.isEmpty()) {
-            return ChatCompletionUserMessageParam.builder()
+            return ChatCompletionUserMessageParam
+                .builder()
                 .content(prompt)
                 .build()
         }
 
-        val parts = buildList {
-            add(
-                ChatCompletionContentPart.ofText(
-                    ChatCompletionContentPartText.builder()
-                        .text(prompt)
-                        .build()
-                )
-            )
-            ImagePayloads.fromUris(imageUris).forEach { payload ->
-                ImagePayloads.validate(payload)
+        val parts =
+            buildList {
                 add(
-                    ChatCompletionContentPart.ofImageUrl(
-                        ChatCompletionContentPartImage.builder()
-                            .imageUrl(
-                                ChatCompletionContentPartImage.ImageUrl.builder()
-                                    .url(payload.dataUrl)
-                                    .build()
-                            )
-                            .build()
-                    )
+                    ChatCompletionContentPart.ofText(
+                        ChatCompletionContentPartText
+                            .builder()
+                            .text(prompt)
+                            .build(),
+                    ),
                 )
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ChatCompletionContentPart.ofImageUrl(
+                            ChatCompletionContentPartImage
+                                .builder()
+                                .imageUrl(
+                                    ChatCompletionContentPartImage.ImageUrl
+                                        .builder()
+                                        .url(payload.dataUrl)
+                                        .build(),
+                                ).build(),
+                        ),
+                    )
+                }
             }
-        }
 
-        return ChatCompletionUserMessageParam.builder()
+        return ChatCompletionUserMessageParam
+            .builder()
             .contentOfArrayOfContentParts(parts)
             .build()
     }
@@ -351,17 +392,20 @@ object OpenAiRequestMapper {
         prompt: String,
         imageUris: List<String>,
     ): ResponseInputItem.Message {
-        val builder = ResponseInputItem.Message.builder()
-            .role(ResponseInputItem.Message.Role.of("user"))
-            .addInputTextContent(prompt)
+        val builder =
+            ResponseInputItem.Message
+                .builder()
+                .role(ResponseInputItem.Message.Role.of("user"))
+                .addInputTextContent(prompt)
 
         ImagePayloads.fromUris(imageUris).forEach { payload ->
             ImagePayloads.validate(payload)
             builder.addContent(
-                ResponseInputImage.builder()
+                ResponseInputImage
+                    .builder()
                     .detail(ResponseInputImage.Detail.AUTO)
                     .imageUrl(payload.dataUrl)
-                    .build()
+                    .build(),
             )
         }
 
@@ -369,12 +413,14 @@ object OpenAiRequestMapper {
     }
 }
 
-internal fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
-    val paramsBuilder = FunctionParameters.builder()
-        .putAdditionalProperty("type", JsonValue.from("object"))
-        .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
-        .putAdditionalProperty("required", JsonValue.from(schema.required))
-        .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+internal fun ToolDefinition.toChatCompletionTool(strict: Boolean = false): ChatCompletionFunctionTool {
+    val paramsBuilder =
+        FunctionParameters
+            .builder()
+            .putAdditionalProperty("type", JsonValue.from("object"))
+            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toJsonMap()))
+            .putAdditionalProperty("required", JsonValue.from(schema.required))
+            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
     schema.fullSchemaOverride?.get("definitions")?.let { defs ->
         if (defs is kotlinx.serialization.json.JsonObject) {
             paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toJsonMap()))
@@ -385,16 +431,17 @@ internal fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
             paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toJsonMap()))
         }
     }
-    return ChatCompletionFunctionTool.builder()
+    return ChatCompletionFunctionTool
+        .builder()
         .function(
-            FunctionDefinition.builder()
+            FunctionDefinition
+                .builder()
                 .name(name)
                 .description(description)
                 .parameters(paramsBuilder.build())
-                .strict(true)
-                .build()
-        )
-        .build()
+                .strict(strict)
+                .build(),
+        ).build()
 }
 
 private fun kotlinx.serialization.json.JsonObject.toJsonMap(): Map<String, Any> {
@@ -406,8 +453,11 @@ private fun kotlinx.serialization.json.JsonObject.toJsonMap(): Map<String, Any> 
 private fun kotlinx.serialization.json.JsonElement.toJsonPrimitiveOrMap(): Any =
     when (this) {
         is kotlinx.serialization.json.JsonPrimitive -> {
-            if (isString) content
-            else content.toBooleanStrictOrNull() ?: content.toLongOrNull() ?: content.toDoubleOrNull() ?: content
+            if (isString) {
+                content
+            } else {
+                content.toBooleanStrictOrNull() ?: content.toLongOrNull() ?: content.toDoubleOrNull() ?: content
+            }
         }
         is kotlinx.serialization.json.JsonObject -> toJsonMap()
         is kotlinx.serialization.json.JsonArray -> map { it.toJsonPrimitiveOrMap() }

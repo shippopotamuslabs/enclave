@@ -1,5 +1,15 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.anthropic.client.AnthropicClient
+import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
+import com.anthropic.models.messages.RawMessageStreamEvent
+import com.anthropic.models.messages.TextBlockParam
+import com.anthropic.models.messages.ThinkingConfigEnabled
+import com.anthropic.models.messages.ToolResultBlockParam
+import com.anthropic.models.messages.ToolUseBlockParam
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
@@ -14,16 +24,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
-import com.anthropic.client.AnthropicClient
-import com.anthropic.core.JsonValue
-import com.anthropic.models.messages.ContentBlockParam
-import com.anthropic.models.messages.MessageCreateParams
-import com.anthropic.models.messages.MessageParam
-import com.anthropic.models.messages.RawMessageStreamEvent
-import com.anthropic.models.messages.TextBlockParam
-import com.anthropic.models.messages.ThinkingConfigEnabled
-import com.anthropic.models.messages.ToolResultBlockParam
-import com.anthropic.models.messages.ToolUseBlockParam
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
@@ -48,9 +48,9 @@ class AnthropicInferenceServiceImpl(
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
+    @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
 ) : RustCompatibleInferenceService {
-
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
         val toolUse: CapturedToolUse?,
@@ -82,69 +82,72 @@ class AnthropicInferenceServiceImpl(
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
-        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
-    }
+    override fun sendPrompt(
+        prompt: String,
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
 
     override fun sendPrompt(
         prompt: String,
         options: GenerationOptions,
-        closeConversation: Boolean
-    ): Flow<InferenceEvent> = flow {
-        try {
-            require(options.imageUris.size <= 20) {
-                "Anthropic API supports a maximum of 20 images per request."
-            }
-            val requestHistory = buildRequestHistory(options)
-            loggingPort.debug(
-                TAG,
-                @Suppress("MaxLineLength")
-                "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
-            )
-            executePrompt(prompt, options, requestHistory) { emit(it) }
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> =
+        flow {
+            try {
+                require(options.imageUris.size <= 20) {
+                    "Anthropic API supports a maximum of 20 images per request."
+                }
+                val requestHistory = buildRequestHistory(options)
+                loggingPort.debug(
+                    TAG,
+                    @Suppress("MaxLineLength")
+                    "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}",
+                )
+                executePrompt(prompt, options, requestHistory) { emit(it) }
 
-            conversationHistory.add(ChatMessage(Role.USER, prompt))
-            if (closeConversation) {
-                closeSession()
+                conversationHistory.add(ChatMessage(Role.USER, prompt))
+                if (closeConversation) {
+                    closeSession()
+                }
+            } catch (e: CancellationException) {
+                loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
+                emit(InferenceEvent.Finished(modelType))
+                throw e
+            } catch (e: IllegalArgumentException) {
+                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            } catch (e: IllegalStateException) {
+                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            } catch (e: Exception) {
+                val errorMsg = e.message ?: "Unknown error"
+                loggingPort.error(TAG, "API request failed. ${describeException(e)}", e)
+                emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
             }
-        } catch (e: CancellationException) {
-            loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
-            emit(InferenceEvent.Finished(modelType))
-            throw e
-        } catch (e: IllegalArgumentException) {
-            loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
-            emit(InferenceEvent.Error(e, modelType))
-            return@flow
-        } catch (e: IllegalStateException) {
-            loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
-            emit(InferenceEvent.Error(e, modelType))
-            return@flow
-        } catch (e: Exception) {
-            val errorMsg = e.message ?: "Unknown error"
-            loggingPort.error(TAG, "API request failed. ${describeException(e)}", e)
-            emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     private suspend fun executePrompt(
         prompt: String,
         options: GenerationOptions,
         requestHistory: List<ChatMessage>,
-        emitEvent: suspend (InferenceEvent) -> Unit
+        emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
         logImagePayloads(options)
 
-        val params = AnthropicRequestMapper.mapToMessageParams(
-            modelId = modelId,
-            prompt = prompt,
-            history = requestHistory,
-            options = options
-        )
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = modelId,
+                prompt = prompt,
+                history = requestHistory,
+                options = options,
+            )
 
         loggingPort.info(
             TAG,
             @Suppress("MaxLineLength")
-            "Using Anthropic Messages API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}"
+            "Using Anthropic Messages API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}",
         )
         logRequest(params)
         streamMessages(
@@ -173,9 +176,11 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val builder = MessageCreateParams.builder()
-            .model(modelId)
-            .maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
+        val builder =
+            MessageCreateParams
+                .builder()
+                .model(modelId)
+                .maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
 
         systemPrompt.takeIf { it.isNotBlank() }?.let { builder.system(it) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
@@ -186,41 +191,51 @@ class AnthropicInferenceServiceImpl(
         }
 
         sessionMessages.forEach { msg ->
-            val metadata = if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
-                runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
-            } else null
+            val metadata =
+                if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
+                    runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
+                } else {
+                    null
+                }
 
             when (msg.role) {
                 Role.SYSTEM -> {} // already in systemPrompt param
-                Role.USER -> builder.addMessage(
-                    MessageParam.builder().role(MessageParam.Role.USER).content(msg.content).build()
-                )
+                Role.USER ->
+                    builder.addMessage(
+                        MessageParam
+                            .builder()
+                            .role(MessageParam.Role.USER)
+                            .content(msg.content)
+                            .build(),
+                    )
                 Role.ASSISTANT -> {
                     if (msg.id.startsWith("compact-summary-")) {
                         builder.addMessage(
-                            MessageParam.builder()
+                            MessageParam
+                                .builder()
                                 .role(MessageParam.Role.USER)
                                 .content("[Conversation summary]\n${msg.content}")
-                                .build()
+                                .build(),
                         )
                         return@forEach
                     }
                     val callId = metadata?.get("call_id")?.jsonPrimitive?.content
                     if (callId != null) {
                         builder.addMessage(
-                            MessageParam.builder()
+                            MessageParam
+                                .builder()
                                 .role(MessageParam.Role.USER)
                                 .contentOfBlockParams(
                                     listOf(
                                         ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam.builder()
+                                            ToolResultBlockParam
+                                                .builder()
                                                 .toolUseId(callId)
                                                 .content(msg.content)
-                                                .build()
-                                        )
-                                    )
-                                )
-                                .build()
+                                                .build(),
+                                        ),
+                                    ),
+                                ).build(),
                         )
                         return@forEach
                     }
@@ -237,25 +252,27 @@ class AnthropicInferenceServiceImpl(
                             val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
                             contentBlocks.add(
                                 ContentBlockParam.ofToolUse(
-                                    ToolUseBlockParam.builder()
+                                    ToolUseBlockParam
+                                        .builder()
                                         .id(rawCallId)
                                         .name(callName)
                                         .input(
-                                            ToolUseBlockParam.Input.builder()
+                                            ToolUseBlockParam.Input
+                                                .builder()
                                                 .putAllAdditionalProperties(toolUseInputProperties(argsJson))
-                                                .build()
-                                        )
-                                        .build()
-                                )
+                                                .build(),
+                                        ).build(),
+                                ),
                             )
                         }
                     }
                     if (contentBlocks.isNotEmpty()) {
                         builder.addMessage(
-                            MessageParam.builder()
+                            MessageParam
+                                .builder()
                                 .role(MessageParam.Role.ASSISTANT)
                                 .contentOfBlockParams(contentBlocks)
-                                .build()
+                                .build(),
                         )
                     }
                 }
@@ -266,46 +283,50 @@ class AnthropicInferenceServiceImpl(
             availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
         }
 
-        val textGate = ToolStreamGateSession(
-            port = toolStreamGatePort,
-            allowToolCall = allowToolCall,
-        )
-        val response = streamMessages(builder.build()) { event ->
-            when (event) {
-                is InferenceEvent.PartialResponse -> textGate.onTextToken(event.chunk, onTextToken)
-                is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                else -> {}
+        val accumulatedText = StringBuilder()
+        val response =
+            streamMessages(builder.build()) { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse -> {
+                        accumulatedText.append(event.chunk)
+                        onTextToken(event.chunk)
+                    }
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    else -> {}
+                }
             }
-        }
 
-        val toolCalls = response.toolUse?.let { tu ->
-            listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
-        } ?: emptyList()
-        val bufferedText = textGate.finish(hasNativeToolCalls = toolCalls.isNotEmpty(), onTextToken)
+        val toolCalls =
+            response.toolUse?.let { tu ->
+                listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
+            } ?: emptyList()
+        val bufferedText = accumulatedText.toString()
 
         return AgentModelTurnResult(
             assistantText = bufferedText.takeIf { it.isNotBlank() },
             toolCalls = toolCalls,
-            finishReason = if (toolCalls.isNotEmpty()) {
-                AgentFinishReason.ToolUse
-            } else {
-                response.stopReason
-                    ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
-                    ?: AgentFinishReason.Stop
-            },
+            finishReason =
+                if (toolCalls.isNotEmpty()) {
+                    AgentFinishReason.ToolUse
+                } else {
+                    response.stopReason
+                        ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
+                        ?: AgentFinishReason.Stop
+                },
         )
     }
 
     private fun resolveThinkingBudget(options: GenerationOptions): Long? =
         when {
             options.reasoningBudget > 0 -> options.reasoningBudget.toLong().coerceAtLeast(1024L)
-            else -> when (options.reasoningEffort) {
-                null -> null
-                ApiReasoningEffort.LOW -> 1024L
-                ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
-                ApiReasoningEffort.HIGH -> 2048L
-                ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
-            }
+            else ->
+                when (options.reasoningEffort) {
+                    null -> null
+                    ApiReasoningEffort.LOW -> 1024L
+                    ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
+                    ApiReasoningEffort.HIGH -> 2048L
+                    ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
+                }
         }
 
     private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {
@@ -313,14 +334,14 @@ class AnthropicInferenceServiceImpl(
         loggingPort.debug(
             TAG,
             @Suppress("MaxLineLength")
-            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
+            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}",
         )
         return historyWithSystemPrompt
     }
 
     private fun mergeSystemPrompt(
         history: List<ChatMessage>,
-        systemPrompt: String?
+        systemPrompt: String?,
     ): List<ChatMessage> {
         val normalizedPrompt = systemPrompt?.trim()?.takeIf { it.isNotEmpty() } ?: return history
         if (history.any { it.role == Role.SYSTEM && it.content == normalizedPrompt }) {
@@ -344,9 +365,9 @@ class AnthropicInferenceServiceImpl(
             TAG,
             "Messages API request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${
                 truncateForLogs(
-                    params.toString()
+                    params.toString(),
                 )
-            }"
+            }",
         )
     }
 
@@ -361,27 +382,29 @@ class AnthropicInferenceServiceImpl(
         if (options.imageUris.isEmpty()) {
             return
         }
-        val payloads = runCatching {
-            ImagePayloads.fromUris(options.imageUris)
-        }.getOrElse { error ->
-            loggingPort.error(
-                TAG,
-                "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
-                error,
-            )
-            return
-        }
-
-        val details = payloads.joinToString(separator = "; ") { payload ->
-            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${
-                payload.sha256.take(
-                    8
+        val payloads =
+            runCatching {
+                ImagePayloads.fromUris(options.imageUris)
+            }.getOrElse { error ->
+                loggingPort.error(
+                    TAG,
+                    "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
+                    error,
                 )
-            }"
-        }
+                return
+            }
+
+        val details =
+            payloads.joinToString(separator = "; ") { payload ->
+                "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${
+                    payload.sha256.take(
+                        8,
+                    )
+                }"
+            }
         loggingPort.info(
             TAG,
-            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details"
+            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details",
         )
     }
 
@@ -398,7 +421,7 @@ class AnthropicInferenceServiceImpl(
 
     private suspend fun streamMessages(
         params: MessageCreateParams,
-        emitEvent: suspend (InferenceEvent) -> Unit
+        emitEvent: suspend (InferenceEvent) -> Unit,
     ): StreamedAnthropicResponse {
         logRequest(params)
         client.messages().createStreaming(params).use { streamResponse ->
@@ -432,13 +455,13 @@ class AnthropicInferenceServiceImpl(
                     if (block.isToolUse()) {
                         val startedToolUse = block.asToolUse()
                         toolUseIndex = startEvent.index()
-                        pendingToolUses[startEvent.index()] = PendingToolUse(
-                            id = startedToolUse.id(),
-                            toolName = startedToolUse.name(),
-                            initialInput = startedToolUse._input(),
-                        )
+                        pendingToolUses[startEvent.index()] =
+                            PendingToolUse(
+                                id = startedToolUse.id(),
+                                toolName = startedToolUse.name(),
+                                initialInput = startedToolUse._input(),
+                            )
                     }
-
                 }
                 val contentBlockDelta = event.contentBlockDelta()
                 if (contentBlockDelta.isPresent) {
@@ -473,11 +496,18 @@ class AnthropicInferenceServiceImpl(
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
+                        "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount",
                     )
                 }
                 if (event.messageDelta().isPresent) {
-                    stopReason = event.messageDelta().get().delta().stopReason().map { it.toString() }.orElse(stopReason)
+                    stopReason =
+                        event
+                            .messageDelta()
+                            .get()
+                            .delta()
+                            .stopReason()
+                            .map { it.toString() }
+                            .orElse(stopReason)
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
                 if (event.contentBlockStart().isPresent) {
@@ -485,7 +515,7 @@ class AnthropicInferenceServiceImpl(
                         TAG,
                         "Anthropic stream content block start model=$modelId type=${
                             describeStreamEvent(event)
-                        }"
+                        }",
                     )
                 }
                 if (event.contentBlockStop().isPresent) {
@@ -496,9 +526,10 @@ class AnthropicInferenceServiceImpl(
                 }
             }
 
-            val capturedToolUse = toolUseIndex
-                ?.let { pendingToolUses[it] }
-                ?.toCapturedToolUse()
+            val capturedToolUse =
+                toolUseIndex
+                    ?.let { pendingToolUses[it] }
+                    ?.toCapturedToolUse()
             return StreamedAnthropicResponse(
                 emittedAny = emittedAny,
                 toolUse = capturedToolUse,
@@ -511,27 +542,36 @@ class AnthropicInferenceServiceImpl(
         CapturedToolUse(
             id = id,
             toolName = toolName,
-            argumentsJson = if (streamedInputJson.isNotEmpty()) {
-                toolUseArgumentsJson(toolName, streamedInputJson.toString())
-            } else {
-                toolUseArgumentsJson(toolName, initialInput)
-            },
+            argumentsJson =
+                if (streamedInputJson.isNotEmpty()) {
+                    toolUseArgumentsJson(toolName, streamedInputJson.toString())
+                } else {
+                    toolUseArgumentsJson(toolName, initialInput)
+                },
         )
 
-    private fun toolUseArgumentsJson(toolName: String, input: JsonValue): String {
+    private fun toolUseArgumentsJson(
+        toolName: String,
+        input: JsonValue,
+    ): String {
         val properties: Map<*, *> = input.convert(Map::class.java) ?: emptyMap<Any?, Any?>()
         return canonicalToolArgumentsJson(toolName, properties)
     }
 
-    private fun toolUseArgumentsJson(toolName: String, inputJson: String): String =
-        canonicalToolArgumentsJson(toolName, parseToolInputJson(inputJson))
+    private fun toolUseArgumentsJson(
+        toolName: String,
+        inputJson: String,
+    ): String = canonicalToolArgumentsJson(toolName, parseToolInputJson(inputJson))
 
-    private fun canonicalToolArgumentsJson(toolName: String, properties: Map<*, *>): String {
-        return toolEnvelopeParserPort.coerceProviderArguments(
-            toolName = toolName,
-            argsJson = TOOL_INPUT_JSON_MAPPER.writeValueAsString(properties),
-        ).argumentsJson
-    }
+    private fun canonicalToolArgumentsJson(
+        toolName: String,
+        properties: Map<*, *>,
+    ): String =
+        toolEnvelopeParserPort
+            .coerceProviderArguments(
+                toolName = toolName,
+                argsJson = TOOL_INPUT_JSON_MAPPER.writeValueAsString(properties),
+            ).argumentsJson
 
     private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =
         parseToolInputJson(argumentsJson).entries.associate { (key, value) ->
@@ -542,7 +582,7 @@ class AnthropicInferenceServiceImpl(
         runCatching {
             TOOL_INPUT_JSON_MAPPER.readValue(
                 inputJson,
-                object : TypeReference<Map<String, Any?>>() {}
+                object : TypeReference<Map<String, Any?>>() {},
             )
         }.getOrElse { error ->
             throw IllegalArgumentException("Tool input JSON is invalid", error)

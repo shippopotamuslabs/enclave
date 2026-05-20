@@ -14,9 +14,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
@@ -256,7 +256,6 @@ class InferenceFactoryImpl
                                         ),
                                     modelId = apiCreds.modelId,
                                     modelType = modelType,
-                                    routing = apiConfig.openRouterRouting,
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
                                     toolStreamGatePort = toolStreamGatePort,
@@ -347,7 +346,7 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                    toolStreamGatePort = toolStreamGatePort,
+                                        toolStreamGatePort = toolStreamGatePort,
                                     )
                                 ApiProvider.GOOGLE -> {
                                     val client =
@@ -369,7 +368,7 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                    toolStreamGatePort = toolStreamGatePort,
+                                        toolStreamGatePort = toolStreamGatePort,
                                     )
                                 }
                                 ApiProvider.OPENROUTER ->
@@ -382,7 +381,6 @@ class InferenceFactoryImpl
                                             ),
                                         modelId = apiCreds.modelId,
                                         modelType = modelType,
-                                        routing = apiConfig.openRouterRouting,
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
@@ -484,17 +482,18 @@ class InferenceFactoryImpl
                     when (extension) {
                         "gguf" -> {
                             wrapWithRustLoop(
-                                service = LlamaInferenceServiceImpl(
-                                    sessionManager = llamaChatSessionManagerProvider.get(),
-                                    processThinkingTokens = processThinkingTokens,
-                                    loggingPort = loggingPort,
-                                    localModelRepository = localModelRepository,
-                                    activeModelProvider = activeModelProvider,
-                                    context = context,
-                                    modelType = modelType,
-                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                ),
+                                service =
+                                    LlamaInferenceServiceImpl(
+                                        sessionManager = llamaChatSessionManagerProvider.get(),
+                                        processThinkingTokens = processThinkingTokens,
+                                        loggingPort = loggingPort,
+                                        localModelRepository = localModelRepository,
+                                        activeModelProvider = activeModelProvider,
+                                        context = context,
+                                        modelType = modelType,
+                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                        toolStreamGatePort = toolStreamGatePort,
+                                    ),
                                 provider = "LLAMA",
                                 modelType = modelType,
                             )

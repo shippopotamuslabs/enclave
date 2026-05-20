@@ -19,35 +19,40 @@ import javax.inject.Singleton
  * - Google: WAV bytes from the batch synthesizeSpeech API (PCM wrapped in WAV header)
  */
 @Singleton
-class TtsMediaStreamFactory @Inject constructor(
-    private val httpClient: OkHttpClient,
-    private val openAiClientProvider: OpenAiClientProviderPort,
-    private val googleClientProvider: GoogleGenAiClientProviderPort,
-    private val logger: AndroidLoggingAdapter,
-) : TtsMediaStreamFactoryPort {
-
-    override fun create(
-        provider: ApiProvider,
-        apiKey: String,
-        baseUrl: String?,
-    ): TtsMediaStreamServicePort? = when (provider) {
-        ApiProvider.OPENAI -> OpenAiMediaStreamService(
-            clientProvider = openAiClientProvider,
-            apiKey = apiKey,
-            baseUrl = baseUrl,
-            logger = logger,
-        )
-        ApiProvider.XAI -> XAiMediaStreamService(
-            httpClient = httpClient,
-            apiKey = apiKey,
-            logger = logger,
-        )
-        ApiProvider.GOOGLE -> GoogleMediaStreamService(
-            modelsApiProvider = {
-                googleClientProvider.getClient(apiKey, baseUrl, apiVersion = "v1beta").models
-            },
-            logger = logger,
-        )
-        else -> null
+class TtsMediaStreamFactory
+    @Inject
+    constructor(
+        private val httpClient: OkHttpClient,
+        private val openAiClientProvider: OpenAiClientProviderPort,
+        private val googleClientProvider: GoogleGenAiClientProviderPort,
+        private val logger: AndroidLoggingAdapter,
+    ) : TtsMediaStreamFactoryPort {
+        override fun create(
+            provider: ApiProvider,
+            apiKey: String,
+            baseUrl: String?,
+        ): TtsMediaStreamServicePort? =
+            when (provider) {
+                ApiProvider.OPENAI ->
+                    OpenAiMediaStreamService(
+                        clientProvider = openAiClientProvider,
+                        apiKey = apiKey,
+                        baseUrl = baseUrl,
+                        logger = logger,
+                    )
+                ApiProvider.XAI ->
+                    XAiMediaStreamService(
+                        httpClient = httpClient,
+                        apiKey = apiKey,
+                        logger = logger,
+                    )
+                ApiProvider.GOOGLE ->
+                    GoogleMediaStreamService(
+                        modelsApiProvider = {
+                            googleClientProvider.getClient(apiKey, baseUrl, apiVersion = "v1beta").models
+                        },
+                        logger = logger,
+                    )
+                else -> null
+            }
     }
-}

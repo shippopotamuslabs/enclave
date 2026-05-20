@@ -1,13 +1,12 @@
 package com.browntowndev.pocketcrew.feature.inference
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
 import java.io.File
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ModuleDependencyTest {
-
     private val moduleRoot = File("src")
     private val buildFile = File("build.gradle.kts")
 
@@ -27,7 +26,8 @@ class ModuleDependencyTest {
     fun sourceFilesDoNotImportCoreData() {
         val violations = mutableListOf<String>()
 
-        moduleRoot.walkTopDown()
+        moduleRoot
+            .walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
             .forEach { file ->
                 file.readLines().forEachIndexed { index, line ->

@@ -1,21 +1,20 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.Base64ImageSource
+import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.ImageBlockParam
+import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
+import com.anthropic.models.messages.TextBlockParam
+import com.anthropic.models.messages.ThinkingConfigEnabled
+import com.anthropic.models.messages.Tool
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.anthropic.core.JsonValue
-import com.anthropic.models.messages.Base64ImageSource
-import com.anthropic.models.messages.MessageCreateParams
-import com.anthropic.models.messages.MessageParam
-import com.anthropic.models.messages.ContentBlockParam
-import com.anthropic.models.messages.ImageBlockParam
-import com.anthropic.models.messages.TextBlockParam
-import com.anthropic.models.messages.ThinkingConfigEnabled
-import com.anthropic.models.messages.Tool
 
 object AnthropicRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
@@ -27,16 +26,21 @@ object AnthropicRequestMapper {
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
-        options: GenerationOptions
+        options: GenerationOptions,
     ): MessageCreateParams {
         val provider = options.apiProvider
         val optModelId = options.modelId
-        val parameterSupport = if (provider != null && optModelId != null) {
-            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
-        } else null
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
 
-        val builder = MessageCreateParams.builder()
-            .model(modelId)
+        val builder =
+            MessageCreateParams
+                .builder()
+                .model(modelId)
 
         if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
             builder.maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
@@ -56,9 +60,10 @@ object AnthropicRequestMapper {
 
         resolveThinkingBudgetTokens(options)?.let {
             builder.thinking(
-                ThinkingConfigEnabled.builder()
+                ThinkingConfigEnabled
+                    .builder()
                     .budgetTokens(it)
-                    .build()
+                    .build(),
             )
         }
 
@@ -87,19 +92,20 @@ object AnthropicRequestMapper {
 
     private fun buildSystemPrompt(
         history: List<ChatMessage>,
-        systemPrompt: String?
+        systemPrompt: String?,
     ): String {
-        val parts = buildList {
-            systemPrompt
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let(::add)
-            history
-                .filterNot(::isSyntheticAssistantError)
-                .filter { it.role == Role.SYSTEM }
-                .mapNotNull { it.content.trim().takeIf(String::isNotEmpty) }
-                .forEach(::add)
-        }
+        val parts =
+            buildList {
+                systemPrompt
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(::add)
+                history
+                    .filterNot(::isSyntheticAssistantError)
+                    .filter { it.role == Role.SYSTEM }
+                    .mapNotNull { it.content.trim().takeIf(String::isNotEmpty) }
+                    .forEach(::add)
+            }
 
         return parts.joinToString(separator = "\n\n")
     }
@@ -107,13 +113,14 @@ object AnthropicRequestMapper {
     private fun resolveThinkingBudgetTokens(options: GenerationOptions): Long? =
         when {
             options.reasoningBudget > 0 -> options.reasoningBudget.toLong().coerceAtLeast(1024L)
-            else -> when (options.reasoningEffort) {
-                null -> null
-                ApiReasoningEffort.LOW -> 1024L
-                ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
-                ApiReasoningEffort.HIGH -> 2048L
-                ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
-            }
+            else ->
+                when (options.reasoningEffort) {
+                    null -> null
+                    ApiReasoningEffort.LOW -> 1024L
+                    ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
+                    ApiReasoningEffort.HIGH -> 2048L
+                    ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
+                }
         }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
@@ -124,32 +131,36 @@ object AnthropicRequestMapper {
         imageUris: List<String>,
     ): MessageParam {
         if (imageUris.isEmpty()) {
-            return MessageParam.builder()
+            return MessageParam
+                .builder()
                 .role(MessageParam.Role.USER)
                 .content(prompt)
                 .build()
         }
 
-        val blocks = buildList {
-            add(ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build()))
-            ImagePayloads.fromUris(imageUris).forEach { payload ->
-                ImagePayloads.validate(payload)
-                add(
-                    ContentBlockParam.ofImage(
-                        ImageBlockParam.builder()
-                            .source(
-                                Base64ImageSource.builder()
-                                    .data(payload.base64)
-                                    .mediaType(payload.mimeType.toAnthropicMediaType())
-                                    .build()
-                            )
-                            .build()
+        val blocks =
+            buildList {
+                add(ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build()))
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ContentBlockParam.ofImage(
+                            ImageBlockParam
+                                .builder()
+                                .source(
+                                    Base64ImageSource
+                                        .builder()
+                                        .data(payload.base64)
+                                        .mediaType(payload.mimeType.toAnthropicMediaType())
+                                        .build(),
+                                ).build(),
+                        ),
                     )
-                )
+                }
             }
-        }
 
-        return MessageParam.builder()
+        return MessageParam
+            .builder()
             .role(MessageParam.Role.USER)
             .contentOfBlockParams(blocks)
             .build()
@@ -165,17 +176,18 @@ object AnthropicRequestMapper {
 }
 
 internal fun ToolDefinition.toAnthropicTool(): Tool =
-    Tool.builder()
+    Tool
+        .builder()
         .name(name)
         .description(description)
         .inputSchema(
-            Tool.InputSchema.builder()
+            Tool.InputSchema
+                .builder()
                 .type(JsonValue.from("object"))
                 .properties(anthropicToolProperties())
                 .required(schema.required)
-                .build()
-        )
-        .strict(true)
+                .build(),
+        ).strict(true)
         .build()
 
 private fun ToolDefinition.anthropicToolProperties(): Tool.InputSchema.Properties {
@@ -189,11 +201,14 @@ private fun ToolDefinition.anthropicToolProperties(): Tool.InputSchema.Propertie
 private fun kotlinx.serialization.json.JsonElement.toAnthropicJsonValueExt(): JsonValue =
     when (this) {
         is kotlinx.serialization.json.JsonPrimitive -> {
-            if (isString) JsonValue.from(content)
-            else content.toBooleanStrictOrNull()?.let { JsonValue.from(it) }
-                ?: content.toLongOrNull()?.let { JsonValue.from(it) }
-                ?: content.toDoubleOrNull()?.let { JsonValue.from(it) }
-                ?: JsonValue.from(content)
+            if (isString) {
+                JsonValue.from(content)
+            } else {
+                content.toBooleanStrictOrNull()?.let { JsonValue.from(it) }
+                    ?: content.toLongOrNull()?.let { JsonValue.from(it) }
+                    ?: content.toDoubleOrNull()?.let { JsonValue.from(it) }
+                    ?: JsonValue.from(content)
+            }
         }
         is kotlinx.serialization.json.JsonObject -> {
             val map = mutableMapOf<String, JsonValue>()

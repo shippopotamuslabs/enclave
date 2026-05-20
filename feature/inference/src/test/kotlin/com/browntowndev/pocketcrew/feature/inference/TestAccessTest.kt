@@ -7,7 +7,10 @@ class TestAccessTest {
     fun runTest() {
         val p = ResponseCreateParams.builder().model("test").build()
         println("BUILDER METHODS:")
-        p.toBuilder().javaClass.methods.forEach { println(it.name) }
+        p
+            .toBuilder()
+            .javaClass.methods
+            .forEach { println(it.name) }
         println("PARAMS METHODS:")
         p.javaClass.methods.forEach { println(it.name) }
     }

@@ -18,9 +18,9 @@ interface ConversationManager {
      * @return The active LiteRtConversation instance
      */
     suspend fun getConversation(
-        modelType: ModelType, 
+        modelType: ModelType,
         options: GenerationOptions? = null,
-        onLoadingStarted: suspend () -> Unit = {}
+        onLoadingStarted: suspend () -> Unit = {},
     ): LiteRtConversation
 
     /**
@@ -44,7 +44,7 @@ interface ConversationManager {
     suspend fun closeEngine()
 
     /**
-     * Cancels the current ongoing generation. 
+     * Cancels the current ongoing generation.
      * This signals the underlying tool executor to abort any ongoing or pending tool calls
      * to safely interrupt the native C++ engine.
      */

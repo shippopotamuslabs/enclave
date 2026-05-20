@@ -8,17 +8,17 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LocalToolResultPolicyTest {
-
     @Test
     fun `evaluate appends stop warning even when truncation returns an error payload`() {
-        val decision = LocalToolResultPolicy.evaluate(
-            rawResultJson = """{"results":[{"title":"One","url":"https://example.com","content":"short"}]}""",
-            contextWindowTokens = 2_000,
-            currentSystemPrompt = "x ".repeat(4_000),
-            history = listOf(ChatMessage(Role.USER, "hello")),
-            transientToolResultTokens = 0,
-            modelId = null,
-        )
+        val decision =
+            LocalToolResultPolicy.evaluate(
+                rawResultJson = """{"results":[{"title":"One","url":"https://example.com","content":"short"}]}""",
+                contextWindowTokens = 2_000,
+                currentSystemPrompt = "x ".repeat(4_000),
+                history = listOf(ChatMessage(Role.USER, "hello")),
+                transientToolResultTokens = 0,
+                modelId = null,
+            )
 
         assertTrue(
             decision.finalResult.contains("""{"error": "cannot read page, context window too full"}"""),
@@ -35,14 +35,15 @@ class LocalToolResultPolicyTest {
 
     @Test
     fun `evaluate does not treat error string value as error payload`() {
-        val decision = LocalToolResultPolicy.evaluate(
-            rawResultJson = """{"chat_id":"chat-1","query":"error","total_results":0,"returned_results":0,"messages":[]}""",
-            contextWindowTokens = 8_000,
-            currentSystemPrompt = "You can search chats.",
-            history = listOf(ChatMessage(Role.USER, "search this chat for error")),
-            transientToolResultTokens = 0,
-            modelId = null,
-        )
+        val decision =
+            LocalToolResultPolicy.evaluate(
+                rawResultJson = """{"chat_id":"chat-1","query":"error","total_results":0,"returned_results":0,"messages":[]}""",
+                contextWindowTokens = 8_000,
+                currentSystemPrompt = "You can search chats.",
+                history = listOf(ChatMessage(Role.USER, "search this chat for error")),
+                transientToolResultTokens = 0,
+                modelId = null,
+            )
 
         assertFalse(decision.hasErrorPayload)
         assertTrue(decision.shouldTrackTransientToolResult)

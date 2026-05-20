@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference.llama
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for GpuProfiler - tests the backend routing logic.
@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Assertions.*
  * The fallback detection uses Build.HARDWARE which is platform-dependent.
  */
 class GpuProfilerTest {
-
     @Test
     fun `LlamaBackend - fromValue returns correct enum`() {
         // Given: Backend values

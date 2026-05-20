@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TeardownLoggingTest {
-
     private val context = mockk<Context>(relaxed = true)
     private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
     private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
@@ -42,13 +41,16 @@ class TeardownLoggingTest {
         every { Log.w(any<String>(), any<String>(), any<Throwable>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
 
-        manager = spyk(ConversationManagerImpl(
-            context = context,
-            localModelRepository = localModelRepository,
-            activeModelProvider = activeModelProvider,
-            loggingPort = loggingPort,
-            toolExecutor = toolExecutor,
-        ))
+        manager =
+            spyk(
+                ConversationManagerImpl(
+                    context = context,
+                    localModelRepository = localModelRepository,
+                    activeModelProvider = activeModelProvider,
+                    loggingPort = loggingPort,
+                    toolExecutor = toolExecutor,
+                ),
+            )
 
         // Default mock behaviors
         every { manager.createEngine(any(), any(), any(), any(), any()) } returns mockEngine
@@ -73,99 +75,104 @@ class TeardownLoggingTest {
     }
 
     @Test
-    fun `engine initialization failure teardown is logged`() = runTest {
-        // Given: engine initialization throws
-        val initError = RuntimeException("Init failed")
-        every { mockEngine.initialize() } throws initError
-        
-        // And: teardown throws
-        val teardownError = RuntimeException("Teardown failed")
-        every { mockEngine.close() } throws teardownError
+    fun `engine initialization failure teardown is logged`() =
+        runTest {
+            // Given: engine initialization throws
+            val initError = RuntimeException("Init failed")
+            every { mockEngine.initialize() } throws initError
 
-        // When: getConversation is called
-        assertThrows(RuntimeException::class.java) {
-            runBlocking {
-                manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
+            // And: teardown throws
+            val teardownError = RuntimeException("Teardown failed")
+            every { mockEngine.close() } throws teardownError
+
+            // When: getConversation is called
+            assertThrows(RuntimeException::class.java) {
+                runBlocking {
+                    manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
+                }
+            }
+
+            // Then: Log.w is called for the teardown failure
+            verify {
+                Log.w(
+                    "ConversationManager",
+                    "Failed to close engine during error cleanup",
+                    teardownError,
+                )
             }
         }
 
-        // Then: Log.w is called for the teardown failure
-        verify {
-            Log.w(
-                "ConversationManager",
-                "Failed to close engine during error cleanup",
-                teardownError
-            )
+    @Test
+    fun `engine initialization failure teardown logged and original error propagated`() =
+        runTest {
+            // Given: engine initialization throws
+            val initError = RuntimeException("ORIGINAL_INIT_ERROR")
+            every { mockEngine.initialize() } throws initError
+
+            // And: teardown throws
+            val teardownError = RuntimeException("Teardown failed")
+            every { mockEngine.close() } throws teardownError
+
+            // When: getConversation is called
+            val exception =
+                assertThrows(RuntimeException::class.java) {
+                    runBlocking {
+                        manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
+                    }
+                }
+
+            // Then: The original error is propagated (wrapped in IllegalStateException)
+            var rootCause: Throwable? = exception
+            while (rootCause?.cause != null && rootCause.cause != rootCause) {
+                rootCause = rootCause.cause
+            }
+            assert(rootCause?.message == "ORIGINAL_INIT_ERROR")
+
+            // And: Teardown failure was logged
+            verify { Log.w(any(), match { it.contains("cleanup") }, teardownError) }
         }
-    }
 
     @Test
-    fun `engine initialization failure teardown logged and original error propagated`() = runTest {
-        // Given: engine initialization throws
-        val initError = RuntimeException("ORIGINAL_INIT_ERROR")
-        every { mockEngine.initialize() } throws initError
-        
-        // And: teardown throws
-        val teardownError = RuntimeException("Teardown failed")
-        every { mockEngine.close() } throws teardownError
+    fun `inference reset teardown failure is logged`() =
+        runTest {
+            // Given: Inference service with mocked manager
+            val mockManager = mockk<ConversationManager>(relaxed = true)
+            val service =
+                LiteRtInferenceServiceImpl(
+                    conversationManager = mockManager,
+                    processThinkingTokens = mockk(relaxed = true),
+                    toolExecutionEventPort = mockk(relaxed = true),
+                    modelType = ModelType.FAST,
+                )
 
-        // When: getConversation is called
-        val exception = assertThrows(RuntimeException::class.java) {
-            runBlocking {
-                manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
+            // And: Inference fails, requiring reset
+            coEvery { mockManager.getConversation(any(), any(), any()) } throws RuntimeException("Inference failed")
+
+            // And: reset teardown fails
+            val teardownError = RuntimeException("Reset teardown failed")
+            coEvery { mockManager.closeEngine() } throws teardownError
+
+            // When: inference is attempted
+            service
+                .sendPrompt(
+                    prompt = "test",
+                    options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+                    closeConversation = false,
+                ).test {
+                    // Flow will eventually emit an error event and then finish
+                    // Note: Loading might not be emitted if getConversation throws before it calls the callback
+                    val event = awaitItem()
+                    assert(event is InferenceEvent.Error)
+                    awaitComplete()
+                }
+
+            // Then: Log.w is called for the reset teardown failure
+            verify {
+                Log.w(
+                    "LiteRtInferenceService",
+                    "Failed to close engine during inference reset",
+                    teardownError,
+                )
             }
         }
-
-        // Then: The original error is propagated (wrapped in IllegalStateException)
-        var rootCause: Throwable? = exception
-        while (rootCause?.cause != null && rootCause.cause != rootCause) {
-            rootCause = rootCause.cause
-        }
-        assert(rootCause?.message == "ORIGINAL_INIT_ERROR")
-        
-        // And: Teardown failure was logged
-        verify { Log.w(any(), match { it.contains("cleanup") }, teardownError) }
-    }
-
-    @Test
-    fun `inference reset teardown failure is logged`() = runTest {
-        // Given: Inference service with mocked manager
-        val mockManager = mockk<ConversationManager>(relaxed = true)
-        val service = LiteRtInferenceServiceImpl(
-            conversationManager = mockManager,
-            processThinkingTokens = mockk(relaxed = true),
-            toolExecutionEventPort = mockk(relaxed = true),
-            modelType = ModelType.FAST
-        )
-        
-        // And: Inference fails, requiring reset
-        coEvery { mockManager.getConversation(any(), any(), any()) } throws RuntimeException("Inference failed")
-        
-        // And: reset teardown fails
-        val teardownError = RuntimeException("Reset teardown failed")
-        coEvery { mockManager.closeEngine() } throws teardownError
-
-        // When: inference is attempted
-        service.sendPrompt(
-            prompt = "test",
-            options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
-            closeConversation = false
-        ).test {
-            // Flow will eventually emit an error event and then finish
-            // Note: Loading might not be emitted if getConversation throws before it calls the callback
-            val event = awaitItem()
-            assert(event is InferenceEvent.Error)
-            awaitComplete()
-        }
-
-        // Then: Log.w is called for the reset teardown failure
-        verify {
-            Log.w(
-                "LiteRtInferenceService",
-                "Failed to close engine during inference reset",
-                teardownError
-            )
-        }
-    }
 }
-

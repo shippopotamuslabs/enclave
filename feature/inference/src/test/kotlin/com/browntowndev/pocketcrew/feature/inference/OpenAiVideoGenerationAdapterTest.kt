@@ -24,60 +24,65 @@ class OpenAiVideoGenerationAdapterTest {
     private val adapter = OpenAiVideoGenerationAdapter(okHttpClient, pollDelayMillis = 0L)
 
     @Test
-    fun generateVideo_success_submitsPollsAndDownloadsContent() = runTest {
-        val requests = mutableListOf<Request>()
-        everyResponses(
-            requests = requests,
-            jsonResponse("""{"id":"video_1","status":"queued"}"""),
-            jsonResponse("""{"id":"video_1","status":"completed"}"""),
-            bytesResponse("mp4".toByteArray(), "video/mp4"),
-        )
+    fun generateVideo_success_submitsPollsAndDownloadsContent() =
+        runTest {
+            val requests = mutableListOf<Request>()
+            everyResponses(
+                requests = requests,
+                jsonResponse("""{"id":"video_1","status":"queued"}"""),
+                jsonResponse("""{"id":"video_1","status":"completed"}"""),
+                bytesResponse("mp4".toByteArray(), "video/mp4"),
+            )
 
-        val result = adapter.generateVideo(
-            prompt = "animate",
-            apiKey = "key",
-            modelId = "sora-2",
-            baseUrl = "https://example.test/v1",
-            settings = VideoGenerationSettings(
-                aspectRatio = AspectRatio.SIXTEEN_NINE,
-                videoDuration = 7,
-                videoResolution = "720p",
-            ),
-            referenceImage = "png".toByteArray(),
-        )
+            val result =
+                adapter.generateVideo(
+                    prompt = "animate",
+                    apiKey = "key",
+                    modelId = "sora-2",
+                    baseUrl = "https://example.test/v1",
+                    settings =
+                        VideoGenerationSettings(
+                            aspectRatio = AspectRatio.SIXTEEN_NINE,
+                            videoDuration = 7,
+                            videoResolution = "720p",
+                        ),
+                    referenceImage = "png".toByteArray(),
+                )
 
-        assertTrue(result.isSuccess)
-        assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
-        assertEquals("https://example.test/v1/videos", requests[0].url.toString())
-        assertEquals("https://example.test/v1/videos/video_1", requests[1].url.toString())
-        assertEquals("https://example.test/v1/videos/video_1/content", requests[2].url.toString())
-        val body = requests[0].bodyString()
-        assertTrue(body.contains("name=\"model\""))
-        assertTrue(body.contains("sora-2"))
-        assertTrue(body.contains("name=\"seconds\""))
-        assertTrue(body.contains("8"))
-        assertTrue(body.contains("name=\"input_reference\""))
-    }
+            assertTrue(result.isSuccess)
+            assertArrayEquals("mp4".toByteArray(), result.getOrThrow())
+            assertEquals("https://example.test/v1/videos", requests[0].url.toString())
+            assertEquals("https://example.test/v1/videos/video_1", requests[1].url.toString())
+            assertEquals("https://example.test/v1/videos/video_1/content", requests[2].url.toString())
+            val body = requests[0].bodyString()
+            assertTrue(body.contains("name=\"model\""))
+            assertTrue(body.contains("sora-2"))
+            assertTrue(body.contains("name=\"seconds\""))
+            assertTrue(body.contains("8"))
+            assertTrue(body.contains("name=\"input_reference\""))
+        }
 
     @Test
-    fun generateVideo_failedStatus_returnsFailure() = runTest {
-        everyResponses(
-            requests = mutableListOf(),
-            jsonResponse("""{"id":"video_1","status":"queued"}"""),
-            jsonResponse("""{"id":"video_1","status":"failed"}"""),
-        )
+    fun generateVideo_failedStatus_returnsFailure() =
+        runTest {
+            everyResponses(
+                requests = mutableListOf(),
+                jsonResponse("""{"id":"video_1","status":"queued"}"""),
+                jsonResponse("""{"id":"video_1","status":"failed"}"""),
+            )
 
-        val result = adapter.generateVideo(
-            prompt = "animate",
-            apiKey = "key",
-            modelId = "sora-2",
-            baseUrl = null,
-            settings = VideoGenerationSettings(),
-        )
+            val result =
+                adapter.generateVideo(
+                    prompt = "animate",
+                    apiKey = "key",
+                    modelId = "sora-2",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(),
+                )
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message?.contains("failed") == true)
-    }
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("failed") == true)
+        }
 
     private fun everyResponses(
         requests: MutableList<Request>,
@@ -92,7 +97,8 @@ class OpenAiVideoGenerationAdapterTest {
     }
 
     private fun jsonResponse(body: String): Response =
-        Response.Builder()
+        Response
+            .Builder()
             .request(Request.Builder().url("https://example.test").build())
             .protocol(Protocol.HTTP_1_1)
             .code(200)
@@ -100,8 +106,12 @@ class OpenAiVideoGenerationAdapterTest {
             .body(body.toResponseBody("application/json".toMediaType()))
             .build()
 
-    private fun bytesResponse(body: ByteArray, mediaType: String): Response =
-        Response.Builder()
+    private fun bytesResponse(
+        body: ByteArray,
+        mediaType: String,
+    ): Response =
+        Response
+            .Builder()
             .request(Request.Builder().url("https://example.test").build())
             .protocol(Protocol.HTTP_1_1)
             .code(200)

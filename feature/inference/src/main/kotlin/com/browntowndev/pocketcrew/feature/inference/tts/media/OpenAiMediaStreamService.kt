@@ -20,50 +20,57 @@ import javax.inject.Inject
  * Uses MP3 format (not PCM) because ExoPlayer supports MP3 demuxing out of the box,
  * and MP3 avoids the need for sample rate / channel configuration that PCM requires.
  */
-class OpenAiMediaStreamService @Inject constructor(
-    private val clientProvider: OpenAiClientProviderPort,
-    private val apiKey: String,
-    private val baseUrl: String?,
-    private val logger: LoggingPort,
-) : TtsMediaStreamServicePort {
+class OpenAiMediaStreamService
+    @Inject
+    constructor(
+        private val clientProvider: OpenAiClientProviderPort,
+        private val apiKey: String,
+        private val baseUrl: String?,
+        private val logger: LoggingPort,
+    ) : TtsMediaStreamServicePort {
+        override suspend fun openStream(
+            text: String,
+            voice: String,
+            modelId: String?,
+        ): TtsMediaStream =
+            withContext(Dispatchers.IO) {
+                val client = clientProvider.getClient(apiKey = apiKey, baseUrl = baseUrl)
+                val resolvedModel = modelId?.let { SpeechModel.of(it) } ?: SpeechModel.TTS_1
 
-    override suspend fun openStream(text: String, voice: String, modelId: String?): TtsMediaStream =
-        withContext(Dispatchers.IO) {
-            val client = clientProvider.getClient(apiKey = apiKey, baseUrl = baseUrl)
-            val resolvedModel = modelId?.let { SpeechModel.of(it) } ?: SpeechModel.TTS_1
+                val params =
+                    SpeechCreateParams
+                        .builder()
+                        .input(text)
+                        .model(resolvedModel)
+                        .voice(SpeechCreateParams.Voice.ofString(voice))
+                        .responseFormat(SpeechCreateParams.ResponseFormat.MP3)
+                        .build()
 
-            val params = SpeechCreateParams.builder()
-                .input(text)
-                .model(resolvedModel)
-                .voice(SpeechCreateParams.Voice.ofString(voice))
-                .responseFormat(SpeechCreateParams.ResponseFormat.MP3)
-                .build()
+                logger.debug(TAG, "Starting MP3 stream for OpenAI TTS: model=$resolvedModel, voice=$voice")
 
-            logger.debug(TAG, "Starting MP3 stream for OpenAI TTS: model=$resolvedModel, voice=$voice")
+                val response = client.audio().speech().create(params)
+                // response.body() returns an InputStream from the SDK.
+                // We do NOT close the response here — the caller (TtsDataSource) will
+                // close the InputStream when ExoPlayer is done, which also closes the
+                // underlying HTTP connection.
+                val stream = response.body()
 
-            val response = client.audio().speech().create(params)
-            // response.body() returns an InputStream from the SDK.
-            // We do NOT close the response here — the caller (TtsDataSource) will
-            // close the InputStream when ExoPlayer is done, which also closes the
-            // underlying HTTP connection.
-            val stream = response.body()
+                TtsMediaStream(
+                    mimeType = MIME_TYPE_MP3,
+                    length = null, // Content-Length not available from SDK InputStream
+                    stream = stream,
+                )
+            }
 
-            TtsMediaStream(
-                mimeType = MIME_TYPE_MP3,
-                length = null, // Content-Length not available from SDK InputStream
-                stream = stream,
-            )
+        /** Exposed for testing to verify MIME type without making HTTP calls. */
+        fun expectedMimeType(): String = MIME_TYPE_MP3
+
+        /** Confirms this service uses streaming response (not readBytes). */
+        @Suppress("FunctionOnlyReturningConstant")
+        fun usesStreamingResponse(): Boolean = true
+
+        companion object {
+            private const val TAG = "OpenAiMediaStream"
+            private const val MIME_TYPE_MP3 = "audio/mpeg"
         }
-
-    /** Exposed for testing to verify MIME type without making HTTP calls. */
-    fun expectedMimeType(): String = MIME_TYPE_MP3
-
-    /** Confirms this service uses streaming response (not readBytes). */
-    @Suppress("FunctionOnlyReturningConstant")
-    fun usesStreamingResponse(): Boolean = true
-
-    companion object {
-        private const val TAG = "OpenAiMediaStream"
-        private const val MIME_TYPE_MP3 = "audio/mpeg"
     }
-}

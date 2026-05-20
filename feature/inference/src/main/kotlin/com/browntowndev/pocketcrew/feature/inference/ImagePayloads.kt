@@ -14,11 +14,9 @@ internal data class ImagePayloadSummary(
 )
 
 internal object ImagePayloads {
-    fun fromUris(imageUris: List<String>): List<ImagePayload> =
-        imageUris.map(::fromUri)
+    fun fromUris(imageUris: List<String>): List<ImagePayload> = imageUris.map(::fromUri)
 
-    fun summarizeUris(imageUris: List<String>): List<ImagePayloadSummary> =
-        imageUris.map(::summarizeUri)
+    fun summarizeUris(imageUris: List<String>): List<ImagePayloadSummary> = imageUris.map(::summarizeUri)
 
     fun validate(payload: ImagePayload) {
         require(payload.bytes.isNotEmpty()) { "Image payload is empty for ${payload.filename}" }
@@ -31,7 +29,10 @@ internal object ImagePayloads {
     /**
      * Dumps the payload to the specified directory for debugging purposes.
      */
-    fun dump(payload: ImagePayload, directory: File) {
+    fun dump(
+        payload: ImagePayload,
+        directory: File,
+    ) {
         runCatching {
             if (!directory.exists()) directory.mkdirs()
             val extension = payload.filename.substringAfterLast(".", "bin")
@@ -47,7 +48,7 @@ internal object ImagePayloads {
                   "sha256": "${payload.sha256}",
                   "sourceUri": "${payload.sourceUri}"
                 }
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
     }
@@ -57,19 +58,19 @@ internal object ImagePayloads {
      * accidental base64 payload leakage in history turns sent to API providers.
      * The rehydrator already strips images, but this is a defensive guard.
      */
-    fun stripBase64DataUris(content: String): String =
-        BASE64_DATA_URI_REGEX.replace(content, "[image]")
+    fun stripBase64DataUris(content: String): String = BASE64_DATA_URI_REGEX.replace(content, "[image]")
 
     private val BASE64_DATA_URI_REGEX = Regex("""data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+""")
 
-    private val supportedMimeTypes = setOf(
-        "image/png",
-        "image/jpeg",
-        "image/webp",
-        "image/heic",
-        "image/heif",
-        "image/gif"
-    )
+    private val supportedMimeTypes =
+        setOf(
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/heic",
+            "image/heif",
+            "image/gif",
+        )
 
     private fun fromUri(imageUri: String): ImagePayload {
         val file = File(URI(imageUri))
@@ -82,7 +83,7 @@ internal object ImagePayloads {
             byteCount = file.length(),
             sourceUri = imageUri,
             filename = file.name,
-            sha256 = calculateSha256(bytes)
+            sha256 = calculateSha256(bytes),
         )
     }
 
@@ -110,7 +111,10 @@ internal object ImagePayloads {
     }
 
     @Suppress("ReturnCount")
-    private fun detectMimeTypeFromHeader(header: ByteArray, bytesRead: Int): String? {
+    private fun detectMimeTypeFromHeader(
+        header: ByteArray,
+        bytesRead: Int,
+    ): String? {
         if (bytesRead >= 8 && isPngSignature(header)) {
             return "image/png"
         }

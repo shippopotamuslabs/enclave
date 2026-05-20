@@ -4,9 +4,6 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "LlamaGpuHelper"
 private const val MIN_OPENGL_ES_VERSION = 0x30001
@@ -22,7 +19,6 @@ private const val OS_HEADROOM_BYTES = 1536L * 1024 * 1024 // 1.5 GB safety buffe
  * On emulators and devices without proper GPU support, we fall back to CPU-only mode.
  */
 object LlamaGpuHelper {
-
     /**
      * Check if GPU acceleration is likely available on this device.
      *
@@ -76,7 +72,7 @@ object LlamaGpuHelper {
         context: Context,
         modelSizeBytes: Long,
         totalModelLayers: Int,
-        contextSizeBytes: Long = 500L * 1024 * 1024
+        contextSizeBytes: Long = 500L * 1024 * 1024,
     ): Int {
         try {
             // 1. Get real-time available memory from the Android OS
@@ -120,7 +116,6 @@ object LlamaGpuHelper {
             Log.i(TAG, "Available RAM: ${availableRamBytes / 1024 / 1024}MB. Offloading $finalLayerCount/$totalModelLayers layers.")
 
             return finalLayerCount
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to calculate dynamic layers, using safe fallback.", e)
             return 0 // Safest fallback is CPU-only
@@ -130,22 +125,21 @@ object LlamaGpuHelper {
     /**
      * Check if running on an Android emulator.
      */
-    private fun isEmulator(): Boolean {
-        return (
+    private fun isEmulator(): Boolean =
+        (
             Build.BRAND.equals("android", ignoreCase = true) ||
-            Build.MANUFACTURER.equals("android", ignoreCase = true) ||
-            Build.HARDWARE.startsWith("goldfish") ||
-            Build.HARDWARE.startsWith("ranchu") ||
-            Build.HARDWARE.contains("vbox86") ||
-            Build.MODEL.contains("sdk_gphone") ||
-            Build.MODEL.contains("Emulator") ||
-            Build.MODEL.contains("AVD") ||
-            Build.DEVICE.startsWith("sdk_") ||
-            Build.DEVICE.startsWith("vbox86") ||
-            Build.PRODUCT.startsWith("sdk_") ||
-            Build.PRODUCT.startsWith("vbox86")
+                Build.MANUFACTURER.equals("android", ignoreCase = true) ||
+                Build.HARDWARE.startsWith("goldfish") ||
+                Build.HARDWARE.startsWith("ranchu") ||
+                Build.HARDWARE.contains("vbox86") ||
+                Build.MODEL.contains("sdk_gphone") ||
+                Build.MODEL.contains("Emulator") ||
+                Build.MODEL.contains("AVD") ||
+                Build.DEVICE.startsWith("sdk_") ||
+                Build.DEVICE.startsWith("vbox86") ||
+                Build.PRODUCT.startsWith("sdk_") ||
+                Build.PRODUCT.startsWith("vbox86")
         )
-    }
 }
 
 /**
@@ -153,10 +147,9 @@ object LlamaGpuHelper {
  */
 data class GpuConfig(
     val gpuLayers: Int,
-    val useGpu: Boolean
+    val useGpu: Boolean,
 ) {
     companion object {
-
         /**
          * Get recommended GPU configuration with specific model parameters.
          * This uses dynamic calculation based on real-time available memory.
@@ -170,7 +163,7 @@ data class GpuConfig(
             context: Context,
             modelSizeBytes: Long,
             totalModelLayers: Int,
-            contextSizeBytes: Long = 500L * 1024 * 1024
+            contextSizeBytes: Long = 500L * 1024 * 1024,
         ): GpuConfig {
             Log.i(TAG, "=== GPU CONFIG DETECTION (Dynamic) ===")
             Log.i(TAG, "Device: ${Build.MANUFACTURER} ${Build.MODEL}")
@@ -182,17 +175,17 @@ data class GpuConfig(
             // Check emulator inline
             val isEmulator = (
                 Build.BRAND.equals("android", ignoreCase = true) ||
-                Build.MANUFACTURER.equals("android", ignoreCase = true) ||
-                Build.HARDWARE.startsWith("goldfish") ||
-                Build.HARDWARE.startsWith("ranchu") ||
-                Build.HARDWARE.contains("vbox86") ||
-                Build.MODEL.contains("sdk_gphone") ||
-                Build.MODEL.contains("Emulator") ||
-                Build.MODEL.contains("AVD") ||
-                Build.DEVICE.startsWith("sdk_") ||
-                Build.DEVICE.startsWith("vbox86") ||
-                Build.PRODUCT.startsWith("sdk_") ||
-                Build.PRODUCT.startsWith("vbox86")
+                    Build.MANUFACTURER.equals("android", ignoreCase = true) ||
+                    Build.HARDWARE.startsWith("goldfish") ||
+                    Build.HARDWARE.startsWith("ranchu") ||
+                    Build.HARDWARE.contains("vbox86") ||
+                    Build.MODEL.contains("sdk_gphone") ||
+                    Build.MODEL.contains("Emulator") ||
+                    Build.MODEL.contains("AVD") ||
+                    Build.DEVICE.startsWith("sdk_") ||
+                    Build.DEVICE.startsWith("vbox86") ||
+                    Build.PRODUCT.startsWith("sdk_") ||
+                    Build.PRODUCT.startsWith("vbox86")
             )
             val hasEnoughRam = checkRam(context)
 
@@ -200,12 +193,13 @@ data class GpuConfig(
             Log.i(TAG, "Has enough RAM (3GB+): $hasEnoughRam")
 
             val hasGpu = LlamaGpuHelper.isGpuAvailable(context)
-            val calculatedGpuLayers = LlamaGpuHelper.calculateDynamicGpuLayers(
-                context = context,
-                modelSizeBytes = modelSizeBytes,
-                totalModelLayers = totalModelLayers,
-                contextSizeBytes = contextSizeBytes
-            )
+            val calculatedGpuLayers =
+                LlamaGpuHelper.calculateDynamicGpuLayers(
+                    context = context,
+                    modelSizeBytes = modelSizeBytes,
+                    totalModelLayers = totalModelLayers,
+                    contextSizeBytes = contextSizeBytes,
+                )
 
             Log.i(TAG, "GPU available (heuristic): $hasGpu")
             Log.i(TAG, "Calculated GPU layers (dynamic): $calculatedGpuLayers")
@@ -215,13 +209,13 @@ data class GpuConfig(
                 Log.i(TAG, "GPU config: gpuLayers=$calculatedGpuLayers, useGpu=true")
                 GpuConfig(
                     gpuLayers = calculatedGpuLayers,
-                    useGpu = true
+                    useGpu = true,
                 )
             } else {
                 Log.i(TAG, "GPU config: gpuLayers=0, useGpu=false (CPU only)")
                 GpuConfig(
                     gpuLayers = 0,
-                    useGpu = false
+                    useGpu = false,
                 )
             }
         }

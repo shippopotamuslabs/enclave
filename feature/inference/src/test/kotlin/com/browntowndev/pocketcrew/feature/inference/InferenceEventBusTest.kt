@@ -14,56 +14,61 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class InferenceEventBusTest {
-
     private val bus = InferenceEventBus()
-    private val key = InferenceEventBus.ChatRequestKey(
-        chatId = ChatId("chat-id"),
-        assistantMessageId = MessageId("assistant-id"),
-    )
+    private val key =
+        InferenceEventBus.ChatRequestKey(
+            chatId = ChatId("chat-id"),
+            assistantMessageId = MessageId("assistant-id"),
+        )
 
     @Test
-    fun `observeChatRequest replays state emitted before observer subscribes`() = runTest {
-        bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
+    fun `observeChatRequest replays state emitted before observer subscribes`() =
+        runTest {
+            bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
 
-        val result = bus.observeChatRequest(key).first()
+            val result = bus.observeChatRequest(key).first()
 
-        assertTrue(result is MessageGenerationState.Finished)
-    }
-
-    @Test
-    fun `openChatRequest starts a fresh stream for an existing key`() = runTest {
-        bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
-        val results = mutableListOf<MessageGenerationState>()
-
-        val collectJob = launch {
-            bus.openChatRequest(key).toList(results)
+            assertTrue(result is MessageGenerationState.Finished)
         }
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(emptyList<MessageGenerationState>(), results)
-
-        bus.emitChatState(key, MessageGenerationState.GeneratingText("fresh", ModelType.FAST))
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(1, results.size)
-        assertEquals("fresh", (results.single() as MessageGenerationState.GeneratingText).textDelta)
-        collectJob.cancel()
-    }
 
     @Test
-    fun `clearChatRequest removes stale replay cache`() = runTest {
-        bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
-        bus.clearChatRequest(key)
-        val results = mutableListOf<MessageGenerationState>()
+    fun `openChatRequest starts a fresh stream for an existing key`() =
+        runTest {
+            bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
+            val results = mutableListOf<MessageGenerationState>()
 
-        val collectJob = launch {
-            bus.observeChatRequest(key).toList(results)
+            val collectJob =
+                launch {
+                    bus.openChatRequest(key).toList(results)
+                }
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList<MessageGenerationState>(), results)
+
+            bus.emitChatState(key, MessageGenerationState.GeneratingText("fresh", ModelType.FAST))
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, results.size)
+            assertEquals("fresh", (results.single() as MessageGenerationState.GeneratingText).textDelta)
+            collectJob.cancel()
         }
-        testScheduler.advanceUntilIdle()
 
-        assertEquals(emptyList<MessageGenerationState>(), results)
-        collectJob.cancel()
-    }
+    @Test
+    fun `clearChatRequest removes stale replay cache`() =
+        runTest {
+            bus.emitChatState(key, MessageGenerationState.Finished(ModelType.FAST))
+            bus.clearChatRequest(key)
+            val results = mutableListOf<MessageGenerationState>()
+
+            val collectJob =
+                launch {
+                    bus.observeChatRequest(key).toList(results)
+                }
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(emptyList<MessageGenerationState>(), results)
+            collectJob.cancel()
+        }
 
     // --- Pipeline stream tests ---
     @Test
@@ -103,19 +108,21 @@ class InferenceEventBusTest {
     }
 
     @Test
-    fun `hasChatRequest returns true when collector cancels before terminal state`() = runTest {
-        val collectJob = launch {
-            bus.openChatRequest(key).toList(mutableListOf())
+    fun `hasChatRequest returns true when collector cancels before terminal state`() =
+        runTest {
+            val collectJob =
+                launch {
+                    bus.openChatRequest(key).toList(mutableListOf())
+                }
+            testScheduler.advanceUntilIdle()
+
+            bus.emitChatState(key, MessageGenerationState.GeneratingText("non-terminal", ModelType.FAST))
+            testScheduler.advanceUntilIdle()
+
+            collectJob.cancel()
+            testScheduler.advanceUntilIdle()
+
+            // Assert: key should be cleared when collector cancels
+            assertFalse(bus.hasChatRequest(key), "Key must be cleared when collector cancels before terminal state")
         }
-        testScheduler.advanceUntilIdle()
-
-        bus.emitChatState(key, MessageGenerationState.GeneratingText("non-terminal", ModelType.FAST))
-        testScheduler.advanceUntilIdle()
-
-        collectJob.cancel()
-        testScheduler.advanceUntilIdle()
-
-        // Assert: key should be cleared when collector cancels
-        assertFalse(bus.hasChatRequest(key), "Key must be cleared when collector cancels before terminal state")
-    }
 }

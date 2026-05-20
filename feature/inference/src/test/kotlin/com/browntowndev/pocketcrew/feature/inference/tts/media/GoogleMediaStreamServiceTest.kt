@@ -8,16 +8,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GoogleMediaStreamServiceTest {
-
     private val logger: LoggingPort = mockk(relaxed = true)
     private lateinit var service: GoogleMediaStreamService
 
     @BeforeEach
     fun setUp() {
-        service = GoogleMediaStreamService(
-            modelsApiProvider = { mockk(relaxed = true) },
-            logger = logger,
-        )
+        service =
+            GoogleMediaStreamService(
+                modelsApiProvider = { mockk(relaxed = true) },
+                logger = logger,
+            )
     }
 
     @Test
@@ -27,10 +27,11 @@ class GoogleMediaStreamServiceTest {
     }
 
     @Test
-    fun `service delegates to GoogleTtsService synthesizeSpeech for batch`() = runTest {
-        // Google does not support streaming; it delegates to the batch API
-        // and returns WAV bytes as a ByteArrayInputStream.
-        // The actual call verification is in GoogleTtsServiceTest.
-        assertEquals("batch", service.streamingMode())
-    }
+    fun `service delegates to GoogleTtsService synthesizeSpeech for batch`() =
+        runTest {
+            // Google does not support streaming; it delegates to the batch API
+            // and returns WAV bytes as a ByteArrayInputStream.
+            // The actual call verification is in GoogleTtsServiceTest.
+            assertEquals("batch", service.streamingMode())
+        }
 }
