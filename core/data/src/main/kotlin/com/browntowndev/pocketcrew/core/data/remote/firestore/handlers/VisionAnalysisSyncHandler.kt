@@ -79,10 +79,6 @@ internal class VisionAnalysisSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val chatId = doc.getString("chat_id")?.let { ChatId(it) }
-        if (chatId != null) {
-            ctx.ensurePlaceholderMessage(entity.userMessageId, chatId)
-        }
         val existing = ctx.daos.messageVisionAnalysisDao.getById(entity.id)
         if (existing == null || entity.updatedAt >= existing.updatedAt) {
             ctx.daos.messageVisionAnalysisDao.upsert(entity.copy(pendingSync = 0))

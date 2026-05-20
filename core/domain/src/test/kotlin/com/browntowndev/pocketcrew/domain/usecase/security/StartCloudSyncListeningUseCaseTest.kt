@@ -1,12 +1,15 @@
 package com.browntowndev.pocketcrew.domain.usecase.security
 
+import com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifySequence
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -22,35 +25,99 @@ class StartCloudSyncListeningUseCaseTest {
     }
 
     @Test
-    fun `SC-ARCH-01-04 uploads then starts listener when uploadLocalFirst true`() =
+    fun `SCN-USECASE-001 upload replay and listener start occur in order`() =
         runTest {
             coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returnsMany
+                listOf(
+                    Result.success(
+                        CloudSyncEventReplayResult(
+                            eventsApplied = 200,
+                            lastAppliedSequence = 200,
+                            hasMore = true,
+                        ),
+                    ),
+                    Result.success(
+                        CloudSyncEventReplayResult(
+                            eventsApplied = 1,
+                            lastAppliedSequence = 201,
+                            hasMore = false,
+                        ),
+                    ),
+                )
 
             val result = useCase(uploadLocalFirst = true)
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 1) { cloudSyncPort.syncAllLocalDataToCloud() }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerifySequence {
+                cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.startListening()
+            }
         }
 
     @Test
-    fun `SC-ARCH-01-05 skips upload when uploadLocalFirst false`() =
+    fun `SCN-USECASE-002 upload failure prevents replay and listener start`() =
         runTest {
+            coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns
+                Result.failure(IllegalStateException("Vault locked"))
+
+            val result = useCase(uploadLocalFirst = true)
+
+            coVerify(exactly = 0) { cloudSyncPort.syncRemoteChangesFromCloud() }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+            val exception = result.exceptionOrNull()
+            assertTrue(exception is IllegalStateException)
+            assertEquals("Vault locked", exception?.message)
+        }
+
+    @Test
+    fun `SCN-USECASE-003 replay failure prevents listener start`() =
+        runTest {
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
+                Result.failure(IllegalStateException("missing required parent chats/chat-1 for messages/message-1"))
+
+            val result = useCase(uploadLocalFirst = false)
+
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+            val exception = result.exceptionOrNull()
+            assertTrue(exception is IllegalStateException)
+            assertEquals("missing required parent chats/chat-1 for messages/message-1", exception?.message)
+        }
+
+    @Test
+    fun `SCN-CHECKPOINT-001 large replay is page resumable without skipping events`() =
+        runTest {
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returnsMany
+                listOf(
+                    Result.success(
+                        CloudSyncEventReplayResult(
+                            eventsApplied = 200,
+                            lastAppliedSequence = 200,
+                            hasMore = true,
+                        ),
+                    ),
+                    Result.success(
+                        CloudSyncEventReplayResult(
+                            eventsApplied = 200,
+                            lastAppliedSequence = 400,
+                            hasMore = true,
+                        ),
+                    ),
+                    Result.success(
+                        CloudSyncEventReplayResult(
+                            eventsApplied = 1,
+                            lastAppliedSequence = 401,
+                            hasMore = false,
+                        ),
+                    ),
+                )
+
             val result = useCase(uploadLocalFirst = false)
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
-        }
-
-    @Test
-    fun `SC-ARCH-01-MUTATION still starts listener when upload fails`() =
-        runTest {
-            coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.failure(IllegalStateException("upload failed"))
-
-            val result = useCase(uploadLocalFirst = true)
-
-            assertTrue(result.isSuccess)
+            coVerify(exactly = 3) { cloudSyncPort.syncRemoteChangesFromCloud() }
             verify(exactly = 1) { cloudSyncPort.startListening() }
         }
 }

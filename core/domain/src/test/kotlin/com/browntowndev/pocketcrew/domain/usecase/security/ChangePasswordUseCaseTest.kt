@@ -316,6 +316,15 @@ class ChangePasswordUseCaseTest {
             return Result.success(Unit)
         }
 
+        override suspend fun syncRemoteChangesFromCloud(): Result<com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult> =
+            Result.success(
+                com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult(
+                    eventsApplied = 0,
+                    lastAppliedSequence = 0,
+                    hasMore = false,
+                ),
+            )
+
         override suspend fun updateVaultSalt(salt: String): Result<Unit> = Result.success(Unit)
 
         override suspend fun getVaultSalt(): Result<String?> = Result.success(null)

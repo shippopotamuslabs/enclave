@@ -90,8 +90,6 @@ override val collectionPath: String = "messages"
                 ) {
                     val existing = ctx.daos.messageDao.getMessageById(entity.message.id)
                     if (overwrite || existing == null || entity.message.updatedAt > existing.message.updatedAt) {
-                        ctx.ensurePlaceholderMessage(entity.message.id, entity.message.chatId)
-
                         // Preserve local artifacts_json until Task 4 migration is complete
                         val merged =
                             entity.message.copy(

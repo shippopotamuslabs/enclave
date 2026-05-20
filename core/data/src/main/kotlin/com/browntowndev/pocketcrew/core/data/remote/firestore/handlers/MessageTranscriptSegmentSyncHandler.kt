@@ -58,10 +58,6 @@ internal class MessageTranscriptSegmentSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val chatId = doc.getString("chat_id")?.let { ChatId(it) }
-        if (chatId != null) {
-            ctx.ensurePlaceholderMessage(entity.messageId, chatId)
-        }
         val existing = ctx.daos.messageTranscriptSegmentDao.getById(entity.id)
         if (existing == null || entity.updatedAt > existing.updatedAt) {
             ctx.daos.messageTranscriptSegmentDao.upsert(entity.copy(pendingSync = 0))

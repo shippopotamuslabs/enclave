@@ -6,8 +6,12 @@ import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreCloudPurg
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreListenerCoordinator
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestorePendingSyncEngine
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncAdapterRegistry
-import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncDependencies
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncDaos
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncDependencies
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventApplier
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventDispatcher
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreVaultClient
 import com.browntowndev.pocketcrew.core.data.remote.firestore.StudioSyncDaos
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
@@ -18,6 +22,7 @@ import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinat
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.security.VaultMetadata
+import com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -33,8 +38,9 @@ import javax.inject.Singleton
 /**
  * Firestore ↔ Room sync for opted-in entities.
  *
- * **Transcript segments:** Synced under `message_transcript_segments` with encrypted `text`,
- * mirroring the same pending_sync / tombstone pattern as [WebSearchSourceEntity].
+ * **Event feed:** Live sync is driven by a single ordered listener on
+ * `users/{uid}/sync_events`. [syncRemoteChangesFromCloud] pages the feed before the live
+ * listener attaches so initial hydration and live delivery share one code path.
  */
 @Singleton
 class FirestoreDataSource
@@ -46,17 +52,25 @@ class FirestoreDataSource
         private val syncDependencies = dependencies.toSyncDependencies()
         private val syncContext = syncDependencies.toContext()
         private val adapterRegistry = FirestoreSyncAdapterRegistry(syncContext)
+        private val syncEventFeedClient = dependencies.syncEventFeedClient
+        private val syncEventApplier = dependencies.syncEventApplier
+        private val syncStateStore = dependencies.syncStateStore
         private val syncMutex = Mutex()
+        private val eventApplyMutex = Mutex()
         private val listenerCoordinator =
             FirestoreListenerCoordinator(
                 ctx = syncContext,
-                adapters = adapterRegistry.adapters,
+                syncEventFeedClient = syncEventFeedClient,
+                syncEventApplier = syncEventApplier,
+                syncStateStore = syncStateStore,
+                eventApplyMutex = eventApplyMutex,
                 externalScope = externalScope,
             )
         private val pendingSyncEngine =
             FirestorePendingSyncEngine(
                 ctx = syncContext,
                 adapters = adapterRegistry.adapters,
+                syncStateStore = syncStateStore,
             )
         private val vaultClient = FirestoreVaultClient(syncContext)
         private val cloudPurgeClient =
@@ -74,6 +88,36 @@ class FirestoreDataSource
         override fun stopListening() {
             listenerCoordinator.stopListening()
         }
+
+        override suspend fun syncRemoteChangesFromCloud(): Result<CloudSyncEventReplayResult> =
+            runCatching {
+                val userId = syncContext.userIdProvider() ?: throw IllegalStateException("Not signed in")
+                if (!syncContext.cryptoManager.hasCachedKey()) {
+                    throw IllegalStateException("Vault locked")
+                }
+                eventApplyMutex.withLock {
+                    val lastApplied = syncStateStore.lastAppliedSequence(userId)
+                    val page = syncEventFeedClient.fetchNextPage(userId, lastApplied)
+                    var applied = 0
+                    var newLast = lastApplied
+                    for (event in page) {
+                        val result = syncEventApplier.apply(userId, event)
+                        applied += result.appliedCount
+                        if (result.lastAppliedSequence > newLast) newLast = result.lastAppliedSequence
+                    }
+                    // Persist the high-water mark so the next page query uses the correct
+                    // sequence lower bound even when the dispatcher (e.g., a test double)
+                    // does not update the state store itself.
+                    if (newLast > lastApplied) {
+                        syncStateStore.setLastAppliedSequence(userId, newLast)
+                    }
+                    CloudSyncEventReplayResult(
+                        eventsApplied = applied,
+                        lastAppliedSequence = newLast,
+                        hasMore = page.size >= PAGE_SIZE_THRESHOLD,
+                    )
+                }
+            }
 
         override suspend fun syncAllLocalDataToCloud(): Result<Unit> =
             syncMutex.withLock {
@@ -123,7 +167,10 @@ class FirestoreDataSource
 
         override suspend fun fetchVaultMetadata(): Result<VaultMetadata?> = vaultClient.fetchVaultMetadata()
 
-        override suspend fun deleteUserAccount(): Result<Unit> = cloudPurgeClient.deleteUserAccount()
+        override suspend fun deleteUserAccount(): Result<Unit> {
+            listenerCoordinator.detachAllListeners()
+            return cloudPurgeClient.deleteUserAccount()
+        }
 
         override suspend fun deleteAllChatsFromCloud(): Result<Unit> = cloudPurgeClient.deleteAllChatsFromCloud()
 
@@ -135,6 +182,10 @@ class FirestoreDataSource
 
         override fun enqueueEmbeddingRegeneration() {
             syncContext.embeddingCoordinator.enqueueFullRegeneration()
+        }
+
+        private companion object {
+            const val PAGE_SIZE_THRESHOLD = 200
         }
     }
 
@@ -157,8 +208,12 @@ class FirestoreSyncDependenciesFacade
         private val localEncryption: LocalDataEncryptionService,
         private val sensitiveSelfHealer: SensitivePersistenceSelfHealer,
         private val purgeInProgress: AtomicBoolean,
+        internal val syncEventFeedClient: FirestoreSyncEventFeedClient,
+        internal val syncEventApplier: FirestoreSyncEventDispatcher,
+        internal val syncStateStore: FirestoreSyncStateStore,
     ) {
         @Inject
+        @Suppress("LongParameterList")
         constructor(
             firestore: FirebaseFirestore,
             chatSyncDaos: ChatSyncDaos,
@@ -170,6 +225,41 @@ class FirestoreSyncDependenciesFacade
             userIdProvider: () -> String?,
             embeddingCoordinator: EmbeddingRegenerationCoordinator,
             localEncryption: LocalDataEncryptionService,
+            @ApplicationScope externalScope: CoroutineScope,
+            database: com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase,
+            preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+        ) : this(
+            firestore,
+            chatSyncDaos,
+            configSyncDaos,
+            studioSyncDaos,
+            apiKeyManager,
+            cryptoManager,
+            loggingPort,
+            userIdProvider,
+            embeddingCoordinator,
+            localEncryption,
+            externalScope,
+            database,
+            preferencesDataStore,
+            FirestoreSyncStateStore(preferencesDataStore),
+        )
+
+        private constructor(
+            firestore: FirebaseFirestore,
+            chatSyncDaos: ChatSyncDaos,
+            configSyncDaos: ConfigSyncDaos,
+            studioSyncDaos: StudioSyncDaos,
+            apiKeyManager: ApiKeyManager,
+            cryptoManager: CryptoManagerPort,
+            loggingPort: LoggingPort,
+            userIdProvider: () -> String?,
+            embeddingCoordinator: EmbeddingRegenerationCoordinator,
+            localEncryption: LocalDataEncryptionService,
+            externalScope: CoroutineScope,
+            database: com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase,
+            preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+            sharedStateStore: FirestoreSyncStateStore,
         ) : this(
             firestore = firestore,
             chatSyncDaos = chatSyncDaos,
@@ -183,6 +273,24 @@ class FirestoreSyncDependenciesFacade
             localEncryption = localEncryption,
             sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
             purgeInProgress = AtomicBoolean(false),
+            syncEventFeedClient =
+                buildProductionFeedClient(firestore, externalScope, loggingPort),
+            syncEventApplier =
+                buildProductionApplier(
+                    firestore = firestore,
+                    chatSyncDaos = chatSyncDaos,
+                    configSyncDaos = configSyncDaos,
+                    studioSyncDaos = studioSyncDaos,
+                    localEncryption = localEncryption,
+                    cryptoManager = cryptoManager,
+                    loggingPort = loggingPort,
+                    apiKeyManager = apiKeyManager,
+                    embeddingCoordinator = embeddingCoordinator,
+                    userIdProvider = userIdProvider,
+                    database = database,
+                    stateStore = sharedStateStore,
+                ),
+            syncStateStore = sharedStateStore,
         )
 
         internal fun toSyncDependencies(): FirestoreSyncDependencies =
@@ -205,6 +313,83 @@ class FirestoreSyncDependenciesFacade
             )
 
         internal companion object {
+            private fun buildProductionFeedClient(
+                firestore: FirebaseFirestore,
+                externalScope: CoroutineScope,
+                loggingPort: LoggingPort,
+            ): FirestoreSyncEventFeedClient =
+                FirestoreSyncEventFeedClient(
+                    gateway =
+                        com.browntowndev.pocketcrew.core.data.remote.firestore
+                            .FirestoreBackedSyncEventQueryGateway(
+                                firestore = firestore,
+                                externalScope = externalScope,
+                                loggingPort = loggingPort,
+                            ),
+                )
+
+            @Suppress("LongParameterList")
+            private fun buildProductionApplier(
+                firestore: FirebaseFirestore,
+                chatSyncDaos: ChatSyncDaos,
+                configSyncDaos: ConfigSyncDaos,
+                studioSyncDaos: StudioSyncDaos,
+                localEncryption: LocalDataEncryptionService,
+                cryptoManager: CryptoManagerPort,
+                loggingPort: LoggingPort,
+                apiKeyManager: ApiKeyManager,
+                embeddingCoordinator: EmbeddingRegenerationCoordinator,
+                userIdProvider: () -> String?,
+                database: com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase,
+                stateStore: FirestoreSyncStateStore,
+            ): FirestoreSyncEventApplier {
+                val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
+                val repairer =
+                    FirestoreSensitiveFieldRepairer(
+                        StaticSensitiveFieldCatalog(),
+                        healer,
+                    )
+                val syncContext =
+                    FirestoreSyncDependencies(
+                        firestore = firestore,
+                        daos = FirestoreSyncDaos.from(chatSyncDaos, configSyncDaos, studioSyncDaos),
+                        localEncryption = localEncryption,
+                        sensitiveSelfHealer = healer,
+                        firestoreSensitiveFieldRepairer = repairer,
+                        cryptoManager = cryptoManager,
+                        loggingPort = loggingPort,
+                        apiKeyManager = apiKeyManager,
+                        embeddingCoordinator = embeddingCoordinator,
+                        userIdProvider = userIdProvider,
+                    ).toContext()
+                val registry = FirestoreSyncAdapterRegistry(syncContext)
+                val adapterLookup = registry.adapters.associateBy { it.collectionPath }
+                val localStore =
+                    com.browntowndev.pocketcrew.core.data.remote.firestore
+                        .RoomFirestoreSyncLocalStore(
+                            database = database,
+                            firestore = firestore,
+                            userIdProvider = userIdProvider,
+                            adapterLookup = adapterLookup,
+                            repairer = repairer,
+                            embeddingCoordinator = embeddingCoordinator,
+                            loggingPort = loggingPort,
+                            syncStateStore = stateStore,
+                            pendingSyncLookup =
+                                com.browntowndev.pocketcrew.core.data.remote.firestore
+                                    .FirestoreSyncPendingSyncLookup(database),
+                        )
+                val sourceDocStore =
+                    com.browntowndev.pocketcrew.core.data.remote.firestore
+                        .FirestoreBackedSyncSourceDocumentStore(firestore)
+                return FirestoreSyncEventApplier(
+                    sourceDocuments = sourceDocStore,
+                    localStore = localStore,
+                    stateStore = stateStore,
+                )
+            }
+
+            @Suppress("LongParameterList")
             fun forTests(
                 firestore: FirebaseFirestore,
                 chatSyncDaos: ChatSyncDaos,
@@ -218,6 +403,9 @@ class FirestoreSyncDependenciesFacade
                 localEncryption: LocalDataEncryptionService,
                 sensitiveSelfHealer: SensitivePersistenceSelfHealer,
                 purgeInProgress: AtomicBoolean,
+                syncEventFeedClient: FirestoreSyncEventFeedClient = FirestoreSyncEventFeedClient(),
+                syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
+                syncStateStore: FirestoreSyncStateStore = FirestoreSyncStateStore(),
             ): FirestoreSyncDependenciesFacade =
                 FirestoreSyncDependenciesFacade(
                     firestore = firestore,
@@ -232,6 +420,9 @@ class FirestoreSyncDependenciesFacade
                     localEncryption = localEncryption,
                     sensitiveSelfHealer = sensitiveSelfHealer,
                     purgeInProgress = purgeInProgress,
+                    syncEventFeedClient = syncEventFeedClient,
+                    syncEventApplier = syncEventApplier,
+                    syncStateStore = syncStateStore,
                 )
         }
     }

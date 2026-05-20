@@ -23,6 +23,10 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.remote.firestore.ChatSyncDaos
 import com.browntowndev.pocketcrew.core.data.remote.firestore.ConfigSyncDaos
 import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncDaos
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventApplier
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventDispatcher
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.pocketcrew.core.data.remote.firestore.StudioSyncDaos
 import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
@@ -65,9 +69,12 @@ internal fun createTestFirestoreDataSource(
     externalScope: CoroutineScope,
     userIdProvider: () -> String? = { "test-user-id" },
     embeddingCoordinator: EmbeddingRegenerationCoordinator = mockk(relaxed = true),
-    localEncryption: LocalDataEncryptionService = FakeLocalDataEncryptionService(),
+    localEncryption: LocalDataEncryptionService = LenientFakeLocalDataEncryptionService(),
     sensitiveSelfHealer: SensitivePersistenceSelfHealer? = null,
     purgeInProgress: AtomicBoolean = AtomicBoolean(false),
+    syncEventFeedClient: FirestoreSyncEventFeedClient = FirestoreSyncEventFeedClient(),
+    syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
+    syncStateStore: FirestoreSyncStateStore = DeterministicTestSyncStateStore(),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
     val facade =
@@ -110,8 +117,62 @@ internal fun createTestFirestoreDataSource(
             localEncryption = localEncryption,
             sensitiveSelfHealer = healer,
             purgeInProgress = purgeInProgress,
+            syncEventFeedClient = syncEventFeedClient,
+            syncEventApplier = syncEventApplier,
+            syncStateStore = syncStateStore,
         )
     return FirestoreDataSource(facade, externalScope)
+}
+
+/**
+ * Lenient encryption service used as the default for [createTestFirestoreDataSource]. Any
+ * value that already looks like ciphertext (starts with the production envelope prefix or the
+ * "cipher-" fixture prefix used in SCN-PENDING-002) is treated as already-encrypted so the
+ * pending-sync engine preserves it verbatim. New plaintext values still go through the
+ * production envelope so encryption-required call sites see a sensible blob.
+ */
+internal class LenientFakeLocalDataEncryptionService : LocalDataEncryptionService {
+    override fun encryptString(plaintext: String): String =
+        if (isEncrypted(plaintext)) plaintext else "PCENC:v1:aes-gcm:$plaintext"
+
+    override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
+    override fun isEncrypted(stored: String): Boolean =
+        stored.startsWith("PCENC:v1:aes-gcm:") || stored.startsWith("cipher-")
+
+    override fun encryptString(
+        plaintext: String,
+        aad: ByteArray,
+    ): String = encryptString(plaintext)
+
+    override fun decryptString(
+        stored: String,
+        aad: ByteArray,
+    ): String = decryptString(stored)
+}
+
+/**
+ * Default sync-state store for tests. Provides deterministic device/mutation/clock values so
+ * pending-sync metadata assertions (SCN-PENDING-001/002) are reproducible without requiring
+ * every test to thread a custom store.
+ */
+internal class DeterministicTestSyncStateStore : FirestoreSyncStateStore() {
+    private val lastApplied = mutableMapOf<String, Long>()
+
+    override suspend fun lastAppliedSequence(userId: String): Long = lastApplied[userId] ?: 0L
+
+    override suspend fun setLastAppliedSequence(
+        userId: String,
+        sequence: Long,
+    ) {
+        lastApplied[userId] = sequence
+    }
+
+    override suspend fun deviceId(): String = "device-a"
+
+    override fun newClientMutationId(): String = "mutation-upload-1"
+
+    override fun currentTimeMillis(): Long = 1_700_000_003_000L
 }
 
 internal fun testFirestoreSyncDaos(
