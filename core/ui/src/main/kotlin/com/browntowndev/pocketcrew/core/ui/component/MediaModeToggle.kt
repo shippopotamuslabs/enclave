@@ -9,7 +9,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -33,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,29 +41,32 @@ import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 fun MediaModeToggle(
     selectedType: MediaCapability,
     onTypeChange: (MediaCapability) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val items = listOf(
-        ToggleItem(MediaCapability.IMAGE.displayName, Icons.Default.Image, MediaCapability.IMAGE),
-        ToggleItem(MediaCapability.VIDEO.displayName, Icons.Default.Movie, MediaCapability.VIDEO),
-        ToggleItem(MediaCapability.MUSIC.displayName, Icons.Default.MusicNote, MediaCapability.MUSIC)
-    )
+    val items =
+        listOf(
+            ToggleItem(MediaCapability.IMAGE.displayName, Icons.Default.Image, MediaCapability.IMAGE),
+            ToggleItem(MediaCapability.VIDEO.displayName, Icons.Default.Movie, MediaCapability.VIDEO),
+            ToggleItem(MediaCapability.MUSIC.displayName, Icons.Default.MusicNote, MediaCapability.MUSIC),
+        )
 
     val padding = 0.dp
     val gap = 0.dp
-    
-    val selectedIndex = when (selectedType) {
-        MediaCapability.IMAGE -> 0
-        MediaCapability.VIDEO -> 1
-        MediaCapability.MUSIC -> 2
-    }
-    
+
+    val selectedIndex =
+        when (selectedType) {
+            MediaCapability.IMAGE -> 0
+            MediaCapability.VIDEO -> 1
+            MediaCapability.MUSIC -> 2
+        }
+
     BoxWithConstraints(
-        modifier = modifier
-            .height(44.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(padding)
+        modifier =
+            modifier
+                .height(44.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(padding),
     ) {
         val containerWidth = maxWidth
         val itemWidth = (containerWidth - (gap * (items.size - 1))) / items.size
@@ -75,59 +75,62 @@ fun MediaModeToggle(
         val indicatorOffset by animateDpAsState(
             targetValue = (itemWidth + gap) * selectedIndex,
             animationSpec = tween(durationMillis = 300),
-            label = "indicatorOffset"
+            label = "indicatorOffset",
         )
 
         // Sliding Indicator
         Box(
-            modifier = Modifier
-                .offset(x = indicatorOffset)
-                .width(itemWidth)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
+            modifier =
+                Modifier
+                    .offset(x = indicatorOffset)
+                    .width(itemWidth)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
         )
 
         Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(gap)
+            horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
             items.forEachIndexed { index, item ->
                 val isSelected = index == selectedIndex
                 val contentColor by animateColorAsState(
                     targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    label = "contentColor"
+                    label = "contentColor",
                 )
 
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onTypeChange(item.capability) }
-                        ),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onTypeChange(item.capability) },
+                            ),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(
                             imageVector = item.icon,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = contentColor
+                            tint = contentColor,
                         )
                         Text(
                             text = item.label,
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 14.sp
-                            ),
-                            color = contentColor
+                            style =
+                                MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 14.sp,
+                                ),
+                            color = contentColor,
                         )
                     }
                 }
@@ -139,5 +142,5 @@ fun MediaModeToggle(
 private data class ToggleItem(
     val label: String,
     val icon: ImageVector,
-    val capability: MediaCapability
+    val capability: MediaCapability,
 )

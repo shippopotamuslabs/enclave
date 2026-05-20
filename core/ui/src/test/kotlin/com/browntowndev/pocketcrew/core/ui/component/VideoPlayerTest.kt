@@ -29,7 +29,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class VideoPlayerTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -51,9 +50,10 @@ class VideoPlayerTest {
                     },
                     playerContent = { _, modifier ->
                         Box(
-                            modifier = modifier
-                                .background(Color.Black)
-                                .testTag("player-surface"),
+                            modifier =
+                                modifier
+                                    .background(Color.Black)
+                                    .testTag("player-surface"),
                         )
                     },
                 )
@@ -103,9 +103,10 @@ class VideoPlayerTest {
                     },
                     playerContent = { _, modifier ->
                         Box(
-                            modifier = modifier
-                                .background(Color.Black)
-                                .testTag("player-surface"),
+                            modifier =
+                                modifier
+                                    .background(Color.Black)
+                                    .testTag("player-surface"),
                         )
                     },
                 )

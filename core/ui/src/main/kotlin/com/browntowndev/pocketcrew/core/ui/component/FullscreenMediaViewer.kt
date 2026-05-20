@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -71,30 +70,34 @@ fun FullscreenMediaViewer(
     },
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .semantics { this.contentDescription = contentDescription },
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         when (mediaType) {
-            MediaCapability.IMAGE -> imageContent(
-                localUri,
-                contentDescription,
-                Modifier.fillMaxSize(),
-            )
+            MediaCapability.IMAGE ->
+                imageContent(
+                    localUri,
+                    contentDescription,
+                    Modifier.fillMaxSize(),
+                )
 
-            MediaCapability.VIDEO -> videoContent(
-                localUri,
-                contentDescription,
-                Modifier.fillMaxSize(),
-            )
+            MediaCapability.VIDEO ->
+                videoContent(
+                    localUri,
+                    contentDescription,
+                    Modifier.fillMaxSize(),
+                )
 
-            MediaCapability.MUSIC -> audioContent(
-                localUri,
-                contentDescription,
-                Modifier.fillMaxSize(),
-            )
+            MediaCapability.MUSIC ->
+                audioContent(
+                    localUri,
+                    contentDescription,
+                    Modifier.fillMaxSize(),
+                )
         }
     }
 }
@@ -120,16 +123,18 @@ private fun FullscreenMediaViewerDarkPreview() {
 @Composable
 private fun FullscreenMediaViewerPreviewContent() {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(280.dp),
         ) {
             FullscreenMediaViewer(
                 localUri = "file:///preview-image.png",
@@ -140,9 +145,10 @@ private fun FullscreenMediaViewerPreviewContent() {
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(280.dp),
         ) {
             FullscreenMediaViewer(
                 localUri = "file:///preview-video.mp4",
@@ -167,9 +173,10 @@ private fun FullscreenMediaPreviewPlaceholder(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .background(Color.DarkGray)
-            .semantics { this.contentDescription = contentDescription },
+        modifier =
+            modifier
+                .background(Color.DarkGray)
+                .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -15,21 +15,30 @@ data class VaultUserUiState(
 @Immutable
 sealed interface VaultAuthUiState {
     data object Unauthenticated : VaultAuthUiState
+
     data object Loading : VaultAuthUiState
-    data class Authenticated(val user: VaultUserUiState) : VaultAuthUiState
-    data class Error(val message: String) : VaultAuthUiState
+
+    data class Authenticated(
+        val user: VaultUserUiState,
+    ) : VaultAuthUiState
+
+    data class Error(
+        val message: String,
+    ) : VaultAuthUiState
 }
 
-fun AuthState.toVaultAuthUiState(): VaultAuthUiState = when (this) {
-    is AuthState.Authenticated -> VaultAuthUiState.Authenticated(user.toUi())
-    AuthState.Loading -> VaultAuthUiState.Loading
-    AuthState.Unauthenticated -> VaultAuthUiState.Unauthenticated
-    is AuthState.Error -> VaultAuthUiState.Error(message)
-}
+fun AuthState.toVaultAuthUiState(): VaultAuthUiState =
+    when (this) {
+        is AuthState.Authenticated -> VaultAuthUiState.Authenticated(user.toUi())
+        AuthState.Loading -> VaultAuthUiState.Loading
+        AuthState.Unauthenticated -> VaultAuthUiState.Unauthenticated
+        is AuthState.Error -> VaultAuthUiState.Error(message)
+    }
 
-private fun UserProfile.toUi(): VaultUserUiState = VaultUserUiState(
-    uid = uid,
-    displayName = displayName,
-    email = email,
-    photoUrl = photoUrl,
-)
+private fun UserProfile.toUi(): VaultUserUiState =
+    VaultUserUiState(
+        uid = uid,
+        displayName = displayName,
+        email = email,
+        photoUrl = photoUrl,
+    )

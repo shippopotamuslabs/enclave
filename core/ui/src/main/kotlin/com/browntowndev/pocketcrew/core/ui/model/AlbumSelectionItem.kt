@@ -9,5 +9,5 @@ data class AlbumSelectionItem(
     val name: String,
     val itemCount: Int,
     val coverUri: String? = null,
-    val coverMediaType: MediaCapability? = null
+    val coverMediaType: MediaCapability? = null,
 )

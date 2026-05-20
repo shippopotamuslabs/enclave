@@ -44,10 +44,11 @@ fun VaultReauthBottomSheet(
         sheetState = sheetState,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding(),
         ) {
             VaultUnlockContent(
                 authState = authState,

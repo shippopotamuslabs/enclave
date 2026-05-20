@@ -26,7 +26,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class StreamableMarkdownTextRecompositionTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -44,10 +43,11 @@ class StreamableMarkdownTextRecompositionTest {
     @Test
     fun `themeFactory is called only once across multiple recompositions of StreamableMarkdownText`() {
         var factoryCallCount = 0
-        val countingFactory = MarkdownThemeFactory {
-            factoryCallCount++
-            darkMarkdownTheme()
-        }
+        val countingFactory =
+            MarkdownThemeFactory {
+                factoryCallCount++
+                darkMarkdownTheme()
+            }
         var isStreaming by mutableStateOf(false)
 
         composeTestRule.setContent {

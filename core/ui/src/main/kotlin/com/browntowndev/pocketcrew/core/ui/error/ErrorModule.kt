@@ -9,10 +9,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ErrorModule {
-
     @Binds
     @Singleton
-    abstract fun bindViewModelErrorHandler(
-        impl: ViewModelErrorHandlerImpl
-    ): ViewModelErrorHandler
+    abstract fun bindViewModelErrorHandler(impl: ViewModelErrorHandlerImpl): ViewModelErrorHandler
 }

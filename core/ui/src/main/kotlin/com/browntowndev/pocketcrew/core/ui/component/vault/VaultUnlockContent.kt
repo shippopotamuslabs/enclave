@@ -109,9 +109,10 @@ fun VaultUnlockContent(
                     AsyncImage(
                         model = authState.user.photoUrl,
                         contentDescription = "Profile picture",
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(RoundedCornerShape(40.dp)),
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(40.dp)),
                     )
                 } else {
                     Icon(
@@ -135,7 +136,6 @@ fun VaultUnlockContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-
             }
             VaultAuthUiState.Unauthenticated, VaultAuthUiState.Loading, is VaultAuthUiState.Error -> {
                 Icon(
@@ -178,9 +178,10 @@ fun VaultUnlockContent(
                         Spacer(modifier = Modifier.height(48.dp))
                         Button(
                             onClick = onLoginClick,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
                             shape = RoundedCornerShape(24.dp),
                             enabled = authState !is VaultAuthUiState.Loading,
                         ) {
@@ -204,9 +205,10 @@ fun VaultUnlockContent(
             if (targetIsUnlocking) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 48.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
@@ -287,21 +289,26 @@ fun VaultUnlockContent(
                                 )
                             }
                         },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (password.isNotBlank()) {
-                                    onSubmitVaultPassword(password, enableBiometric)
-                                }
-                            },
-                        ),
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onDone = {
+                                    if (password.isNotBlank()) {
+                                        onSubmitVaultPassword(password, enableBiometric)
+                                    }
+                                },
+                            ),
                         isError = errorMessage != null,
-                        supportingText = if (errorMessage != null) {
-                            { Text(errorMessage) }
-                        } else null,
+                        supportingText =
+                            if (errorMessage != null) {
+                                { Text(errorMessage) }
+                            } else {
+                                null
+                            },
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -310,7 +317,15 @@ fun VaultUnlockContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         val surfaceColor by animateColorAsState(
-                            targetValue = if (enableBiometric) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            targetValue =
+                                if (enableBiometric) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                        .copy(
+                                            alpha = 0.5f,
+                                        )
+                                },
                             label = "biometric_surface_color",
                         )
 
@@ -355,9 +370,10 @@ fun VaultUnlockContent(
 
                     Button(
                         onClick = { onSubmitVaultPassword(password, enableBiometric) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
                         shape = RoundedCornerShape(24.dp),
                         enabled = password.isNotBlank(),
                     ) {

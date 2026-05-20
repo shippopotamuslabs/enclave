@@ -10,9 +10,8 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineExceptionHandler
-
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Global exception handler that catches uncaught coroutine exceptions.
@@ -27,16 +26,20 @@ class GlobalErrorHandler : CoroutineExceptionHandler {
         fun loggingPort(): LoggingPort
     }
 
-    override fun handleException(context: CoroutineContext, exception: Throwable) {
+    override fun handleException(
+        context: CoroutineContext,
+        exception: Throwable,
+    ) {
         val app = ErrorHandlerContextProvider.application ?: return
-        
+
         try {
-            val entryPoint = EntryPointAccessors.fromApplication(
-                app,
-                ErrorHandlerEntryPoint::class.java
-            )
+            val entryPoint =
+                EntryPointAccessors.fromApplication(
+                    app,
+                    ErrorHandlerEntryPoint::class.java,
+                )
             val loggingPort = entryPoint.loggingPort()
-            
+
             loggingPort.recordException("GlobalErrorHandler", "Uncaught coroutine exception", exception)
             loggingPort.error("GlobalErrorHandler", "Uncaught coroutine exception", exception)
         } catch (e: Exception) {
@@ -68,10 +71,26 @@ class ErrorHandlerContextProvider : ContentProvider() {
         projection: Array<out String>?,
         selection: String?,
         selectionArgs: Array<out String>?,
-        sortOrder: String?
+        sortOrder: String?,
     ): Cursor? = null
+
     override fun getType(uri: Uri): String? = null
-    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
-    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
-    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+
+    override fun insert(
+        uri: Uri,
+        values: ContentValues?,
+    ): Uri? = null
+
+    override fun delete(
+        uri: Uri,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int = 0
+
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int = 0
 }

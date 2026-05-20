@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.core.ui.component
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -20,7 +19,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class FullscreenMediaViewerTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -44,9 +42,10 @@ class FullscreenMediaViewerTest {
                     imageContent = { _, _, modifier ->
                         imageRendered = true
                         Box(
-                            modifier = modifier
-                                .fillMaxSize()
-                                .testTag("image-slot"),
+                            modifier =
+                                modifier
+                                    .fillMaxSize()
+                                    .testTag("image-slot"),
                         )
                     },
                 )
@@ -74,9 +73,10 @@ class FullscreenMediaViewerTest {
                     videoContent = { _, _, modifier ->
                         videoRendered = true
                         Box(
-                            modifier = modifier
-                                .fillMaxSize()
-                                .testTag("video-slot"),
+                            modifier =
+                                modifier
+                                    .fillMaxSize()
+                                    .testTag("video-slot"),
                         )
                     },
                     imageContent = { _, _, modifier ->

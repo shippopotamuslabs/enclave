@@ -39,7 +39,7 @@ class PocketCrewTabToolbarTest {
     @Test
     fun `when studio tab is clicked, then onTabClick is called with STUDIO`() {
         val onTabClick = mockk<(PocketCrewTab) -> Unit>(relaxed = true)
-        
+
         composeTestRule.setContent {
             PocketCrewTheme {
                 PocketCrewTabToolbar(
@@ -58,7 +58,7 @@ class PocketCrewTabToolbarTest {
     @Test
     fun `when menu icon is clicked, then onMenuClick is called`() {
         val onMenuClick = mockk<() -> Unit>(relaxed = true)
-        
+
         composeTestRule.setContent {
             PocketCrewTheme {
                 PocketCrewTabToolbar(

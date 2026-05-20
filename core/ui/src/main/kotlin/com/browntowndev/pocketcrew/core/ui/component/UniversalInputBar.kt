@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.core.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
@@ -15,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -32,8 +30,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
@@ -44,12 +44,9 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -72,13 +69,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 
 /**
  * A universal container for input bars (Chat, Studio, etc.).
@@ -107,19 +104,21 @@ fun UniversalInputBar(
         color = MaterialTheme.colorScheme.background,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .then(
-                    if (hazeState != null) {
-                        Modifier.hazeEffect(state = hazeState) {
-                            blurRadius = 24.dp
-                            tints = listOf(HazeTint(Color.Black.copy(alpha = hazeAlpha)))
-                            noiseFactor = 0.15f
-                        }
-                    } else Modifier.background(backgroundColor)
-                )
-                .navigationBarsPadding()
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .then(
+                        if (hazeState != null) {
+                            Modifier.hazeEffect(state = hazeState) {
+                                blurRadius = 24.dp
+                                tints = listOf(HazeTint(Color.Black.copy(alpha = hazeAlpha)))
+                                noiseFactor = 0.15f
+                            }
+                        } else {
+                            Modifier.background(backgroundColor)
+                        },
+                    ).navigationBarsPadding(),
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val contentMaxH = maxHeight
@@ -128,47 +127,49 @@ fun UniversalInputBar(
                 var inputHeight by remember { mutableStateOf(0.dp) }
                 val innerTopHeight by remember { derivedStateOf { attachmentHeight + inputHeight } }
 
-                
                 val expandFraction by animateFloatAsState(
                     targetValue = if (isExpanded) 1f else 0f,
-                    animationSpec = spring(
-                        dampingRatio = 1.0f,
-                        stiffness = 400.0f
-                    ),
-                    label = "expandFraction"
+                    animationSpec =
+                        spring(
+                            dampingRatio = 1.0f,
+                            stiffness = 400.0f,
+                        ),
+                    label = "expandFraction",
                 )
-                
+
                 // Calculate the true collapsed height based on the current unconstrained inner content
                 val unconstrainedHeight = 12.dp + innerTopHeight + 56.dp
                 val trueCollapsedHeight = unconstrainedHeight.coerceIn(112.dp, maxHeightCollapsed)
                 val currentHeight = lerp(trueCollapsedHeight, contentMaxH * 0.7f, expandFraction)
-                
+
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            when (expandFraction) {
-                                0f -> Modifier.heightIn(min = 112.dp, max = maxHeightCollapsed)
-                                1f -> Modifier.fillMaxHeight(0.7f) // Reduced from 0.9f to avoid hitting TopAppBar
-                                else -> Modifier.height(currentHeight)
-                            }
-                        )
-                        .padding(start = 16.dp, end = 16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .then(
+                                when (expandFraction) {
+                                    0f -> Modifier.heightIn(min = 112.dp, max = maxHeightCollapsed)
+                                    1f -> Modifier.fillMaxHeight(0.7f) // Reduced from 0.9f to avoid hitting TopAppBar
+                                    else -> Modifier.height(currentHeight)
+                                },
+                            ).padding(start = 16.dp, end = 16.dp),
                 ) {
                     // TOP CONTENT (Pinned attachments + Scrollable input)
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 56.dp) // Reserves space for the bottom row (48dp height + 8dp padding)
-                            .then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
-                        verticalArrangement = Arrangement.Top
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 56.dp) // Reserves space for the bottom row (48dp height + 8dp padding)
+                                .then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
+                        verticalArrangement = Arrangement.Top,
                     ) {
                         // 1. Pinned Attachment Row
                         if (attachmentContent != null) {
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onSizeChanged { attachmentHeight = with(density) { it.height.toDp() } }
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .onSizeChanged { attachmentHeight = with(density) { it.height.toDp() } },
                             ) {
                                 attachmentContent()
                             }
@@ -178,18 +179,19 @@ fun UniversalInputBar(
 
                         // 2. Scrollable Input Area
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(rememberScrollState())
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f, fill = false)
+                                    .verticalScroll(rememberScrollState()),
                         ) {
                             Box(modifier = Modifier.onSizeChanged { inputHeight = with(density) { it.height.toDp() } }) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.Top
+                                    verticalAlignment = Alignment.Top,
                                 ) {
                                     Column(
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
                                     ) {
                                         inputContent()
                                     }
@@ -213,18 +215,19 @@ fun UniversalInputBar(
                         visible = actionContent != null,
                         enter = expandVertically() + fadeIn(),
                         exit = shrinkVertically() + fadeOut(),
-                        modifier = Modifier.align(Alignment.BottomStart)
+                        modifier = Modifier.align(Alignment.BottomStart),
                     ) {
                         lastActionContent?.let { content ->
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                                    .heightIn(min = 48.dp),
-                                verticalAlignment = Alignment.Bottom
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .heightIn(min = 48.dp),
+                                verticalAlignment = Alignment.Bottom,
                             ) {
                                 content()
-                                
+
                                 // Ensure the trailing area is reserved in the action row too
                                 if (trailingAction != null) {
                                     Spacer(Modifier.width(104.dp))
@@ -240,15 +243,16 @@ fun UniversalInputBar(
                                 if (isExpanded) focusManager.clearFocus()
                                 onExpandToggle()
                             },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 4.dp)
-                                .size(32.dp)
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 4.dp)
+                                    .size(32.dp),
                         ) {
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -256,12 +260,13 @@ fun UniversalInputBar(
                     // Bottom Right: Trailing Container (Mic, Send)
                     if (trailingAction != null) {
                         Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(bottom = 8.dp)
-                                .heightIn(min = 48.dp),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(bottom = 8.dp)
+                                    .heightIn(min = 48.dp),
                             verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
                         ) {
                             this@Row.trailingAction()
                         }
@@ -289,16 +294,17 @@ fun StandardTrailingAction(
     description: String? = null,
 ) {
     Box(
-        modifier = modifier
-            .size(48.dp)
-            .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .size(48.dp)
+                .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
+                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = if (enabled) contentColor else disabledContentColor
+            tint = if (enabled) contentColor else disabledContentColor,
         )
     }
 }
@@ -320,16 +326,17 @@ fun StandardTrailingAction(
     description: String? = null,
 ) {
     Box(
-        modifier = modifier
-            .size(48.dp)
-            .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .size(48.dp)
+                .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
+                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             painter = painter,
             contentDescription = description,
-            tint = if (enabled) contentColor else disabledContentColor
+            tint = if (enabled) contentColor else disabledContentColor,
         )
     }
 }
@@ -343,23 +350,24 @@ fun UniversalVoicePromptPlaceholder(
     idlePlaceholder: String = "Prompt the Pocket Crew",
     modifier: Modifier = Modifier,
 ) {
-    val isRecordingPhase = speechState is SpeechState.Listening || 
-                          speechState is SpeechState.ModelLoading || 
-                          speechState is SpeechState.Transcribing
+    val isRecordingPhase =
+        speechState is SpeechState.Listening ||
+            speechState is SpeechState.ModelLoading ||
+            speechState is SpeechState.Transcribing
 
     Box(modifier = modifier) {
         AnimatedContent(
             targetState = speechState,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "PlaceholderTransition",
-            contentKey = { it::class }
+            contentKey = { it::class },
         ) { target ->
             when (target) {
                 is SpeechState.ModelLoading -> {
                     Text(
                         text = "Preparing microphone...",
                         style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 is SpeechState.Transcribing -> {
@@ -367,16 +375,17 @@ fun UniversalVoicePromptPlaceholder(
                         text = "Transcribing...",
                         baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         highlightColor = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp)
+                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
                     )
                 }
                 is SpeechState.Listening -> {
                     Box(
-                        modifier = Modifier
-                            .height(50.dp)
-                            .fillMaxWidth()
-                            .padding(end = 48.dp),
-                        contentAlignment = Alignment.CenterStart
+                        modifier =
+                            Modifier
+                                .height(50.dp)
+                                .fillMaxWidth()
+                                .padding(end = 48.dp),
+                        contentAlignment = Alignment.CenterStart,
                     ) {
                         SoundWave(state = target)
                     }
@@ -385,7 +394,7 @@ fun UniversalVoicePromptPlaceholder(
                     Text(
                         text = idlePlaceholder,
                         style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -412,19 +421,20 @@ fun UniversalVoiceTrailingAction(
     hasSendableContent: Boolean = inputText.isNotBlank(),
 ) {
     val focusManager = LocalFocusManager.current
-    val isRecordingPhase = speechState is SpeechState.Listening || 
-                          speechState is SpeechState.ModelLoading || 
-                          speechState is SpeechState.Transcribing
+    val isRecordingPhase =
+        speechState is SpeechState.Listening ||
+            speechState is SpeechState.ModelLoading ||
+            speechState is SpeechState.Transcribing
 
     if (speechState is SpeechState.Transcribing) {
         Box(
             modifier = modifier.size(48.dp),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             CircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
                 color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 2.dp
+                strokeWidth = 2.dp,
             )
         }
     } else {
@@ -432,31 +442,34 @@ fun UniversalVoiceTrailingAction(
             targetState = hasSendableContent && !isGenerating && !isRecordingPhase,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "SendMicTransition",
-            modifier = modifier
+            modifier = modifier,
         ) { isSending ->
             val isRecording = speechState is SpeechState.Listening || speechState is SpeechState.ModelLoading
-            val icon = when {
-                isGenerating || isRecording -> Icons.Default.Stop
-                isSending -> Icons.AutoMirrored.Filled.Send
-                else -> Icons.Default.Mic
-            }
-            
+            val icon =
+                when {
+                    isGenerating || isRecording -> Icons.Default.Stop
+                    isSending -> Icons.AutoMirrored.Filled.Send
+                    else -> Icons.Default.Mic
+                }
+
             val stopEnabled = (isGenerating && canStop) || isRecording
             val micEnabled = !isGenerating && !isRecording && !isGlobalInferenceBlocked
             val sendEnabled = isSending && !isGenerating && !isRecording && !isGlobalInferenceBlocked
-            
+
             val enabled = stopEnabled || micEnabled || sendEnabled
-            
-            val containerColor = when {
-                isRecording || isGenerating -> MaterialTheme.colorScheme.errorContainer
-                isSending -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-            val contentColor = when {
-                isRecording || isGenerating -> MaterialTheme.colorScheme.onErrorContainer
-                isSending -> MaterialTheme.colorScheme.onPrimary
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
+
+            val containerColor =
+                when {
+                    isRecording || isGenerating -> MaterialTheme.colorScheme.errorContainer
+                    isSending -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            val contentColor =
+                when {
+                    isRecording || isGenerating -> MaterialTheme.colorScheme.onErrorContainer
+                    isSending -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
 
             StandardTrailingAction(
                 onClick = {
@@ -473,14 +486,17 @@ fun UniversalVoiceTrailingAction(
                 icon = icon,
                 enabled = enabled,
                 containerColor = containerColor,
-                contentColor = contentColor
+                contentColor = contentColor,
             )
         }
     }
 }
 
 @Composable
-fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
+fun SoundWave(
+    state: SpeechState.Listening,
+    modifier: Modifier = Modifier,
+) {
     var volumes by remember { mutableStateOf(listOf<Float>()) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val silenceColor = MaterialTheme.colorScheme.surfaceVariant
@@ -491,7 +507,7 @@ fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
     }
 
     Canvas(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
     ) {
         val barWidth = 4.dp.toPx()
         val spacing = 3.dp.toPx()
@@ -509,7 +525,7 @@ fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
                 color = if (vol <= 0.01f) silenceColor else primaryColor,
                 topLeft = Offset(x, y),
                 size = Size(barWidth, h),
-                cornerRadius = CornerRadius(barWidth / 2, barWidth / 2)
+                cornerRadius = CornerRadius(barWidth / 2, barWidth / 2),
             )
         }
     }
@@ -527,40 +543,42 @@ fun UniversalImageAttachment(
     isVideo: Boolean = false,
 ) {
     Box(
-        modifier = modifier
-            .size(80.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+        modifier =
+            modifier
+                .size(80.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         if (isVideo) {
             VideoThumbnail(
                 videoUri = uri,
                 contentDescription = contentDescription ?: "Reference video thumbnail",
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             AsyncImage(
                 model = uri,
                 contentDescription = contentDescription ?: "Attached image preview",
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
             )
         }
 
         Surface(
             color = Color.Black.copy(alpha = 0.6f),
             shape = CircleShape,
-            modifier = Modifier
-                .padding(4.dp)
-                .size(24.dp)
-                .align(Alignment.TopEnd)
-                .clickable(onClick = onClear)
+            modifier =
+                Modifier
+                    .padding(4.dp)
+                    .size(24.dp)
+                    .align(Alignment.TopEnd)
+                    .clickable(onClick = onClear),
         ) {
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Clear attachment",
                 tint = Color.White,
-                modifier = Modifier.padding(4.dp)
+                modifier = Modifier.padding(4.dp),
             )
         }
     }

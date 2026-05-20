@@ -12,43 +12,49 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ViewModelErrorHandlerImpl @Inject constructor(
-    private val loggingPort: LoggingPort,
-    private val clock: Clock
-) : ViewModelErrorHandler {
+class ViewModelErrorHandlerImpl
+    @Inject
+    constructor(
+        private val loggingPort: LoggingPort,
+        private val clock: Clock,
+    ) : ViewModelErrorHandler {
+        private val _errorEvents =
+            MutableSharedFlow<String>(
+                replay = 0,
+                extraBufferCapacity = 1,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST,
+            )
+        override val errorEvents: SharedFlow<String> = _errorEvents.asSharedFlow()
 
-    private val _errorEvents = MutableSharedFlow<String>(
-        replay = 0,
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-    override val errorEvents: SharedFlow<String> = _errorEvents.asSharedFlow()
+        private var lastErrorTime = -5000L
+        private val DEBOUNCE_MILLIS = 5000L
 
-    private var lastErrorTime = -5000L
-    private val DEBOUNCE_MILLIS = 5000L
+        override fun handleError(
+            tag: String,
+            message: String,
+            throwable: Throwable,
+            userMessage: String,
+        ) {
+            if (throwable is CancellationException) return
 
-    override fun handleError(tag: String, message: String, throwable: Throwable, userMessage: String) {
-        if (throwable is CancellationException) return
+            // 1. Log to Crashlytics and Logcat
+            loggingPort.recordException(tag, message, throwable)
+            loggingPort.error(tag, message, throwable)
 
-        // 1. Log to Crashlytics and Logcat
-        loggingPort.recordException(tag, message, throwable)
-        loggingPort.error(tag, message, throwable)
-
-        // 2. Debounce and emit user-facing message
-        val currentTime = clock.currentTimeMillis()
-        if (currentTime - lastErrorTime >= DEBOUNCE_MILLIS) {
-            lastErrorTime = currentTime
-            _errorEvents.tryEmit(userMessage)
+            // 2. Debounce and emit user-facing message
+            val currentTime = clock.currentTimeMillis()
+            if (currentTime - lastErrorTime >= DEBOUNCE_MILLIS) {
+                lastErrorTime = currentTime
+                _errorEvents.tryEmit(userMessage)
+            }
         }
-    }
 
-    override fun coroutineExceptionHandler(
-        tag: String,
-        message: String,
-        userMessage: String
-    ): CoroutineExceptionHandler {
-        return CoroutineExceptionHandler { _, throwable ->
-            handleError(tag, message, throwable, userMessage)
-        }
+        override fun coroutineExceptionHandler(
+            tag: String,
+            message: String,
+            userMessage: String,
+        ): CoroutineExceptionHandler =
+            CoroutineExceptionHandler { _, throwable ->
+                handleError(tag, message, throwable, userMessage)
+            }
     }
-}
