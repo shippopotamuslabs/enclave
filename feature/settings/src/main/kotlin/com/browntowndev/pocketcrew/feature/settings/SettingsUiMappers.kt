@@ -244,7 +244,15 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                 },
         displayLabel = modelType.displayLabel,
         providerName = providerName,
-        presetName = presetName,
+        presetName =
+            presetName
+                ?: when {
+                    localConfigId != null ||
+                        apiConfigId != null ||
+                        ttsProviderId != null ->
+                        ActiveModelConfigurationDecryptException.USER_MESSAGE
+                    else -> null
+                },
         isMultimodal = isMultimodal,
     )
 

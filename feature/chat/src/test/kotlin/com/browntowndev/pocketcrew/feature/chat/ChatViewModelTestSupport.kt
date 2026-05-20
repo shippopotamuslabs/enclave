@@ -16,7 +16,6 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
-import com.browntowndev.pocketcrew.feature.chat.delegates.ActiveTurnSnapshotCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatShareCoordinator
@@ -55,6 +54,7 @@ object ChatViewModelTestSupport {
                 chatUseCases = chatUseCases,
                 settingsUseCases = settingsUseCases,
                 cancelInferenceUseCase = cancelInferenceUseCase,
+                activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
                 errorHandler = errorHandler,
                 savedStateHandle = savedStateHandle,
             )
@@ -93,16 +93,13 @@ object ChatViewModelTestSupport {
         val photoAttachmentPolicyResolver =
             PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
 
-        val activeTurnSnapshotCoordinator =
-            ActiveTurnSnapshotCoordinator(activeChatTurnSnapshotPort = activeChatTurnSnapshotPort)
-
         return ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-            activeTurnSnapshotCoordinator = activeTurnSnapshotCoordinator,
+            activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
             errorHandler = errorHandler,
             loggingPort = loggingPort,
             studioRepository = studioRepository,
