@@ -285,7 +285,14 @@ class MainViewModel
                         }
                     } else {
                         _startupState.update {
-                            if (it is AppStartupState.Ready) it.copy(isVaultLocked = false, vaultErrorMessage = null) else it
+                            if (it is AppStartupState.Ready) {
+                                it.copy(
+                                    isVaultLocked = false,
+                                    vaultErrorMessage = if (it.cloudSyncDeferred) it.vaultErrorMessage else null,
+                                )
+                            } else {
+                                it
+                            }
                         }
                     }
 
@@ -440,11 +447,26 @@ class MainViewModel
             }
         }
 
-        private suspend fun startCloudSyncAndListen(initialUpload: Boolean) {
-            startCloudSyncListeningUseCase(uploadLocalFirst = initialUpload)
-            _startupState.update {
-                if (it is AppStartupState.Ready) it.copy(cloudSyncDeferred = false) else it
+        private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
+            val result = startCloudSyncListeningUseCase(uploadLocalFirst = initialUpload)
+            if (result.isSuccess) {
+                _startupState.update {
+                    if (it is AppStartupState.Ready) it.copy(cloudSyncDeferred = false, vaultErrorMessage = null) else it
+                }
+                return true
             }
+            loggingPort.error(TAG, "startCloudSyncAndListen: cloud sync start failed", result.exceptionOrNull())
+            _startupState.update {
+                if (it is AppStartupState.Ready) {
+                    it.copy(
+                        cloudSyncDeferred = true,
+                        vaultErrorMessage = "Failed to start cloud sync",
+                    )
+                } else {
+                    it
+                }
+            }
+            return false
         }
 
         /**
@@ -489,7 +511,16 @@ class MainViewModel
                 }
                 // Skip syncAllLocalDataToCloud — Room is empty after clearAllData; nothing to push.
                 pendingVaultReconciliationPayload = null
-                startCloudSyncListeningUseCase(uploadLocalFirst = false)
+                if (!startCloudSyncAndListen(initialUpload = false)) {
+                    _startupState.update {
+                        if (it is AppStartupState.Ready) {
+                            it.copy(pendingVaultReconciliation = pending.copy(isReconciling = false))
+                        } else {
+                            it
+                        }
+                    }
+                    return@launch
+                }
                 initializeModelsIfNeeded()
                 _startupState.update {
                     if (it is AppStartupState.Ready) {

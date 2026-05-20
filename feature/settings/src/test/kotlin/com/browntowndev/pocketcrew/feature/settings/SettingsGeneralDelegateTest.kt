@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -122,11 +123,72 @@ class SettingsGeneralDelegateTest {
         }
 
     @Test
-    fun `already matching unlocks vault before starting cloud sync`() =
+    fun `sync start failure keeps reauth sheet open with error`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            coEvery { unlockVaultFromStoredMetadataUseCase("password") } returns Result.success(Unit)
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns
+                Result.failure(IllegalStateException("replay failed"))
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+
+            assertEquals(
+                VaultReauthSheetState.EnterPassword(
+                    isUnlocking = false,
+                    errorMessage = "Failed to start cloud sync",
+                ),
+                sheet.value,
+            )
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
+        }
+
+    @Test
+    fun `SCN-ENTRY-003 settings reauth and adoption start ordered sync`() =
         runTest {
             val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
             val salt = ByteArray(16) { 0x11 }
             val wrappedDek = ByteArray(32) { 0x22 }
+            val payload =
+                VaultReconciliationOutcome.MismatchRequiresClobber(
+                    cloudDek = ByteArray(32) { 0x33 },
+                    cloudSalt = "cloud-salt",
+                    cloudWrappedDek = "cloud-wrapped",
+                    cloudVerification = null,
+                )
+
+            // Drive the entry path through a REAL use case so the test fails when the use case
+            // does not actually replay before starting the listener.
+            coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
+                Result.success(
+                    com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult(
+                        eventsApplied = 0,
+                        lastAppliedSequence = 0,
+                        hasMore = false,
+                    ),
+                )
+            every { cloudSyncPort.startListening() } returns Unit
+            val realStartUseCase =
+                com.browntowndev.pocketcrew.domain.usecase.security
+                    .StartCloudSyncListeningUseCase(cloudSyncPort)
+            val realDelegate =
+                SettingsGeneralDelegate(
+                    preferencesUseCases = preferencesUseCases,
+                    authUseCases = authUseCases,
+                    errorHandler = errorHandler,
+                    detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
+                    adoptCloudVaultUseCase = adoptCloudVaultUseCase,
+                    bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+                    createVaultUseCase = createVaultUseCase,
+                    unlockVaultFromStoredMetadataUseCase = unlockVaultFromStoredMetadataUseCase,
+                    startCloudSyncListeningUseCase = realStartUseCase,
+                    cryptoManager = cryptoManager,
+                    vaultMetadataPort = vaultMetadataPort,
+                    cloudSyncPort = cloudSyncPort,
+                )
 
             coEvery { detectVaultReconciliationStateUseCase("password") } returns
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
@@ -135,13 +197,29 @@ class SettingsGeneralDelegateTest {
             every { cryptoManager.decodeBase64("salt-b64") } returns salt
             every { cryptoManager.decodeBase64("wrapped-b64") } returns wrappedDek
             coEvery { unlockVaultFromStoredMetadataUseCase("password") } returns Result.success(Unit)
-            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns Result.success(Unit)
 
-            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            realDelegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
             advanceUntilIdle()
 
             assertEquals(VaultReauthSheetState.Hidden, sheet.value)
             coVerify(exactly = 1) { unlockVaultFromStoredMetadataUseCase("password") }
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
+            // Reauth path must drive upload -> replay -> live listener in order.
+            coVerifyOrder {
+                cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.startListening()
+            }
+
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
+            coEvery { adoptCloudVaultUseCase(payload) } returns Result.success(Unit)
+
+            realDelegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+            realDelegate.onConfirmAdoptCloud(this, "Settings", sheet)
+            advanceUntilIdle()
+
+            // Adoption path must skip upload but still drive replay -> live listener.
+            coVerify(atLeast = 1) { cloudSyncPort.syncRemoteChangesFromCloud() }
+            verify(atLeast = 1) { cloudSyncPort.startListening() }
         }
 }

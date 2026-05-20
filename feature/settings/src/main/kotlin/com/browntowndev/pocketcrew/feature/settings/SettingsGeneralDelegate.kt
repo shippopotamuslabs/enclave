@@ -195,7 +195,9 @@ internal class SettingsGeneralDelegate
                                         )
                                     return@launch
                                 }
-                                startCloudSyncListeningUseCase(uploadLocalFirst = false)
+                                if (!startCloudSync(uploadLocalFirst = false, vaultReauthSheet = vaultReauthSheet)) {
+                                    return@launch
+                                }
                                 vaultReauthSheet.value = VaultReauthSheetState.Hidden
                             }
                             else -> {
@@ -250,7 +252,9 @@ internal class SettingsGeneralDelegate
                     return@launch
                 }
                 pendingCloudClobberPayload = null
-                startCloudSyncListeningUseCase(uploadLocalFirst = false)
+                if (!startCloudSync(uploadLocalFirst = false, vaultReauthSheet = vaultReauthSheet)) {
+                    return@launch
+                }
                 vaultReauthSheet.value = VaultReauthSheetState.Hidden
             }
         }
@@ -297,8 +301,24 @@ internal class SettingsGeneralDelegate
                     )
                 return false
             }
-            startCloudSyncListeningUseCase(uploadLocalFirst = true)
+            if (!startCloudSync(uploadLocalFirst = true, vaultReauthSheet = vaultReauthSheet)) {
+                return false
+            }
             return true
+        }
+
+        private suspend fun startCloudSync(
+            uploadLocalFirst: Boolean,
+            vaultReauthSheet: MutableStateFlow<VaultReauthSheetState>,
+        ): Boolean {
+            val syncResult = startCloudSyncListeningUseCase(uploadLocalFirst = uploadLocalFirst)
+            if (syncResult.isSuccess) return true
+            vaultReauthSheet.value =
+                VaultReauthSheetState.EnterPassword(
+                    isUnlocking = false,
+                    errorMessage = "Failed to start cloud sync",
+                )
+            return false
         }
 
         private suspend fun ensureVerificationStored(): String? {
