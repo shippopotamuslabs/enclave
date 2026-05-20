@@ -1,7 +1,8 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 export { cleanupExpiredShares } from './scheduledCleanup';
+export { handleSyncEntityWrite, handleSyncEntityWriteTrigger } from './syncEventFeed';
 
 admin.initializeApp();
 
