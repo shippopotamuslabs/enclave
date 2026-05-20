@@ -37,8 +37,14 @@ internal class ChatGenerationAccumulatorManager(
             }
             is MessageGenerationState.Processing -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    if (currentState != MessageState.THINKING && currentState != MessageState.GENERATING) {
-                        currentState = MessageState.PROCESSING
+                    when (currentState) {
+                        MessageState.THINKING -> Unit
+                        MessageState.GENERATING -> {
+                            if (content.isEmpty() && thinkingRaw.isEmpty()) {
+                                currentState = MessageState.PROCESSING
+                            }
+                        }
+                        else -> currentState = MessageState.PROCESSING
                     }
                 }
             }
@@ -256,7 +262,7 @@ internal class MessageAccumulator(
     thinkingStartTime: Long? = null,
     thinkingEndTime: Long? = null,
     isComplete: Boolean = false,
-    currentState: MessageState = MessageState.GENERATING,
+    currentState: MessageState = MessageState.PROCESSING,
     pipelineStep: PipelineStep? = null,
     webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     artifacts: MutableList<ArtifactGenerationRequest> = mutableListOf(),

@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -394,7 +395,7 @@ class ChatViewModel
                 )
                 return
             }
-            inferenceOrchestrator.stopInference(viewModelScope)
+            inferenceOrchestrator.stopInference()
             toolExecutionBannerCoordinator.clearBanner()
         }
 
@@ -537,6 +538,7 @@ private data class DbMessagesFingerprint(
 private data class DbMessageFingerprint(
     val id: MessageId,
     val updatedAt: Long?,
+    val messageState: MessageState,
     val fallbackMessage: Message?,
 )
 
@@ -547,6 +549,7 @@ private fun List<Message>.dbMessagesFingerprint(): DbMessagesFingerprint =
                 DbMessageFingerprint(
                     id = message.id,
                     updatedAt = message.updatedAt,
+                    messageState = message.messageState,
                     fallbackMessage = message.takeIf { it.updatedAt == null },
                 )
             },

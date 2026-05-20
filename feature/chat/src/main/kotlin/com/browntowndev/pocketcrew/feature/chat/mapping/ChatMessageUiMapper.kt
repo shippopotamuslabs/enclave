@@ -203,21 +203,28 @@ class ChatMessageUiMapper
                     }
                 MessageState.THINKING -> thinkingIndicatorState(message)
                 MessageState.GENERATING -> {
-                    val raw = message.thinkingRaw
-                    val duration = aggregateThinkingDurationSeconds(message)
-                    val startTime = message.thinkingStartTime ?: 0L
-                    IndicatorState.Generating(
-                        thinkingData =
-                            if (!raw.isNullOrBlank() && duration != null) {
-                                ThinkingDataUi(
-                                    thinkingDurationSeconds = duration,
-                                    thinkingRaw = raw,
-                                    thinkingStartTime = startTime,
-                                )
-                            } else {
-                                null
-                            },
-                    )
+                    if (message.content.text.isBlank() &&
+                        message.thinkingRaw.isNullOrBlank() &&
+                        !message.hasOpenThinkingTranscriptSegment()
+                    ) {
+                        IndicatorState.Processing
+                    } else {
+                        val raw = message.thinkingRaw
+                        val duration = aggregateThinkingDurationSeconds(message)
+                        val startTime = message.thinkingStartTime ?: 0L
+                        IndicatorState.Generating(
+                            thinkingData =
+                                if (!raw.isNullOrBlank() && duration != null) {
+                                    ThinkingDataUi(
+                                        thinkingDurationSeconds = duration,
+                                        thinkingRaw = raw,
+                                        thinkingStartTime = startTime,
+                                    )
+                                } else {
+                                    null
+                                },
+                        )
+                    }
                 }
                 MessageState.COMPLETE -> {
                     val raw = message.thinkingRaw

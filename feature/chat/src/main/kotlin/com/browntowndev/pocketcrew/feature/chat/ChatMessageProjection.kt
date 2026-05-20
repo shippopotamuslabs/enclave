@@ -96,7 +96,7 @@ internal class ChatMessageProjector {
 
         activeMessagesMap.forEach { (messageId, snapshot) ->
             if (messageId !in projectedMap) {
-                projectedMap[messageId] = snapshot.toMessage(chatId = chatId)
+                projectedMap[messageId] = snapshot.toOrphanLiveMessage(chatId = chatId)
             }
         }
 
@@ -140,6 +140,26 @@ internal fun projectChatMessages(
     activeSnapshot: AccumulatedMessages?,
     activeKey: ActiveChatTurnKey?,
 ): ChatMessageProjectionResult = ChatMessageProjector().project(dbMessages, activeSnapshot, activeKey)
+
+/**
+ * Snapshot-only rows (Room has not caught up yet) should not jump straight to THINKING/GENERATING.
+ * Show PROCESSING until the durable db row exists and [resolveMessage] can take over.
+ */
+private fun MessageSnapshot.toOrphanLiveMessage(chatId: ChatId?): Message {
+    val message = toMessage(chatId = chatId)
+    return when (message.messageState) {
+        MessageState.THINKING, MessageState.GENERATING ->
+            message.copy(
+                messageState = MessageState.PROCESSING,
+                thinkingRaw = null,
+                thinkingDurationSeconds = null,
+                thinkingStartTime = null,
+                thinkingEndTime = null,
+                transcriptSegments = emptyList(),
+            )
+        else -> message
+    }
+}
 
 private fun MessageSnapshot.toMessage(
     chatId: ChatId?,

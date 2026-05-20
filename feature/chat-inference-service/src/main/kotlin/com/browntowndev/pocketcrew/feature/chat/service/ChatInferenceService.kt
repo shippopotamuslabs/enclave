@@ -258,6 +258,11 @@ class ChatInferenceService : Service() {
                     )
                     withContext(NonCancellable) {
                         persistenceSession.flush(markIncompleteAsCancelled = true)
+                        publishCancelledTerminalSnapshot(
+                            chatId = chatId,
+                            assistantMessageId = assistantMessageId,
+                            persistenceSession = persistenceSession,
+                        )
                     }
                     throw e
                 } catch (e: Exception) {
@@ -371,6 +376,23 @@ class ChatInferenceService : Service() {
         loggingPort.info(TAG, "sendPrompt complete chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
     }
 
+    private suspend fun publishCancelledTerminalSnapshot(
+        chatId: ChatId,
+        assistantMessageId: MessageId,
+        persistenceSession: ChatGenerationProgressSession,
+    ) {
+        val snapshot = persistenceSession.accumulatedMessages()
+        if (snapshot.messages.isEmpty()) return
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        activeChatTurnSnapshotPort.publish(key, snapshot)
+        loggingPort.debug(
+            TAG,
+            "Published cancelled terminal snapshot chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "state=${snapshot.messages[assistantMessageId]?.messageState}",
+        )
+    }
+
     private suspend fun publishState(
         chatId: ChatId,
         assistantMessageId: MessageId,
@@ -400,15 +422,15 @@ class ChatInferenceService : Service() {
         val session = currentSession
 
         serviceScope.launch(Dispatchers.IO) {
-            // Force persistence cleanup in a NonCancellable block
             withContext(NonCancellable) {
                 session?.flush(markIncompleteAsCancelled = true)
-            }
-
-            if (chatId != null && assistantId != null) {
-                val key = ActiveChatTurnKey(chatId, assistantId)
-                activeChatTurnSnapshotPort.clear(key)
-                loggingPort.debug(TAG, "Snapshot cleared for cancelled turn chat=${chatId.value}")
+                if (chatId != null && assistantId != null && session != null) {
+                    publishCancelledTerminalSnapshot(
+                        chatId = chatId,
+                        assistantMessageId = assistantId,
+                        persistenceSession = session,
+                    )
+                }
             }
 
             // Ensure service stops if this was the last action

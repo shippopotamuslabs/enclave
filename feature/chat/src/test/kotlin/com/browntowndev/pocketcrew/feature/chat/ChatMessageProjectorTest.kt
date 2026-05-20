@@ -211,6 +211,38 @@ class ChatMessageProjectorTest {
         assertFalse(second.handoffReady)
     }
 
+    @Test
+    fun `orphan thinking snapshot shows Processing until durable db row exists`() {
+        val newAssistantId = MessageId("assistant-new")
+        val newKey = ActiveChatTurnKey(chatId, newAssistantId)
+        val thinkingSnapshot =
+            AccumulatedMessages(
+                messages =
+                    mapOf(
+                        newAssistantId to
+                            MessageSnapshot(
+                                messageId = newAssistantId,
+                                modelType = ModelType.THINKING,
+                                content = "",
+                                thinkingRaw = "planning",
+                                messageState = MessageState.THINKING,
+                            ),
+                    ),
+            )
+
+        val orphanOnly = projector.project(emptyList(), thinkingSnapshot, newKey)
+        assertEquals(MessageState.PROCESSING, orphanOnly.messages.single().messageState)
+        assertTrue(orphanOnly.messages.single().transcriptSegments.isEmpty())
+
+        val withDbRow =
+            projector.project(
+                listOf(dbMessage(newAssistantId, state = MessageState.PROCESSING)),
+                thinkingSnapshot,
+                newKey,
+            )
+        assertEquals(MessageState.THINKING, withDbRow.messages.single().messageState)
+    }
+
     // ---------------------------------------------------------------------------
 
     private fun dbMessage(
