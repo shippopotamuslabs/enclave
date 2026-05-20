@@ -19,8 +19,9 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.components.InputBar
-import com.browntowndev.pocketcrew.feature.chat.components.messagelist.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShareBottomSheet
+import com.browntowndev.pocketcrew.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
+import com.browntowndev.pocketcrew.feature.chat.components.messagelist.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
 import com.browntowndev.pocketcrew.feature.chat.components.StreamingResponseHapticEffect
 
@@ -87,23 +88,24 @@ fun ChatScreen(
             onFileSelected(uri?.toString())
         }
 
-    Scaffold(
-        topBar = {
-            ChatTopBar(
-                onMenuClick = onNavigateToHistory,
-                onNewChatClick = onNewChat,
+    ProvideDetailBottomSheet {
+        Scaffold(
+            topBar = {
+                ChatTopBar(
+                    onMenuClick = onNavigateToHistory,
+                    onNewChatClick = onNewChat,
+                )
+            },
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        ) { innerPadding ->
+            ShareBottomSheet(
+                shareState = uiState.shareState,
+                onShareTurn = onShareTurn,
+                onShareFullChat = onShareFullChat,
+                onDismiss = onDismissShareSheet,
             )
-        },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    ) { innerPadding ->
-        ShareBottomSheet(
-            shareState = uiState.shareState,
-            onShareTurn = onShareTurn,
-            onShareFullChat = onShareFullChat,
-            onDismiss = onDismissShareSheet,
-        )
 
-        Column(
+            Column(
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -185,6 +187,7 @@ fun ChatScreen(
                     onMicClick = onMicClick,
                 )
             }
+        }
         }
     }
 }

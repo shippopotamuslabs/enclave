@@ -7,14 +7,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -35,7 +36,7 @@ fun DetailBottomSheet(
 ) {
     if (!config.isVisible) return
 
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uriHandler = LocalUriHandler.current
 
     val displayDuration =
@@ -53,26 +54,29 @@ fun DetailBottomSheet(
     JumpFreeModalBottomSheet(
         onDismissRequest = config.onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
         ) {
             DetailBottomSheetHeader(config = config, displayDuration = displayDuration)
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            DetailBottomSheetBody(
-                config = config,
-                onSourceClick = { url -> uriHandler.openUri(url) },
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                item {
+                    DetailBottomSheetBody(
+                        config = config,
+                        onSourceClick = { url -> uriHandler.openUri(url) },
+                    )
+                }
+            }
         }
     }
 }
@@ -177,7 +181,10 @@ private fun DetailBottomSheetBody(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Requests the screen-level [DetailBottomSheet] via [LocalDetailBottomSheetController].
+ * Safe to call from list rows; does not compose a sheet in place.
+ */
 @Composable
 fun ThinkingDetailsBottomSheet(
     isVisible: Boolean,
@@ -187,15 +194,26 @@ fun ThinkingDetailsBottomSheet(
     elapsedSeconds: Int = 0,
     isStreaming: Boolean = false,
 ) {
-    DetailBottomSheet(
-        config =
-            DetailBottomSheetConfig.Thinking(
-                isVisible = isVisible,
-                content = thinkingRaw,
-                durationSeconds = thinkingDurationSeconds,
-                onDismiss = onDismiss,
-                isStreaming = isStreaming,
-            ),
-        elapsedSeconds = elapsedSeconds,
-    )
+    val controller = LocalDetailBottomSheetController.current
+
+    LaunchedEffect(isVisible, thinkingRaw, thinkingDurationSeconds, isStreaming) {
+        if (isVisible) {
+            controller.show(
+                DetailBottomSheetConfig.Thinking(
+                    isVisible = true,
+                    content = thinkingRaw,
+                    durationSeconds = thinkingDurationSeconds,
+                    onDismiss = onDismiss,
+                    isStreaming = isStreaming,
+                ),
+                elapsedSeconds = elapsedSeconds,
+            )
+        }
+    }
+
+    LaunchedEffect(elapsedSeconds) {
+        if (isVisible) {
+            controller.updateElapsed(elapsedSeconds)
+        }
+    }
 }
