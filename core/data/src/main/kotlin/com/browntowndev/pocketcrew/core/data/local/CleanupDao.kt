@@ -2,7 +2,10 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.Transaction
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 
 @Dao
 @Suppress("TooManyFunctions")
@@ -27,6 +30,9 @@ interface CleanupDao {
         deleteTtsProviders()
         deleteMediaProviders()
         deleteEmbeddings()
+        deleteMemoryEmbeddings(SimpleSQLiteQuery("DELETE FROM memory_embeddings"))
+        deleteDocumentEmbeddings(SimpleSQLiteQuery("DELETE FROM document_embeddings"))
+        deleteArtifactBlockEmbeddings(SimpleSQLiteQuery("DELETE FROM artifact_block_embeddings"))
         deleteWebSearchSources()
     }
 
@@ -83,6 +89,15 @@ interface CleanupDao {
 
     @Query("DELETE FROM embeddings")
     suspend fun deleteEmbeddings()
+
+    @RawQuery
+    suspend fun deleteMemoryEmbeddings(query: SupportSQLiteQuery): Long
+
+    @RawQuery
+    suspend fun deleteDocumentEmbeddings(query: SupportSQLiteQuery): Long
+
+    @RawQuery
+    suspend fun deleteArtifactBlockEmbeddings(query: SupportSQLiteQuery): Long
 
     @Query("DELETE FROM web_search_source")
     suspend fun deleteWebSearchSources()

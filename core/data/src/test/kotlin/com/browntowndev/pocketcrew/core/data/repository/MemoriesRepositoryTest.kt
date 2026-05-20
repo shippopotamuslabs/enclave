@@ -29,21 +29,52 @@ class MemoriesRepositoryTest {
     private lateinit var repository: MemoriesRepository
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
-    private val fakeEncryption = object : com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService {
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+    private val fakeEncryption =
+        object : com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService {
+            override fun encryptString(
+                plaintext: String,
+                aad: ByteArray,
+            ): String = "PCENC:v1:aes-gcm:$plaintext"
 
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+            override fun decryptString(
+                stored: String,
+                aad: ByteArray,
+            ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
-        override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
-    }
-    private val noOpLogger = object : com.browntowndev.pocketcrew.domain.port.inference.LoggingPort {
-        override fun debug(tag: String, message: String) = Unit
-        override fun info(tag: String, message: String) = Unit
-        override fun warning(tag: String, message: String) = Unit
-        override fun error(tag: String, message: String, throwable: Throwable?) = Unit
-        override fun recordException(tag: String, message: String, throwable: Throwable) = Unit
-    }
-    private val healer = com.browntowndev.pocketcrew.core.data.security.SensitivePersistenceSelfHealer(fakeEncryption, noOpLogger)
+            override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
+        }
+    private val noOpLogger =
+        object : com.browntowndev.pocketcrew.domain.port.inference.LoggingPort {
+            override fun debug(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun info(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun warning(
+                tag: String,
+                message: String,
+            ) = Unit
+
+            override fun error(
+                tag: String,
+                message: String,
+                throwable: Throwable?,
+            ) = Unit
+
+            override fun recordException(
+                tag: String,
+                message: String,
+                throwable: Throwable,
+            ) = Unit
+        }
+    private val healer =
+        com.browntowndev.pocketcrew.core.data.security
+            .SensitivePersistenceSelfHealer(fakeEncryption, noOpLogger)
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
 
     @BeforeEach
@@ -51,7 +82,17 @@ class MemoriesRepositoryTest {
         memoriesDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         embeddingEngine = mockk(relaxed = true)
-        repository = MemoriesRepositoryImpl(syncTrigger, memoriesDao, embeddingDao, embeddingEngine, healer, readRepairApplier)
+        repository =
+            MemoriesRepositoryImpl(
+                syncTrigger,
+                memoriesDao,
+                embeddingDao,
+                embeddingEngine,
+                healer,
+                readRepairApplier,
+                cleanupDao = mockk(relaxed = true),
+                transactionProvider = mockk(relaxed = true),
+            )
     }
 
     @Test
@@ -125,6 +166,8 @@ class MemoriesRepositoryTest {
                     embeddingEngine,
                     healer,
                     readRepairApplier,
+                    cleanupDao = mockk(relaxed = true),
+                    transactionProvider = mockk(relaxed = true),
                 )
             val category = MemoryCategory.FACTS
             val content = "Private memory"

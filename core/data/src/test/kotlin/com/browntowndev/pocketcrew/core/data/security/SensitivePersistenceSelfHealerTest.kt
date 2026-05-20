@@ -72,11 +72,12 @@ class SensitivePersistenceSelfHealerTest {
     @Test
     fun decryptForRead_plaintextValue_vaultUnlocked_returnsPlaintext() {
         val healer = SensitivePersistenceSelfHealer(FakeLocalDataEncryptionService(), loggingPort)
-        val result = healer.decryptForRead(
-            SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-            "m1",
-            "hello"
-        )
+        val result =
+            healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                "m1",
+                "hello",
+            )
         assertEquals("hello", result)
     }
 
@@ -86,11 +87,12 @@ class SensitivePersistenceSelfHealerTest {
         every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(MalformedThrowingEncryptionService(), loggingPort)
 
-        val result = healer.decryptForRead(
-            SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-            "m1",
-            "PCENC:v1:aes-gcm:@@@@"
-        )
+        val result =
+            healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                "m1",
+                "PCENC:v1:aes-gcm:@@@@",
+            )
 
         assertNull(result)
         assertTrue(messageSlot.captured.contains("REJECTED_MALFORMED_ENVELOPE"))
@@ -102,11 +104,12 @@ class SensitivePersistenceSelfHealerTest {
         every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(DecryptFailedThrowingEncryptionService(), loggingPort)
 
-        val result = healer.decryptForRead(
-            SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-            "m1",
-            "PCENC:v1:aes-gcm:unused"
-        )
+        val result =
+            healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                "m1",
+                "PCENC:v1:aes-gcm:unused",
+            )
 
         assertNull(result)
         assertTrue(messageSlot.captured.contains("REJECTED_INVALID_CIPHERTEXT"))
@@ -118,20 +121,36 @@ class SensitivePersistenceSelfHealerTest {
 
     private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 
     private class LockedLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = error("locked")
-        override fun encryptString(plaintext: String, aad: ByteArray): String = error("locked")
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = error("locked")
 
         override fun decryptString(stored: String): String = error("locked")
-        override fun decryptString(stored: String, aad: ByteArray): String = error("locked")
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = error("locked")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
 
@@ -140,34 +159,54 @@ class SensitivePersistenceSelfHealerTest {
 
     private class ThrowingDecryptEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = throw IllegalArgumentException("bad ciphertext")
-        override fun decryptString(stored: String, aad: ByteArray): String = throw IllegalArgumentException("bad ciphertext")
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = throw IllegalArgumentException("bad ciphertext")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 
     private class MalformedThrowingEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
-        override fun decryptString(stored: String): String =
-            throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
-        override fun decryptString(stored: String, aad: ByteArray): String =
-            throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun decryptString(stored: String): String = throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = throw MalformedEnvelopeException(MalformedEnvelopeReason.INVALID_BASE64)
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
 
     private class DecryptFailedThrowingEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
 
-        override fun decryptString(stored: String): String =
-            throw DecryptFailedException("tag mismatch", null)
-        override fun decryptString(stored: String, aad: ByteArray): String =
-            throw DecryptFailedException("tag mismatch", null)
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun decryptString(stored: String): String = throw DecryptFailedException("tag mismatch", null)
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = throw DecryptFailedException("tag mismatch", null)
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }
@@ -176,10 +215,18 @@ class SensitivePersistenceSelfHealerTest {
         var lastDecryptAad: ByteArray? = null
 
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
-        override fun decryptString(stored: String, aad: ByteArray): String {
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String {
             lastDecryptAad = aad
             return stored.removePrefix("PCENC:v1:aes-gcm:")
         }
@@ -197,7 +244,7 @@ class SensitivePersistenceSelfHealerTest {
         healer.decryptForRead(
             SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
             "msg-99",
-            stored
+            stored,
         )
 
         val aadUtf8 = aadFake.lastDecryptAad?.toString(Charsets.UTF_8)
@@ -211,11 +258,12 @@ class SensitivePersistenceSelfHealerTest {
         val healer = SensitivePersistenceSelfHealer(aadFake, loggingPort)
         val stored = "PCENC:v1:aes-gcm:body"
 
-        val result = healer.decryptForRead(
-            SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-            "msg-99",
-            stored
-        )
+        val result =
+            healer.decryptForRead(
+                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                "msg-99",
+                stored,
+            )
 
         assertEquals("body", result)
     }

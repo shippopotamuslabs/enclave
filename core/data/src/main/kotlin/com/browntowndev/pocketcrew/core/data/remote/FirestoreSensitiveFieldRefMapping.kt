@@ -105,13 +105,16 @@ internal object FirestoreSensitiveFieldRefMapping {
     private fun firestoreFieldToRoomField(
         collectionPath: String,
         firestoreField: String,
-    ): String = firestoreSnakeToRoomFieldOverrides[collectionPath]?.get(firestoreField)
-        ?: snakeToLowerCamel(firestoreField)
+    ): String =
+        firestoreSnakeToRoomFieldOverrides[collectionPath]?.get(firestoreField)
+            ?: snakeToLowerCamel(firestoreField)
 
     private fun snakeToLowerCamel(snake: String): String {
         if (!snake.contains('_')) return snake
-        return snake.split('_').mapIndexed { i, part ->
-            if (i == 0) part else part.replaceFirstChar { c -> c.uppercase() }
-        }.joinToString("")
+        return snake
+            .split('_')
+            .mapIndexed { i, part ->
+                if (i == 0) part else part.replaceFirstChar { c -> c.uppercase() }
+            }.joinToString("")
     }
 }

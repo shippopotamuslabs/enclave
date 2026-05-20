@@ -15,6 +15,9 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.SET_NULL,
         ),
     ],
+    indices = [
+        androidx.room.Index("albumId"),
+    ],
 )
 data class StudioMediaEntity(
     @PrimaryKey

@@ -98,10 +98,15 @@ class CryptoManagerImpl
 
         override fun hasCachedKey(): Boolean = cachedKey != null
 
-        override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> =
-            encryptBytes(plaintext.toByteArray(Charsets.UTF_8), aad)
+        override fun encrypt(
+            plaintext: String,
+            aad: ByteArray?,
+        ): Result<ByteArray> = encryptBytes(plaintext.toByteArray(Charsets.UTF_8), aad)
 
-        override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> {
+        override fun encryptBytes(
+            data: ByteArray,
+            aad: ByteArray?,
+        ): Result<ByteArray> {
             val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             return try {
@@ -125,10 +130,15 @@ class CryptoManagerImpl
             }
         }
 
-        override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> =
-            decryptBytes(ciphertext, aad).map { String(it, Charsets.UTF_8) }
+        override fun decrypt(
+            ciphertext: ByteArray,
+            aad: ByteArray?,
+        ): Result<String> = decryptBytes(ciphertext, aad).map { String(it, Charsets.UTF_8) }
 
-        override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
+        override fun decryptBytes(
+            ciphertext: ByteArray,
+            aad: ByteArray?,
+        ): Result<ByteArray> {
             val key = cachedKey ?: return Result.failure(IllegalStateException("No DEK cached. Unlock the vault first."))
 
             if (ciphertext.size < IV_LENGTH) {

@@ -40,7 +40,7 @@ class SearchArtifactToolExecutorTest {
                 DocumentEntity(
                     id = "artifact-1",
                     messageId = MessageId("assistant-1"),
-                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[{"type":"paragraph","text":"hi"}]}""",
+                    json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[{"type":"paragraph","text":"hi"}]}""",
                     title = "${enc}T",
                 )
 

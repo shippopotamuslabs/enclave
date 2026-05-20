@@ -114,7 +114,7 @@ class ArtifactToolExecutorImplTest {
                     title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             every { validation.validate(any()) } returns
                 Result.failure(
@@ -160,7 +160,7 @@ class ArtifactToolExecutorImplTest {
                     title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
 
@@ -186,8 +186,17 @@ class ArtifactToolExecutorImplTest {
                     modelType = ModelType.FAST,
                 )
             val result = cut.execute(request)
-            assertTrue(result.resultJson.contains("REMINDER"))
-            assertTrue(result.resultJson.contains("isComplete"))
+            assertTrue(result.resultJson.contains("isComplete"), "incomplete result must mention isComplete")
+            // Regression: old message instructed a separate empty-blocks finalization call, which
+            // caused model fragmentation. The new message must not encourage that pattern.
+            assertTrue(
+                !result.resultJson.contains("blocks empty"),
+                "must not tell model to make a separate empty-blocks call",
+            )
+            assertTrue(
+                result.resultJson.contains("same call"),
+                "must instruct final blocks + isComplete in the same call",
+            )
             assertEquals(0, updatedDocument.captured.pendingSync)
             assertTrue(updatedDocument.captured.json.startsWith(enc))
         }
@@ -204,7 +213,7 @@ class ArtifactToolExecutorImplTest {
                     title = "${enc}T",
                     author = null,
                     targetFormat = MimeType.PDF,
-                    json = """${enc}{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                    json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
             coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
 
@@ -233,6 +242,47 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("\"isComplete\":true"))
             assertEquals(1, updatedDocument.captured.pendingSync)
             assertTrue(updatedDocument.captured.json.startsWith(enc))
+        }
+
+    @Test
+    fun `FAAL-RC-04 canonicalized append_blocks args pass docgen validation`() =
+        runTest {
+            val docDao = mockk<DocumentDao>()
+            coEvery { docDao.getDocumentById("art-exec-1") } returns
+                DocumentEntity(
+                    id = "art-exec-1",
+                    messageId = MessageId("assistant-123"),
+                    title = "${enc}T",
+                    author = null,
+                    targetFormat = MimeType.PDF,
+                    json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
+                )
+            coEvery { docDao.updateDocument(any()) } returns Unit
+
+            val cut =
+                ArtifactToolExecutor(
+                    documentDao = docDao,
+                    embeddingDao = mockk(relaxed = true),
+                    embeddingEngine = mockk(relaxed = true),
+                    documentValidation = documentValidation,
+                    localEncryption = FakeLocalDataEncryptionService(),
+                    externalScope = TestScope(),
+                )
+            val request =
+                ToolCallRequest(
+                    chatId = ChatId("chat-123"),
+                    userMessageId = MessageId("msg-123"),
+                    assistantMessageId = MessageId("assistant-123"),
+                    toolName = ToolDefinition.APPEND_BLOCKS.name,
+                    argumentsJson =
+                        """{"artifactId":"art-exec-1","blocks":[{"type":"paragraph","text":"Valid"}],"isComplete":false}""",
+                    provider = "test",
+                    modelType = ModelType.FAST,
+                )
+
+            val result = cut.execute(request)
+
+            assertTrue(result.resultJson.contains("\"status\":\"success\""), "FAAL-RC-04 status")
         }
 
     @Test

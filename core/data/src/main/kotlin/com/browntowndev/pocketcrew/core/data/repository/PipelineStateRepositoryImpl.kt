@@ -33,8 +33,7 @@ class PipelineStateRepositoryImpl
         companion object {
             private fun pipelineStateKey(chatId: String) = stringPreferencesKey("pipeline_state_$chatId")
 
-            private fun pipelineAad(chatId: String) =
-                AadContext("PipelineStateRepositoryImpl", "pipeline_state_chatId", chatId).toBytes()
+            private fun pipelineAad(chatId: String) = AadContext("PipelineStateRepositoryImpl", "pipeline_state_chatId", chatId).toBytes()
 
             private const val TAG = "PipelineStateRepository"
         }

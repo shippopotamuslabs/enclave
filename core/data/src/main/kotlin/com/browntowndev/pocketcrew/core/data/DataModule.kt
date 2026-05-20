@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
+import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
@@ -152,6 +153,7 @@ object DataModule {
             ).addMigrations(
                 PocketCrewDatabaseMigrations.MIGRATION_3_4,
                 PocketCrewDatabaseMigrations.MIGRATION_4_5,
+                PocketCrewDatabaseMigrations.MIGRATION_5_6,
             ).fallbackToDestructiveMigration(dropAllTables = true)
             .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
             .addCallback(
@@ -230,6 +232,9 @@ object DataModule {
 
     @Provides
     fun provideDocumentDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DocumentDao = database.documentDao()
+
+    @Provides
+    fun provideCleanupDao(database: PocketCrewDatabase): CleanupDao = database.cleanupDao()
 
     @Provides
     @Singleton

@@ -69,8 +69,15 @@ class PipelineStateRepositoryImplTest {
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
 
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
     }
 
     private companion object {

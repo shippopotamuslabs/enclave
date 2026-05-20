@@ -53,6 +53,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.Date
+import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FirestoreDataSourceTest {
@@ -944,7 +945,8 @@ class FirestoreDataSourceTest {
         @DisplayName("returns failure on Firestore batch error")
         fun returnsFailureOnBatchError() =
             testScope.runTest {
-                val chatEntity = ChatEntity(ChatId("c1"), "PCENC:v1:aes-gcm:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
+                val chatEntity =
+                    ChatEntity(ChatId("c1"), "PCENC:v1:aes-gcm:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
                 coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
                 coEvery { messageDao.getClaimedForSync() } returns emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
@@ -2413,6 +2415,79 @@ class FirestoreDataSourceTest {
             }
     }
 
+    @Nested
+    @DisplayName("cloud purge placeholder guard")
+    inner class CloudPurgePlaceholderGuardTests {
+        private val messagesListenerSlot = slot<EventListener<QuerySnapshot>>()
+
+        @BeforeEach
+        fun setupMessagesListener() {
+            val chatsCollection = mockk<CollectionReference>(relaxed = true)
+            val messagesCollection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/chats") } returns chatsCollection
+            every { firestore.collection("users/test-user-id/messages") } returns messagesCollection
+            every { chatsCollection.addSnapshotListener(any()) } returns mockk(relaxed = true)
+            every { messagesCollection.addSnapshotListener(capture(messagesListenerSlot)) } returns mockk(relaxed = true)
+            dataSource.startListening()
+        }
+
+        @Test
+        @DisplayName("ADDED skips placeholder chat insert while cloud purge is in progress")
+        fun addedSkipsPlaceholderChatWhilePurgeInProgress() =
+            testScope.runTest {
+                val purgeField = FirestoreDataSource::class.java.getDeclaredField("purgeInProgress")
+                purgeField.isAccessible = true
+                (purgeField.get(dataSource) as AtomicBoolean).set(true)
+
+                val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+                every { mockDoc.id } returns "msg-1"
+                every { mockDoc.getString("chat_id") } returns "chat-1"
+                every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
+                every { mockDoc.getString("role") } returns "user"
+                every { mockDoc.getString("message_state") } returns "COMPLETE"
+                every { mockDoc.getLong("created_at") } returns null
+                every { mockDoc.getString("model_type") } returns null
+                every { mockDoc.getLong("updated_at") } returns 1000L
+                every { mockDoc.getBoolean("deleted") } returns false
+
+                coEvery { messageDao.getMessageById(MessageId("msg-1")) } returns null
+                coEvery { chatDao.getChatById(ChatId("chat-1")) } returns null
+
+                val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+                messagesListenerSlot.captured.onEvent(snapshot, null)
+                advanceUntilIdle()
+
+                coVerify(exactly = 0) { chatDao.insertIfAbsent(any()) }
+                coVerify {
+                    messageDao.upsert(
+                        match {
+                            it.id.value == "msg-1" && it.chatId.value == "chat-1"
+                        },
+                    )
+                }
+            }
+    }
+
+    @Nested
+    @DisplayName("orphaned placeholder cleanup")
+    inner class OrphanedPlaceholderCleanupTests {
+        @Test
+        @DisplayName("startListening removes orphaned placeholder chats when purge is not active")
+        fun startListeningRemovesOrphanedPlaceholders() =
+            testScope.runTest {
+                val chatsCollection = mockk<CollectionReference>(relaxed = true)
+                val messagesCollection = mockk<CollectionReference>(relaxed = true)
+                every { firestore.collection("users/test-user-id/chats") } returns chatsCollection
+                every { firestore.collection("users/test-user-id/messages") } returns messagesCollection
+                coEvery { chatDao.deleteOrphanedPlaceholders() } returns 2
+
+                dataSource.startListening()
+                advanceUntilIdle()
+
+                coVerify { chatDao.deleteOrphanedPlaceholders() }
+            }
+    }
+
     private fun mockSnapshot(
         docs: List<QueryDocumentSnapshot>,
         changeType: DocumentChange.Type,
@@ -2436,7 +2511,15 @@ class FirestoreDataSourceTest {
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
     }
 }

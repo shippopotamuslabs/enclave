@@ -58,4 +58,13 @@ object PocketCrewDatabaseMigrations {
                     "ON `message_transcript_segment` (`message_id`, `ordinal`)",
             )
         }
+
+    /** Adds index to `albumId` in `studio_gallery` table. */
+    val MIGRATION_5_6 =
+        Migration(5, 6) { db: SupportSQLiteDatabase ->
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_studio_gallery_albumId` " +
+                    "ON `studio_gallery` (`albumId`)",
+            )
+        }
 }

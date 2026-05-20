@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
-import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort

@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.security.AadContext
+import com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -11,8 +13,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.core.data.security.AadContext
-import com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -134,10 +134,18 @@ class SensitiveEntityFieldEncryptorsTest {
 
     private class FakeLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = "PCENC:v1:aes-gcm:$plaintext"
-        override fun encryptString(plaintext: String, aad: ByteArray): String = "PCENC:v1:aes-gcm:$plaintext"
+
+        override fun encryptString(
+            plaintext: String,
+            aad: ByteArray,
+        ): String = "PCENC:v1:aes-gcm:$plaintext"
 
         override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
-        override fun decryptString(stored: String, aad: ByteArray): String = stored.removePrefix("PCENC:v1:aes-gcm:")
+
+        override fun decryptString(
+            stored: String,
+            aad: ByteArray,
+        ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
         override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
     }

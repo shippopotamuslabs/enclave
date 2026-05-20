@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,6 +12,7 @@ class CleanupRepositoryImpl
     constructor(
         private val database: PocketCrewDatabase,
         private val apiKeyManager: com.browntowndev.pocketcrew.core.data.security.ApiKeyManager,
+        private val syncTrigger: CloudSyncTrigger,
     ) : CleanupRepository {
         override suspend fun clearAllData() {
             withContext(Dispatchers.IO) {
@@ -30,6 +32,7 @@ class CleanupRepositoryImpl
         override suspend fun deleteAllArtifacts() {
             withContext(Dispatchers.IO) {
                 database.cleanupDao().deleteDocuments()
+                syncTrigger.triggerCloudArtifactsPurge()
             }
         }
     }

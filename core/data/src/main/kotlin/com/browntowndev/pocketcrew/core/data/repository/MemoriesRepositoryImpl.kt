@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import androidx.sqlite.db.SimpleSQLiteQuery
+import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
@@ -13,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
 import javax.inject.Inject
@@ -28,6 +30,8 @@ class MemoriesRepositoryImpl
         private val embeddingEngine: EmbeddingEnginePort,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
+        private val cleanupDao: CleanupDao,
+        private val transactionProvider: TransactionProvider,
     ) : MemoriesRepository {
         private fun triggerSync() = syncTrigger.trigger()
 
@@ -54,10 +58,11 @@ class MemoriesRepositoryImpl
             category: MemoryCategory,
             content: String,
         ): Memory {
-            val entity = SensitiveEntityFieldEncryptors.encrypt(
-                MemoriesEntity(category = category, content = content, pendingSync = 1),
-                healer,
-            )
+            val entity =
+                SensitiveEntityFieldEncryptors.encrypt(
+                    MemoriesEntity(category = category, content = content, pendingSync = 1),
+                    healer,
+                )
             memoriesDao.insertMemory(entity)
             updateEmbedding(entity.id, content)
             triggerSync()
@@ -70,15 +75,16 @@ class MemoriesRepositoryImpl
             category: MemoryCategory?,
         ) {
             val existing = memoriesDao.getMemoryById(id) ?: return
-            val updated = SensitiveEntityFieldEncryptors.encrypt(
-                existing.copy(
-                    content = content,
-                    category = category ?: existing.category,
-                    updatedAt = System.currentTimeMillis(),
-                    pendingSync = 1,
-                ),
-                healer,
-            )
+            val updated =
+                SensitiveEntityFieldEncryptors.encrypt(
+                    existing.copy(
+                        content = content,
+                        category = category ?: existing.category,
+                        updatedAt = System.currentTimeMillis(),
+                        pendingSync = 1,
+                    ),
+                    healer,
+                )
             memoriesDao.updateMemory(updated)
             updateEmbedding(updated.id, content)
             triggerSync()
@@ -95,6 +101,14 @@ class MemoriesRepositoryImpl
             memoriesDao.softDeleteById(id)
             deleteEmbedding(id)
             triggerSync()
+        }
+
+        override suspend fun deleteAllMemories() {
+            transactionProvider.runInTransaction {
+                cleanupDao.deleteMemories()
+                cleanupDao.deleteMemoryEmbeddings(SimpleSQLiteQuery("DELETE FROM memory_embeddings"))
+            }
+            syncTrigger.triggerCloudMemoriesPurge()
         }
 
         private suspend fun updateEmbedding(

@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentDao
 import com.browntowndev.pocketcrew.core.data.local.DocumentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
-import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
+import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
@@ -52,6 +52,7 @@ class ChatRepositoryImpl
         private val webSearchSourceDao: WebSearchSourceDao,
         private val documentDao: DocumentDao,
         private val transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider,
+        private val cleanupDao: CleanupDao,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ChatRepository {
@@ -144,11 +145,12 @@ class ChatRepositoryImpl
             messageId: MessageId,
             content: String,
         ) {
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                content,
-            ) ?: content
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    content,
+                ) ?: content
             messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
@@ -157,19 +159,22 @@ class ChatRepositoryImpl
             messageId: MessageId,
             content: String,
         ) {
-            val existing = messageDao.getMessageById(messageId)?.message
-                ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val decryptedExisting = healer.decryptForRead(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                existing.content,
-            ) ?: ""
+            val existing =
+                messageDao.getMessageById(messageId)?.message
+                    ?: throw IllegalArgumentException("Message not found with id: $messageId")
+            val decryptedExisting =
+                healer.decryptForRead(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    existing.content,
+                ) ?: ""
             val merged = decryptedExisting + content
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                merged,
-            ) ?: merged
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    merged,
+                ) ?: merged
             messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
@@ -189,19 +194,23 @@ class ChatRepositoryImpl
             messageId: MessageId,
             thinkingText: String,
         ) {
-            val existing = messageDao.getMessageById(messageId)?.message
-                ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val decryptedExisting = healer.decryptForRead(
-                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
-                messageId.value,
-                existing.thinkingRaw,
-            ).orEmpty()
+            val existing =
+                messageDao.getMessageById(messageId)?.message
+                    ?: throw IllegalArgumentException("Message not found with id: $messageId")
+            val decryptedExisting =
+                healer
+                    .decryptForRead(
+                        SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                        messageId.value,
+                        existing.thinkingRaw,
+                    ).orEmpty()
             val merged = decryptedExisting + thinkingText
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
-                messageId.value,
-                merged,
-            ) ?: merged
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    merged,
+                ) ?: merged
             messageDao.updateThinkingRaw(messageId, encrypted)
             triggerSync()
         }
@@ -262,19 +271,21 @@ class ChatRepositoryImpl
 
             messageDao.updateMessageContent(
                 id = messageId,
-                content = healer.requireEncrypted(
-                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                    messageId.value,
-                    content,
-                ) ?: content,
-                thinkingDuration = duration,
-                thinkingRaw = thinkingData?.rawFullThought?.let { raw ->
+                content =
                     healer.requireEncrypted(
-                        SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                        SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
                         messageId.value,
-                        raw,
-                    )
-                },
+                        content,
+                    ) ?: content,
+                thinkingDuration = duration,
+                thinkingRaw =
+                    thinkingData?.rawFullThought?.let { raw ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            raw,
+                        )
+                    },
             )
             triggerSync()
         }
@@ -301,22 +312,6 @@ class ChatRepositoryImpl
             generatedMediaPrompts: List<String>,
             transcriptSegments: List<MessageTranscriptSegment>,
         ) {
-            val documentEntities =
-                artifacts.map { artifact ->
-                    SensitiveEntityFieldEncryptors.encrypt(
-                        DocumentEntity(
-                            id = artifact.artifactId,
-                            messageId = messageId,
-                            json = artifact.content,
-                            title = artifact.title,
-                            author = null,
-                            targetFormat = artifact.targetFormat,
-                            pendingSync = 1,
-                        ),
-                        healer,
-                    )
-                }
-
             val mediaUrisJson =
                 if (generatedMediaUris.isNotEmpty()) {
                     Json.encodeToString(generatedMediaUris)
@@ -352,49 +347,56 @@ class ChatRepositoryImpl
                     thinkingStartTime = thinkingStartTime,
                     thinkingEndTime = thinkingEndTime,
                     thinkingDuration = thinkingDuration,
-                    thinkingRaw = thinkingRaw?.let { raw ->
+                    thinkingRaw =
+                        thinkingRaw?.let { raw ->
+                            healer.requireEncrypted(
+                                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                                messageId.value,
+                                raw,
+                            )
+                        },
+                    content =
                         healer.requireEncrypted(
-                            SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                            SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
                             messageId.value,
-                            raw,
-                        )
-                    },
-                    content = healer.requireEncrypted(
-                        SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                        messageId.value,
-                        content,
-                    ) ?: content,
+                            content,
+                        ) ?: content,
                     messageState = messageState,
                     pipelineStep = pipelineStep,
                     webSearchSources = webSearchSources.map { SensitiveEntityFieldEncryptors.encrypt(it.toEntity(), healer) },
-                    mediaUrisJson = mediaUrisJson?.let { json ->
-                        healer.requireEncrypted(
-                            SensitiveFieldRef("MessageEntity", "generatedMediaUrisJson", PersistenceBoundary.ROOM),
-                            messageId.value,
-                            json,
-                        )
-                    },
-                    mediaAssetIdsJson = mediaAssetIdsJson?.let { json ->
-                        healer.requireEncrypted(
-                            SensitiveFieldRef("MessageEntity", "generatedMediaAssetIdsJson", PersistenceBoundary.ROOM),
-                            messageId.value,
-                            json,
-                        )
-                    },
+                    mediaUrisJson =
+                        mediaUrisJson?.let { json ->
+                            healer.requireEncrypted(
+                                SensitiveFieldRef("MessageEntity", "generatedMediaUrisJson", PersistenceBoundary.ROOM),
+                                messageId.value,
+                                json,
+                            )
+                        },
+                    mediaAssetIdsJson =
+                        mediaAssetIdsJson?.let { json ->
+                            healer.requireEncrypted(
+                                SensitiveFieldRef("MessageEntity", "generatedMediaAssetIdsJson", PersistenceBoundary.ROOM),
+                                messageId.value,
+                                json,
+                            )
+                        },
                     mediaTypesJson = mediaTypesJson,
-                    mediaPromptsJson = mediaPromptsJson?.let { json ->
-                        healer.requireEncrypted(
-                            SensitiveFieldRef("MessageEntity", "generatedMediaPromptsJson", PersistenceBoundary.ROOM),
-                            messageId.value,
-                            json,
-                        )
-                    },
+                    mediaPromptsJson =
+                        mediaPromptsJson?.let { json ->
+                            healer.requireEncrypted(
+                                SensitiveFieldRef("MessageEntity", "generatedMediaPromptsJson", PersistenceBoundary.ROOM),
+                                messageId.value,
+                                json,
+                            )
+                        },
                 )
 
-                // Soft-delete all previous artifacts attached to this assistant message,
-                // then upsert the current set by stable `artifactId`.
-                documentDao.softDeleteByMessageId(messageId)
-                documentEntities.forEach { documentDao.insertDocument(it) }
+                artifacts.forEach { artifact ->
+                    val documentEntity = documentEntityForPersist(messageId, artifact)
+                    if (documentEntity != null) {
+                        documentDao.insertDocument(documentEntity)
+                    }
+                }
 
                 val segmentEntities =
                     transcriptSegments.map { segment ->
@@ -406,6 +408,28 @@ class ChatRepositoryImpl
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
             }
             triggerSync()
+        }
+
+        private suspend fun documentEntityForPersist(
+            messageId: MessageId,
+            artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+        ): DocumentEntity? {
+            if (artifact.content.isBlank()) {
+                val existing = documentDao.getDocumentById(artifact.artifactId) ?: return null
+                return existing.takeIf { document -> document.json.length <= PRESERVED_BLANK_ARTIFACT_REINSERT_MAX_CHARS }
+            }
+            return SensitiveEntityFieldEncryptors.encrypt(
+                DocumentEntity(
+                    id = artifact.artifactId,
+                    messageId = messageId,
+                    json = artifact.content,
+                    title = artifact.title,
+                    author = null,
+                    targetFormat = artifact.targetFormat,
+                    pendingSync = 1,
+                ),
+                healer,
+            )
         }
 
         override suspend fun updateArtifactExportPreference(
@@ -446,6 +470,21 @@ class ChatRepositoryImpl
             // Soft-delete related generated documents so sync doesn't resurrect them later.
             documentDao.softDeleteByChatId(chatId)
             triggerSync()
+        }
+
+        override suspend fun deleteAllChats() {
+            transactionProvider.runInTransaction {
+                cleanupDao.deleteChats()
+                cleanupDao.deleteMessages()
+                cleanupDao.deleteMessageTranscriptSegments()
+                cleanupDao.deleteChatSummaries()
+                cleanupDao.deleteMessageFiles()
+                cleanupDao.deleteDocuments()
+                cleanupDao.deleteVisionAnalysis()
+                cleanupDao.deleteWebSearchSources()
+                cleanupDao.deleteEmbeddings()
+            }
+            syncTrigger.triggerCloudChatsPurge()
         }
 
         override suspend fun renameChat(
@@ -493,6 +532,10 @@ class ChatRepositoryImpl
         override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
             urls.forEach { webSearchSourceDao.markExtracted(it) }
             triggerSync()
+        }
+
+        private companion object {
+            const val PRESERVED_BLANK_ARTIFACT_REINSERT_MAX_CHARS = 50
         }
 
         private data class ChatStreamFrame(
