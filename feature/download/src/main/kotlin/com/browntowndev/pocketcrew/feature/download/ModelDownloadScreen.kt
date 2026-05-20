@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.feature.download
 import android.Manifest
-import java.util.Locale
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -78,11 +77,10 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
-
+import java.util.Locale
 
 /**
  * Full-screen model download status page.
@@ -95,28 +93,31 @@ fun ModelDownloadScreen(
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
     onReady: () -> Unit = {},
-    viewModel: DownloadViewModel = hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
-        key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
-        creationCallback = { factory ->
-            val safeModelsResult = modelsResult ?: DownloadModelsResult(
-                allModels = emptyMap(),
-                modelsToDownload = emptyList(),
-                scanResult = ModelScanResult(
-                    missingModels = emptyList(),
-                    partialDownloads = emptyMap(),
-                    allValid = true
-                )
-            )
-            factory.create(safeModelsResult, errorMessage, autoStartDownloads = true)
-        }
-    )
+    viewModel: DownloadViewModel =
+        hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
+            key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
+            creationCallback = { factory ->
+                val safeModelsResult =
+                    modelsResult ?: DownloadModelsResult(
+                        allModels = emptyMap(),
+                        modelsToDownload = emptyList(),
+                        scanResult =
+                            ModelScanResult(
+                                missingModels = emptyList(),
+                                partialDownloads = emptyMap(),
+                                allValid = true,
+                            ),
+                    )
+                factory.create(safeModelsResult, errorMessage, autoStartDownloads = true)
+            },
+        ),
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val wifiOnly by viewModel.wifiOnly.collectAsStateWithLifecycle()
     val fileProgressList by viewModel.fileProgressList.collectAsStateWithLifecycle()
-    
+
     // Track lifecycle for foreground state to prevent race condition with WorkManager foreground service
     LaunchedEffect(lifecycleOwner) {
         // Check current state immediately to handle case where activity is already in ON_RESUME
@@ -124,14 +125,16 @@ fun ModelDownloadScreen(
         if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
             viewModel.onAppForegrounded()
         }
-        
-        lifecycleOwner.lifecycle.addObserver(LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> viewModel.onAppForegrounded()
-                Lifecycle.Event.ON_PAUSE -> viewModel.onAppBackgrounded()
-                else -> {}
-            }
-        })
+
+        lifecycleOwner.lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> viewModel.onAppForegrounded()
+                    Lifecycle.Event.ON_PAUSE -> viewModel.onAppBackgrounded()
+                    else -> {}
+                }
+            },
+        )
     }
 
     // Permission state for POST_NOTIFICATIONS (Android 13+)
@@ -139,8 +142,8 @@ fun ModelDownloadScreen(
         mutableStateOf(
             ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED,
         )
     }
 
@@ -148,21 +151,22 @@ fun ModelDownloadScreen(
     var showRationale by remember { mutableStateOf(false) }
 
     // Permission launcher using native AndroidX API
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasNotificationPermission = isGranted
-        if (isGranted) {
-            // Permission granted - trigger model check and download
-            viewModel.schedulePendingDownloadCheck()
-        } else {
-            // Permission denied - check if we should show rationale
-            val activity = context.findActivity()
-            if (activity != null) {
-                showRationale = activity.shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            hasNotificationPermission = isGranted
+            if (isGranted) {
+                // Permission granted - trigger model check and download
+                viewModel.schedulePendingDownloadCheck()
+            } else {
+                // Permission denied - check if we should show rationale
+                val activity = context.findActivity()
+                if (activity != null) {
+                    showRationale = activity.shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
         }
-    }
 
     // Request permission on first screen appearance (Android 13+)
     LaunchedEffect(Unit) {
@@ -201,7 +205,7 @@ fun ModelDownloadScreen(
                 showRationale = false
                 // User dismissed - still try to download but notifications won't show
                 viewModel.schedulePendingDownloadCheck()
-            }
+            },
         )
     }
 
@@ -217,15 +221,16 @@ fun ModelDownloadScreen(
                 onCancel = { viewModel.cancelDownloads() },
                 onRetry = { viewModel.retryFailed() },
                 onWifiOnlyChange = { viewModel.setWifiOnly(it) },
-                onDownloadOnMobileData = { viewModel.downloadOnMobileData() }
+                onDownloadOnMobileData = { viewModel.downloadOnMobileData() },
             )
-        }
+        },
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
         ) {
             // Header
             DownloadHeader(
@@ -234,7 +239,7 @@ fun ModelDownloadScreen(
                 modelsComplete = downloadState.modelsComplete,
                 modelsTotal = downloadState.modelsTotal,
                 speedMBs = downloadState.currentSpeedMBs,
-                eta = downloadState.estimatedTimeRemaining
+                eta = downloadState.estimatedTimeRemaining,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -242,7 +247,7 @@ fun ModelDownloadScreen(
             // File list
             FileProgressList(
                 files = fileProgressList,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -251,7 +256,7 @@ fun ModelDownloadScreen(
             downloadState.errorMessage?.let { error ->
                 ErrorBanner(
                     message = error,
-                    onRetry = { viewModel.retryFailed() }
+                    onRetry = { viewModel.retryFailed() },
                 )
             }
 
@@ -283,34 +288,35 @@ private fun DownloadHeader(
     modelsComplete: Int,
     modelsTotal: Int,
     speedMBs: Double?,
-    eta: String?
+    eta: String?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Icon
         Icon(
             imageVector = Icons.Default.CloudDownload,
             contentDescription = "Download status",
             modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.primary,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Title
         Text(
-            text = when (status) {
-                DownloadStatus.CHECKING -> "Checking on the crew..."
-                DownloadStatus.WIFI_BLOCKED -> "Waiting for Wi-Fi..."
-                DownloadStatus.DOWNLOADING -> "Downloading Crew"
-                DownloadStatus.PAUSED -> "Downloads Paused"
-                DownloadStatus.ERROR -> "Download Error"
-                else -> "Crew"
-            },
+            text =
+                when (status) {
+                    DownloadStatus.CHECKING -> "Checking on the crew..."
+                    DownloadStatus.WIFI_BLOCKED -> "Waiting for Wi-Fi..."
+                    DownloadStatus.DOWNLOADING -> "Downloading Crew"
+                    DownloadStatus.PAUSED -> "Downloads Paused"
+                    DownloadStatus.ERROR -> "Download Error"
+                    else -> "Crew"
+                },
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -318,27 +324,29 @@ private fun DownloadHeader(
         // Progress
         if (status == DownloadStatus.CHECKING || status == DownloadStatus.WIFI_BLOCKED) {
             LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(50)),
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(50)),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         } else {
             val animatedProgress by animateFloatAsState(
                 targetValue = progress(),
                 animationSpec = tween(durationMillis = 200, easing = LinearEasing),
-                label = "progress"
+                label = "progress",
             )
 
             LinearProgressIndicator(
                 progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(50)),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(50)),
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                strokeCap = StrokeCap.Butt
+                strokeCap = StrokeCap.Butt,
             )
         }
 
@@ -346,22 +354,23 @@ private fun DownloadHeader(
 
         // Stats row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = "$modelsComplete of $modelsTotal models",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
                 text = "${(progress() * 100).toInt()}%",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -370,27 +379,27 @@ private fun DownloadHeader(
             Spacer(modifier = Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
             ) {
                 speedMBs?.let {
                     Text(
                         text = String.format(Locale.US, "%.1f MB/s", it),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (speedMBs != null && eta != null) {
                     Text(
                         text = " • ",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 eta?.let {
                     Text(
                         text = "ETA: $it",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -402,32 +411,32 @@ private fun DownloadHeader(
 @Composable
 private fun FileProgressList(
     files: List<FileProgressUiModel>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (files.isEmpty()) {
         Box(
             modifier = modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = "Waiting for model configuration...",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     } else {
         LazyColumn(
             modifier = modifier,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(
                 items = files,
-                key = { it.sha256 }
+                key = { it.sha256 },
             ) { file ->
                 FileProgressItem(
                     file = file,
-                    progress = { file.progress }
+                    progress = { file.progress },
                 )
             }
         }
@@ -437,52 +446,57 @@ private fun FileProgressList(
 @Composable
 private fun FileProgressItem(
     file: FileProgressUiModel,
-    progress: () -> Float
+    progress: () -> Float,
 ) {
     val statusColor by animateColorAsState(
-        targetValue = when (file.status) {
-            FileStatus.COMPLETE -> MaterialTheme.colorScheme.primary
-            FileStatus.FAILED -> MaterialTheme.colorScheme.error
-            FileStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
-            FileStatus.PAUSED -> MaterialTheme.colorScheme.surfaceVariant
-            FileStatus.QUEUED -> MaterialTheme.colorScheme.outline
-        },
-        label = "statusColor"
+        targetValue =
+            when (file.status) {
+                FileStatus.COMPLETE -> MaterialTheme.colorScheme.primary
+                FileStatus.FAILED -> MaterialTheme.colorScheme.error
+                FileStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
+                FileStatus.PAUSED -> MaterialTheme.colorScheme.surfaceVariant
+                FileStatus.QUEUED -> MaterialTheme.colorScheme.outline
+            },
+        label = "statusColor",
     )
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Status icon
                 Icon(
-                    imageVector = when (file.status) {
-                        FileStatus.COMPLETE -> Icons.Default.CheckCircle
-                        FileStatus.FAILED -> Icons.Default.Error
-                        FileStatus.DOWNLOADING -> Icons.Default.CloudDownload
-                        FileStatus.PAUSED -> Icons.Default.Pause
-                        FileStatus.QUEUED -> Icons.Default.CloudDownload
-                    },
-                    contentDescription = when (file.status) {
-                        FileStatus.COMPLETE -> "Download complete"
-                        FileStatus.FAILED -> "Download failed"
-                        FileStatus.DOWNLOADING -> "Currently downloading"
-                        FileStatus.PAUSED -> "Download paused"
-                        FileStatus.QUEUED -> "Queued for download"
-                    },
+                    imageVector =
+                        when (file.status) {
+                            FileStatus.COMPLETE -> Icons.Default.CheckCircle
+                            FileStatus.FAILED -> Icons.Default.Error
+                            FileStatus.DOWNLOADING -> Icons.Default.CloudDownload
+                            FileStatus.PAUSED -> Icons.Default.Pause
+                            FileStatus.QUEUED -> Icons.Default.CloudDownload
+                        },
+                    contentDescription =
+                        when (file.status) {
+                            FileStatus.COMPLETE -> "Download complete"
+                            FileStatus.FAILED -> "Download failed"
+                            FileStatus.DOWNLOADING -> "Currently downloading"
+                            FileStatus.PAUSED -> "Download paused"
+                            FileStatus.QUEUED -> "Queued for download"
+                        },
                     tint = statusColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -494,22 +508,24 @@ private fun FileProgressItem(
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
 
                 // Status text
                 Text(
-                    text = when (file.status) {
-                        FileStatus.COMPLETE -> "Complete"
-                        FileStatus.FAILED -> "Failed"
-                        FileStatus.DOWNLOADING -> file.speedMBs?.let {
-                            String.format(Locale.US, "%.1f MB/s", it)
-                        } ?: "Downloading..."
-                        FileStatus.PAUSED -> "Paused"
-                        FileStatus.QUEUED -> "Waiting..."
-                    },
+                    text =
+                        when (file.status) {
+                            FileStatus.COMPLETE -> "Complete"
+                            FileStatus.FAILED -> "Failed"
+                            FileStatus.DOWNLOADING ->
+                                file.speedMBs?.let {
+                                    String.format(Locale.US, "%.1f MB/s", it)
+                                } ?: "Downloading..."
+                            FileStatus.PAUSED -> "Paused"
+                            FileStatus.QUEUED -> "Waiting..."
+                        },
                     style = MaterialTheme.typography.bodySmall,
-                    color = statusColor
+                    color = statusColor,
                 )
             }
 
@@ -520,16 +536,17 @@ private fun FileProgressItem(
                 val animatedProgress by animateFloatAsState(
                     targetValue = progress(),
                     animationSpec = tween(durationMillis = 200, easing = LinearEasing),
-                    label = "fileProgress"
+                    label = "fileProgress",
                 )
 
                 LinearProgressIndicator(
                     progress = { animatedProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50)),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50)),
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = StrokeCap.Butt
+                    strokeCap = StrokeCap.Butt,
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -538,7 +555,7 @@ private fun FileProgressItem(
                 Text(
                     text = "${formatBytes(file.bytesDownloaded)} / ${formatBytes(file.totalBytes)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -554,56 +571,57 @@ private fun DownloadControls(
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onWifiOnlyChange: (Boolean) -> Unit,
-    onDownloadOnMobileData: () -> Unit = {}
+    onDownloadOnMobileData: () -> Unit = {},
 ) {
     val allowCancel = FeatureFlags.ALLOW_CANCEL_DOWNLOAD
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding() // Ensure controls sit above system navigation bar in edge-to-edge mode
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding() // Ensure controls sit above system navigation bar in edge-to-edge mode
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // WiFi-only toggle (Always visible) - Full row is clickable with 48dp min touch target
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .toggleable(
-                    value = wifiOnly,
-                    onValueChange = onWifiOnlyChange,
-                    role = Role.Switch
-                )
-                .padding(vertical = 12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = wifiOnly,
+                        onValueChange = onWifiOnlyChange,
+                        role = Role.Switch,
+                    ).padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             Text(
                 text = "Download on Wi-Fi only",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Switch(
                 checked = wifiOnly,
-                onCheckedChange = null // Handled by parent toggleable
+                onCheckedChange = null, // Handled by parent toggleable
             )
         }
 
         // Action buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when (status) {
                 DownloadStatus.DOWNLOADING -> {
                     if (allowCancel) {
                         OutlinedButton(
                             onClick = onCancel,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(
                                 Icons.Default.Cancel,
-                                contentDescription = "Cancel download"
+                                contentDescription = "Cancel download",
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Cancel")
@@ -611,11 +629,11 @@ private fun DownloadControls(
                     }
                     Button(
                         onClick = onPause,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             Icons.Default.Pause,
-                            contentDescription = "Pause download"
+                            contentDescription = "Pause download",
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Pause")
@@ -625,11 +643,11 @@ private fun DownloadControls(
                     if (allowCancel) {
                         OutlinedButton(
                             onClick = onCancel,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(
                                 Icons.Default.Cancel,
-                                contentDescription = "Cancel download"
+                                contentDescription = "Cancel download",
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Cancel")
@@ -637,11 +655,11 @@ private fun DownloadControls(
                     }
                     Button(
                         onClick = onResume,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             Icons.Default.PlayArrow,
-                            contentDescription = "Resume download"
+                            contentDescription = "Resume download",
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Resume")
@@ -651,11 +669,11 @@ private fun DownloadControls(
                     if (allowCancel) {
                         OutlinedButton(
                             onClick = onCancel,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(
                                 Icons.Default.Cancel,
-                                contentDescription = "Cancel download"
+                                contentDescription = "Cancel download",
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Cancel")
@@ -663,11 +681,11 @@ private fun DownloadControls(
                     }
                     Button(
                         onClick = onDownloadOnMobileData,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             Icons.Default.SignalWifiOff,
-                            contentDescription = "Download on mobile data"
+                            contentDescription = "Download on mobile data",
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Use Mobile Data")
@@ -676,11 +694,11 @@ private fun DownloadControls(
                 DownloadStatus.ERROR -> {
                     Button(
                         onClick = onRetry,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Retry all downloads"
+                            contentDescription = "Retry all downloads",
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Retry All")
@@ -690,11 +708,11 @@ private fun DownloadControls(
                     if (status != DownloadStatus.READY && allowCancel) {
                         OutlinedButton(
                             onClick = onCancel,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(
                                 Icons.Default.Cancel,
-                                contentDescription = "Cancel download"
+                                contentDescription = "Cancel download",
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Cancel")
@@ -709,32 +727,34 @@ private fun DownloadControls(
 @Composable
 private fun ErrorBanner(
     message: String,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
                 contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onRetry) {
                 Text("Retry")
@@ -746,35 +766,39 @@ private fun ErrorBanner(
 @Composable
 private fun BackgroundNotice(hasPermission: Boolean) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Default.CloudDownload,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = if (hasPermission) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.error
-            }
+            tint =
+                if (hasPermission) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = if (hasPermission) {
-                "Downloads continue in background via notification"
-            } else {
-                "Enable notifications for background download progress"
-            },
+            text =
+                if (hasPermission) {
+                    "Downloads continue in background via notification"
+                } else {
+                    "Enable notifications for background download progress"
+                },
             style = MaterialTheme.typography.bodySmall,
-            color = if (hasPermission) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.error
-            }
+            color =
+                if (hasPermission) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
         )
     }
 }
@@ -786,7 +810,7 @@ private fun BackgroundNotice(hasPermission: Boolean) {
 @Composable
 private fun NotificationPermissionRationaleDialog(
     onRequestPermission: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -794,7 +818,7 @@ private fun NotificationPermissionRationaleDialog(
             Icon(
                 imageVector = Icons.Default.CloudDownload,
                 contentDescription = "Notifications",
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
             )
         },
         title = {
@@ -804,7 +828,7 @@ private fun NotificationPermissionRationaleDialog(
             Text(
                 "Pocket Crew needs notification permission to show download progress when the app is " +
                     "in the background. This allows you to monitor AI model downloads even when you switch " +
-                    "to other apps.\n\nYour notification will show real-time progress, speed, and ETA for the download."
+                    "to other apps.\n\nYour notification will show real-time progress, speed, and ETA for the download.",
             )
         },
         confirmButton = {
@@ -816,109 +840,112 @@ private fun NotificationPermissionRationaleDialog(
             TextButton(onClick = onDismiss) {
                 Text("Not Now")
             }
-        }
+        },
     )
 }
 // ==================== PREVIEWS ====================
 
-private val fakeFilesAllDownloading = listOf(
-    FileProgressUiModel(
-        filename = "model-qwen3-8b.gguf",
-        sha256 = "sha256-qwen3-8b",
-        displayName = "Qwen 3 8B",
-        bytesDownloaded = 2_500_000_000L,
-        totalBytes = 5_000_000_000L,
-        status = FileStatus.DOWNLOADING,
-        speedMBs = 12.4
-    ),
-    FileProgressUiModel(
-        filename = "model-embeddings.gguf",
-        sha256 = "sha256-embeddings",
-        displayName = "Embeddings",
-        bytesDownloaded = 800_000_000L,
-        totalBytes = 2_000_000_000L,
-        status = FileStatus.DOWNLOADING,
-        speedMBs = 8.2
-    ),
-    FileProgressUiModel(
-        filename = "model-tokenizer.gguf",
-        sha256 = "sha256-tokenizer",
-        displayName = "Tokenizer",
-        bytesDownloaded = 0L,
-        totalBytes = 500_000_000L,
-        status = FileStatus.QUEUED,
-        speedMBs = null
+private val fakeFilesAllDownloading =
+    listOf(
+        FileProgressUiModel(
+            filename = "model-qwen3-8b.gguf",
+            sha256 = "sha256-qwen3-8b",
+            displayName = "Qwen 3 8B",
+            bytesDownloaded = 2_500_000_000L,
+            totalBytes = 5_000_000_000L,
+            status = FileStatus.DOWNLOADING,
+            speedMBs = 12.4,
+        ),
+        FileProgressUiModel(
+            filename = "model-embeddings.gguf",
+            sha256 = "sha256-embeddings",
+            displayName = "Embeddings",
+            bytesDownloaded = 800_000_000L,
+            totalBytes = 2_000_000_000L,
+            status = FileStatus.DOWNLOADING,
+            speedMBs = 8.2,
+        ),
+        FileProgressUiModel(
+            filename = "model-tokenizer.gguf",
+            sha256 = "sha256-tokenizer",
+            displayName = "Tokenizer",
+            bytesDownloaded = 0L,
+            totalBytes = 500_000_000L,
+            status = FileStatus.QUEUED,
+            speedMBs = null,
+        ),
     )
-)
 
-private val fakeFilesMixedStates = listOf(
-    FileProgressUiModel(
-        filename = "model-qwen3-8b.gguf",
-        sha256 = "sha256-qwen3-8b",
-        displayName = "Qwen 3 8B",
-        bytesDownloaded = 5_000_000_000L,
-        totalBytes = 5_000_000_000L,
-        status = FileStatus.COMPLETE,
-        speedMBs = null
-    ),
-    FileProgressUiModel(
-        filename = "model-embeddings.gguf",
-        sha256 = "sha256-embeddings",
-        displayName = "Embeddings",
-        bytesDownloaded = 1_500_000_000L,
-        totalBytes = 2_000_000_000L,
-        status = FileStatus.DOWNLOADING,
-        speedMBs = 15.7
-    ),
-    FileProgressUiModel(
-        filename = "model-tokenizer.gguf",
-        sha256 = "sha256-tokenizer",
-        displayName = "Tokenizer",
-        bytesDownloaded = 0L,
-        totalBytes = 500_000_000L,
-        status = FileStatus.FAILED,
-        speedMBs = null
-    ),
-    FileProgressUiModel(
-        filename = "model-vision.gguf",
-        sha256 = "sha256-vision",
-        displayName = "Vision Encoder",
-        bytesDownloaded = 400_000_000L,
-        totalBytes = 1_200_000_000L,
-        status = FileStatus.PAUSED,
-        speedMBs = null
+private val fakeFilesMixedStates =
+    listOf(
+        FileProgressUiModel(
+            filename = "model-qwen3-8b.gguf",
+            sha256 = "sha256-qwen3-8b",
+            displayName = "Qwen 3 8B",
+            bytesDownloaded = 5_000_000_000L,
+            totalBytes = 5_000_000_000L,
+            status = FileStatus.COMPLETE,
+            speedMBs = null,
+        ),
+        FileProgressUiModel(
+            filename = "model-embeddings.gguf",
+            sha256 = "sha256-embeddings",
+            displayName = "Embeddings",
+            bytesDownloaded = 1_500_000_000L,
+            totalBytes = 2_000_000_000L,
+            status = FileStatus.DOWNLOADING,
+            speedMBs = 15.7,
+        ),
+        FileProgressUiModel(
+            filename = "model-tokenizer.gguf",
+            sha256 = "sha256-tokenizer",
+            displayName = "Tokenizer",
+            bytesDownloaded = 0L,
+            totalBytes = 500_000_000L,
+            status = FileStatus.FAILED,
+            speedMBs = null,
+        ),
+        FileProgressUiModel(
+            filename = "model-vision.gguf",
+            sha256 = "sha256-vision",
+            displayName = "Vision Encoder",
+            bytesDownloaded = 400_000_000L,
+            totalBytes = 1_200_000_000L,
+            status = FileStatus.PAUSED,
+            speedMBs = null,
+        ),
     )
-)
 
-private val fakeFilesAllComplete = listOf(
-    FileProgressUiModel(
-        filename = "model-qwen3-8b.gguf",
-        sha256 = "sha256-qwen3-8b",
-        displayName = "Qwen 3 8B",
-        bytesDownloaded = 5_000_000_000L,
-        totalBytes = 5_000_000_000L,
-        status = FileStatus.COMPLETE,
-        speedMBs = null
-    ),
-    FileProgressUiModel(
-        filename = "model-embeddings.gguf",
-        sha256 = "sha256-embeddings",
-        displayName = "Embeddings",
-        bytesDownloaded = 2_000_000_000L,
-        totalBytes = 2_000_000_000L,
-        status = FileStatus.COMPLETE,
-        speedMBs = null
-    ),
-    FileProgressUiModel(
-        filename = "model-tokenizer.gguf",
-        sha256 = "sha256-tokenizer",
-        displayName = "Tokenizer",
-        bytesDownloaded = 500_000_000L,
-        totalBytes = 500_000_000L,
-        status = FileStatus.COMPLETE,
-        speedMBs = null
+private val fakeFilesAllComplete =
+    listOf(
+        FileProgressUiModel(
+            filename = "model-qwen3-8b.gguf",
+            sha256 = "sha256-qwen3-8b",
+            displayName = "Qwen 3 8B",
+            bytesDownloaded = 5_000_000_000L,
+            totalBytes = 5_000_000_000L,
+            status = FileStatus.COMPLETE,
+            speedMBs = null,
+        ),
+        FileProgressUiModel(
+            filename = "model-embeddings.gguf",
+            sha256 = "sha256-embeddings",
+            displayName = "Embeddings",
+            bytesDownloaded = 2_000_000_000L,
+            totalBytes = 2_000_000_000L,
+            status = FileStatus.COMPLETE,
+            speedMBs = null,
+        ),
+        FileProgressUiModel(
+            filename = "model-tokenizer.gguf",
+            sha256 = "sha256-tokenizer",
+            displayName = "Tokenizer",
+            bytesDownloaded = 500_000_000L,
+            totalBytes = 500_000_000L,
+            status = FileStatus.COMPLETE,
+            speedMBs = null,
+        ),
     )
-)
 
 @Suppress("UnusedPrivateMember")
 @Preview(name = "Downloading - Multiple Files")
@@ -927,10 +954,11 @@ private fun PreviewDownloadHeaderDownloading() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
@@ -938,12 +966,12 @@ private fun PreviewDownloadHeaderDownloading() {
                     modelsComplete = 1,
                     modelsTotal = 3,
                     speedMBs = 12.4,
-                    eta = "5 min"
+                    eta = "5 min",
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesAllDownloading,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -957,10 +985,11 @@ private fun PreviewDownloadMixedStates() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
@@ -968,16 +997,16 @@ private fun PreviewDownloadMixedStates() {
                     modelsComplete = 1,
                     modelsTotal = 4,
                     speedMBs = 15.7,
-                    eta = "3 min"
+                    eta = "3 min",
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 ErrorBanner(
                     message = "Failed to download Tokenizer: Network timeout",
-                    onRetry = {}
+                    onRetry = {},
                 )
             }
         }
@@ -991,10 +1020,11 @@ private fun PreviewDownloadChecking() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.CHECKING,
@@ -1002,7 +1032,7 @@ private fun PreviewDownloadChecking() {
                     modelsComplete = 0,
                     modelsTotal = 3,
                     speedMBs = null,
-                    eta = null
+                    eta = null,
                 )
             }
         }
@@ -1016,10 +1046,11 @@ private fun PreviewDownloadPaused() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.PAUSED,
@@ -1027,12 +1058,12 @@ private fun PreviewDownloadPaused() {
                     modelsComplete = 1,
                     modelsTotal = 3,
                     speedMBs = null,
-                    eta = null
+                    eta = null,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -1046,10 +1077,11 @@ private fun PreviewDownloadError() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.ERROR,
@@ -1057,16 +1089,16 @@ private fun PreviewDownloadError() {
                     modelsComplete = 0,
                     modelsTotal = 3,
                     speedMBs = null,
-                    eta = null
+                    eta = null,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 ErrorBanner(
                     message = "Connection lost: Please check your internet connection",
-                    onRetry = {}
+                    onRetry = {},
                 )
             }
         }
@@ -1080,10 +1112,11 @@ private fun PreviewDownloadComplete() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.READY,
@@ -1091,12 +1124,12 @@ private fun PreviewDownloadComplete() {
                     modelsComplete = 3,
                     modelsTotal = 3,
                     speedMBs = null,
-                    eta = null
+                    eta = null,
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesAllComplete,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -1109,63 +1142,67 @@ private fun PreviewDownloadComplete() {
 private fun PreviewFileProgressItems() {
     PocketCrewTheme {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Downloading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel(
-                    filename = "model.gguf",
-                    sha256 = "sha256-1",
-                    displayName = "Qwen 3 8B",
-                    bytesDownloaded = 2_500_000_000L,
-                    totalBytes = 5_000_000_000L,
-                    status = FileStatus.DOWNLOADING,
-                    speedMBs = 12.4
-                ),
-                progress = { 0.5f }
+                file =
+                    FileProgressUiModel(
+                        filename = "model.gguf",
+                        sha256 = "sha256-1",
+                        displayName = "Qwen 3 8B",
+                        bytesDownloaded = 2_500_000_000L,
+                        totalBytes = 5_000_000_000L,
+                        status = FileStatus.DOWNLOADING,
+                        speedMBs = 12.4,
+                    ),
+                progress = { 0.5f },
             )
 
             Text("Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel(
-                    filename = "model.gguf",
-                    sha256 = "sha256-2",
-                    displayName = "Embeddings",
-                    bytesDownloaded = 2_000_000_000L,
-                    totalBytes = 2_000_000_000L,
-                    status = FileStatus.COMPLETE,
-                    speedMBs = null
-                ),
-                progress = { 1f }
+                file =
+                    FileProgressUiModel(
+                        filename = "model.gguf",
+                        sha256 = "sha256-2",
+                        displayName = "Embeddings",
+                        bytesDownloaded = 2_000_000_000L,
+                        totalBytes = 2_000_000_000L,
+                        status = FileStatus.COMPLETE,
+                        speedMBs = null,
+                    ),
+                progress = { 1f },
             )
 
             Text("Failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
                 file = FileProgressUiModel("model.gguf", "sha256-3", "Tokenizer", 150_000_000L, 500_000_000L, FileStatus.FAILED, null),
-                progress = { 0.3f }
+                progress = { 0.3f },
             )
 
             Text("Paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel(
-                    filename = "model.gguf",
-                    sha256 = "sha256-4",
-                    displayName = "Vision Encoder",
-                    bytesDownloaded = 400_000_000L,
-                    totalBytes = 1_200_000_000L,
-                    status = FileStatus.PAUSED,
-                    speedMBs = null
-                ),
-                progress = { 0.33f }
+                file =
+                    FileProgressUiModel(
+                        filename = "model.gguf",
+                        sha256 = "sha256-4",
+                        displayName = "Vision Encoder",
+                        bytesDownloaded = 400_000_000L,
+                        totalBytes = 1_200_000_000L,
+                        status = FileStatus.PAUSED,
+                        speedMBs = null,
+                    ),
+                progress = { 0.33f },
             )
 
             Text("Queued", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
                 file = FileProgressUiModel("model.gguf", "sha256-5", "Large Model", 0L, 8_000_000_000L, FileStatus.QUEUED, null),
-                progress = { 0f }
+                progress = { 0f },
             )
         }
     }
@@ -1178,10 +1215,11 @@ private fun PreviewDownloadLongETA() {
     PocketCrewTheme {
         Scaffold { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
             ) {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
@@ -1189,7 +1227,7 @@ private fun PreviewDownloadLongETA() {
                     modelsComplete = 0,
                     modelsTotal = 5,
                     speedMBs = 2.3,
-                    eta = "1.8 hours"
+                    eta = "1.8 hours",
                 )
             }
         }
@@ -1203,7 +1241,7 @@ private fun PreviewBackgroundNotice() {
     PocketCrewTheme {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("With Permission", style = MaterialTheme.typography.titleMedium)
             BackgroundNotice(hasPermission = true)
