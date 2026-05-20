@@ -30,4 +30,19 @@ class DefaultModelAssignmentUiMapperTest {
 
         assertEquals("None Assigned", ui.currentModelName)
     }
+
+    @Test
+    fun `shows unlock vault message when preset name is unreadable`() {
+        val assignment =
+            DefaultModelAssignment(
+                modelType = ModelType.FAST,
+                apiConfigId = ApiModelConfigurationId("cfg-1"),
+                displayName = "OpenAI Primary",
+                presetName = null,
+            )
+
+        val ui = assignment.toUi()
+
+        assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, ui.presetName)
+    }
 }

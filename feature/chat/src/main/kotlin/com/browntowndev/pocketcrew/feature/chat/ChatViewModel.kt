@@ -27,10 +27,13 @@ import com.browntowndev.pocketcrew.feature.chat.delegates.ArtifactExportCoordina
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatUiStateReducer
+import com.browntowndev.pocketcrew.domain.util.throttleLatest
 import com.browntowndev.pocketcrew.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.pocketcrew.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.TtsController
+import com.browntowndev.pocketcrew.feature.chat.delegates.maybeAcknowledgeCompletedTurn
+import com.browntowndev.pocketcrew.feature.chat.delegates.resolveActiveTurnSnapshotObserveKey
 import com.browntowndev.pocketcrew.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -380,6 +383,7 @@ class ChatViewModel
                             )
                         activeChatTurnSnapshotPort
                             .observe(key)
+                            .throttleLatest(16L)
                             .distinctUntilChanged()
                             .collect { snapshot ->
                                 Log.d(
@@ -658,35 +662,6 @@ class ChatViewModel
 
 internal fun List<Message>.dbMessagesFingerprintForTesting(): Any = dbMessagesFingerprint()
 
-internal fun resolveActiveTurnSnapshotObserveKey(
-    requestedKey: ActiveChatTurnKey?,
-    incompleteKey: ActiveChatTurnKey?,
-    acknowledgedKeys: Set<ActiveChatTurnKey>,
-    retainedKey: ActiveChatTurnKey?,
-): ActiveChatTurnKey? {
-    val candidateKey =
-        requestedKey ?: incompleteKey?.takeUnless { key -> key in acknowledgedKeys }
-    val retainedSnapshotKey = retainedKey?.takeUnless { key -> key in acknowledgedKeys }
-    return candidateKey ?: retainedSnapshotKey
-}
-
-internal fun maybeAcknowledgeCompletedTurn(
-    key: ActiveChatTurnKey,
-    dbMessages: List<Message>,
-    activeSnapshot: AccumulatedMessages?,
-    acknowledgedTurnKeys: Set<ActiveChatTurnKey>,
-    onAcknowledge: (ActiveChatTurnKey) -> Unit,
-) {
-    if (key in acknowledgedTurnKeys) return
-    val dbMessage = dbMessages.find { message -> message.id == key.assistantMessageId }
-    val snapshotMessage = activeSnapshot?.messages?.get(key.assistantMessageId)
-    if (dbMessage?.messageState == MessageState.COMPLETE &&
-        snapshotMessage?.messageState == MessageState.COMPLETE
-    ) {
-        onAcknowledge(key)
-    }
-}
-
 private data class DbMessagesFingerprint(
     val messages: List<DbMessageFingerprint>,
 )
@@ -694,6 +669,7 @@ private data class DbMessagesFingerprint(
 private data class DbMessageFingerprint(
     val id: MessageId,
     val updatedAt: Long?,
+    val messageState: MessageState,
     val fallbackMessage: Message?,
 )
 
@@ -704,6 +680,7 @@ private fun List<Message>.dbMessagesFingerprint(): DbMessagesFingerprint =
                 DbMessageFingerprint(
                     id = message.id,
                     updatedAt = message.updatedAt,
+                    messageState = message.messageState,
                     fallbackMessage = message.takeIf { it.updatedAt == null },
                 )
             },
