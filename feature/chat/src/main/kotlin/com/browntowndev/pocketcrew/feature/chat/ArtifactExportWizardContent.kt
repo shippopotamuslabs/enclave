@@ -1,4 +1,25 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
+
 package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.compose.foundation.BorderStroke
@@ -21,8 +42,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -340,22 +361,23 @@ private fun WizardSelectableCard(
 private fun ArtifactExportWizardContentPreviewFormat() {
     PocketCrewTheme {
         ArtifactExportWizardContent(
-            state = ArtifactExportSheetState.Visible(
-                messageId = MessageId("m1"),
-                artifactId = "a1",
-                title = "Quarterly summary",
-                step = ArtifactExportWizardStep.CHOOSE_FORMAT,
-                selectedFormat = WizardExportFormat.PDF,
-                selectedDestination = null,
-                isExporting = false,
-                documentJson = """{"blocks":[]}""",
-            ),
+            state =
+                ArtifactExportSheetState.Visible(
+                    messageId = MessageId("m1"),
+                    artifactId = "a1",
+                    title = "Quarterly summary",
+                    step = ArtifactExportWizardStep.CHOOSE_FORMAT,
+                    selectedFormat = WizardExportFormat.PDF,
+                    selectedDestination = null,
+                    isExporting = false,
+                    documentJson = """{"blocks":[]}""",
+                ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},
             onBack = {},
             onNext = {},
-            onConfirmExport = {}
+            onConfirmExport = {},
         )
     }
 }
@@ -365,22 +387,23 @@ private fun ArtifactExportWizardContentPreviewFormat() {
 private fun ArtifactExportWizardContentPreviewDestination() {
     PocketCrewTheme {
         ArtifactExportWizardContent(
-            state = ArtifactExportSheetState.Visible(
-                messageId = MessageId("m1"),
-                artifactId = "a1",
-                title = "Quarterly summary",
-                step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
-                selectedFormat = WizardExportFormat.BOTH,
-                selectedDestination = WizardExportDestination.SHARE,
-                isExporting = false,
-                documentJson = """{"blocks":[]}""",
-            ),
+            state =
+                ArtifactExportSheetState.Visible(
+                    messageId = MessageId("m1"),
+                    artifactId = "a1",
+                    title = "Quarterly summary",
+                    step = ArtifactExportWizardStep.CHOOSE_DESTINATION,
+                    selectedFormat = WizardExportFormat.BOTH,
+                    selectedDestination = WizardExportDestination.SHARE,
+                    isExporting = false,
+                    documentJson = """{"blocks":[]}""",
+                ),
             onDismiss = {},
             onSelectFormat = {},
             onSelectDestination = {},
             onBack = {},
             onNext = {},
-            onConfirmExport = {}
+            onConfirmExport = {},
         )
     }
 }

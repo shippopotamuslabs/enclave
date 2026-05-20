@@ -14,22 +14,16 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.pocketcrew.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -58,7 +52,6 @@ import kotlin.coroutines.CoroutineContext
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class ActiveTurnSnapshotThrottleTest {
-
     private val chatId = ChatId("throttle-test-chat")
     private val assistantMsgId = MessageId("assistant-msg-1")
     private val key = ActiveChatTurnKey(chatId, assistantMsgId)
@@ -112,17 +105,20 @@ class ActiveTurnSnapshotThrottleTest {
         )
     }
 
-    private fun snapshot(content: String) = AccumulatedMessages(
-        messages = mapOf(
-            assistantMsgId to MessageSnapshot(
-                messageId = assistantMsgId,
-                modelType = ModelType.MAIN,
-                content = content,
-                thinkingRaw = "",
-                isComplete = false,
-            )
+    private fun snapshot(content: String) =
+        AccumulatedMessages(
+            messages =
+                mapOf(
+                    assistantMsgId to
+                        MessageSnapshot(
+                            messageId = assistantMsgId,
+                            modelType = ModelType.MAIN,
+                            content = content,
+                            thinkingRaw = "",
+                            isComplete = false,
+                        ),
+                ),
         )
-    )
 
     /**
      * Without throttle: 100 rapid snapshot emissions → ~100 distinct ChatUiState values →
@@ -132,46 +128,50 @@ class ActiveTurnSnapshotThrottleTest {
      * ≤ 8 emissions (100ms/16ms ≈ 6 windows + 1 immediate + 1 final flush).
      */
     @Test
-    fun `uiState emission count is bounded when 100 snapshots arrive over 100ms virtual time`() = runTest {
-        // DB has one incomplete assistant message so activeTurnKeyFlow resolves the key.
-        coEvery { chatUseCases.getChat(chatId) } returns MutableStateFlow(
-            listOf(
-                Message(
-                    id = assistantMsgId,
-                    chatId = chatId,
-                    content = Content(""),
-                    role = Role.ASSISTANT,
-                    messageState = MessageState.PROCESSING,
+    fun `uiState emission count is bounded when 100 snapshots arrive over 100ms virtual time`() =
+        runTest {
+            // DB has one incomplete assistant message so activeTurnKeyFlow resolves the key.
+            coEvery { chatUseCases.getChat(chatId) } returns
+                MutableStateFlow(
+                    listOf(
+                        Message(
+                            id = assistantMsgId,
+                            chatId = chatId,
+                            content = Content(""),
+                            role = Role.ASSISTANT,
+                            messageState = MessageState.PROCESSING,
+                        ),
+                    ),
                 )
+
+            // Snapshot port emits 100 distinct snapshots, each 1ms apart (100ms total span).
+            every { activeChatTurnSnapshotPort.observe(key) } returns
+                flow {
+                    repeat(100) { i ->
+                        emit(snapshot("Token $i"))
+                        delay(1L)
+                    }
+                }
+
+            val vm = buildViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+
+            var totalEmissions = 0
+            val collectJob =
+                launch {
+                    vm.uiState.collect { totalEmissions++ }
+                }
+
+            advanceUntilIdle() // propagate initial state + first snapshot
+            advanceTimeBy(100L) // process all 100 snapshot emissions + throttle windows
+            advanceUntilIdle() // flush any remaining buffered value
+
+            collectJob.cancel()
+
+            // Without throttle: ≥ 100 snapshot-driven uiState emissions.
+            // With throttleLatest(16ms): ≤ 15 total emissions including initial + DB load + throttled snapshots.
+            assertTrue(
+                totalEmissions <= 15,
+                "Expected ≤15 total uiState emissions with 16ms throttle, got $totalEmissions",
             )
-        )
-
-        // Snapshot port emits 100 distinct snapshots, each 1ms apart (100ms total span).
-        every { activeChatTurnSnapshotPort.observe(key) } returns flow {
-            repeat(100) { i ->
-                emit(snapshot("Token $i"))
-                delay(1L)
-            }
         }
-
-        val vm = buildViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
-
-        var totalEmissions = 0
-        val collectJob = launch {
-            vm.uiState.collect { totalEmissions++ }
-        }
-
-        advanceUntilIdle()       // propagate initial state + first snapshot
-        advanceTimeBy(100L)      // process all 100 snapshot emissions + throttle windows
-        advanceUntilIdle()       // flush any remaining buffered value
-
-        collectJob.cancel()
-
-        // Without throttle: ≥ 100 snapshot-driven uiState emissions.
-        // With throttleLatest(16ms): ≤ 15 total emissions including initial + DB load + throttled snapshots.
-        assertTrue(
-            totalEmissions <= 15,
-            "Expected ≤15 total uiState emissions with 16ms throttle, got $totalEmissions"
-        )
-    }
 }

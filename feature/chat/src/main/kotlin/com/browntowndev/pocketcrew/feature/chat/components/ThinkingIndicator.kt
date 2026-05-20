@@ -1,4 +1,24 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.chat.components
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,12 +37,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,8 +48,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
-import kotlinx.coroutines.delay
-
 
 /**
  * Redesigned Thinking Indicator that matches the Grok-style thinking indicator.
@@ -59,25 +73,27 @@ fun ThinkingIndicator(
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 90f else 0f,
         animationSpec = tween(durationMillis = 200),
-        label = "chevronRotation"
+        label = "chevronRotation",
     )
 
     Column(
-        modifier = modifier
-            .padding(top = 8.dp, bottom = 8.dp)
-            .fillMaxWidth()
+        modifier =
+            modifier
+                .padding(top = 8.dp, bottom = 8.dp)
+                .fillMaxWidth(),
     ) {
         // Header Row: Orb + "Thinking" text + elapsed time + chevron
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(x = (-11).dp)
-                .clickable { onToggleDetails() }
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset(x = (-11).dp)
+                    .clickable { onToggleDetails() },
         ) {
             // Dynamic molten-lava orb
             DynamicThinkingAnimation(
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(46.dp),
             )
 
             Spacer(modifier = Modifier.width(5.dp))
@@ -85,13 +101,14 @@ fun ThinkingIndicator(
             // "Thinking - Xs" text with shimmer
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
-                val thinkingText = if (elapsedSeconds > 0) {
-                    "Thinking... • ${formatElapsedTime(elapsedSeconds)}"
-                } else {
-                    "Thinking..."
-                }
+                val thinkingText =
+                    if (elapsedSeconds > 0) {
+                        "Thinking... • ${formatElapsedTime(elapsedSeconds)}"
+                    } else {
+                        "Thinking..."
+                    }
 
                 val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
                 val highlightColor = grayColor.copy(alpha = 0.3f)
@@ -100,10 +117,11 @@ fun ThinkingIndicator(
                     text = thinkingText,
                     baseColor = grayColor,
                     highlightColor = highlightColor,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    ),
+                    style =
+                        MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                        ),
                 )
 
                 Spacer(Modifier.width(6.dp))
@@ -112,9 +130,10 @@ fun ThinkingIndicator(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = "Expand thinking details",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .rotate(rotation)
+                    modifier =
+                        Modifier
+                            .size(24.dp)
+                            .rotate(rotation),
                 )
             }
         }
@@ -124,13 +143,12 @@ fun ThinkingIndicator(
 /**
  * Formats elapsed seconds into a human-readable string.
  */
-private fun formatElapsedTime(seconds: Int): String {
-    return when {
+private fun formatElapsedTime(seconds: Int): String =
+    when {
         seconds < 60 -> "${seconds}s"
         seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
         else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
     }
-}
 
 // --- Previews ---
 
@@ -149,7 +167,7 @@ fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
         ThinkingIndicator(
             elapsedSeconds = 0,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp),
         )
     }
 }
@@ -160,7 +178,7 @@ fun ThinkingIndicator_WithContentPreview() {
     PreviewTheme {
         ThinkingIndicator(
             elapsedSeconds = 42,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp),
         )
     }
 }

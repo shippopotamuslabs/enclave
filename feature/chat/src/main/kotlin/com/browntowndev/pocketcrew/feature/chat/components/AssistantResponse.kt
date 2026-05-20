@@ -1,9 +1,13 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
+import android.content.ClipData
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,23 +17,19 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,25 +43,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalUriHandler
-import android.content.ClipData
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.feature.chat.R
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
-import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
+import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
+import com.browntowndev.pocketcrew.feature.chat.R
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.TranscriptSegmentUi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -88,9 +87,10 @@ fun AssistantResponse(
     // Get content and pipeline step from ContentUi
     val contentText = message.content.text
     val pipelineStep = message.content.pipelineStep
-    val isStreaming = message.indicatorState !is IndicatorState.Complete &&
-                     message.indicatorState !is IndicatorState.None &&
-                     !isPreview
+    val isStreaming =
+        message.indicatorState !is IndicatorState.Complete &&
+            message.indicatorState !is IndicatorState.None &&
+            !isPreview
 
     // State for step completion bottom sheet
     var showStepDetails by remember { mutableStateOf(false) }
@@ -100,23 +100,25 @@ fun AssistantResponse(
     // Show bottom sheet if triggered
     if (showStepDetails) {
         DetailBottomSheet(
-            config = DetailBottomSheetConfig.StepCompletion(
-                isVisible = showStepDetails,
-                content = contentText, // Always use live content from message
-                stepName = selectedStepName,
-                isStreaming = isStreaming,
-                onDismiss = { showStepDetails = false }
-            )
+            config =
+                DetailBottomSheetConfig.StepCompletion(
+                    isVisible = showStepDetails,
+                    content = contentText, // Always use live content from message
+                    stepName = selectedStepName,
+                    isStreaming = isStreaming,
+                    onDismiss = { showStepDetails = false },
+                ),
         )
     }
 
     if (showSources) {
         DetailBottomSheet(
-            config = DetailBottomSheetConfig.Sources(
-                isVisible = showSources,
-                sources = message.webSearchSources,
-                onDismiss = { showSources = false }
-            )
+            config =
+                DetailBottomSheetConfig.Sources(
+                    isVisible = showSources,
+                    sources = message.webSearchSources,
+                    onDismiss = { showSources = false },
+                ),
         )
     }
 
@@ -135,7 +137,7 @@ fun AssistantResponse(
                 onClick = {
                     selectedStepName = pipelineStep.displayName()
                     showStepDetails = true
-                }
+                },
             )
         } else {
             var transcriptSheetVisible by remember { mutableStateOf(false) }
@@ -155,7 +157,12 @@ fun AssistantResponse(
                 )
             }
 
-            fun openThinkingSheet(text: String, durationSeconds: Long?, streaming: Boolean, elapsedForComplete: Int) {
+            fun openThinkingSheet(
+                text: String,
+                durationSeconds: Long?,
+                streaming: Boolean,
+                elapsedForComplete: Int,
+            ) {
                 transcriptSheetText = text
                 transcriptSheetDurationSeconds = durationSeconds ?: 0L
                 transcriptSheetStreaming = streaming
@@ -191,18 +198,20 @@ fun AssistantResponse(
                                     )
                                 } else {
                                     ThoughtForHeader(
-                                        durationText = formatThinkingDuration(
-                                            (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
-                                        ),
+                                        durationText =
+                                            formatThinkingDuration(
+                                                (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
+                                            ),
                                         isExpanded = false,
                                         onViewFullThinking = {
                                             openThinkingSheet(
                                                 text = segment.text,
                                                 durationSeconds = segment.durationSeconds,
                                                 streaming = false,
-                                                elapsedForComplete = (segment.durationSeconds ?: 0L)
-                                                    .toInt()
-                                                    .coerceAtLeast(0),
+                                                elapsedForComplete =
+                                                    (segment.durationSeconds ?: 0L)
+                                                        .toInt()
+                                                        .coerceAtLeast(0),
                                             )
                                         },
                                     )
@@ -242,7 +251,7 @@ fun AssistantResponse(
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(message.content.artifacts) { card ->
                         ArtifactCard(
@@ -252,7 +261,7 @@ fun AssistantResponse(
                     }
                 }
             }
-            
+
             // Generated Media Card (Aggregated)
             if (message.content.generatedMediaUris.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -265,27 +274,29 @@ fun AssistantResponse(
                     uris = mediaUris,
                     mediaTypes = mediaTypes,
                     prompts = mediaPrompts,
-                    onClick = { u, t, p -> 
-                        onNavigateToStudio(mediaIds, u, t, p) 
+                    onClick = { u, t, p ->
+                        onNavigateToStudio(mediaIds, u, t, p)
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
 
-            val isComplete = message.indicatorState is IndicatorState.Complete || 
-                            message.indicatorState is IndicatorState.None || 
-                            isPreview
+            val isComplete =
+                message.indicatorState is IndicatorState.Complete ||
+                    message.indicatorState is IndicatorState.None ||
+                    isPreview
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 16.dp, top = 4.dp, bottom = 12.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp, top = 4.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     if (isComplete) {
                         // Share Button
@@ -296,7 +307,7 @@ fun AssistantResponse(
                                 imageVector = Icons.Default.Share,
                                 contentDescription = "Share",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                         }
 
@@ -309,9 +320,10 @@ fun AssistantResponse(
                                     )
                                 }
                             },
-                            modifier = Modifier
-                                .offset(x = (-8).dp)
-                                .size(32.dp),
+                            modifier =
+                                Modifier
+                                    .offset(x = (-8).dp)
+                                    .size(32.dp),
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.content_copy),
@@ -325,9 +337,10 @@ fun AssistantResponse(
                             // Speaker Button
                             IconButton(
                                 onClick = { onPlayAudio(contentText) },
-                                modifier = Modifier
-                                    .offset(x = (-8).dp)
-                                    .size(32.dp),
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.VolumeUp,
@@ -344,26 +357,28 @@ fun AssistantResponse(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .padding(start = 4.dp)
-                                    .clickable { showSources = true }
+                                modifier =
+                                    Modifier
+                                        .padding(start = 4.dp)
+                                        .clickable { showSources = true },
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.link),
                                         contentDescription = null,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(14.dp),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Sources",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
+                                        style =
+                                            MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                            ),
                                     )
                                 }
                             }
@@ -419,10 +434,11 @@ private fun CompletedStepRow(
     modelDisplayName: String,
     indicatorState: IndicatorState?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Only hide if we have no output AND we aren't actively working on it
-    val isStepActive = indicatorState is IndicatorState.Processing ||
+    val isStepActive =
+        indicatorState is IndicatorState.Processing ||
             indicatorState is IndicatorState.EngineLoading ||
             indicatorState is IndicatorState.Thinking ||
             indicatorState is IndicatorState.Generating
@@ -431,40 +447,45 @@ private fun CompletedStepRow(
     // Preview text - "Tap to View" as requested
     val previewText = "Tap to View"
 
-    val statusText = when (indicatorState) {
-        is IndicatorState.EngineLoading -> "I'm loading the engine from disk..."
-        is IndicatorState.Processing -> "I'm processing your request now..."
-        is IndicatorState.Thinking -> "I'm thinking about the next step..."
-        is IndicatorState.Generating -> "I understand the request and I'm generating my response now."
-        is IndicatorState.Complete, IndicatorState.None, null -> "I have completed my task. Here are the results."
-    }
+    val statusText =
+        when (indicatorState) {
+            is IndicatorState.EngineLoading -> "I'm loading the engine from disk..."
+            is IndicatorState.Processing -> "I'm processing your request now..."
+            is IndicatorState.Thinking -> "I'm thinking about the next step..."
+            is IndicatorState.Generating -> "I understand the request and I'm generating my response now."
+            is IndicatorState.Complete, IndicatorState.None, null -> "I have completed my task. Here are the results."
+        }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
     ) {
         // Model message: "$modelDisplayName: $statusText"
-        val completionMessage = remember(modelDisplayName, statusText) {
-            buildAnnotatedString {
-                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(modelDisplayName)
+        val completionMessage =
+            remember(modelDisplayName, statusText) {
+                buildAnnotatedString {
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append(modelDisplayName)
+                    }
+                    append(": $statusText")
                 }
-                append(": $statusText")
             }
-        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onClick() }
-                .padding(vertical = 4.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onClick() }
+                    .padding(vertical = 4.dp),
         ) {
             Text(
                 text = completionMessage,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Medium,
-                ),
+                style =
+                    MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Medium,
+                    ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -473,29 +494,31 @@ private fun CompletedStepRow(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
-                .clickable { onClick() }
-                .padding(horizontal = 12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                    .clickable { onClick() }
+                    .padding(horizontal = 12.dp),
         ) {
             // Document icon - Rectangular, rotated 10 degrees, shifted down slightly
             // Position extends below card so bottom gets clipped by container
             Box(
-                modifier = Modifier
-                    .offset(y = 12.dp)
-                    .padding(start = 12.dp)
-                    .rotate(-10f)
-                    .size(width = 60.dp, height = 90.dp)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .offset(y = 12.dp)
+                        .padding(start = 12.dp)
+                        .rotate(-10f)
+                        .size(width = 60.dp, height = 90.dp)
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = painterResource(R.drawable.document),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(36.dp),
                 )
             }
 
@@ -503,22 +526,24 @@ private fun CompletedStepRow(
 
             // Text content on the right - moved further right
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = "$stepName Results",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 23.sp,
-                    ),
+                    style =
+                        MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 23.sp,
+                        ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = previewText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                    ),
+                    style =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                        ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                 )
@@ -526,58 +551,62 @@ private fun CompletedStepRow(
         }
     }
 }
+
 @Composable
 private fun ArtifactCard(
     card: ArtifactCardUiModel,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier
-            .width(280.dp)
-            .height(110.dp),
+        modifier =
+            modifier
+                .width(280.dp)
+                .height(110.dp),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp)
+            modifier = Modifier.padding(12.dp),
         ) {
             // Document Preview / Icon
             Box(
-                modifier = Modifier
-                    .size(width = 56.dp, height = 76.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(width = 56.dp, height = 76.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
             ) {
                 // PDF Label - The "Premium" touch
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.document),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(4.dp)
+                        shape = RoundedCornerShape(4.dp),
                     ) {
                         Text(
                             text = card.badgeLabel,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Black,
-                                fontSize = 10.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onPrimary
+                            style =
+                                MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                ),
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
                 }
@@ -586,42 +615,43 @@ private fun ArtifactCard(
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = card.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.sp
-                    ),
+                    style =
+                        MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.sp,
+                        ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = card.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 1,
                 )
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = card.ctaLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -635,7 +665,7 @@ private fun MediaCard(
     mediaTypes: List<String>,
     prompts: List<String>,
     onClick: (uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var loadError by remember { mutableStateOf(false) }
     val primaryUri = uris.firstOrNull() ?: ""
@@ -644,32 +674,34 @@ private fun MediaCard(
 
     Surface(
         onClick = { if (!loadError) onClick(uris, mediaTypes, prompts) },
-        modifier = modifier
-            .fillMaxWidth()
-            .height(110.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(110.dp),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp)
+            modifier = Modifier.padding(12.dp),
         ) {
             // Media Preview
             Box(
-                modifier = Modifier
-                    .size(width = 80.dp, height = 80.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(width = 80.dp, height = 80.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
             ) {
                 if (loadError) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Deleted",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     )
                 } else {
                     coil3.compose.AsyncImage(
@@ -678,22 +710,27 @@ private fun MediaCard(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         onError = { loadError = true },
-                        error = painterResource(R.drawable.pocket_crew_icon)
+                        error = painterResource(R.drawable.pocket_crew_icon),
                     )
-                    
+
                     if (count > 1) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f)),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        androidx.compose.ui.graphics.Color.Black
+                                            .copy(alpha = 0.4f),
+                                    ),
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = "+${count - 1}",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = androidx.compose.ui.graphics.Color.White
-                                )
+                                style =
+                                    MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = androidx.compose.ui.graphics.Color.White,
+                                    ),
                             )
                         }
                     }
@@ -703,51 +740,56 @@ private fun MediaCard(
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
-                val title = if (loadError) "Media Missing" else {
-                    val typeLabel = when (primaryType) {
-                        "VIDEO" -> "Video"
-                        "MUSIC" -> "Audio"
-                        else -> "Image"
+                val title =
+                    if (loadError) {
+                        "Media Missing"
+                    } else {
+                        val typeLabel =
+                            when (primaryType) {
+                                "VIDEO" -> "Video"
+                                "MUSIC" -> "Audio"
+                                else -> "Image"
+                            }
+                        if (count > 1) "$count ${typeLabel}s Generated" else "Generated $typeLabel"
                     }
-                    if (count > 1) "$count ${typeLabel}s Generated" else "Generated $typeLabel"
-                }
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.sp
-                    ),
+                    style =
+                        MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.sp,
+                        ),
                     color = if (loadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (loadError) "Deleted from storage" else "Available in Studio",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 1,
                 )
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 if (!loadError) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "Open in Studio",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }

@@ -11,10 +11,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ChatInferenceServiceModule {
-
     @Binds
     @Singleton
-    abstract fun bindChatInferenceExecutorPort(
-        impl: ChatInferenceExecutorRouter
-    ): ChatInferenceExecutorPort
+    abstract fun bindChatInferenceExecutorPort(impl: ChatInferenceExecutorRouter): ChatInferenceExecutorPort
 }

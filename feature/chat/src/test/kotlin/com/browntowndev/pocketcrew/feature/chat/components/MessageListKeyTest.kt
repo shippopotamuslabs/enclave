@@ -35,7 +35,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class MessageListKeyTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -44,10 +43,11 @@ class MessageListKeyTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 MessageList(
-                    messages = listOf(
-                        userMessage("u1", "What is Kotlin?"),
-                        assistantMessage("a1", "Kotlin is a modern JVM language."),
-                    ),
+                    messages =
+                        listOf(
+                            userMessage("u1", "What is Kotlin?"),
+                            assistantMessage("a1", "Kotlin is a modern JVM language."),
+                        ),
                     hasActiveIndicator = false,
                     isPreview = true,
                 )
@@ -64,7 +64,7 @@ class MessageListKeyTest {
             listOf(
                 userMessage("u1", "Explain coroutines"),
                 assistantMessage("a1", "Coroutines are"),
-            )
+            ),
         )
 
         composeTestRule.setContent {
@@ -79,10 +79,11 @@ class MessageListKeyTest {
 
         composeTestRule.onNodeWithText("Coroutines are").assertIsDisplayed()
 
-        messages = listOf(
-            userMessage("u1", "Explain coroutines"),
-            assistantMessage("a1", "Coroutines are a concurrency primitive."),
-        )
+        messages =
+            listOf(
+                userMessage("u1", "Explain coroutines"),
+                assistantMessage("a1", "Coroutines are a concurrency primitive."),
+            )
 
         composeTestRule.onNodeWithText("Coroutines are a concurrency primitive.").assertIsDisplayed()
     }
@@ -104,7 +105,7 @@ class MessageListKeyTest {
             listOf(
                 userMessage("u-original", longText),
                 assistantMessage("a1", "Short answer"),
-            )
+            ),
         )
 
         composeTestRule.setContent {
@@ -122,10 +123,11 @@ class MessageListKeyTest {
         composeTestRule.onNodeWithContentDescription("Collapse message").assertIsDisplayed()
 
         // Replace the user message with a different ID but the same text content.
-        messages = listOf(
-            userMessage("u-replacement", longText),
-            assistantMessage("a1", "Short answer"),
-        )
+        messages =
+            listOf(
+                userMessage("u-replacement", longText),
+                assistantMessage("a1", "Short answer"),
+            )
 
         // The replacement message must have fresh (collapsed) expand state, not the old
         // node's expanded state.  "Expand message" should be visible; "Collapse" should not.
@@ -133,7 +135,10 @@ class MessageListKeyTest {
     }
 }
 
-private fun userMessage(id: String, text: String) = ChatMessage(
+private fun userMessage(
+    id: String,
+    text: String,
+) = ChatMessage(
     id = MessageId(id),
     chatId = ChatId("test-chat"),
     role = MessageRole.User,
@@ -141,7 +146,10 @@ private fun userMessage(id: String, text: String) = ChatMessage(
     formattedTimestamp = "10:00 AM",
 )
 
-private fun assistantMessage(id: String, text: String) = ChatMessage(
+private fun assistantMessage(
+    id: String,
+    text: String,
+) = ChatMessage(
     id = MessageId(id),
     chatId = ChatId("test-chat"),
     role = MessageRole.Assistant,

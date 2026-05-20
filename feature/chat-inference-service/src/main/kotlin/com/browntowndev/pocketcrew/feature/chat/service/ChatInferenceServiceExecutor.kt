@@ -22,61 +22,61 @@ import javax.inject.Singleton
  * terminal [MessageGenerationState.Failed] so the caller can persist the error.
  */
 @Singleton
-class ChatInferenceServiceExecutor @Inject constructor(
-    private val serviceStarter: ChatInferenceServiceStarter,
-    private val loggingPort: LoggingPort,
-) : ChatInferenceExecutorPort {
+class ChatInferenceServiceExecutor
+    @Inject
+    constructor(
+        private val serviceStarter: ChatInferenceServiceStarter,
+        private val loggingPort: LoggingPort,
+    ) : ChatInferenceExecutorPort {
+        companion object {
+            private const val TAG = "ChatInferenceServiceExec"
+        }
 
-    companion object {
-        private const val TAG = "ChatInferenceServiceExec"
-    }
-
-    override fun execute(
-        prompt: String,
-        userMessageId: MessageId,
-        assistantMessageId: MessageId,
-        chatId: ChatId,
-        userHasImage: Boolean,
-        modelType: ModelType,
-        backgroundInferenceEnabled: Boolean, // Ignored — this executor IS the background path
-    ): Flow<MessageGenerationState> {
-        return flow {
-            loggingPort.info(
-                TAG,
-                "execute() requested chat=${chatId.value} " +
-                    "assistantMessageId=${assistantMessageId.value} " +
-                    "modelType=${modelType.name} backgroundInferenceEnabled=$backgroundInferenceEnabled",
-            )
-            try {
-                loggingPort.debug(
-                    TAG,
-                    "starting ChatInferenceService chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                )
-                serviceStarter.startService(
-                    prompt = prompt,
-                    userMessageId = userMessageId,
-                    assistantMessageId = assistantMessageId,
-                    chatId = chatId,
-                    userHasImage = userHasImage,
-                    modelType = modelType,
-                )
+        override fun execute(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelType: ModelType,
+            backgroundInferenceEnabled: Boolean, // Ignored — this executor IS the background path
+        ): Flow<MessageGenerationState> =
+            flow {
                 loggingPort.info(
                     TAG,
-                    "service start accepted chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                    "execute() requested chat=${chatId.value} " +
+                        "assistantMessageId=${assistantMessageId.value} " +
+                        "modelType=${modelType.name} backgroundInferenceEnabled=$backgroundInferenceEnabled",
                 )
-            } catch (e: ForegroundServiceStartNotAllowedException) {
-                loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
-                emit(MessageGenerationState.Failed(e, modelType))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
-                emit(MessageGenerationState.Failed(e, modelType))
+                try {
+                    loggingPort.debug(
+                        TAG,
+                        "starting ChatInferenceService chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                    )
+                    serviceStarter.startService(
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        userHasImage = userHasImage,
+                        modelType = modelType,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "service start accepted chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                    )
+                } catch (e: ForegroundServiceStartNotAllowedException) {
+                    loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, modelType))
+                }
             }
+
+        override fun stop() {
+            serviceStarter.stopInference()
         }
     }
-
-    override fun stop() {
-        serviceStarter.stopInference()
-    }
-}

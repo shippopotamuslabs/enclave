@@ -3,8 +3,6 @@ package com.browntowndev.pocketcrew.feature.chat.di
 import com.browntowndev.pocketcrew.data.chat.BreakIteratorSentenceBoundaryDetector
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCasesImpl
-import com.browntowndev.pocketcrew.domain.usecase.chat.GetChatUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.SafetyProbe
 import com.browntowndev.pocketcrew.domain.usecase.chat.SafetyProbeImpl
 import com.browntowndev.pocketcrew.domain.usecase.chat.SentenceBoundaryDetector
@@ -27,7 +25,5 @@ abstract class ChatUseCasesModule {
 
     @Binds
     @Singleton
-    abstract fun bindSentenceBoundaryDetector(
-        impl: BreakIteratorSentenceBoundaryDetector
-    ): SentenceBoundaryDetector
+    abstract fun bindSentenceBoundaryDetector(impl: BreakIteratorSentenceBoundaryDetector): SentenceBoundaryDetector
 }

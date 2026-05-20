@@ -21,19 +21,18 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
  * Shows a gray shimmer "Processing..." text with animated orb.
  */
 @Composable
-fun ProcessingIndicator(
-    modifier: Modifier = Modifier,
-) {
+fun ProcessingIndicator(modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .offset(x = (-11).dp)
-            .padding(top = 8.dp, bottom = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .offset(x = (-11).dp)
+                .padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Dynamic orb animation (same as ThinkingIndicator)
         DynamicThinkingAnimation(
-            modifier = Modifier.size(46.dp)
+            modifier = Modifier.size(46.dp),
         )
 
         Spacer(modifier = Modifier.width(5.dp))
@@ -47,10 +46,11 @@ fun ProcessingIndicator(
             text = "Processing",
             baseColor = grayColor,
             highlightColor = highlightColor,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
-            ),
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                ),
         )
     }
 }

@@ -14,22 +14,22 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.PromptComposerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
-import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressPersister
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
@@ -48,12 +48,11 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class ChatInferenceService : Service() {
-
     companion object {
         const val TAG = "ChatInferenceService"
         const val ACTION_START = "com.browntowndev.pocketcrew.chat.ACTION_START"
         const val ACTION_STOP = "com.browntowndev.pocketcrew.chat.ACTION_STOP"
-        
+
         const val EXTRA_PROMPT = "extra_prompt"
         const val EXTRA_USER_MESSAGE_ID = "extra_user_message_id"
         const val EXTRA_ASSISTANT_MESSAGE_ID = "extra_assistant_message_id"
@@ -93,16 +92,16 @@ class ChatInferenceService : Service() {
 
     @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
-    
+
     @Inject
     lateinit var defaultModelRepository: com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-    
+
     @Inject
     lateinit var mediaProviderRepository: com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
-    
+
     @Inject
     lateinit var mediaToolDefinitionFactory: com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory
-    
+
     @Inject
     lateinit var getProviderCapabilitiesUseCase: com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 
@@ -126,22 +125,27 @@ class ChatInferenceService : Service() {
         loggingPort.info(TAG, "onCreate")
         createNotificationChannels()
         historyRehydrator = ChatHistoryRehydrator(messageRepository, loggingPort)
-        inferenceRequestPreparer = ChatInferenceRequestPreparer(
-            activeModelProvider,
-            settingsRepository,
-            messageRepository,
-            memoriesRepository,
-            embeddingEnginePort,
-            promptComposer = promptComposer,
-            defaultModelRepository,
-            mediaProviderRepository,
-            mediaToolDefinitionFactory,
-            getProviderCapabilitiesUseCase,
-            loggingPort
-        )
+        inferenceRequestPreparer =
+            ChatInferenceRequestPreparer(
+                activeModelProvider,
+                settingsRepository,
+                messageRepository,
+                memoriesRepository,
+                embeddingEnginePort,
+                promptComposer = promptComposer,
+                defaultModelRepository,
+                mediaProviderRepository,
+                mediaToolDefinitionFactory,
+                getProviderCapabilitiesUseCase,
+                loggingPort,
+            )
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         latestStartId = startId
         loggingPort.info(
             TAG,
@@ -170,7 +174,7 @@ class ChatInferenceService : Service() {
                 if (!isStopping) {
                     isStopping = true
                     stopInference()
-                    
+
                     // If no job is active, stop immediately. Otherwise, the job's finally block will handle it.
                     if (currentJob?.isActive != true) {
                         stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
@@ -204,69 +208,71 @@ class ChatInferenceService : Service() {
         startForeground(ONGOING_NOTIFICATION_ID, createOngoingNotification(chatId))
         loggingPort.debug(TAG, "foreground service started chat=${chatId.value}")
 
-        currentJob = serviceScope.launch {
-            val persistenceSession = chatGenerationProgressPersister.startSession(
-                mode = modelType.toSingleModelMode(),
-                chatId = chatId,
-                userMessageId = userMessageId,
-                assistantMessageId = assistantMessageId,
-            )
-            currentSession = persistenceSession
-            try {
-                loggingPort.debug(
-                    TAG,
-                    "service job started chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                )
-                if (userHasImage) {
+        currentJob =
+            serviceScope.launch {
+                val persistenceSession =
+                    chatGenerationProgressPersister.startSession(
+                        mode = modelType.toSingleModelMode(),
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                    )
+                currentSession = persistenceSession
+                try {
                     loggingPort.debug(
                         TAG,
-                        "emitting initial Processing state for image request " +
-                            "chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                        "service job started chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                     )
+                    if (userHasImage) {
+                        loggingPort.debug(
+                            TAG,
+                            "emitting initial Processing state for image request " +
+                                "chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                        )
+                        publishState(
+                            chatId = chatId,
+                            assistantMessageId = assistantMessageId,
+                            state = MessageGenerationState.Processing(modelType),
+                            persistenceSession = persistenceSession,
+                        )
+                    }
+                    inferenceFactory.withInferenceService(modelType) { service ->
+                        loggingPort.debug(
+                            TAG,
+                            "withInferenceService entered chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                        )
+                        generateWithService(
+                            prompt = prompt,
+                            userMessageId = userMessageId,
+                            assistantMessageId = assistantMessageId,
+                            chatId = chatId,
+                            service = service,
+                            modelType = modelType,
+                            persistenceSession = persistenceSession,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    loggingPort.info(
+                        TAG,
+                        "Inference cancelled in service chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                    )
+                    withContext(NonCancellable) {
+                        persistenceSession.flush(markIncompleteAsCancelled = true)
+                    }
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Inference failed in service", e)
                     publishState(
                         chatId = chatId,
                         assistantMessageId = assistantMessageId,
-                        state = MessageGenerationState.Processing(modelType),
+                        state = MessageGenerationState.Failed(e, modelType),
                         persistenceSession = persistenceSession,
                     )
+                } finally {
+                    stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
+                    stopSelf(latestStartId)
                 }
-                inferenceFactory.withInferenceService(modelType) { service ->
-                    loggingPort.debug(
-                        TAG,
-                        "withInferenceService entered chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                    )
-                    generateWithService(
-                        prompt = prompt,
-                        userMessageId = userMessageId,
-                        assistantMessageId = assistantMessageId,
-                        chatId = chatId,
-                        service = service,
-                        modelType = modelType,
-                        persistenceSession = persistenceSession,
-                    )
-                }
-            } catch (e: CancellationException) {
-                loggingPort.info(
-                    TAG,
-                    "Inference cancelled in service chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                )
-                withContext(NonCancellable) {
-                    persistenceSession.flush(markIncompleteAsCancelled = true)
-                }
-                throw e
-            } catch (e: Exception) {
-                loggingPort.error(TAG, "Inference failed in service", e)
-                publishState(
-                    chatId = chatId,
-                    assistantMessageId = assistantMessageId,
-                    state = MessageGenerationState.Failed(e, modelType),
-                    persistenceSession = persistenceSession,
-                )
-            } finally {
-                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                stopSelf(latestStartId)
             }
-        }
     }
 
     private suspend fun generateWithService(
@@ -285,13 +291,14 @@ class ChatInferenceService : Service() {
                 "assistantMessageId=${assistantMessageId.value} " +
                 "modelType=${modelType.name} configAvailable=${config != null}",
         )
-        val preparedRequest = inferenceRequestPreparer(
-            prompt = prompt,
-            chatId = chatId,
-            userMessageId = userMessageId,
-            assistantMessageId = assistantMessageId,
-            modelType = modelType,
-        )
+        val preparedRequest =
+            inferenceRequestPreparer(
+                prompt = prompt,
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                modelType = modelType,
+            )
         loggingPort.debug(
             TAG,
             "request prepared chat=${chatId.value} " +
@@ -313,47 +320,54 @@ class ChatInferenceService : Service() {
         }
 
         loggingPort.info(TAG, "sendPrompt begin chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
-        service.sendPrompt(
-            preparedRequest.prompt,
-            preparedRequest.options,
-            closeConversation = false,
-        ).collect { event ->
-            loggingPort.debug(
-                TAG,
-                "stream event chat=${chatId.value} assistantMessageId=${assistantMessageId.value} event=${event::class.simpleName}",
-            )
-            val state = when (event) {
-                is InferenceEvent.EngineLoading -> MessageGenerationState.EngineLoading(event.modelType)
-                is InferenceEvent.Processing -> MessageGenerationState.Processing(event.modelType)
-                is InferenceEvent.Thinking -> MessageGenerationState.ThinkingLive(event.chunk, modelType)
-                is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
-                is InferenceEvent.WebSearchResults -> MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType)
-                is InferenceEvent.Artifacts -> MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType)
-                is InferenceEvent.Media -> MessageGenerationState.MediaAttached(
-                    mediaUris = event.mediaUris,
-                    mediaIds = event.mediaIds,
-                    mediaTypes = event.mediaTypes,
-                    prompts = event.prompts,
-                    modelType = event.modelType
+        service
+            .sendPrompt(
+                preparedRequest.prompt,
+                preparedRequest.options,
+                closeConversation = false,
+            ).collect { event ->
+                loggingPort.debug(
+                    TAG,
+                    "stream event chat=${chatId.value} assistantMessageId=${assistantMessageId.value} event=${event::class.simpleName}",
                 )
-                is InferenceEvent.CompactionApplied -> null
-                is InferenceEvent.PreCompact -> null
-                is InferenceEvent.PostCompact -> null
-                is InferenceEvent.ToolRepaired -> null
-                is InferenceEvent.Finished -> {
-                    maybeShowCompletionNotification(chatId)
-                    MessageGenerationState.Finished(event.modelType)
-                }
-                is InferenceEvent.SafetyBlocked -> MessageGenerationState.Blocked(event.reason, event.modelType)
-                is InferenceEvent.Error -> MessageGenerationState.Failed(event.cause, event.modelType)
+                val state =
+                    when (event) {
+                        is InferenceEvent.EngineLoading -> MessageGenerationState.EngineLoading(event.modelType)
+                        is InferenceEvent.Processing -> MessageGenerationState.Processing(event.modelType)
+                        is InferenceEvent.Thinking -> MessageGenerationState.ThinkingLive(event.chunk, modelType)
+                        is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
+                        is InferenceEvent.WebSearchResults ->
+                            MessageGenerationState.WebSearchSourcesAttached(
+                                event.sources,
+                                event.modelType,
+                            )
+                        is InferenceEvent.Artifacts -> MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType)
+                        is InferenceEvent.Media ->
+                            MessageGenerationState.MediaAttached(
+                                mediaUris = event.mediaUris,
+                                mediaIds = event.mediaIds,
+                                mediaTypes = event.mediaTypes,
+                                prompts = event.prompts,
+                                modelType = event.modelType,
+                            )
+                        is InferenceEvent.CompactionApplied -> null
+                        is InferenceEvent.PreCompact -> null
+                        is InferenceEvent.PostCompact -> null
+                        is InferenceEvent.ToolRepaired -> null
+                        is InferenceEvent.Finished -> {
+                            maybeShowCompletionNotification(chatId)
+                            MessageGenerationState.Finished(event.modelType)
+                        }
+                        is InferenceEvent.SafetyBlocked -> MessageGenerationState.Blocked(event.reason, event.modelType)
+                        is InferenceEvent.Error -> MessageGenerationState.Failed(event.cause, event.modelType)
+                    }
+                publishState(
+                    chatId = chatId,
+                    assistantMessageId = assistantMessageId,
+                    state = state ?: return@collect,
+                    persistenceSession = persistenceSession,
+                )
             }
-            publishState(
-                chatId = chatId,
-                assistantMessageId = assistantMessageId,
-                state = state ?: return@collect,
-                persistenceSession = persistenceSession,
-            )
-        }
         loggingPort.info(TAG, "sendPrompt complete chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
     }
 
@@ -373,7 +387,7 @@ class ChatInferenceService : Service() {
     private fun stopInference() {
         loggingPort.info(TAG, "stopInference requested")
         currentJob?.cancel()
-        
+
         val chatId = currentChatId
         val assistantId = currentAssistantMessageId
         val session = currentSession
@@ -389,7 +403,7 @@ class ChatInferenceService : Service() {
                 activeChatTurnSnapshotPort.clear(key)
                 loggingPort.debug(TAG, "Snapshot cleared for cancelled turn chat=${chatId.value}")
             }
-            
+
             // Ensure service stops if this was the last action
             if (currentJob == null || currentJob?.isActive == false) {
                 stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
@@ -398,33 +412,40 @@ class ChatInferenceService : Service() {
         }
     }
 
-    private fun ModelType.toSingleModelMode(): Mode {
-        return when (this) {
+    private fun ModelType.toSingleModelMode(): Mode =
+        when (this) {
             ModelType.THINKING -> Mode.THINKING
             else -> Mode.FAST
         }
-    }
 
     private fun createOngoingNotification(chatId: ChatId): Notification {
-        val stopIntent = Intent(this, ChatInferenceService::class.java).apply {
-            action = ACTION_STOP
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE
-        )
+        val stopIntent =
+            Intent(this, ChatInferenceService::class.java).apply {
+                action = ACTION_STOP
+            }
+        val stopPendingIntent =
+            PendingIntent.getService(
+                this,
+                0,
+                stopIntent,
+                PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        val deepLinkIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ChatNotificationDeepLink.uriStringFor(chatId))).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            setPackage(packageName)
-        }
-        val deepLinkPendingIntent = PendingIntent.getActivity(
-            this,
-            chatId.value.hashCode(),
-            deepLinkIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val deepLinkIntent =
+            Intent(Intent.ACTION_VIEW, Uri.parse(ChatNotificationDeepLink.uriStringFor(chatId))).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                setPackage(packageName)
+            }
+        val deepLinkPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                chatId.value.hashCode(),
+                deepLinkIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat
+            .Builder(this, CHANNEL_ID)
             .setContentTitle("Pocket Crew")
             .setContentText("Generating AI response...")
             .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
@@ -442,8 +463,11 @@ class ChatInferenceService : Service() {
      * showing a redundant notification when the user is actively viewing the chat.
      */
     private fun maybeShowCompletionNotification(chatId: ChatId) {
-        val isForeground = ProcessLifecycleOwner.get().lifecycle.currentState
-            .isAtLeast(Lifecycle.State.STARTED)
+        val isForeground =
+            ProcessLifecycleOwner
+                .get()
+                .lifecycle.currentState
+                .isAtLeast(Lifecycle.State.STARTED)
         if (ChatInferenceNotificationPolicy.shouldShowCompletionNotification(isForeground)) {
             showCompletionNotification(chatId)
         } else {
@@ -452,25 +476,29 @@ class ChatInferenceService : Service() {
     }
 
     private fun showCompletionNotification(chatId: ChatId) {
-        val deepLinkIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ChatNotificationDeepLink.uriStringFor(chatId))).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            setPackage(packageName)
-        }
-        val deepLinkPendingIntent = PendingIntent.getActivity(
-            this,
-            chatId.value.hashCode(),
-            deepLinkIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val deepLinkIntent =
+            Intent(Intent.ACTION_VIEW, Uri.parse(ChatNotificationDeepLink.uriStringFor(chatId))).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                setPackage(packageName)
+            }
+        val deepLinkPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                chatId.value.hashCode(),
+                deepLinkIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        val notification = NotificationCompat.Builder(this, COMPLETION_CHANNEL_ID)
-            .setContentTitle("Pocket Crew")
-            .setContentText("AI response complete.")
-            .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(deepLinkPendingIntent)
-            .build()
+        val notification =
+            NotificationCompat
+                .Builder(this, COMPLETION_CHANNEL_ID)
+                .setContentTitle("Pocket Crew")
+                .setContentText("AI response complete.")
+                .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(deepLinkPendingIntent)
+                .build()
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(COMPLETION_NOTIFICATION_ID, notification)
@@ -479,19 +507,25 @@ class ChatInferenceService : Service() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            
-            val ongoingChannel = NotificationChannel(
-                CHANNEL_ID, "Chat Inference", NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows ongoing AI generation status"
-            }
+
+            val ongoingChannel =
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "Chat Inference",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Shows ongoing AI generation status"
+                }
             manager.createNotificationChannel(ongoingChannel)
 
-            val completionChannel = NotificationChannel(
-                COMPLETION_CHANNEL_ID, "Inference Completion", NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notifies when AI response is ready"
-            }
+            val completionChannel =
+                NotificationChannel(
+                    COMPLETION_CHANNEL_ID,
+                    "Inference Completion",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Notifies when AI response is ready"
+                }
             manager.createNotificationChannel(completionChannel)
         }
     }

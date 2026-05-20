@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class ChatNotificationDeepLinkTest {
-
     @Test
     fun `uriStringFor targets chat deep link with chat id path`() {
         val uri = ChatNotificationDeepLink.uriStringFor(ChatId("chat-123"))

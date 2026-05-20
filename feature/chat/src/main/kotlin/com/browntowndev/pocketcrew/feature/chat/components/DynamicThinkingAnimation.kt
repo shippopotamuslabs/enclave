@@ -21,12 +21,25 @@ import kotlin.time.Duration.Companion.milliseconds
 
 // Pairs of dot indices (0–8 in a 3×3 grid) that light up together.
 // No consecutive pair shares a dot, so every step produces a clean crossfade.
-private val ACTIVATION_SEQUENCE = listOf(
-    0 to 8, 2 to 6, 1 to 7, 3 to 5,
-    4 to 0, 8 to 3, 2 to 7, 5 to 1,
-    6 to 4, 0 to 5, 8 to 1, 3 to 6,
-    4 to 2, 7 to 0, 5 to 8, 1 to 4,
-)
+private val ACTIVATION_SEQUENCE =
+    listOf(
+        0 to 8,
+        2 to 6,
+        1 to 7,
+        3 to 5,
+        4 to 0,
+        8 to 3,
+        2 to 7,
+        5 to 1,
+        6 to 4,
+        0 to 5,
+        8 to 1,
+        3 to 6,
+        4 to 2,
+        7 to 0,
+        5 to 8,
+        1 to 4,
+    )
 
 /**
  * 3×3 dot-grid animation: two dots illuminate at a time using the primary colour,
@@ -75,10 +88,11 @@ fun DynamicThinkingAnimation(modifier: Modifier = Modifier) {
 
             for (i in 0 until 9) {
                 val alpha = dotAlphas[i]
-                val center = Offset(
-                    x = pad + (i % 3) * spacingX,
-                    y = pad + (i / 3) * spacingY,
-                )
+                val center =
+                    Offset(
+                        x = pad + (i % 3) * spacingX,
+                        y = pad + (i / 3) * spacingY,
+                    )
                 drawCircle(
                     color = dotColor.copy(alpha = alpha),
                     radius = baseRadius * (0.55f + alpha * 0.7f),

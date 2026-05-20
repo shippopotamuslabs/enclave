@@ -1,4 +1,24 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.chat.components
 
@@ -10,19 +30,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,13 +57,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
-import com.browntowndev.pocketcrew.feature.chat.R
-import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
-import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.core.ui.component.XIcon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Public
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.feature.chat.R
 import java.net.URI
 
 /**
@@ -113,10 +132,11 @@ sealed class DetailBottomSheetConfig {
  * @param seconds The duration in seconds.
  * @return A formatted string (e.g., "42s" or "1m 30s").
  */
-fun formatThinkingDuration(seconds: Long): String = when {
-    seconds < 60 -> "${seconds}s"
-    else -> "${seconds / 60}m ${seconds % 60}s"
-}
+fun formatThinkingDuration(seconds: Long): String =
+    when {
+        seconds < 60 -> "${seconds}s"
+        else -> "${seconds / 60}m ${seconds % 60}s"
+    }
 
 /**
  * A reusable bottom sheet composable that displays detailed content with a configurable header.
@@ -135,11 +155,14 @@ fun DetailBottomSheet(
         val sheetState = rememberModalBottomSheetState()
         val uriHandler = LocalUriHandler.current
 
-        val displayDuration = if (config is DetailBottomSheetConfig.Thinking && config.durationSeconds == 0L && elapsedSeconds > 0) {
-            elapsedSeconds.toLong()
-        } else if (config is DetailBottomSheetConfig.Thinking) {
-            config.durationSeconds
-        } else 0L
+        val displayDuration =
+            if (config is DetailBottomSheetConfig.Thinking && config.durationSeconds == 0L && elapsedSeconds > 0) {
+                elapsedSeconds.toLong()
+            } else if (config is DetailBottomSheetConfig.Thinking) {
+                config.durationSeconds
+            } else {
+                0L
+            }
 
         JumpFreeModalBottomSheet(
             onDismissRequest = config.onDismiss,
@@ -148,63 +171,67 @@ fun DetailBottomSheet(
             contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState())
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
             ) {
                 // Header row - content varies by config type
                 Box(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     when (config) {
                         is DetailBottomSheetConfig.Thinking -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.lightbulb),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(end = 8.dp)
+                                    modifier = Modifier.padding(end = 8.dp),
                                 )
                                 Text(
                                     text = "Thought for ${formatThinkingDuration(displayDuration)}",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 18.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style =
+                                        MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 18.sp,
+                                        ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         is DetailBottomSheetConfig.StepCompletion -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
                                     text = "${config.stepName} Results",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 18.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style =
+                                        MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 18.sp,
+                                        ),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
                         is DetailBottomSheetConfig.Sources -> {
                             Text(
                                 text = "Sources",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp
-                                ),
+                                style =
+                                    MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 20.sp,
+                                    ),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = 8.dp)
+                                modifier = Modifier.padding(bottom = 8.dp),
                             )
                         }
                     }
@@ -227,7 +254,7 @@ fun DetailBottomSheet(
                                 text = "No thinking content available",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp)
+                                modifier = Modifier.padding(16.dp),
                             )
                         }
                     }
@@ -240,18 +267,20 @@ fun DetailBottomSheet(
                         )
                     }
                     is DetailBottomSheetConfig.Sources -> {
-                        val webSources = remember(config.sources) {
-                            config.sources.filter { source ->
-                                val domain = runCatching { URI(source.url).host?.removePrefix("www.") }.getOrNull() ?: ""
-                                !domain.equals("x.com", ignoreCase = true) && !domain.equals("twitter.com", ignoreCase = true)
+                        val webSources =
+                            remember(config.sources) {
+                                config.sources.filter { source ->
+                                    val domain = runCatching { URI(source.url).host?.removePrefix("www.") }.getOrNull() ?: ""
+                                    !domain.equals("x.com", ignoreCase = true) && !domain.equals("twitter.com", ignoreCase = true)
+                                }
                             }
-                        }
-                        val xSources = remember(config.sources) {
-                            config.sources.filter { source ->
-                                val domain = runCatching { URI(source.url).host?.removePrefix("www.") }.getOrNull() ?: ""
-                                domain.equals("x.com", ignoreCase = true) || domain.equals("twitter.com", ignoreCase = true)
+                        val xSources =
+                            remember(config.sources) {
+                                config.sources.filter { source ->
+                                    val domain = runCatching { URI(source.url).host?.removePrefix("www.") }.getOrNull() ?: ""
+                                    domain.equals("x.com", ignoreCase = true) || domain.equals("twitter.com", ignoreCase = true)
+                                }
                             }
-                        }
 
                         var selectedTab by remember { mutableIntStateOf(if (webSources.isNotEmpty()) 0 else 1) }
                         val showTabs = webSources.isNotEmpty() && xSources.isNotEmpty()
@@ -265,12 +294,13 @@ fun DetailBottomSheet(
                                 indicator = { tabPositions ->
                                     SecondaryIndicator(
                                         Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp)
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp),
                             ) {
                                 Tab(
                                     selected = selectedTab == 0,
@@ -281,9 +311,9 @@ fun DetailBottomSheet(
                                         Icon(
                                             imageVector = Icons.Default.Public,
                                             contentDescription = "Web",
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(20.dp),
                                         )
-                                    }
+                                    },
                                 )
                                 Tab(
                                     selected = selectedTab == 1,
@@ -294,9 +324,9 @@ fun DetailBottomSheet(
                                         Icon(
                                             imageVector = XIcon,
                                             contentDescription = "X",
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(18.dp),
                                         )
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -305,13 +335,13 @@ fun DetailBottomSheet(
                         activeSources.forEachIndexed { index, source ->
                             WebSearchSourceRow(
                                 source = source,
-                                onClick = { url: String -> uriHandler.openUri(url) }
+                                onClick = { url: String -> uriHandler.openUri(url) },
                             )
                             if (index < activeSources.size - 1) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(vertical = 4.dp),
                                     thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                 )
                             }
                         }
@@ -323,6 +353,7 @@ fun DetailBottomSheet(
         }
     }
 }
+
 /**
  * Re-export of [DetailBottomSheet] with [DetailBottomSheetConfig.Thinking] configuration.
  *
@@ -348,13 +379,14 @@ fun ThinkingDetailsBottomSheet(
     isStreaming: Boolean = false,
 ) {
     DetailBottomSheet(
-        config = DetailBottomSheetConfig.Thinking(
-            isVisible = isVisible,
-            content = thinkingRaw,
-            durationSeconds = thinkingDurationSeconds,
-            onDismiss = onDismiss,
-            isStreaming = isStreaming,
-        ),
-        elapsedSeconds = elapsedSeconds
+        config =
+            DetailBottomSheetConfig.Thinking(
+                isVisible = isVisible,
+                content = thinkingRaw,
+                durationSeconds = thinkingDurationSeconds,
+                onDismiss = onDismiss,
+                isStreaming = isStreaming,
+            ),
+        elapsedSeconds = elapsedSeconds,
     )
 }

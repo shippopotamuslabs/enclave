@@ -23,22 +23,21 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
  * styled to match the Thinking indicator.
  */
 @Composable
-fun GeneratingIndicator(
-    modifier: Modifier = Modifier,
-) {
+fun GeneratingIndicator(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(top = 8.dp, bottom = 8.dp).fillMaxWidth()
+        modifier = modifier.padding(top = 8.dp, bottom = 8.dp).fillMaxWidth(),
     ) {
         // Header Row: Orb + "Generating" text
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(x = (-11).dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset(x = (-11).dp),
         ) {
             // Dynamic molten-lava orb (same as Thinking)
             DynamicThinkingAnimation(
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(46.dp),
             )
 
             Spacer(modifier = Modifier.width(5.dp))
@@ -51,10 +50,11 @@ fun GeneratingIndicator(
                 text = "Responding...",
                 baseColor = grayColor,
                 highlightColor = highlightColor,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
-                ),
+                style =
+                    MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                    ),
             )
         }
     }
