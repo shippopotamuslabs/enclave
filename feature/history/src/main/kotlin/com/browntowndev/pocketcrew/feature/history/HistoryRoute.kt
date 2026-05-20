@@ -31,6 +31,6 @@ fun HistoryRoute(
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,
         onUnpinChat = viewModel::unpinChat,
-        onSettingsClick = onNavigateToSettings
+        onSettingsClick = onNavigateToSettings,
     )
 }
