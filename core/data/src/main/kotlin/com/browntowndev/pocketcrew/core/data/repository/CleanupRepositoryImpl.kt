@@ -17,16 +17,24 @@ class CleanupRepositoryImpl
         override suspend fun clearAllData() {
             withContext(Dispatchers.IO) {
                 database.cleanupDao().clearUserData()
-
-                // Clear all aliases from EncryptedSharedPreferences
-                com.browntowndev.pocketcrew.core.data.security.ApiKeyManager.let {
-                    apiKeyManager.delete(it.TAVILY_SEARCH_ALIAS)
-                    apiKeyManager.delete(it.EXA_SEARCH_ALIAS)
-                    apiKeyManager.delete(it.X_SEARCH_ALIAS)
-                }
-                // Clear all pending sync state from DataStore
-                apiKeyManager.clearAllPending()
+                clearSearchKeys()
             }
+        }
+
+        override suspend fun clearUserContent() {
+            withContext(Dispatchers.IO) {
+                database.cleanupDao().clearUserContent()
+                clearSearchKeys()
+            }
+        }
+
+        private suspend fun clearSearchKeys() {
+            com.browntowndev.pocketcrew.core.data.security.ApiKeyManager.let {
+                apiKeyManager.delete(it.TAVILY_SEARCH_ALIAS)
+                apiKeyManager.delete(it.EXA_SEARCH_ALIAS)
+                apiKeyManager.delete(it.X_SEARCH_ALIAS)
+            }
+            apiKeyManager.clearAllPending()
         }
 
         override suspend fun deleteAllArtifacts() {

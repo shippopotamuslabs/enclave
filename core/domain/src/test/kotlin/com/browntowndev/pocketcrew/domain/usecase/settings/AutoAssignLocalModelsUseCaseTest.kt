@@ -1,17 +1,30 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -21,76 +34,298 @@ class AutoAssignLocalModelsUseCaseTest {
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
     private val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
+    private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
+    private val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
+    private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
+
     private val useCase =
         AutoAssignLocalModelsUseCase(
             getLocalModelAssetsUseCase,
             getDefaultModelsUseCase,
             setDefaultModelUseCase,
+            getApiModelAssetsUseCase,
+            getTtsProvidersUseCase,
+            getMediaProvidersUseCase,
         )
 
+    private val localConfigId = LocalModelConfigurationId("local-config-1")
+    private val localAsset =
+        LocalModelAsset(
+            metadata = mockk<LocalModelMetadata>(),
+            configurations =
+                listOf(
+                    LocalModelConfiguration(
+                        id = localConfigId,
+                        localModelId = LocalModelId("local-1"),
+                        displayName = "Local",
+                        maxTokens = 100,
+                        contextWindow = 100,
+                        temperature = 0.7,
+                        topP = 0.9,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "",
+                    ),
+                ),
+        )
+
+    private val apiCredsId = ApiCredentialsId("api-creds-1")
+    private val apiConfigId = ApiModelConfigurationId("api-config-1")
+    private val multimodalCredsId = ApiCredentialsId("api-creds-mm")
+    private val multimodalConfigId = ApiModelConfigurationId("api-config-mm")
+
+    private val apiAsset =
+        ApiModelAsset(
+            credentials =
+                ApiCredentials(
+                    id = apiCredsId,
+                    displayName = "API",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt",
+                    isMultimodal = false,
+                    credentialAlias = "alias",
+                ),
+            configurations =
+                listOf(
+                    ApiModelConfiguration(
+                        id = apiConfigId,
+                        apiCredentialsId = apiCredsId,
+                        displayName = "API cfg",
+                    ),
+                ),
+        )
+
+    private val multimodalAsset =
+        ApiModelAsset(
+            credentials =
+                ApiCredentials(
+                    id = multimodalCredsId,
+                    displayName = "API MM",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-vision",
+                    isMultimodal = true,
+                    credentialAlias = "alias-mm",
+                ),
+            configurations =
+                listOf(
+                    ApiModelConfiguration(
+                        id = multimodalConfigId,
+                        apiCredentialsId = multimodalCredsId,
+                        displayName = "API MM cfg",
+                    ),
+                ),
+        )
+
+    private val ttsProvider =
+        TtsProviderAsset(
+            id = TtsProviderId("tts-1"),
+            displayName = "TTS",
+            provider = ApiProvider.OPENAI,
+            voiceName = "v",
+            credentialAlias = "alias-tts",
+        )
+
+    private fun mediaProvider(
+        id: String,
+        capability: MediaCapability,
+    ) = MediaProviderAsset(
+        id = MediaProviderId(id),
+        displayName = "Media",
+        provider = ApiProvider.OPENAI,
+        capability = capability,
+        credentialAlias = "alias-media",
+    )
+
     @Test
-    fun `invoke only assigns to empty slots and preserves existing local assignments`() =
+    fun `text slots without assignment get first local config`() =
         runTest {
-            val configId = LocalModelConfigurationId("config-1")
-            val localModelId = LocalModelId("model-1")
-
-            val config =
-                LocalModelConfiguration(
-                    id = configId,
-                    localModelId = localModelId,
-                    displayName = "Test Config",
-                    maxTokens = 100,
-                    contextWindow = 100,
-                    temperature = 0.7,
-                    topP = 0.9,
-                    topK = 40,
-                    repetitionPenalty = 1.1,
-                    systemPrompt = "",
-                )
-
-            val asset =
-                LocalModelAsset(
-                    metadata = mockk<com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata>(),
-                    configurations = listOf(config),
-                )
-
-            // Mock existing assignment for MAIN slot
-            val existingAssignment =
-                mockk<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment> {
-                    every { modelType } returns ModelType.MAIN
-                }
-
-            coEvery { getDefaultModelsUseCase() } returns flowOf(listOf(existingAssignment))
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(asset))
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
 
             useCase()
 
-            // Verify that it assigned to all text-based slots EXCEPT MAIN
-            val expectedSlots = ModelType.entries.filter { it.isTextModel && it != ModelType.MAIN }
-            expectedSlots.forEach { slot ->
+            val textSlots =
+                ModelType.entries.filter { it.isTextModel && it != ModelType.VISION }
+            textSlots.forEach { slot ->
                 coVerify {
                     setDefaultModelUseCase(
                         modelType = slot,
-                        localConfigId = configId,
+                        localConfigId = localConfigId,
                         apiConfigId = null,
                         ttsProviderId = null,
                         mediaProviderId = null,
                     )
                 }
             }
+        }
 
-            // Verify MAIN was NOT reassigned
+    @Test
+    fun `text slots fall back to API config when no local exists`() =
+        runTest {
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            val textSlots =
+                ModelType.entries.filter { it.isTextModel && it != ModelType.VISION }
+            textSlots.forEach { slot ->
+                coVerify {
+                    setDefaultModelUseCase(
+                        modelType = slot,
+                        localConfigId = null,
+                        apiConfigId = apiConfigId,
+                        ttsProviderId = null,
+                        mediaProviderId = null,
+                    )
+                }
+            }
+        }
+
+    @Test
+    fun `vision slot only assigns to first multimodal API config`() =
+        runTest {
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset, multimodalAsset))
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(
+                    modelType = ModelType.VISION,
+                    localConfigId = null,
+                    apiConfigId = multimodalConfigId,
+                    ttsProviderId = null,
+                    mediaProviderId = null,
+                )
+            }
+        }
+
+    @Test
+    fun `vision slot not assigned when no multimodal API available`() =
+        runTest {
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            coVerify(exactly = 0) {
+                setDefaultModelUseCase(modelType = ModelType.VISION, any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `tts slot assigned to first tts provider`() =
+        runTest {
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(listOf(ttsProvider))
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(
+                    modelType = ModelType.TTS,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = ttsProvider.id,
+                    mediaProviderId = null,
+                )
+            }
+        }
+
+    @Test
+    fun `media slots assigned by capability`() =
+        runTest {
+            val image = mediaProvider("media-img", MediaCapability.IMAGE)
+            val video = mediaProvider("media-vid", MediaCapability.VIDEO)
+            val music = mediaProvider("media-mus", MediaCapability.MUSIC)
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image, video, music))
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(ModelType.IMAGE_GENERATION, null, null, null, image.id)
+                setDefaultModelUseCase(ModelType.VIDEO_GENERATION, null, null, null, video.id)
+                setDefaultModelUseCase(ModelType.MUSIC_GENERATION, null, null, null, music.id)
+            }
+        }
+
+    @Test
+    fun `valid existing assignment preserved`() =
+        runTest {
+            val existing =
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = localConfigId,
+                )
+            coEvery { getDefaultModelsUseCase() } returns flowOf(listOf(existing))
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
             coVerify(exactly = 0) {
                 setDefaultModelUseCase(modelType = ModelType.MAIN, any(), any(), any(), any())
             }
         }
 
     @Test
-    fun `invoke does nothing if no local models exist`() =
+    fun `dangling existing assignment reassigned to fallback`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns
-                flowOf(emptyList<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>())
+            val danglingLocal = LocalModelConfigurationId("missing")
+            val existing =
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = danglingLocal,
+                )
+            coEvery { getDefaultModelsUseCase() } returns flowOf(listOf(existing))
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(
+                    modelType = ModelType.MAIN,
+                    localConfigId = localConfigId,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = null,
+                )
+            }
+        }
+
+    @Test
+    fun `does nothing when no models or providers exist`() =
+        runTest {
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
             coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
 
             useCase()
 

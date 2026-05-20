@@ -12,6 +12,24 @@ import androidx.sqlite.db.SupportSQLiteQuery
 interface CleanupDao {
     @Transaction
     suspend fun clearUserData() {
+        clearUserContent()
+        // default_models RESTRICT-deletes to local/api configs and tts/media providers — wipe first.
+        deleteAllDefaultModels()
+        deleteApiCredentials()
+        deleteApiModelConfigurations()
+        deleteLocalModelConfigurations()
+        deleteLocalModels()
+        deleteTtsProviders()
+        deleteMediaProviders()
+    }
+
+    /**
+     * Wipes user-generated content (chats, messages, memories, studio, embeddings, web search)
+     * but preserves model/provider configuration so a fresh logout leaves the app usable for
+     * guest mode. Use [clearUserData] for account deletion.
+     */
+    @Transaction
+    suspend fun clearUserContent() {
         deleteChats()
         deleteMessages()
         deleteMessageTranscriptSegments()
@@ -22,14 +40,6 @@ interface CleanupDao {
         deleteMemories()
         deleteStudioMedia()
         deleteStudioAlbums()
-        // default_models RESTRICT-deletes to local/api configs and tts/media providers — wipe first.
-        deleteAllDefaultModels()
-        deleteApiCredentials()
-        deleteApiModelConfigurations()
-        deleteLocalModelConfigurations()
-        deleteLocalModels()
-        deleteTtsProviders()
-        deleteMediaProviders()
         deleteEmbeddings()
         deleteMemoryEmbeddings(SimpleSQLiteQuery("DELETE FROM memory_embeddings"))
         deleteDocumentEmbeddings(SimpleSQLiteQuery("DELETE FROM document_embeddings"))
