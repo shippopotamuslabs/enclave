@@ -48,7 +48,8 @@ internal class ChatMessageProjector {
     ): ChatMessageProjectionResult {
         val memo = memoResult
         if (memo != null && matchesMemo(dbMessages, activeSnapshot, activeKey)) {
-            return memo
+            val handoffReady = computeHandoffReady(dbMessages, activeSnapshot, activeKey)
+            return if (memo.handoffReady == handoffReady) memo else memo.copy(handoffReady = handoffReady)
         }
 
         val result = buildResult(dbMessages, activeSnapshot, activeKey)
@@ -81,7 +82,7 @@ internal class ChatMessageProjector {
 
         dbMessages.forEach { dbMessage ->
             val snapshot = activeMessagesMap[dbMessage.id]
-            val inputKey = MessageInputKey(dbMessage, snapshot)
+            val inputKey = MessageInputKey(dbMessage = dbMessage, snapshot = snapshot)
             val cached = messageCache[dbMessage.id]
             projectedMap[dbMessage.id] =
                 if (cached != null && cached.first == inputKey) {
@@ -103,15 +104,21 @@ internal class ChatMessageProjector {
 
         return ChatMessageProjectionResult(
             messages = sorted,
-            handoffReady =
-                activeSnapshot != null &&
-                    activeKey != null &&
-                    activeMessagesMap.isNotEmpty() &&
-                    activeMessagesMap.values.all { snapshot -> snapshot.messageState == MessageState.COMPLETE } &&
-                    activeMessagesMap.keys.all { messageId ->
-                        dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
-                    },
+            handoffReady = computeHandoffReady(dbMessages, activeSnapshot, activeKey),
         )
+    }
+
+    private fun computeHandoffReady(
+        dbMessages: List<Message>,
+        activeSnapshot: AccumulatedMessages?,
+        activeKey: ActiveChatTurnKey?,
+    ): Boolean {
+        val activeMessagesMap = activeSnapshot?.messages.orEmpty()
+        val dbMessagesMap = dbMessages.associateBy { it.id }
+        return activeSnapshot != null &&
+            activeKey != null &&
+            activeMessagesMap[activeKey.assistantMessageId]?.messageState == MessageState.COMPLETE &&
+            dbMessagesMap[activeKey.assistantMessageId]?.messageState == MessageState.COMPLETE
     }
 
     private fun resolveMessage(

@@ -72,8 +72,7 @@ class ChatUiStateReducer
                     activeSnapshot = params.activeTurnSnapshot,
                     activeKey = params.activeTurnKey,
                 )
-            val acknowledgedTurnKey =
-                projectedMessages.handoffReady.takeIf { params.activeTurnKey != null }?.let { params.activeTurnKey }
+            val acknowledgedTurnKey = params.activeTurnKey.takeIf { projectedMessages.handoffReady }
 
             val reconciledMessages =
                 projectedMessages.messages.map { message ->

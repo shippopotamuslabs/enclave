@@ -217,7 +217,7 @@ class ChatMessageProjectionTest {
     }
 
     @Test
-    fun `projectChatMessages requires all snapshot messages to be complete before handoff`() {
+    fun `projectChatMessages does not handoff until active turn is complete in snapshot and db`() {
         val secondMessageId = MessageId("assistant-2")
         val result =
             projectChatMessages(
@@ -252,12 +252,43 @@ class ChatMessageProjectionTest {
                                     ),
                             ),
                     ),
-                activeKey = ActiveChatTurnKey(chatId, assistantMessageId),
+                activeKey = ActiveChatTurnKey(chatId, secondMessageId),
             )
 
         val projectedById = result.messages.associateBy { it.id }
         assertEquals("first persisted answer", projectedById.getValue(assistantMessageId).content.text)
         assertEquals("second streaming answer", projectedById.getValue(secondMessageId).content.text)
+        assertFalse(result.handoffReady)
+    }
+
+    @Test
+    fun `projectChatMessages does not handoff when snapshot is stale previous turn`() {
+        val previousMessageId = MessageId("assistant-prev")
+        val newTurnMessageId = MessageId("assistant-new")
+        val result =
+            projectChatMessages(
+                dbMessages =
+                    listOf(
+                        assistantMessage(
+                            id = previousMessageId,
+                            content = "previous answer",
+                            state = MessageState.COMPLETE,
+                        ),
+                        assistantMessage(
+                            id = newTurnMessageId,
+                            content = "",
+                            state = MessageState.PROCESSING,
+                        ),
+                    ),
+                activeSnapshot =
+                    snapshot(
+                        assistantMessageId = previousMessageId,
+                        content = "previous answer",
+                        state = MessageState.COMPLETE,
+                    ),
+                activeKey = ActiveChatTurnKey(chatId, newTurnMessageId),
+            )
+
         assertFalse(result.handoffReady)
     }
 

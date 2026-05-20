@@ -378,6 +378,13 @@ class ChatInferenceService : Service() {
         persistenceSession: ChatGenerationProgressSession,
     ) {
         val snapshot = persistenceSession.applyState(state)
+        val snapMessage = snapshot.messages[assistantMessageId]
+        loggingPort.debug(
+            TAG,
+            "publishState evt=${state::class.simpleName} " +
+                "snapState=${snapMessage?.messageState} " +
+                "segs=${snapMessage?.transcriptSegments?.size}",
+        )
         activeChatTurnSnapshotPort.publish(
             key = ActiveChatTurnKey(chatId, assistantMessageId),
             snapshot = snapshot,

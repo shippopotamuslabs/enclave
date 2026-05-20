@@ -113,6 +113,13 @@ class GenerateChatResponseUseCase
                         }
                         val accumulatedMessages = accumulatorManager.reduce(state)
                         if (!backgroundInferenceEnabled) {
+                            val snapMessage = accumulatedMessages.messages[assistantMessageId]
+                            loggingPort.debug(
+                                TAG,
+                                "publishSnapshot evt=${state::class.simpleName} " +
+                                    "snapState=${snapMessage?.messageState} " +
+                                    "segs=${snapMessage?.transcriptSegments?.size}",
+                            )
                             activeChatTurnSnapshotPort.publish(
                                 key =
                                     ActiveChatTurnKey(

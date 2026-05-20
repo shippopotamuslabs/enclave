@@ -63,9 +63,9 @@ class MessageListLayoutTest {
     }
 
     @Test
-    fun `total lazy items includes user filler and assistant tail`() {
+    fun `total lazy items is history plus user plus assistant column`() {
         assertEquals(
-            6,
+            5,
             messageListTotalLazyItems(
                 messageCount = 5,
                 latestUserMessageIndex = 3,
@@ -74,41 +74,30 @@ class MessageListLayoutTest {
     }
 
     @Test
-    fun `viewport filler shrinks as assistant tail grows`() {
-        val targetMinPx = 800f
-        val userPx = 120
-        val spacingPx = 12f
-
-        val initialFiller =
-            messageListActiveViewportFillerHeightPx(
-                targetMinHeightPx = targetMinPx,
-                userHeightPx = userPx,
-                assistantTailHeightPx = 0,
-                lazyItemSpacingPx = spacingPx,
-                activeAssistantCount = 1,
-            )
-        val laterFiller =
-            messageListActiveViewportFillerHeightPx(
-                targetMinHeightPx = targetMinPx,
-                userHeightPx = userPx,
-                assistantTailHeightPx = 200,
-                lazyItemSpacingPx = spacingPx,
-                activeAssistantCount = 1,
-            )
-
-        assertEquals(656, initialFiller)
-        assertEquals(456, laterFiller)
-        assertEquals(200, initialFiller - laterFiller)
+    fun `active turn column min height fills viewport below user`() {
+        assertEquals(
+            668,
+            messageListActiveTurnColumnMinHeightPx(
+                targetMinHeightPx = 800f,
+                userHeightPx = 120,
+                userToColumnSpacingPx = 12f,
+            ),
+        )
     }
 
     @Test
-    fun `assistant tail height sums messages and internal gaps`() {
-        assertEquals(
-            250,
-            messageListActiveAssistantTailHeightPx(
-                assistantHeightsPx = listOf(100, 120),
-                lazyItemSpacingPx = 30f,
-            ),
-        )
+    fun `active turn column min height does not depend on assistant content height`() {
+        val withNoAssistantContent =
+            messageListActiveTurnColumnMinHeightPx(
+                targetMinHeightPx = 800f,
+                userHeightPx = 120,
+                userToColumnSpacingPx = 12f,
+            )
+        assertEquals(668, withNoAssistantContent)
+    }
+
+    @Test
+    fun `assistant column is immediately after active user row`() {
+        assertEquals(4, messageListActiveAssistantColumnLazyIndex(latestUserMessageIndex = 3))
     }
 }

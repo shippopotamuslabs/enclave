@@ -36,7 +36,11 @@ internal class ChatGenerationAccumulatorManager(
                 getOrCreateAccumulator(state.modelType).currentState = MessageState.ENGINE_LOADING
             }
             is MessageGenerationState.Processing -> {
-                getOrCreateAccumulator(state.modelType).currentState = MessageState.PROCESSING
+                getOrCreateAccumulator(state.modelType).apply {
+                    if (currentState != MessageState.THINKING && currentState != MessageState.GENERATING) {
+                        currentState = MessageState.PROCESSING
+                    }
+                }
             }
 
             is MessageGenerationState.ThinkingLive -> {
