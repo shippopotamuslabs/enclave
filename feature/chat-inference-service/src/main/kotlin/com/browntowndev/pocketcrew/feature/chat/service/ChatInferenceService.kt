@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
@@ -265,6 +266,14 @@ class ChatInferenceService : Service() {
                         )
                     }
                     throw e
+                } catch (e: ActiveModelConfigurationDecryptException) {
+                    loggingPort.error(TAG, "Model configuration decrypt failed in service", e)
+                    publishState(
+                        chatId = chatId,
+                        assistantMessageId = assistantMessageId,
+                        state = ChatInferenceDecryptFailureMapper.toFailedState(e, modelType),
+                        persistenceSession = persistenceSession,
+                    )
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Inference failed in service", e)
                     publishState(

@@ -10,8 +10,11 @@ import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -20,20 +23,18 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.feature.chat.delegates.ActiveTurnSnapshotCoordinator
-import com.browntowndev.pocketcrew.feature.chat.delegates.ActiveTurnSnapshotState
 import com.browntowndev.pocketcrew.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ChatUiStateReducer
 import com.browntowndev.pocketcrew.feature.chat.delegates.InferenceOrchestrator
-import com.browntowndev.pocketcrew.feature.chat.delegates.maybeAcknowledgeCompletedTurn
 import com.browntowndev.pocketcrew.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.pocketcrew.feature.chat.delegates.TtsController
 import com.browntowndev.pocketcrew.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.util.Log
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,13 +48,12 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -71,7 +71,7 @@ class ChatViewModel
         private val savedStateHandle: SavedStateHandle,
         inferenceLockManager: InferenceLockManager,
         private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
-        private val activeTurnSnapshotCoordinator: ActiveTurnSnapshotCoordinator,
+        private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
         private val studioRepository: StudioRepositoryPort,
@@ -134,6 +134,116 @@ class ChatViewModel
                     replay = 1,
                 )
 
+        private val activeTurnCandidateFlow =
+            combine(
+                activeChatIdFlow,
+                dbMessagesFlow,
+                inferenceOrchestrator.requestedTurnKey,
+            ) { chatId, messages, requestedTurnKey ->
+                val incompleteKey =
+                    chatId?.let { id ->
+                        messages
+                            .lastOrNull { message ->
+                                message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
+                            }?.let { message -> ActiveChatTurnKey(id, message.id) }
+                    }
+                val requestedKey =
+                    requestedTurnKey?.takeIf { key ->
+                        key.chatId == chatId
+                    }
+                ActiveTurnCandidate(
+                    chatId = chatId,
+                    messages = messages,
+                    key = requestedKey ?: incompleteKey,
+                )
+            }
+
+        private val activeTurnKeyFlow =
+            combine(
+                activeTurnCandidateFlow,
+                inferenceOrchestrator.acknowledgedTurnKeys,
+            ) { candidate, acknowledgedKeys ->
+                candidate to acknowledgedKeys
+            }.scan(null as ActiveChatTurnKey?) { currentKey, (candidate, acknowledgedKeys) ->
+                val candidateKey = candidate.key?.takeUnless { key -> key in acknowledgedKeys }
+                when {
+                    currentKey != null && currentKey in acknowledgedKeys -> null
+                    candidateKey != null -> candidateKey
+                    currentKey != null &&
+                        candidate.chatId == currentKey.chatId &&
+                        candidate.messages.any { message ->
+                            message.id == currentKey.assistantMessageId &&
+                                message.messageState == MessageState.COMPLETE
+                        } -> currentKey
+                    else -> null
+                }
+            }.distinctUntilChanged()
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
+                    initialValue = null,
+                )
+
+        private val activeTurnSnapshotObserveKeyFlow =
+            combine(
+                dbMessagesFlow,
+                activeChatIdFlow,
+                inferenceOrchestrator.requestedTurnKey,
+                inferenceOrchestrator.acknowledgedTurnKeys,
+                activeTurnKeyFlow,
+            ) { messages, chatId, requestedTurnKey, acknowledgedKeys, retainedKey ->
+                val incompleteKey =
+                    chatId?.let { id ->
+                        messages
+                            .lastOrNull { message ->
+                                message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
+                            }?.let { message -> ActiveChatTurnKey(id, message.id) }
+                    }
+                val requestedKey =
+                    requestedTurnKey?.takeIf { key ->
+                        key.chatId == chatId
+                    }
+                val resultKey =
+                    resolveActiveTurnSnapshotObserveKey(
+                        requestedKey = requestedKey,
+                        incompleteKey = incompleteKey,
+                        acknowledgedKeys = acknowledgedKeys,
+                        retainedKey = retainedKey,
+                    )
+                val incompleteAssistantId =
+                    messages
+                        .lastOrNull { message ->
+                            message.role == Role.ASSISTANT &&
+                                message.messageState != MessageState.COMPLETE
+                        }?.id
+                        ?.value
+                        ?.take(4)
+                Log.d(
+                    "ObserveKeyCompute",
+                    "chatId=${chatId?.value} dbMsgs=${messages.size}/$incompleteAssistantId " +
+                        "req=${requestedTurnKey?.assistantMessageId?.value?.take(4)}" +
+                        "@${requestedTurnKey?.chatId?.value} " +
+                        "ack=${acknowledgedKeys.map { it.assistantMessageId.value.take(4) }} " +
+                        "retained=${retainedKey?.assistantMessageId?.value?.take(4)} " +
+                        "result=${resultKey?.assistantMessageId?.value?.take(4)}",
+                )
+                resultKey
+            }.distinctUntilChanged()
+                .shareIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    replay = 1,
+                )
+
+        private val _activeTurnSnapshotState =
+            MutableStateFlow(
+                ActiveTurnSnapshotState(
+                    key = null,
+                    snapshot = null,
+                ),
+            )
+        private val activeTurnSnapshotStateFlow = _activeTurnSnapshotState.asStateFlow()
+
         private val uiInputsFlow =
             combine(
                 settingsUseCases.getSettings(),
@@ -178,12 +288,12 @@ class ChatViewModel
                 (ephemeral + persisted).associateBy { it.id }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
-        private val uiReduceOutputFlow =
+        val uiState: StateFlow<ChatUiState> =
             combine(
                 uiInputsWithPolicyFlow,
                 inferenceLockManager.isInferenceBlocked,
                 dbMessagesFlow,
-                activeTurnSnapshotCoordinator.state,
+                activeTurnSnapshotStateFlow,
                 ttsPlaybackFlow,
                 studioMediaFlow,
                 chatShareCoordinator.shareState,
@@ -233,54 +343,67 @@ class ChatViewModel
                             modelDisplayNames = modelDisplayNames,
                         ),
                     )
-                UiReduceOutput(
-                    uiState = reduceResult.uiState,
-                    handoffTurnKey = reduceResult.acknowledgedTurnKey,
-                    dbMessages = dbMessages,
-                    activeSnapshot = activeTurnSnapshotState.snapshot,
-                )
-            }.shareIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
-                replay = 1,
-            )
-
-        val uiState: StateFlow<ChatUiState> =
-            uiReduceOutputFlow
-                .map { output -> output.uiState }
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
-                    initialValue = ChatUiState(),
-                )
-
-        init {
-            activeTurnSnapshotCoordinator.start(
-                scope = viewModelScope,
-                chatIdFlow = activeChatIdFlow,
-                dbMessagesFlow = dbMessagesFlow,
-                requestedTurnKeyFlow = inferenceOrchestrator.requestedTurnKey,
-                acknowledgedTurnKeysFlow = inferenceOrchestrator.acknowledgedTurnKeys,
-            )
-
-            uiReduceOutputFlow
-                .mapNotNull { output -> output.handoffTurnKey?.let { key -> output to key } }
-                .distinctUntilChangedBy { (_, key) -> key }
-                .onEach { (output, key) ->
+                reduceResult.acknowledgedTurnKey?.let { key ->
                     maybeAcknowledgeCompletedTurn(
                         key = key,
-                        dbMessages = output.dbMessages,
-                        activeSnapshot = output.activeSnapshot,
+                        dbMessages = dbMessages,
+                        activeSnapshot = activeTurnSnapshotState.snapshot,
                         acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
                         onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
                     )
-                }.launchIn(viewModelScope)
+                }
+                reduceResult.uiState
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
+                initialValue = ChatUiState(),
+            )
+
+        init {
+            viewModelScope.launch {
+                activeTurnSnapshotObserveKeyFlow.collectLatest { key ->
+                    if (key == null) {
+                        Log.d(
+                            "ChatVM",
+                            "snapshotFlow key=null snapshot=null",
+                        )
+                        _activeTurnSnapshotState.value =
+                            ActiveTurnSnapshotState(
+                                key = null,
+                                snapshot = null,
+                            )
+                    } else {
+                        _activeTurnSnapshotState.value =
+                            ActiveTurnSnapshotState(
+                                key = key,
+                                snapshot = null,
+                            )
+                        activeChatTurnSnapshotPort
+                            .observe(key)
+                            .distinctUntilChanged()
+                            .collect { snapshot ->
+                                Log.d(
+                                    "ChatVM",
+                                    "snapshotFlow key=${key.assistantMessageId.value} " +
+                                        "snapshot=${snapshot?.messages?.values?.firstOrNull()?.messageState} " +
+                                        "segs=${snapshot?.messages?.values?.firstOrNull()?.transcriptSegments?.size}",
+                                )
+                                _activeTurnSnapshotState.value =
+                                    ActiveTurnSnapshotState(
+                                        key = key,
+                                        snapshot = snapshot,
+                                    )
+                            }
+                    }
+                }
+            }
 
             viewModelScope.launch {
-                val names = mutableMapOf<ModelType, String>()
-                for (type in ModelType.entries) {
-                    names[type] = modelDisplayNamesUseCase(type)
-                }
+                val names =
+                    ModelType.entries.associateWith { type ->
+                        runCatching { modelDisplayNamesUseCase(type) }
+                            .getOrElse { ActiveModelConfigurationDecryptException.USER_MESSAGE }
+                    }
                 _modelDisplayNames.value = names
             }
 
@@ -292,7 +415,7 @@ class ChatViewModel
                 scope = viewModelScope,
                 currentChatId = { inferenceOrchestrator.currentChatId.value },
                 initialChatId = initialChatId,
-                activeTurnKey = { activeTurnSnapshotCoordinator.retainedTurnKey.value },
+                activeTurnKey = { activeTurnKeyFlow.value },
                 onExtractingUrl = { url -> markWebSearchSourceExtracted(url) },
             )
         }
@@ -401,9 +524,9 @@ class ChatViewModel
 
         fun createNewChat() {
             speechInputCoordinator.stopListening()
-            activeTurnSnapshotCoordinator.retainedTurnKey.value?.let { key ->
+            activeTurnKeyFlow.value?.let { key ->
                 viewModelScope.launch {
-                    activeTurnSnapshotCoordinator.clearTurn(key)
+                    activeChatTurnSnapshotPort.clear(key)
                     inferenceOrchestrator.acknowledgeTurn(key)
                 }
             }
@@ -486,9 +609,9 @@ class ChatViewModel
             chatMessageUiMapper.map(message, _modelDisplayNames.value)
 
         private fun markWebSearchSourceExtracted(url: String) {
-            val key = activeTurnSnapshotCoordinator.retainedTurnKey.value ?: return
+            val key = activeTurnKeyFlow.value ?: return
             viewModelScope.launch {
-                activeTurnSnapshotCoordinator.markWebSearchSourcesExtracted(
+                activeChatTurnSnapshotPort.markWebSearchSourcesExtracted(
                     key = key,
                     urls = listOf(url),
                 )
@@ -515,11 +638,15 @@ class ChatViewModel
             val attachmentPolicy: com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicy,
         )
 
-        private data class UiReduceOutput(
-            val uiState: ChatUiState,
-            val handoffTurnKey: ActiveChatTurnKey?,
-            val dbMessages: List<Message>,
-            val activeSnapshot: AccumulatedMessages?,
+        private data class ActiveTurnCandidate(
+            val chatId: ChatId?,
+            val messages: List<Message>,
+            val key: ActiveChatTurnKey?,
+        )
+
+        private data class ActiveTurnSnapshotState(
+            val key: ActiveChatTurnKey?,
+            val snapshot: AccumulatedMessages?,
         )
 
         private companion object {
@@ -531,6 +658,35 @@ class ChatViewModel
 
 internal fun List<Message>.dbMessagesFingerprintForTesting(): Any = dbMessagesFingerprint()
 
+internal fun resolveActiveTurnSnapshotObserveKey(
+    requestedKey: ActiveChatTurnKey?,
+    incompleteKey: ActiveChatTurnKey?,
+    acknowledgedKeys: Set<ActiveChatTurnKey>,
+    retainedKey: ActiveChatTurnKey?,
+): ActiveChatTurnKey? {
+    val candidateKey =
+        requestedKey ?: incompleteKey?.takeUnless { key -> key in acknowledgedKeys }
+    val retainedSnapshotKey = retainedKey?.takeUnless { key -> key in acknowledgedKeys }
+    return candidateKey ?: retainedSnapshotKey
+}
+
+internal fun maybeAcknowledgeCompletedTurn(
+    key: ActiveChatTurnKey,
+    dbMessages: List<Message>,
+    activeSnapshot: AccumulatedMessages?,
+    acknowledgedTurnKeys: Set<ActiveChatTurnKey>,
+    onAcknowledge: (ActiveChatTurnKey) -> Unit,
+) {
+    if (key in acknowledgedTurnKeys) return
+    val dbMessage = dbMessages.find { message -> message.id == key.assistantMessageId }
+    val snapshotMessage = activeSnapshot?.messages?.get(key.assistantMessageId)
+    if (dbMessage?.messageState == MessageState.COMPLETE &&
+        snapshotMessage?.messageState == MessageState.COMPLETE
+    ) {
+        onAcknowledge(key)
+    }
+}
+
 private data class DbMessagesFingerprint(
     val messages: List<DbMessageFingerprint>,
 )
@@ -538,7 +694,6 @@ private data class DbMessagesFingerprint(
 private data class DbMessageFingerprint(
     val id: MessageId,
     val updatedAt: Long?,
-    val messageState: MessageState,
     val fallbackMessage: Message?,
 )
 
@@ -549,7 +704,6 @@ private fun List<Message>.dbMessagesFingerprint(): DbMessagesFingerprint =
                 DbMessageFingerprint(
                     id = message.id,
                     updatedAt = message.updatedAt,
-                    messageState = message.messageState,
                     fallbackMessage = message.takeIf { it.updatedAt == null },
                 )
             },

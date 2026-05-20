@@ -105,7 +105,7 @@ class SettingsGeneralDelegateTest {
             coEvery { vaultMetadataPort.saveWrappedDek("wrapped-b64") } returns Unit
             coEvery { vaultMetadataPort.saveVaultVerificationData("verification-b64") } returns Unit
             coEvery { cloudSyncPort.uploadVaultMetadata(any()) } returns Result.success(Unit)
-            every { cloudSyncPort.startListening() } returns Unit
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = false) } returns Result.success(Unit)
 
             delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
             advanceUntilIdle()
@@ -116,7 +116,8 @@ class SettingsGeneralDelegateTest {
             coVerify(exactly = 1) { vaultMetadataPort.saveWrappedDek("wrapped-b64") }
             coVerify(exactly = 1) { vaultMetadataPort.saveVaultVerificationData("verification-b64") }
             coVerify(exactly = 1) { cloudSyncPort.uploadVaultMetadata(any()) }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
             coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
         }
 

@@ -485,8 +485,7 @@ class MainViewModelTest {
 
             coVerify(exactly = 1) { initializeModelsUseCase() }
             io.mockk.verify { cryptoManager.cacheDek(dek) }
-            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertFalse(state.isUnlocking, "isUnlocking should be false after biometric unlock")
             assertFalse(state.isVaultLocked)
@@ -545,7 +544,7 @@ class MainViewModelTest {
             coVerify(exactly = 1) { cloudSyncPort.getVaultVerificationData() }
             coVerify(exactly = 0) { vaultMetadataPort.getVaultVerificationData() }
             io.mockk.verify { cryptoManager.decrypt(ciphertextBytes, null) }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
         }
 
     @Test
@@ -860,8 +859,7 @@ class MainViewModelTest {
                 detectVaultReconciliationStateUseCase("password")
                 initializeModelsUseCase()
             }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
-            coVerify(exactly = 1) { cloudSyncPort.syncAllLocalDataToCloud() }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
             coVerify(exactly = 0) { adoptCloudVaultUseCase(any()) }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertNull(state.pendingVaultReconciliation)
@@ -952,7 +950,8 @@ class MainViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { adoptCloudVaultUseCase(payload) }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertNull(state.pendingVaultReconciliation)
         }
@@ -1035,8 +1034,7 @@ class MainViewModelTest {
 
             coVerifyOrder {
                 bootstrapCloudVaultFromLocalUseCase()
-                cloudSyncPort.syncAllLocalDataToCloud()
+                startCloudSyncListeningUseCase(uploadLocalFirst = true)
             }
-            verify(exactly = 1) { cloudSyncPort.startListening() }
         }
 }

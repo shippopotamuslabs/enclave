@@ -195,7 +195,7 @@ internal class SettingsGeneralDelegate
                                         )
                                     return@launch
                                 }
-                                cloudSyncPort.startListening()
+                                startCloudSyncListeningUseCase(uploadLocalFirst = false)
                                 vaultReauthSheet.value = VaultReauthSheetState.Hidden
                             }
                             else -> {
@@ -250,7 +250,7 @@ internal class SettingsGeneralDelegate
                     return@launch
                 }
                 pendingCloudClobberPayload = null
-                cloudSyncPort.startListening()
+                startCloudSyncListeningUseCase(uploadLocalFirst = false)
                 vaultReauthSheet.value = VaultReauthSheetState.Hidden
             }
         }

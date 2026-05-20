@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import javax.inject.Inject
@@ -18,5 +19,10 @@ class GetModelDisplayNameUseCase
          * @param modelType The type of model to get display name for
          * @return The display name, or empty string if no model is registered
          */
-        suspend operator fun invoke(modelType: ModelType): String = activeModelProvider.getActiveConfiguration(modelType)?.name ?: ""
+        suspend operator fun invoke(modelType: ModelType): String =
+            try {
+                activeModelProvider.getActiveConfiguration(modelType)?.name ?: ""
+            } catch (_: ActiveModelConfigurationDecryptException) {
+                ActiveModelConfigurationDecryptException.USER_MESSAGE
+            }
     }

@@ -8,23 +8,23 @@ import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 /**
- * TEST-01 — verifies [PocketCrewApplication] cloud sync gate: listeners start only when
- * authenticated and vault unlocked.
+ * BUG-04 — Application-level cloud sync gate stops listeners when unsafe; start is owned by
+ * [com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase].
  */
 class CloudSyncAuthListenerTest {
     private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
     private val authenticated = AuthState.Authenticated(UserProfile("uid", "User", "u@example.com", null))
 
     @Test
-    fun `authenticated and vault unlocked starts listening`() {
+    fun `authenticated and vault unlocked does not start or stop listening`() {
         CloudSyncAuthListener.onAuthAndVaultStateChanged(authenticated, isVaultUnlocked = true, cloudSyncPort)
 
-        verify(exactly = 1) { cloudSyncPort.stopListening() }
-        verify(exactly = 1) { cloudSyncPort.startListening() }
+        verify(exactly = 0) { cloudSyncPort.stopListening() }
+        verify(exactly = 0) { cloudSyncPort.startListening() }
     }
 
     @Test
-    fun `authenticated but vault locked does not start listening`() {
+    fun `authenticated but vault locked stops listening without starting`() {
         CloudSyncAuthListener.onAuthAndVaultStateChanged(authenticated, isVaultUnlocked = false, cloudSyncPort)
 
         verify(exactly = 1) { cloudSyncPort.stopListening() }

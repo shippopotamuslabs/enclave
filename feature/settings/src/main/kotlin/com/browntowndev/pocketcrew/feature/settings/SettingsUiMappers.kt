@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
@@ -231,7 +232,16 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                 ttsProviderId != null -> ModelSource.API // TTS is also API-based for now
                 else -> ModelSource.API
             },
-        currentModelName = displayName ?: "None Assigned",
+        currentModelName =
+            displayName
+                ?: when {
+                    localConfigId != null ||
+                        apiConfigId != null ||
+                        ttsProviderId != null ||
+                        mediaProviderId != null ->
+                        ActiveModelConfigurationDecryptException.USER_MESSAGE
+                    else -> "None Assigned"
+                },
         displayLabel = modelType.displayLabel,
         providerName = providerName,
         presetName = presetName,
