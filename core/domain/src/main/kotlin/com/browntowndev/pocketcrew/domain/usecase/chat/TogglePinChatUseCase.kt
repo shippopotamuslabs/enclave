@@ -23,15 +23,17 @@ import javax.inject.Inject
 /**
  * Use case for toggling the pin status of a chat.
  */
-class TogglePinChatUseCase @Inject constructor(
-    private val chatRepository: ChatRepository
-) {
-    /**
-     * Toggles the pinned status of a chat.
-     *
-     * @param chatId The ID of the chat to toggle
-     */
-    suspend operator fun invoke(chatId: ChatId) {
-        chatRepository.togglePinStatus(chatId)
+class TogglePinChatUseCase
+    @Inject
+    constructor(
+        private val chatRepository: ChatRepository,
+    ) {
+        /**
+         * Toggles the pinned status of a chat.
+         *
+         * @param chatId The ID of the chat to toggle
+         */
+        suspend operator fun invoke(chatId: ChatId) {
+            chatRepository.togglePinStatus(chatId)
+        }
     }
-}

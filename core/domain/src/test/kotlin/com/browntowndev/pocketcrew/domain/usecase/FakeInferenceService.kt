@@ -12,8 +12,9 @@ import kotlinx.coroutines.flow.flow
  * Fake implementation of LlmInferencePort for testing.
  * Allows controlling inference events and verifying interactions.
  */
-class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : LlmInferencePort {
-
+class FakeInferenceService(
+    private val modelType: ModelType = ModelType.FAST,
+) : LlmInferencePort {
     private var shouldThrowOnSendPrompt = false
     private var shouldThrowOnSetHistory = false
     private val sentPrompts = mutableListOf<String>()
@@ -21,25 +22,31 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
     private var emittedEvents: List<InferenceEvent> = emptyList()
     private var historyMessages: List<ChatMessage> = emptyList()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
-        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
-    }
+    override fun sendPrompt(
+        prompt: String,
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
 
-    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        sentPrompts.add(prompt)
-        sentOptions.add(options)
+    override fun sendPrompt(
+        prompt: String,
+        options: GenerationOptions,
+        closeConversation: Boolean,
+    ): Flow<InferenceEvent> =
+        flow {
+            sentPrompts.add(prompt)
+            sentOptions.add(options)
 
-        if (shouldThrowOnSendPrompt) {
-            shouldThrowOnSendPrompt = false
-            throw RuntimeException("Simulated sendPrompt with options error")
+            if (shouldThrowOnSendPrompt) {
+                shouldThrowOnSendPrompt = false
+                throw RuntimeException("Simulated sendPrompt with options error")
+            }
+
+            emittedEvents.forEach { emit(it) }
         }
-
-        emittedEvents.forEach { emit(it) }
-    }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         historyMessages = messages
-        
+
         if (shouldThrowOnSetHistory) {
             shouldThrowOnSetHistory = false
             throw RuntimeException("Simulated setHistory error")
@@ -80,7 +87,11 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
     /**
      * Configure to emit a completed response.
      */
-    fun configureCompletedResponse(finalResponse: String, rawFullThought: String? = null, modelType: ModelType = ModelType.FAST) {
+    fun configureCompletedResponse(
+        finalResponse: String,
+        rawFullThought: String? = null,
+        modelType: ModelType = ModelType.FAST,
+    ) {
         // This method should be overridden in test setup
     }
 }

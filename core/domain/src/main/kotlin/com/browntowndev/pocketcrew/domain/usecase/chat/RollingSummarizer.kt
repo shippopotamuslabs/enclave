@@ -3,9 +3,9 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopCompactionTrigger
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.util.TokenCounter
 import kotlinx.coroutines.flow.toList
 
@@ -42,14 +42,15 @@ class RollingSummarizer(
         val sliceToSummarize = history.subList(0, splitIndex)
         if (sliceToSummarize.isEmpty()) return null
 
-        val prompt = buildAgentSummaryPrompt(
-            messages = sliceToSummarize,
-            instruction = instruction,
-            focusInstruction = focusInstruction,
-            historyRef = historyRef,
-            stateLedgerSnapshotJson = stateLedgerSnapshotJson,
-            trigger = AgentLoopCompactionTrigger.PREFLIGHT,
-        )
+        val prompt =
+            buildAgentSummaryPrompt(
+                messages = sliceToSummarize,
+                instruction = instruction,
+                focusInstruction = focusInstruction,
+                historyRef = historyRef,
+                stateLedgerSnapshotJson = stateLedgerSnapshotJson,
+                trigger = AgentLoopCompactionTrigger.PREFLIGHT,
+            )
 
         return summarizePrompt(prompt, service)
     }
@@ -85,13 +86,14 @@ class RollingSummarizer(
         stateLedgerSnapshotJson: String?,
         trigger: AgentLoopCompactionTrigger,
     ): String {
-        val summaryGuidance = buildString {
-            appendLine(instruction)
-            appendLine("Compaction trigger: ${trigger.name}")
-            focusInstruction?.let { appendLine("Focus instruction: $it") }
-            historyRef?.let { appendLine("History reference: $it") }
-            stateLedgerSnapshotJson?.let { appendLine("State ledger snapshot: $it") }
-        }.trim()
+        val summaryGuidance =
+            buildString {
+                appendLine(instruction)
+                appendLine("Compaction trigger: ${trigger.name}")
+                focusInstruction?.let { appendLine("Focus instruction: $it") }
+                historyRef?.let { appendLine("History reference: $it") }
+                stateLedgerSnapshotJson?.let { appendLine("State ledger snapshot: $it") }
+            }.trim()
 
         return """
             $summaryGuidance
@@ -101,15 +103,20 @@ class RollingSummarizer(
             ${messages.joinToString("\n") { "${it.role.name}: ${it.content}" }}
 
             Summary:
-        """.trimIndent()
+            """.trimIndent()
     }
 
-    suspend fun summarizePrompt(prompt: String, service: LlmInferencePort): String? =
+    suspend fun summarizePrompt(
+        prompt: String,
+        service: LlmInferencePort,
+    ): String? =
         try {
             val responseFlow = service.sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, maxTokens = 1024))
-            val result = responseFlow.toList()
-                .filterIsInstance<com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent.PartialResponse>()
-                .joinToString("") { it.chunk }
+            val result =
+                responseFlow
+                    .toList()
+                    .filterIsInstance<com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent.PartialResponse>()
+                    .joinToString("") { it.chunk }
             result.trim().takeIf { it.isNotBlank() }
         } catch (e: Exception) {
             loggingPort.error("RollingSummarizer", "Failed to generate summary: ${e.message}")

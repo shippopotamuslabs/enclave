@@ -13,8 +13,9 @@ data class ToolCallRequest(
     val assistantMessageId: MessageId? = null,
 ) {
     val parameters: ToolParameters by lazy {
-        val definition = ToolDefinition.fromName(toolName)
-            ?: throw IllegalArgumentException("Unknown tool: $toolName")
+        val definition =
+            ToolDefinition.fromName(toolName)
+                ?: throw IllegalArgumentException("Unknown tool: $toolName")
         definition.decodeArguments(argumentsJson)
     }
 }

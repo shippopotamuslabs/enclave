@@ -26,13 +26,13 @@ import javax.inject.Inject
  * Listens to database changes via Room Flow.
  * Returns chats sorted by pinned first, then by lastModified descending.
  */
-class GetAllChatsUseCase @Inject constructor(
-    private val chatRepository: ChatRepository
-) {
-    /**
-     * Returns all chats as a Flow, sorted by pinned first, then by lastModified descending.
-     */
-    operator fun invoke(): Flow<List<Chat>> {
-        return chatRepository.getAllChats()
+class GetAllChatsUseCase
+    @Inject
+    constructor(
+        private val chatRepository: ChatRepository,
+    ) {
+        /**
+         * Returns all chats as a Flow, sorted by pinned first, then by lastModified descending.
+         */
+        operator fun invoke(): Flow<List<Chat>> = chatRepository.getAllChats()
     }
-}

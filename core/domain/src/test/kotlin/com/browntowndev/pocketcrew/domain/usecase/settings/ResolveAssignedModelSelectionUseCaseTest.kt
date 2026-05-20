@@ -24,7 +24,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ResolveAssignedModelSelectionUseCaseTest {
-
     private lateinit var getDefaultModelsUseCase: GetDefaultModelsUseCase
     private lateinit var getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase
     private lateinit var getApiModelAssetsUseCase: GetApiModelAssetsUseCase
@@ -37,100 +36,114 @@ class ResolveAssignedModelSelectionUseCaseTest {
         getLocalModelAssetsUseCase = mockk()
         getApiModelAssetsUseCase = mockk()
         getTtsProvidersUseCase = mockk()
-        useCase = ResolveAssignedModelSelectionUseCase(
-            getDefaultModelsUseCase,
-            getLocalModelAssetsUseCase,
-            getApiModelAssetsUseCase,
-            getTtsProvidersUseCase,
-        )
+        useCase =
+            ResolveAssignedModelSelectionUseCase(
+                getDefaultModelsUseCase,
+                getLocalModelAssetsUseCase,
+                getApiModelAssetsUseCase,
+                getTtsProvidersUseCase,
+            )
     }
 
     @Test
-    fun `returns null if assignment not found for model type`() = runTest {
-        every { getDefaultModelsUseCase() } returns flowOf(emptyList())
+    fun `returns null if assignment not found for model type`() =
+        runTest {
+            every { getDefaultModelsUseCase() } returns flowOf(emptyList())
 
-        val result = useCase(ModelType.MAIN)
+            val result = useCase(ModelType.MAIN)
 
-        assertNull(result)
-    }
-
-    @Test
-    fun `returns null if all config ids are null`() = runTest {
-        val assignment = DefaultModelAssignment(
-            modelType = ModelType.MAIN,
-            localConfigId = null,
-            apiConfigId = null,
-            ttsProviderId = null,
-        )
-        every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-
-        val result = useCase(ModelType.MAIN)
-
-        assertNull(result)
-    }
-
-    @Test
-    fun `returns local asset and config if localConfigId matches an existing asset`() = runTest {
-        val localConfigId = LocalModelConfigurationId("local-config-1")
-        val assignment = DefaultModelAssignment(
-            modelType = ModelType.MAIN,
-            localConfigId = localConfigId,
-            apiConfigId = null,
-        )
-        val localConfig = mockk<LocalModelConfiguration> {
-            every { id } returns localConfigId
-        }
-        val localAsset = mockk<LocalModelAsset> {
-            every { configurations } returns listOf(localConfig)
+            assertNull(result)
         }
 
-        every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-        every { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-
-        val result = useCase(ModelType.MAIN)
-
-        assertEquals(ResolvedAssignedModelSelection(localAsset = localAsset, localConfig = localConfig), result)
-    }
-
     @Test
-    fun `returns api asset and config if apiConfigId matches an existing asset`() = runTest {
-        val apiConfigId = ApiModelConfigurationId("api-config-1")
-        val assignment = DefaultModelAssignment(
-            modelType = ModelType.MAIN,
-            localConfigId = null,
-            apiConfigId = apiConfigId,
-        )
-        val apiConfig = mockk<ApiModelConfiguration> {
-            every { id } returns apiConfigId
-        }
-        val apiAsset = mockk<ApiModelAsset> {
-            every { configurations } returns listOf(apiConfig)
+    fun `returns null if all config ids are null`() =
+        runTest {
+            val assignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                )
+            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
+
+            val result = useCase(ModelType.MAIN)
+
+            assertNull(result)
         }
 
-        every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-        every { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
+    @Test
+    fun `returns local asset and config if localConfigId matches an existing asset`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("local-config-1")
+            val assignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = localConfigId,
+                    apiConfigId = null,
+                )
+            val localConfig =
+                mockk<LocalModelConfiguration> {
+                    every { id } returns localConfigId
+                }
+            val localAsset =
+                mockk<LocalModelAsset> {
+                    every { configurations } returns listOf(localConfig)
+                }
 
-        val result = useCase(ModelType.MAIN)
+            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
+            every { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
 
-        assertEquals(ResolvedAssignedModelSelection(apiAsset = apiAsset, apiConfig = apiConfig), result)
-    }
+            val result = useCase(ModelType.MAIN)
+
+            assertEquals(ResolvedAssignedModelSelection(localAsset = localAsset, localConfig = localConfig), result)
+        }
 
     @Test
-    fun `returns tts asset if ttsProviderId matches an existing asset`() = runTest {
-        val ttsId = TtsProviderId("tts-1")
-        val assignment = DefaultModelAssignment(
-            modelType = ModelType.TTS,
-            localConfigId = null,
-            apiConfigId = null,
-            ttsProviderId = ttsId,
-        )
-        val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias")
+    fun `returns api asset and config if apiConfigId matches an existing asset`() =
+        runTest {
+            val apiConfigId = ApiModelConfigurationId("api-config-1")
+            val assignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = null,
+                    apiConfigId = apiConfigId,
+                )
+            val apiConfig =
+                mockk<ApiModelConfiguration> {
+                    every { id } returns apiConfigId
+                }
+            val apiAsset =
+                mockk<ApiModelAsset> {
+                    every { configurations } returns listOf(apiConfig)
+                }
 
-        every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-        every { getTtsProvidersUseCase() } returns flowOf(listOf(ttsAsset))
+            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
+            every { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
 
-        val result = useCase(ModelType.TTS)
+            val result = useCase(ModelType.MAIN)
 
-        assertEquals(ResolvedAssignedModelSelection(ttsAsset = ttsAsset), result)
-    }
+            assertEquals(ResolvedAssignedModelSelection(apiAsset = apiAsset, apiConfig = apiConfig), result)
+        }
+
+    @Test
+    fun `returns tts asset if ttsProviderId matches an existing asset`() =
+        runTest {
+            val ttsId = TtsProviderId("tts-1")
+            val assignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.TTS,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = ttsId,
+                )
+            val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias")
+
+            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
+            every { getTtsProvidersUseCase() } returns flowOf(listOf(ttsAsset))
+
+            val result = useCase(ModelType.TTS)
+
+            assertEquals(ResolvedAssignedModelSelection(ttsAsset = ttsAsset), result)
+        }
 }

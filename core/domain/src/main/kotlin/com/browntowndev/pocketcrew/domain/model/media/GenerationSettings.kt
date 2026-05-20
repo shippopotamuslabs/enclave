@@ -23,10 +23,13 @@ data class ImageGenerationSettings(
 }
 
 fun ImageGenerationSettings.withClampedGenerationCount(): ImageGenerationSettings =
-    copy(generationCount = generationCount.coerceIn(
-        ImageGenerationSettings.MIN_GENERATION_COUNT,
-        ImageGenerationSettings.MAX_GENERATION_COUNT,
-    ))
+    copy(
+        generationCount =
+            generationCount.coerceIn(
+                ImageGenerationSettings.MIN_GENERATION_COUNT,
+                ImageGenerationSettings.MAX_GENERATION_COUNT,
+            ),
+    )
 
 data class VideoGenerationSettings(
     override val aspectRatio: AspectRatio = AspectRatio.ONE_ONE,
@@ -35,22 +38,31 @@ data class VideoGenerationSettings(
     val videoResolution: String = "480p",
     val autoGenerateVideo: Boolean = false,
     override val referenceImageUri: String? = null,
-    override val seed: String = ""
+    override val seed: String = "",
 ) : VisualGenerationSettings
 
 data class MusicGenerationSettings(
     val duration: Int = 30,
-    val tempo: Int = 120
+    val tempo: Int = 120,
 ) : GenerationSettings
 
-enum class AspectRatio(val ratio: String) {
-    ONE_ONE("1:1"), THREE_FOUR("3:4"), FOUR_THREE("4:3"), 
-    NINE_SIXTEEN("9:16"), SIXTEEN_NINE("16:9"), 
-    TWO_THREE("2:3"), THREE_TWO("3:2"),
-    TWENTY_ONE_NINE("21:9"), FIVE_FOUR("5:4")
+enum class AspectRatio(
+    val ratio: String,
+) {
+    ONE_ONE("1:1"),
+    THREE_FOUR("3:4"),
+    FOUR_THREE("4:3"),
+    NINE_SIXTEEN("9:16"),
+    SIXTEEN_NINE("16:9"),
+    TWO_THREE("2:3"),
+    THREE_TWO("3:2"),
+    TWENTY_ONE_NINE("21:9"),
+    FIVE_FOUR("5:4"),
 }
 
-enum class GenerationQuality(val displayName: String) {
+enum class GenerationQuality(
+    val displayName: String,
+) {
     SPEED("Speed"),
     QUALITY("Quality"),
     HD("HD"),
@@ -58,7 +70,7 @@ enum class GenerationQuality(val displayName: String) {
     LOW("Low"),
     MEDIUM("Medium"),
     HIGH("High"),
-    AUTO("Auto")
+    AUTO("Auto"),
 }
 
 data class ProviderCapabilities(
@@ -69,5 +81,5 @@ data class ProviderCapabilities(
     val supportedVideoDurations: List<Int>,
     val supportsReferenceImage: Boolean,
     val supportsVideo: Boolean,
-    val supportsMusic: Boolean = false
+    val supportsMusic: Boolean = false,
 )

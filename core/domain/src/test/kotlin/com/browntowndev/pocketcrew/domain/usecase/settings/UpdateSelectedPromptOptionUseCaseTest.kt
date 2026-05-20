@@ -10,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class UpdateSelectedPromptOptionUseCaseTest {
-
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var useCase: UpdateSelectedPromptOptionUseCase
 
@@ -21,42 +20,46 @@ class UpdateSelectedPromptOptionUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository with CONCISE option`() = runTest {
-        val option = SystemPromptOption.CONCISE
-        coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
+    fun `invoke calls repository with CONCISE option`() =
+        runTest {
+            val option = SystemPromptOption.CONCISE
+            coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
 
-        useCase(option)
+            useCase(option)
 
-        coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
-    }
-
-    @Test
-    fun `invoke calls repository with CUSTOM option`() = runTest {
-        val option = SystemPromptOption.CUSTOM
-        coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
-
-        useCase(option)
-
-        coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
-    }
+            coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
+        }
 
     @Test
-    fun `invoke calls repository with FORMAL option`() = runTest {
-        val option = SystemPromptOption.FORMAL
-        coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
+    fun `invoke calls repository with CUSTOM option`() =
+        runTest {
+            val option = SystemPromptOption.CUSTOM
+            coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
 
-        useCase(option)
+            useCase(option)
 
-        coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
-    }
+            coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
+        }
 
     @Test
-    fun `invoke calls repository with RIGOROUS option`() = runTest {
-        val option = SystemPromptOption.RIGOROUS
-        coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
+    fun `invoke calls repository with FORMAL option`() =
+        runTest {
+            val option = SystemPromptOption.FORMAL
+            coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
 
-        useCase(option)
+            useCase(option)
 
-        coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
-    }
+            coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
+        }
+
+    @Test
+    fun `invoke calls repository with RIGOROUS option`() =
+        runTest {
+            val option = SystemPromptOption.RIGOROUS
+            coEvery { settingsRepository.updateSelectedPromptOption(option) } returns Unit
+
+            useCase(option)
+
+            coVerify(exactly = 1) { settingsRepository.updateSelectedPromptOption(option) }
+        }
 }

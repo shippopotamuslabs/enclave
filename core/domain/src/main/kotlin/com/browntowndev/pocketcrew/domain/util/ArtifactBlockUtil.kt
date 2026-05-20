@@ -6,7 +6,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 object ArtifactBlockUtil {
-
     fun getVisibleText(block: JsonElement): String {
         return try {
             val obj = block.jsonObject
@@ -17,9 +16,10 @@ object ArtifactBlockUtil {
                 "list" -> (obj["items"] as? JsonArray)?.joinToString("\n") { it.jsonPrimitive.content } ?: ""
                 "table" -> {
                     val header = (obj["header"] as? JsonArray)?.joinToString(" | ") { it.jsonPrimitive.content } ?: ""
-                    val rows = (obj["rows"] as? JsonArray)?.joinToString("\n") { row ->
-                        (row as? JsonArray)?.joinToString(" | ") { it.jsonPrimitive.content } ?: ""
-                    } ?: ""
+                    val rows =
+                        (obj["rows"] as? JsonArray)?.joinToString("\n") { row ->
+                            (row as? JsonArray)?.joinToString(" | ") { it.jsonPrimitive.content } ?: ""
+                        } ?: ""
                     "$header\n$rows"
                 }
                 "code" -> obj["text"]?.jsonPrimitive?.content ?: ""

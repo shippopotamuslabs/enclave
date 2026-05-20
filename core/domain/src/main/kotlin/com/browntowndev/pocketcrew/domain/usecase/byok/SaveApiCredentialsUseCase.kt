@@ -9,22 +9,23 @@ interface SaveApiCredentialsUseCase {
     suspend operator fun invoke(
         credentials: ApiCredentials,
         apiKey: String,
-        sourceCredentialAlias: String? = null
+        sourceCredentialAlias: String? = null,
     ): ApiCredentialsId
 }
 
-class SaveApiCredentialsUseCaseImpl @Inject constructor(
-    private val apiModelRepository: ApiModelRepositoryPort,
-) : SaveApiCredentialsUseCase {
-    override suspend fun invoke(
-        credentials: ApiCredentials,
-        apiKey: String,
-        sourceCredentialAlias: String?
-    ): ApiCredentialsId {
-        return apiModelRepository.saveCredentials(
-            credentials = credentials,
-            apiKey = apiKey,
-            sourceCredentialAlias = sourceCredentialAlias,
-        )
+class SaveApiCredentialsUseCaseImpl
+    @Inject
+    constructor(
+        private val apiModelRepository: ApiModelRepositoryPort,
+    ) : SaveApiCredentialsUseCase {
+        override suspend fun invoke(
+            credentials: ApiCredentials,
+            apiKey: String,
+            sourceCredentialAlias: String?,
+        ): ApiCredentialsId =
+            apiModelRepository.saveCredentials(
+                credentials = credentials,
+                apiKey = apiKey,
+                sourceCredentialAlias = sourceCredentialAlias,
+            )
     }
-}

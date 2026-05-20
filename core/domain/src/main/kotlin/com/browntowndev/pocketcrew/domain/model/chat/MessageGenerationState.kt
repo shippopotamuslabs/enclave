@@ -3,13 +3,11 @@ package com.browntowndev.pocketcrew.domain.model.chat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
-
 /**
  * Sealed interface for message generation states.
  * AccumulatedMessages is the primary emission for UI updates.
  */
 sealed interface MessageGenerationState {
-
     /**
      * Returns `true` if this state represents a terminal event that signals
      * the end of the generation stream. [Finished], [Failed], and [Blocked]
@@ -20,27 +18,56 @@ sealed interface MessageGenerationState {
      * that adds pipeline-specific terminal logic on top of this property.
      */
     val isTerminal: Boolean
-        get() = when (this) {
-            is Finished -> true
-            is Failed -> true
-            is Blocked -> true
-            else -> false
-        }
-    data class EngineLoading(val modelType: ModelType) : MessageGenerationState
-    data class Processing(val modelType: ModelType) : MessageGenerationState
-    data class ThinkingLive(val thinkingChunk: String, val modelType: ModelType) : MessageGenerationState
-    data class GeneratingText(val textDelta: String, val modelType: ModelType) : MessageGenerationState
-    data class Finished(val modelType: ModelType) : MessageGenerationState
-    data class Blocked(val reason: String, val modelType: ModelType) : MessageGenerationState
-    data class Failed(val error: Throwable, val modelType: ModelType) : MessageGenerationState
+        get() =
+            when (this) {
+                is Finished -> true
+                is Failed -> true
+                is Blocked -> true
+                else -> false
+            }
+
+    data class EngineLoading(
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class Processing(
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class ThinkingLive(
+        val thinkingChunk: String,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class GeneratingText(
+        val textDelta: String,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class Finished(
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class Blocked(
+        val reason: String,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    data class Failed(
+        val error: Throwable,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
     data class WebSearchSourcesAttached(
         val sources: List<WebSearchSource>,
         val modelType: ModelType,
     ) : MessageGenerationState
+
     data class ArtifactsAttached(
         val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
         val modelType: ModelType,
     ) : MessageGenerationState
+
     data class MediaAttached(
         val mediaUris: List<String>,
         val mediaIds: List<String> = emptyList(),
@@ -48,11 +75,12 @@ sealed interface MessageGenerationState {
         val prompts: List<String> = emptyList(),
         val modelType: ModelType,
     ) : MessageGenerationState
+
     data class StepCompleted(
         val stepOutput: String,
         val modelDisplayName: String,
         val modelType: ModelType,
-        val stepType: PipelineStep
+        val stepType: PipelineStep,
     ) : MessageGenerationState
 }
 
@@ -62,5 +90,6 @@ sealed interface MessageGenerationState {
  * states ([Finished], [Failed], [Blocked]).
  */
 val MessageGenerationState.isPipelineTerminal: Boolean
-    get() = isTerminal ||
-        (this is MessageGenerationState.StepCompleted && stepType == PipelineStep.FINAL)
+    get() =
+        isTerminal ||
+            (this is MessageGenerationState.StepCompleted && stepType == PipelineStep.FINAL)

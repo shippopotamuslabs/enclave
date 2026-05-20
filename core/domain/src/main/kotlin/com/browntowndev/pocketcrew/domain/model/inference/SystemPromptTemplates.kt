@@ -5,7 +5,6 @@ package com.browntowndev.pocketcrew.domain.model.inference
  * These are the exact templates required for the pipeline steps to function correctly.
  */
 object SystemPromptTemplates {
-
     @Suppress("MaxLineLength")
     const val VISION = "You are a precise visual analyst. Examine the provided image or images carefully and report what is present. Describe important objects, text, scene details, and spatial relationships. Clearly separate direct observation from inference. Be direct, specific, and concise."
 
@@ -27,15 +26,14 @@ object SystemPromptTemplates {
     /**
      * Returns a map of all available system prompt templates keyed by their ModelType.
      */
-    fun getAll(): Map<ModelType, String> {
-        return mapOf(
+    fun getAll(): Map<ModelType, String> =
+        mapOf(
             ModelType.VISION to VISION,
             ModelType.DRAFT_ONE to DRAFT_ONE,
             ModelType.DRAFT_TWO to DRAFT_TWO,
             ModelType.MAIN to MAIN,
             ModelType.FINAL_SYNTHESIS to FINAL_SYNTHESIS,
             ModelType.FAST to FAST,
-            ModelType.THINKING to THINKING
+            ModelType.THINKING to THINKING,
         )
-    }
 }

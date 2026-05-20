@@ -9,5 +9,5 @@ package com.browntowndev.pocketcrew.domain.model.chat
  */
 data class ThinkingData(
     val thinkingDurationSeconds: Int,
-    val rawFullThought: String
+    val rawFullThought: String,
 )

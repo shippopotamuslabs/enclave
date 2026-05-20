@@ -10,22 +10,26 @@ import javax.inject.Inject
 /**
  * Use case for generating videos using the assigned media provider.
  */
-class GenerateVideoUseCase @Inject constructor(
-    private val defaultModelRepository: DefaultModelRepositoryPort,
-    private val mediaProviderRepository: MediaProviderRepositoryPort,
-    private val videoGenerationPort: VideoGenerationPort,
-) {
-    suspend operator fun invoke(
-        prompt: String,
-        settings: GenerationSettings
-    ): Result<ByteArray> {
-        val assignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)
-        val providerId = assignment?.mediaProviderId
-            ?: return Result.failure(IllegalStateException("No video generation provider assigned"))
+class GenerateVideoUseCase
+    @Inject
+    constructor(
+        private val defaultModelRepository: DefaultModelRepositoryPort,
+        private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val videoGenerationPort: VideoGenerationPort,
+    ) {
+        suspend operator fun invoke(
+            prompt: String,
+            settings: GenerationSettings,
+        ): Result<ByteArray> {
+            val assignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)
+            val providerId =
+                assignment?.mediaProviderId
+                    ?: return Result.failure(IllegalStateException("No video generation provider assigned"))
 
-        val provider = mediaProviderRepository.getMediaProvider(providerId)
-            ?: return Result.failure(IllegalStateException("Assigned media provider not found"))
+            val provider =
+                mediaProviderRepository.getMediaProvider(providerId)
+                    ?: return Result.failure(IllegalStateException("Assigned media provider not found"))
 
-        return videoGenerationPort.generateVideo(prompt, provider, settings)
+            return videoGenerationPort.generateVideo(prompt, provider, settings)
+        }
     }
-}

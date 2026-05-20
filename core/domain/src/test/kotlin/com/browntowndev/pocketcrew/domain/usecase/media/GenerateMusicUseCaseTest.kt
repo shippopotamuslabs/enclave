@@ -23,80 +23,88 @@ class GenerateMusicUseCaseTest {
 
     @BeforeEach
     fun setup() {
-        useCase = GenerateMusicUseCase(
-            defaultModelRepository,
-            mediaProviderRepository,
-            musicGenerationPort
-        )
-    }
-
-    @Test
-    fun `invoke resolves MUSIC_GENERATION model type and delegates to port`() = runBlocking {
-        // Given
-        val settings = MusicGenerationSettings()
-        val provider = mockk<MediaProviderAsset>()
-
-        coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns mockk {
-            coEvery { mediaProviderId } returns MediaProviderId("music-provider-1")
-        }
-        coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("music-provider-1")) } returns provider
-        coEvery { musicGenerationPort.generateMusic(any(), any(), any()) } returns Result.success(ByteArray(0))
-
-        // When
-        val result = useCase("ambient soundscape", settings)
-
-        // Then
-        assertTrue(result.isSuccess)
-        coVerify {
-            musicGenerationPort.generateMusic(
-                prompt = "ambient soundscape",
-                provider = provider,
-                settings = settings
+        useCase =
+            GenerateMusicUseCase(
+                defaultModelRepository,
+                mediaProviderRepository,
+                musicGenerationPort,
             )
-        }
     }
 
     @Test
-    fun `invoke fails when no default music model assigned`() = runBlocking {
-        // Given
-        coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns null
+    fun `invoke resolves MUSIC_GENERATION model type and delegates to port`() =
+        runBlocking {
+            // Given
+            val settings = MusicGenerationSettings()
+            val provider = mockk<MediaProviderAsset>()
 
-        // When
-        val result = useCase("prompt", MusicGenerationSettings())
+            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
+                mockk {
+                    coEvery { mediaProviderId } returns MediaProviderId("music-provider-1")
+                }
+            coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("music-provider-1")) } returns provider
+            coEvery { musicGenerationPort.generateMusic(any(), any(), any()) } returns Result.success(ByteArray(0))
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
+            // When
+            val result = useCase("ambient soundscape", settings)
 
-    @Test
-    fun `invoke fails when no media provider assigned`() = runBlocking {
-        // Given
-        coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns mockk {
-            coEvery { mediaProviderId } returns null
+            // Then
+            assertTrue(result.isSuccess)
+            coVerify {
+                musicGenerationPort.generateMusic(
+                    prompt = "ambient soundscape",
+                    provider = provider,
+                    settings = settings,
+                )
+            }
         }
 
-        // When
-        val result = useCase("prompt", MusicGenerationSettings())
+    @Test
+    fun `invoke fails when no default music model assigned`() =
+        runBlocking {
+            // Given
+            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns null
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
+            // When
+            val result = useCase("prompt", MusicGenerationSettings())
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
 
     @Test
-    fun `invoke fails when provider not found`() = runBlocking {
-        // Given
-        coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns mockk {
-            coEvery { mediaProviderId } returns MediaProviderId("missing-provider")
+    fun `invoke fails when no media provider assigned`() =
+        runBlocking {
+            // Given
+            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
+                mockk {
+                    coEvery { mediaProviderId } returns null
+                }
+
+            // When
+            val result = useCase("prompt", MusicGenerationSettings())
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
         }
-        coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("missing-provider")) } returns null
 
-        // When
-        val result = useCase("prompt", MusicGenerationSettings())
+    @Test
+    fun `invoke fails when provider not found`() =
+        runBlocking {
+            // Given
+            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
+                mockk {
+                    coEvery { mediaProviderId } returns MediaProviderId("missing-provider")
+                }
+            coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("missing-provider")) } returns null
 
-        // Then
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
+            // When
+            val result = useCase("prompt", MusicGenerationSettings())
+
+            // Then
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
 }

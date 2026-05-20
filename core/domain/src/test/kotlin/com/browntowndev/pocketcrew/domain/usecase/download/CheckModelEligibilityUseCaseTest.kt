@@ -6,9 +6,9 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.UtilityType
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -16,13 +16,12 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 class CheckModelEligibilityUseCaseTest {
-
     private lateinit var useCase: CheckModelEligibilityUseCase
     private lateinit var mockLogger: LoggingPort
 
@@ -51,53 +50,57 @@ class CheckModelEligibilityUseCaseTest {
         modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
         localFileName: String = "model.litertlm",
         displayName: String = "Test Config",
-        thinkingEnabled: Boolean = false
-    ): LocalModelAsset {
-        return LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = LocalModelId("1"),
-                huggingFaceModelName = "test/model",
-                remoteFileName = localFileName,
-                localFileName = localFileName,
-                sha256 = sha256,
-                sizeInBytes = sizeInBytes,
-                modelFileFormat = modelFileFormat
-            ),
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = LocalModelId("1"),
-                    displayName = displayName,
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    temperature = 0.7,
-                    topP = 0.95,
-                    topK = 40,
-                    repetitionPenalty = 1.0,
-                    thinkingEnabled = thinkingEnabled,
-                    systemPrompt = "You are helpful."
-                )
-            )
+        thinkingEnabled: Boolean = false,
+    ): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("1"),
+                    huggingFaceModelName = "test/model",
+                    remoteFileName = localFileName,
+                    localFileName = localFileName,
+                    sha256 = sha256,
+                    sizeInBytes = sizeInBytes,
+                    modelFileFormat = modelFileFormat,
+                ),
+            configurations =
+                listOf(
+                    LocalModelConfiguration(
+                        localModelId = LocalModelId("1"),
+                        displayName = displayName,
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.7,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.0,
+                        thinkingEnabled = thinkingEnabled,
+                        systemPrompt = "You are helpful.",
+                    ),
+                ),
         )
-    }
 
     @Test
     fun `check returns models for missing files`() {
-        val asset = createModelAsset(
-            sha256 = "abc123",
-            localFileName = "main.litertlm"
-        )
-        val scanResult = ModelScanResult(
-            missingModels = listOf(asset),
-            partialDownloads = emptyMap(),
-            invalidModels = emptyList(),
-            allValid = false,
-            directoryError = false
-        )
+        val asset =
+            createModelAsset(
+                sha256 = "abc123",
+                localFileName = "main.litertlm",
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = listOf(asset),
+                partialDownloads = emptyMap(),
+                invalidModels = emptyList(),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset),
+                scanResult = scanResult,
+            )
 
         assertTrue(result.isNotEmpty())
         assertEquals(1, result.size)
@@ -106,181 +109,206 @@ class CheckModelEligibilityUseCaseTest {
     @Test
     fun `check handles empty scan result (all valid)`() {
         val asset = createModelAsset(sha256 = "abc123")
-        val scanResult = ModelScanResult(
-            missingModels = emptyList(),
-            partialDownloads = emptyMap(),
-            invalidModels = emptyList(),
-            allValid = true,
-            directoryError = false
-        )
+        val scanResult =
+            ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                invalidModels = emptyList(),
+                allValid = true,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset),
+                scanResult = scanResult,
+            )
 
         assertTrue(result.isEmpty())
     }
 
     @Test
     fun `check handles multiple missing models`() {
-        val asset1 = createModelAsset(
-            sha256 = "abc123",
-            localFileName = "main1.litertlm"
-        )
-        val asset2 = createModelAsset(
-            sha256 = "def456",
-            localFileName = "vision.litertlm"
-        )
-        val scanResult = ModelScanResult(
-            missingModels = listOf(asset1, asset2),
-            partialDownloads = emptyMap(),
-            invalidModels = emptyList(),
-            allValid = false,
-            directoryError = false
-        )
+        val asset1 =
+            createModelAsset(
+                sha256 = "abc123",
+                localFileName = "main1.litertlm",
+            )
+        val asset2 =
+            createModelAsset(
+                sha256 = "def456",
+                localFileName = "vision.litertlm",
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = listOf(asset1, asset2),
+                partialDownloads = emptyMap(),
+                invalidModels = emptyList(),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
+                scanResult = scanResult,
+            )
 
         assertEquals(2, result.size)
     }
 
     @Test
     fun `check returns empty list when no missing partial or invalid`() {
-        val asset = createModelAsset(
-            sha256 = "abc123",
-            localFileName = "main.litertlm"
-        )
-        val scanResult = ModelScanResult(
-            missingModels = emptyList(),
-            partialDownloads = emptyMap(),
-            invalidModels = emptyList(),
-            allValid = true,
-            directoryError = false
-        )
+        val asset =
+            createModelAsset(
+                sha256 = "abc123",
+                localFileName = "main.litertlm",
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                invalidModels = emptyList(),
+                allValid = true,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset),
+                scanResult = scanResult,
+            )
 
         assertTrue(result.isEmpty())
     }
 
     @Test
     fun `check includes models with partial downloads`() {
-        val asset = createModelAsset(
-            sha256 = "abc123",
-            localFileName = "main.litertlm"
-        )
-        val scanResult = ModelScanResult(
-            missingModels = emptyList(),
-            partialDownloads = mapOf("main.litertlm" to 500000L),
-            invalidModels = emptyList(),
-            allValid = false,
-            directoryError = false
-        )
+        val asset =
+            createModelAsset(
+                sha256 = "abc123",
+                localFileName = "main.litertlm",
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = mapOf("main.litertlm" to 500000L),
+                invalidModels = emptyList(),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset),
+                scanResult = scanResult,
+            )
 
         assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check includes invalid models due to MD5 mismatch`() {
-        val asset = createModelAsset(
-            sha256 = "abc123",
-            localFileName = "main.litertlm"
-        )
+        val asset =
+            createModelAsset(
+                sha256 = "abc123",
+                localFileName = "main.litertlm",
+            )
 
-        val scanResult = ModelScanResult(
-            missingModels = emptyList(),
-            partialDownloads = emptyMap(),
-            invalidModels = listOf(asset),
-            allValid = false,
-            directoryError = false
-        )
+        val scanResult =
+            ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                invalidModels = listOf(asset),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(ModelType.MAIN to asset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = mapOf(ModelType.MAIN to asset),
+                scanResult = scanResult,
+            )
 
         assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check preserves slot specific assets with same SHA256`() {
-        val asset1 = createModelAsset(
-            sha256 = "shared-sha256",
-            localFileName = "shared.litertlm",
-            displayName = "Gemma 4 E4B (Vision)"
-        )
-        val asset2 = createModelAsset(
-            sha256 = "shared-sha256",
-            localFileName = "shared.litertlm",
-            displayName = "Gemma 4 E4B (Fast)"
-        )
-        val asset3 = createModelAsset(
-            sha256 = "shared-sha256",
-            localFileName = "shared.litertlm",
-            displayName = "Gemma 4 E4B (Thinking)",
-            thinkingEnabled = true
-        )
-        val scanResult = ModelScanResult(
-            missingModels = listOf(asset1, asset2, asset3),
-            partialDownloads = emptyMap(),
-            invalidModels = emptyList(),
-            allValid = false,
-            directoryError = false
-        )
+        val asset1 =
+            createModelAsset(
+                sha256 = "shared-sha256",
+                localFileName = "shared.litertlm",
+                displayName = "Gemma 4 E4B (Vision)",
+            )
+        val asset2 =
+            createModelAsset(
+                sha256 = "shared-sha256",
+                localFileName = "shared.litertlm",
+                displayName = "Gemma 4 E4B (Fast)",
+            )
+        val asset3 =
+            createModelAsset(
+                sha256 = "shared-sha256",
+                localFileName = "shared.litertlm",
+                displayName = "Gemma 4 E4B (Thinking)",
+                thinkingEnabled = true,
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = listOf(asset1, asset2, asset3),
+                partialDownloads = emptyMap(),
+                invalidModels = emptyList(),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = mapOf(
-                ModelType.VISION to asset1,
-                ModelType.FAST to asset2,
-                ModelType.THINKING to asset3
-            ),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels =
+                    mapOf(
+                        ModelType.VISION to asset1,
+                        ModelType.FAST to asset2,
+                        ModelType.THINKING to asset3,
+                    ),
+                scanResult = scanResult,
+            )
 
         assertEquals(3, result.size)
         assertEquals(
             setOf("Gemma 4 E4B (Vision)", "Gemma 4 E4B (Fast)", "Gemma 4 E4B (Thinking)"),
-            result.map { it.configurations.first().displayName }.toSet()
+            result.map { it.configurations.first().displayName }.toSet(),
         )
     }
 
     @Test
     fun `check includes utility assets with partial downloads`() {
-        val baseAsset = createModelAsset(
-            sha256 = "whisper-sha",
-            modelFileFormat = ModelFileFormat.BIN,
-            localFileName = "ggml-base.en.bin",
-        )
-        val utilityAsset = baseAsset.copy(
-            metadata = baseAsset.metadata.copy(utilityType = UtilityType.WHISPER),
-            configurations = emptyList(),
-        )
-        val scanResult = ModelScanResult(
-            missingModels = emptyList(),
-            partialDownloads = mapOf("ggml-base.en.bin" to 50L),
-            invalidModels = emptyList(),
-            allValid = false,
-            directoryError = false,
-        )
+        val baseAsset =
+            createModelAsset(
+                sha256 = "whisper-sha",
+                modelFileFormat = ModelFileFormat.BIN,
+                localFileName = "ggml-base.en.bin",
+            )
+        val utilityAsset =
+            baseAsset.copy(
+                metadata = baseAsset.metadata.copy(utilityType = UtilityType.WHISPER),
+                configurations = emptyList(),
+            )
+        val scanResult =
+            ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = mapOf("ggml-base.en.bin" to 50L),
+                invalidModels = emptyList(),
+                allValid = false,
+                directoryError = false,
+            )
 
-        val result = useCase.check(
-            newModels = emptyMap(),
-            utilityAssets = listOf(utilityAsset),
-            scanResult = scanResult,
-        )
+        val result =
+            useCase.check(
+                newModels = emptyMap(),
+                utilityAssets = listOf(utilityAsset),
+                scanResult = scanResult,
+            )
 
         assertEquals(listOf(utilityAsset), result)
     }

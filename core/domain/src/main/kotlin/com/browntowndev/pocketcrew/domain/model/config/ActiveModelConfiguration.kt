@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.model.config
 
-import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 
 data class ActiveModelConfiguration(

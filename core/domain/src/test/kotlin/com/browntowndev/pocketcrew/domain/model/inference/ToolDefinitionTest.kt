@@ -67,11 +67,11 @@ class ToolDefinitionTest {
         assertEquals("web_extract", ToolDefinition.WEB_EXTRACT.name)
         assertTrue(
             ToolDefinition.WEB_EXTRACT.description.contains("extract", ignoreCase = true),
-            "Description should mention extracting content from URLs"
+            "Description should mention extracting content from URLs",
         )
         assertTrue(
             ToolDefinition.WEB_EXTRACT.description.contains("URL", ignoreCase = true),
-            "Description should mention URLs"
+            "Description should mention URLs",
         )
     }
 
@@ -133,7 +133,7 @@ class ToolDefinitionTest {
         assertEquals("search_chat_history", ToolDefinition.SEARCH_CHAT_HISTORY.name)
         assertTrue(
             ToolDefinition.SEARCH_CHAT_HISTORY.description.contains("past", ignoreCase = true),
-            "Description should mention past conversations"
+            "Description should mention past conversations",
         )
     }
 
@@ -156,7 +156,7 @@ class ToolDefinitionTest {
         assertEquals("search_chat", ToolDefinition.SEARCH_CHAT.name)
         assertTrue(
             ToolDefinition.SEARCH_CHAT.description.contains("chat", ignoreCase = true),
-            "Description should mention chat"
+            "Description should mention chat",
         )
     }
 
@@ -178,7 +178,7 @@ class ToolDefinitionTest {
         assertEquals("get_message_context", ToolDefinition.GET_MESSAGE_CONTEXT.name)
         assertTrue(
             ToolDefinition.GET_MESSAGE_CONTEXT.description.contains("context", ignoreCase = true),
-            "Description should mention context"
+            "Description should mention context",
         )
     }
 
@@ -196,6 +196,28 @@ class ToolDefinitionTest {
     }
 
     @Test
+    fun `append_blocks schema and examples use camelCase artifact keys`() {
+        val schema = Json.parseToJsonElement(ToolDefinition.APPEND_BLOCKS.parametersJson).jsonObject
+        val properties = schema["properties"]!!.jsonObject
+        assertTrue(properties.containsKey("artifactId"), "Schema should have 'artifactId' property")
+        assertTrue(properties.containsKey("isComplete"), "Schema should have 'isComplete' property")
+        assertTrue(!properties.containsKey("artifact_id"), "Schema should not advertise 'artifact_id'")
+        assertTrue(!properties.containsKey("is_complete"), "Schema should not advertise 'is_complete'")
+
+        val required = schema["required"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertTrue(required.contains("artifactId"), "artifactId should be in required list")
+
+        assertTrue(
+            ToolDefinition.APPEND_BLOCKS.toExample(ToolCallStrategy.JSON_XML_ENVELOPE).contains("artifactId"),
+            "JSON envelope example should steer artifactId",
+        )
+        assertTrue(
+            ToolDefinition.APPEND_BLOCKS.toExample(ToolCallStrategy.LITE_RT_NATIVE).contains("artifactId"),
+            "LiteRT native example should steer artifactId",
+        )
+    }
+
+    @Test
     fun `search_chat_history round-trip serialization`() {
         val params = SearchChatHistoryParams(queries = listOf("android", "kotlin"))
         val json = ToolDefinition.SEARCH_CHAT_HISTORY.encodeArguments(params)
@@ -206,11 +228,12 @@ class ToolDefinitionTest {
 
     @Test
     fun `web_extract round-trip serialization`() {
-        val params = WebExtractParams(
-            urls = listOf("https://example.com"),
-            extract_depth = ExtractDepth.advanced,
-            format = ExtractFormat.markdown
-        )
+        val params =
+            WebExtractParams(
+                urls = listOf("https://example.com"),
+                extract_depth = ExtractDepth.advanced,
+                format = ExtractFormat.markdown,
+            )
         val json = ToolDefinition.WEB_EXTRACT.encodeArguments(params)
         val decoded: WebExtractParams = ToolDefinition.WEB_EXTRACT.decodeArguments(json)
 

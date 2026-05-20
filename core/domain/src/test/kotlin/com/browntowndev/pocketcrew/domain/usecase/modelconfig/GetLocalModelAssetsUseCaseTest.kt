@@ -21,13 +21,14 @@ class GetLocalModelAssetsUseCaseTest {
     }
 
     @Test
-    fun `invoke returns stream of local model assets`() = runTest {
-        val assets = listOf(mockk<LocalModelAsset>())
-        every { repository.observeAllLocalAssets() } returns flowOf(assets)
+    fun `invoke returns stream of local model assets`() =
+        runTest {
+            val assets = listOf(mockk<LocalModelAsset>())
+            every { repository.observeAllLocalAssets() } returns flowOf(assets)
 
-        val result = useCase().first()
+            val result = useCase().first()
 
-        assertEquals(1, result.size)
-        assertEquals(assets, result)
-    }
+            assertEquals(1, result.size)
+            assertEquals(assets, result)
+        }
 }

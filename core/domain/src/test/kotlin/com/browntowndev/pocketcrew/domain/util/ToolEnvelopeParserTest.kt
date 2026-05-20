@@ -12,7 +12,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class ToolEnvelopeParserTest {
-
     private lateinit var fakePort: FakeToolEnvelopeParserPort
 
     @BeforeEach
@@ -28,12 +27,13 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun extractLocalToolEnvelope_returnsFirstPortSuccess() {
-        fakePort.parseResponses["INPUT"] = ToolEnvelopeBatch(
-            successes = listOf(ToolEnvelopeField("web_search", """{"query":"q1"}""", false, emptyList())),
-            failures = emptyList(),
-            visiblePrefix = "before",
-            visibleSuffix = "after",
-        )
+        fakePort.parseResponses["INPUT"] =
+            ToolEnvelopeBatch(
+                successes = listOf(ToolEnvelopeField("web_search", """{"query":"q1"}""", false, emptyList())),
+                failures = emptyList(),
+                visiblePrefix = "before",
+                visibleSuffix = "after",
+            )
 
         val envelope = ToolEnvelopeParser.extractLocalToolEnvelope("INPUT")
 
@@ -47,15 +47,17 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun extractLocalToolEnvelopes_returnsMultiplePortSuccesses() {
-        fakePort.parseResponses["INPUT"] = ToolEnvelopeBatch(
-            successes = listOf(
-                ToolEnvelopeField("web_search", """{"query":"first"}""", false, emptyList()),
-                ToolEnvelopeField("web_search", """{"query":"second"}""", false, emptyList()),
-            ),
-            failures = emptyList(),
-            visiblePrefix = "",
-            visibleSuffix = "",
-        )
+        fakePort.parseResponses["INPUT"] =
+            ToolEnvelopeBatch(
+                successes =
+                    listOf(
+                        ToolEnvelopeField("web_search", """{"query":"first"}""", false, emptyList()),
+                        ToolEnvelopeField("web_search", """{"query":"second"}""", false, emptyList()),
+                    ),
+                failures = emptyList(),
+                visiblePrefix = "",
+                visibleSuffix = "",
+            )
 
         val result = ToolEnvelopeParser.extractLocalToolEnvelopes("INPUT")
 
@@ -74,19 +76,23 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun malformedEnvelopeMessages_areMappedFromStructuredFailures() {
-        fakePort.parseResponses["tool_call"] = failureBatch(
-            ToolEnvelopeFailure(ToolEnvelopeFailureReason.MalformedEnvelope, "raw"),
-        )
-        fakePort.parseResponses["dsml"] = failureBatch(
-            ToolEnvelopeFailure(ToolEnvelopeFailureReason.MalformedEnvelope, "raw", formatHint = "dsml"),
-        )
+        fakePort.parseResponses["tool_call"] =
+            failureBatch(
+                ToolEnvelopeFailure(ToolEnvelopeFailureReason.MalformedEnvelope, "raw"),
+            )
+        fakePort.parseResponses["dsml"] =
+            failureBatch(
+                ToolEnvelopeFailure(ToolEnvelopeFailureReason.MalformedEnvelope, "raw", formatHint = "dsml"),
+            )
 
-        val nonDsml = assertFailsWith<IllegalStateException> {
-            ToolEnvelopeParser.extractLocalToolEnvelopes("tool_call")
-        }
-        val dsml = assertFailsWith<IllegalStateException> {
-            ToolEnvelopeParser.extractLocalToolEnvelopes("dsml")
-        }
+        val nonDsml =
+            assertFailsWith<IllegalStateException> {
+                ToolEnvelopeParser.extractLocalToolEnvelopes("tool_call")
+            }
+        val dsml =
+            assertFailsWith<IllegalStateException> {
+                ToolEnvelopeParser.extractLocalToolEnvelopes("dsml")
+            }
 
         assertEquals("Malformed tool_call envelope", nonDsml.message)
         assertEquals("Malformed DSML tool envelope", dsml.message)
@@ -94,27 +100,32 @@ class ToolEnvelopeParserTest {
 
     @Test
     fun validationFailures_areMappedToStableExceptionMessages() {
-        fakePort.parseResponses["missing"] = failureBatch(
-            ToolEnvelopeFailure(
-                reason = ToolEnvelopeFailureReason.MissingRequiredParameter("web_search", "query"),
-                original = "raw",
-            ),
-        )
-        fakePort.parseResponses["missing_urls"] = failureBatch(
-            ToolEnvelopeFailure(
-                reason = ToolEnvelopeFailureReason.MissingRequiredParameter("web_extract", "urls"),
-                original = "raw",
-            ),
-        )
-        fakePort.parseResponses["unknown_tool"] = failureBatch(
-            ToolEnvelopeFailure(ToolEnvelopeFailureReason.UnknownTool("unknown_tool"), "raw"),
-        )
-        fakePort.parseResponses["unknown_param"] = failureBatch(
-            ToolEnvelopeFailure(ToolEnvelopeFailureReason.UnknownParameter("web_search", "extra"), "raw"),
-        )
-        fakePort.parseResponses["duplicate"] = failureBatch(
-            ToolEnvelopeFailure(ToolEnvelopeFailureReason.DuplicateParameter("web_search", "query"), "raw"),
-        )
+        fakePort.parseResponses["missing"] =
+            failureBatch(
+                ToolEnvelopeFailure(
+                    reason = ToolEnvelopeFailureReason.MissingRequiredParameter("web_search", "query"),
+                    original = "raw",
+                ),
+            )
+        fakePort.parseResponses["missing_urls"] =
+            failureBatch(
+                ToolEnvelopeFailure(
+                    reason = ToolEnvelopeFailureReason.MissingRequiredParameter("web_extract", "urls"),
+                    original = "raw",
+                ),
+            )
+        fakePort.parseResponses["unknown_tool"] =
+            failureBatch(
+                ToolEnvelopeFailure(ToolEnvelopeFailureReason.UnknownTool("unknown_tool"), "raw"),
+            )
+        fakePort.parseResponses["unknown_param"] =
+            failureBatch(
+                ToolEnvelopeFailure(ToolEnvelopeFailureReason.UnknownParameter("web_search", "extra"), "raw"),
+            )
+        fakePort.parseResponses["duplicate"] =
+            failureBatch(
+                ToolEnvelopeFailure(ToolEnvelopeFailureReason.DuplicateParameter("web_search", "query"), "raw"),
+            )
 
         assertEquals(
             "Tool argument 'query' is required",
@@ -151,13 +162,14 @@ class ToolEnvelopeParserTest {
     @Test
     fun buildArgumentsJson_delegatesToPortCoercion() {
         fakePort.coerceProviderArgumentsResponses[
-            "web_search" to """{"query":"weather in London"}"""
+            "web_search" to """{"query":"weather in London"}""",
         ] = ToolEnvelopeField("web_search", """{"query":"weather in London"}""", false, emptyList())
 
-        val json = ToolEnvelopeParser.buildArgumentsJson(
-            "web_search",
-            mapOf("query" to "weather in London"),
-        )
+        val json =
+            ToolEnvelopeParser.buildArgumentsJson(
+                "web_search",
+                mapOf("query" to "weather in London"),
+            )
 
         assertEquals("""{"query":"weather in London"}""", json)
         assertEquals(
@@ -181,19 +193,21 @@ class ToolEnvelopeParserTest {
     fun extractRequiredUrls_usesPortForMalformedArguments() {
         val malformedArguments = """{"urls":"[\"https://example.com\"]"}"""
         val wrapped = """<tool_call>{"name":"web_extract","arguments":$malformedArguments}</tool_call>"""
-        fakePort.parseResponses[wrapped] = ToolEnvelopeBatch(
-            successes = listOf(
-                ToolEnvelopeField(
-                    toolName = "web_extract",
-                    argumentsJson = """{"urls":["https://example.com"],"extract_depth":"basic","format":"markdown"}""",
-                    repaired = true,
-                    repairs = emptyList(),
-                ),
-            ),
-            failures = emptyList(),
-            visiblePrefix = "",
-            visibleSuffix = "",
-        )
+        fakePort.parseResponses[wrapped] =
+            ToolEnvelopeBatch(
+                successes =
+                    listOf(
+                        ToolEnvelopeField(
+                            toolName = "web_extract",
+                            argumentsJson = """{"urls":["https://example.com"],"extract_depth":"basic","format":"markdown"}""",
+                            repaired = true,
+                            repairs = emptyList(),
+                        ),
+                    ),
+                failures = emptyList(),
+                visiblePrefix = "",
+                visibleSuffix = "",
+            )
 
         val urls = ToolEnvelopeParser.extractRequiredUrls(malformedArguments)
 

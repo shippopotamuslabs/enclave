@@ -12,7 +12,6 @@ import org.junit.jupiter.api.assertThrows
 
 @DisplayName("DeleteAllMediaUseCase")
 class DeleteAllMediaUseCaseTest {
-
     private lateinit var studioRepository: FakeStudioRepository
     private lateinit var useCase: DeleteAllMediaUseCase
 
@@ -34,30 +33,34 @@ class DeleteAllMediaUseCaseTest {
     @Nested
     inner class HappyPaths {
         @Test
-        fun `S3 deletes two media assets`() = runTest {
-            studioRepository.setMedia(listOf(asset("media-1"), asset("media-2")))
-            useCase()
-            assertEquals(setOf("media-1", "media-2"), studioRepository.deletedMediaIds)
-        }
+        fun `S3 deletes two media assets`() =
+            runTest {
+                studioRepository.setMedia(listOf(asset("media-1"), asset("media-2")))
+                useCase()
+                assertEquals(setOf("media-1", "media-2"), studioRepository.deletedMediaIds)
+            }
 
         @Test
-        fun `S4 empty studio produces no deletions`() = runTest {
-            studioRepository.setMedia(emptyList())
-            useCase()
-            assertEquals(emptySet<String>(), studioRepository.deletedMediaIds)
-        }
+        fun `S4 empty studio produces no deletions`() =
+            runTest {
+                studioRepository.setMedia(emptyList())
+                useCase()
+                assertEquals(emptySet<String>(), studioRepository.deletedMediaIds)
+            }
     }
 
     @Nested
     inner class Errors {
         @Test
-        fun `E2 propagates deleteMedia failures`() = runTest {
-            studioRepository.setMedia(listOf(asset("m-1")))
-            studioRepository.deleteMediaFailure = RuntimeException("permission denied")
-            val thrown = assertThrows<RuntimeException> {
-                useCase()
+        fun `E2 propagates deleteMedia failures`() =
+            runTest {
+                studioRepository.setMedia(listOf(asset("m-1")))
+                studioRepository.deleteMediaFailure = RuntimeException("permission denied")
+                val thrown =
+                    assertThrows<RuntimeException> {
+                        useCase()
+                    }
+                assertEquals("permission denied", thrown.message)
             }
-            assertEquals("permission denied", thrown.message)
-        }
     }
 }

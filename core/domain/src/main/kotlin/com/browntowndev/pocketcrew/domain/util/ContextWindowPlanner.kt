@@ -47,9 +47,10 @@ object ContextWindowPlanner {
     ): Budget {
         val outputReserve = outputReserveFor(contextWindowTokens, options.maxTokens)
         val reasoningReserve = options.reasoningBudget.coerceAtLeast(0)
-        val toolSchemaTokens = options.availableTools.sumOf { tool ->
-            tokenCounter.countTokens("${tool.name}\n${tool.description}\n${tool.schema}", modelId)
-        }
+        val toolSchemaTokens =
+            options.availableTools.sumOf { tool ->
+                tokenCounter.countTokens("${tool.name}\n${tool.description}\n${tool.schema}", modelId)
+            }
         val mediaReserve = options.imageUris.size * DEFAULT_IMAGE_RESERVE_TOKENS
 
         return Budget(
@@ -70,26 +71,38 @@ object ContextWindowPlanner {
         modelId: String? = null,
         tokenCounter: TokenCounter = JTokkitTokenCounter,
     ): Int {
-        val systemTokens = systemPrompt.orEmpty().takeIf(String::isNotBlank)
-            ?.let { tokenCounter.countTokens(it, modelId) }
-            ?: 0
+        val systemTokens =
+            systemPrompt
+                .orEmpty()
+                .takeIf(String::isNotBlank)
+                ?.let { tokenCounter.countTokens(it, modelId) }
+                ?: 0
         val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
-        val currentPromptTokens = currentPrompt.takeIf(String::isNotBlank)
-            ?.let { tokenCounter.countTokens(it, modelId) }
-            ?: 0
-        val toolResultTokens = toolResultPayloads.sumOf {
-            tokenCounter.countTokens(it, modelId) + TOOL_CALL_OVERHEAD_TOKENS
-        }
+        val currentPromptTokens =
+            currentPrompt
+                .takeIf(String::isNotBlank)
+                ?.let { tokenCounter.countTokens(it, modelId) }
+                ?: 0
+        val toolResultTokens =
+            toolResultPayloads.sumOf {
+                tokenCounter.countTokens(it, modelId) + TOOL_CALL_OVERHEAD_TOKENS
+            }
 
         return systemTokens + historyTokens + currentPromptTokens + toolResultTokens
     }
 
-    fun shouldCompact(estimatedPromptTokens: Int, budget: Budget): Boolean {
+    fun shouldCompact(
+        estimatedPromptTokens: Int,
+        budget: Budget,
+    ): Boolean {
         val pressureLimit = minOf(budget.usablePromptTokens, budget.thresholdTokens)
         return estimatedPromptTokens > pressureLimit
     }
 
-    fun outputReserveFor(contextWindowTokens: Int, maxTokens: Int?): Int {
+    fun outputReserveFor(
+        contextWindowTokens: Int,
+        maxTokens: Int?,
+    ): Int {
         val fallback = minOf(DEFAULT_OUTPUT_RESERVE_TOKENS, (contextWindowTokens / 4).coerceAtLeast(1))
         return (maxTokens ?: fallback)
             .coerceAtLeast(1)

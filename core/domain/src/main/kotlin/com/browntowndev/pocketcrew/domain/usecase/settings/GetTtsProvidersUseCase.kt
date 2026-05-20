@@ -5,8 +5,10 @@ import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryP
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-class GetTtsProvidersUseCase @Inject constructor(
-    private val repository: TtsProviderRepositoryPort,
-) {
-    operator fun invoke(): Flow<List<TtsProviderAsset>> = repository.getTtsProviders()
-}
+class GetTtsProvidersUseCase
+    @Inject
+    constructor(
+        private val repository: TtsProviderRepositoryPort,
+    ) {
+        operator fun invoke(): Flow<List<TtsProviderAsset>> = repository.getTtsProviders()
+    }

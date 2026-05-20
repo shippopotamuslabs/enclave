@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MessageGenerationStateTest {
-
     @Test
     fun `isTerminal returns true for Finished`() {
         assertTrue(MessageGenerationState.Finished(ModelType.MAIN).isTerminal)
@@ -46,30 +45,33 @@ class MessageGenerationStateTest {
     @Test
     fun `isTerminal returns false for StepCompleted regardless of step type`() {
         // Base isTerminal should be false for StepCompleted even with FINAL step
-        val finalStep = MessageGenerationState.StepCompleted(
-            stepOutput = "",
-            modelDisplayName = "Test",
-            modelType = ModelType.MAIN,
-            stepType = PipelineStep.FINAL,
-        )
+        val finalStep =
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Test",
+                modelType = ModelType.MAIN,
+                stepType = PipelineStep.FINAL,
+            )
         assertFalse(finalStep.isTerminal)
 
-        val draftStep = MessageGenerationState.StepCompleted(
-            stepOutput = "",
-            modelDisplayName = "Test",
-            modelType = ModelType.DRAFT_ONE,
-            stepType = PipelineStep.DRAFT_ONE,
-        )
+        val draftStep =
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Test",
+                modelType = ModelType.DRAFT_ONE,
+                stepType = PipelineStep.DRAFT_ONE,
+            )
         assertFalse(draftStep.isTerminal)
     }
 
     @Test
     fun `isTerminal returns false for WebSearchSourcesAttached`() {
         assertFalse(
-            MessageGenerationState.WebSearchSourcesAttached(
-                sources = emptyList(),
-                modelType = ModelType.MAIN,
-            ).isTerminal
+            MessageGenerationState
+                .WebSearchSourcesAttached(
+                    sources = emptyList(),
+                    modelType = ModelType.MAIN,
+                ).isTerminal,
         )
     }
 
@@ -92,23 +94,25 @@ class MessageGenerationStateTest {
 
     @Test
     fun `isPipelineTerminal returns true for StepCompleted with FINAL step`() {
-        val state = MessageGenerationState.StepCompleted(
-            stepOutput = "",
-            modelDisplayName = "Test",
-            modelType = ModelType.MAIN,
-            stepType = PipelineStep.FINAL,
-        )
+        val state =
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Test",
+                modelType = ModelType.MAIN,
+                stepType = PipelineStep.FINAL,
+            )
         assertTrue(state.isPipelineTerminal)
     }
 
     @Test
     fun `isPipelineTerminal returns false for StepCompleted with non-FINAL step`() {
-        val state = MessageGenerationState.StepCompleted(
-            stepOutput = "",
-            modelDisplayName = "Test",
-            modelType = ModelType.DRAFT_ONE,
-            stepType = PipelineStep.DRAFT_ONE,
-        )
+        val state =
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Test",
+                modelType = ModelType.DRAFT_ONE,
+                stepType = PipelineStep.DRAFT_ONE,
+            )
         assertFalse(state.isPipelineTerminal)
     }
 

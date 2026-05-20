@@ -1,16 +1,16 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
-import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -53,7 +53,10 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param messageState The new state of the message
      */
-    suspend fun updateMessageState(messageId: MessageId, messageState: MessageState)
+    suspend fun updateMessageState(
+        messageId: MessageId,
+        messageState: MessageState,
+    )
 
     /**
      * Updates the content of a message during streaming.
@@ -61,7 +64,10 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param content The new content
      */
-    suspend fun updateMessageContent(messageId: MessageId, content: String)
+    suspend fun updateMessageContent(
+        messageId: MessageId,
+        content: String,
+    )
 
     /**
      * Appends content to an existing message during streaming.
@@ -69,7 +75,10 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param content The content to append
      */
-    suspend fun appendMessageContent(messageId: MessageId, content: String)
+    suspend fun appendMessageContent(
+        messageId: MessageId,
+        content: String,
+    )
 
     /**
      * Sets the thinking start time for a message.
@@ -94,7 +103,10 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param thinkingText The text to append
      */
-    suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String)
+    suspend fun appendThinkingRaw(
+        messageId: MessageId,
+        thinkingText: String,
+    )
 
     /**
      * Clears thinking data from a message (for blocked/failed states).
@@ -109,7 +121,10 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param modelType The model type
      */
-    suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType)
+    suspend fun updateMessageModelType(
+        messageId: MessageId,
+        modelType: ModelType,
+    )
 
     /**
      * Creates a new chat in the database.
@@ -129,7 +144,7 @@ interface ChatRepository {
     suspend fun saveAssistantMessage(
         messageId: MessageId,
         content: String,
-        thinkingData: ThinkingData? = null
+        thinkingData: ThinkingData? = null,
     )
 
     /**
@@ -146,7 +161,7 @@ interface ChatRepository {
         chatId: ChatId,
         userMessageId: MessageId,
         modelType: ModelType,
-        pipelineStep: PipelineStep? = null
+        pipelineStep: PipelineStep? = null,
     ): MessageId
 
     /**
@@ -213,12 +228,20 @@ interface ChatRepository {
     suspend fun deleteChat(chatId: ChatId)
 
     /**
+     * Deletes all chats, messages, and associated data both locally and in the cloud.
+     */
+    suspend fun deleteAllChats()
+
+    /**
      * Renames a chat.
      *
      * @param chatId The ID of the chat to rename
      * @param newName The new name for the chat
      */
-    suspend fun renameChat(chatId: ChatId, newName: String)
+    suspend fun renameChat(
+        chatId: ChatId,
+        newName: String,
+    )
 
     /**
      * Searches chats by name or message content similarity.
@@ -227,7 +250,10 @@ interface ChatRepository {
      * @param messageIds The IDs of messages that matched the semantic search
      * @return Flow of matching chats
      */
-    fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>>
+    fun searchChats(
+        query: String,
+        messageIds: List<MessageId>,
+    ): Flow<List<Chat>>
 
     /**
      * Retrieves chats by their IDs.
@@ -252,4 +278,3 @@ interface ChatRepository {
      */
     suspend fun markWebSearchSourceExtracted(url: String)
 }
-

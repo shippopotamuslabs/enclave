@@ -17,66 +17,77 @@ import org.junit.jupiter.api.Test
 class ResolveCompactionSummaryModelUseCaseTest {
     private val tokenCounter =
         object : TokenCounter {
-            override fun countTokens(text: String, modelName: String?): Int = text.length
+            override fun countTokens(
+                text: String,
+                modelName: String?,
+            ): Int = text.length
         }
 
     @Test
-    fun `uses FAST when hosted FAST context window fits summarize payload`() = runTest {
-        val useCase = useCase(
-            fastConfig = apiFastConfig(contextWindow = 200_000),
-        )
-        val messages = listOf(ChatMessage(Role.USER, "x".repeat(1_000)))
+    fun `uses FAST when hosted FAST context window fits summarize payload`() =
+        runTest {
+            val useCase =
+                useCase(
+                    fastConfig = apiFastConfig(contextWindow = 200_000),
+                )
+            val messages = listOf(ChatMessage(Role.USER, "x".repeat(1_000)))
 
-        assertEquals(
-            ModelType.FAST,
-            useCase.invoke(ModelType.THINKING, messages, summaryOutputTokenReserve = 1024),
-        )
-    }
-
-    @Test
-    fun `uses active turn when FAST is local to avoid second on-device runtime`() = runTest {
-        val useCase = useCase(
-            fastConfig = localFastConfig(contextWindow = 200_000),
-        )
-
-        assertEquals(
-            ModelType.THINKING,
-            useCase.invoke(ModelType.THINKING, listOf(ChatMessage(Role.USER, "hello"))),
-        )
-    }
+            assertEquals(
+                ModelType.FAST,
+                useCase.invoke(ModelType.THINKING, messages, summaryOutputTokenReserve = 1024),
+            )
+        }
 
     @Test
-    fun `uses active turn when hosted FAST window is too small`() = runTest {
-        val useCase = useCase(
-            fastConfig = apiFastConfig(contextWindow = 2_000),
-        )
-        val messages = listOf(ChatMessage(Role.USER, "x".repeat(2_000)))
+    fun `uses active turn when FAST is local to avoid second on-device runtime`() =
+        runTest {
+            val useCase =
+                useCase(
+                    fastConfig = localFastConfig(contextWindow = 200_000),
+                )
 
-        assertEquals(
-            ModelType.THINKING,
-            useCase.invoke(ModelType.THINKING, messages, summaryOutputTokenReserve = 1024),
-        )
-    }
-
-    @Test
-    fun `uses active turn when FAST is not configured`() = runTest {
-        val useCase = useCase(fastConfig = null)
-
-        assertEquals(
-            ModelType.FAST,
-            useCase.invoke(ModelType.FAST, listOf(ChatMessage(Role.USER, "hello"))),
-        )
-    }
+            assertEquals(
+                ModelType.THINKING,
+                useCase.invoke(ModelType.THINKING, listOf(ChatMessage(Role.USER, "hello"))),
+            )
+        }
 
     @Test
-    fun `uses active turn when hosted FAST has unknown context window`() = runTest {
-        val useCase = useCase(fastConfig = apiFastConfig(contextWindow = null))
+    fun `uses active turn when hosted FAST window is too small`() =
+        runTest {
+            val useCase =
+                useCase(
+                    fastConfig = apiFastConfig(contextWindow = 2_000),
+                )
+            val messages = listOf(ChatMessage(Role.USER, "x".repeat(2_000)))
 
-        assertEquals(
-            ModelType.THINKING,
-            useCase.invoke(ModelType.THINKING, listOf(ChatMessage(Role.USER, "hello"))),
-        )
-    }
+            assertEquals(
+                ModelType.THINKING,
+                useCase.invoke(ModelType.THINKING, messages, summaryOutputTokenReserve = 1024),
+            )
+        }
+
+    @Test
+    fun `uses active turn when FAST is not configured`() =
+        runTest {
+            val useCase = useCase(fastConfig = null)
+
+            assertEquals(
+                ModelType.FAST,
+                useCase.invoke(ModelType.FAST, listOf(ChatMessage(Role.USER, "hello"))),
+            )
+        }
+
+    @Test
+    fun `uses active turn when hosted FAST has unknown context window`() =
+        runTest {
+            val useCase = useCase(fastConfig = apiFastConfig(contextWindow = null))
+
+            assertEquals(
+                ModelType.THINKING,
+                useCase.invoke(ModelType.THINKING, listOf(ChatMessage(Role.USER, "hello"))),
+            )
+        }
 
     private fun useCase(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
         val activeModelProvider = mockk<ActiveModelProviderPort>()

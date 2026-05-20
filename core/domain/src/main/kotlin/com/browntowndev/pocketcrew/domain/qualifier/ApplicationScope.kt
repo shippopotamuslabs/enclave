@@ -12,6 +12,6 @@ import javax.inject.Qualifier
     AnnotationTarget.VALUE_PARAMETER,
     AnnotationTarget.FUNCTION,
     AnnotationTarget.PROPERTY_GETTER,
-    AnnotationTarget.FIELD
+    AnnotationTarget.FIELD,
 )
 annotation class ApplicationScope

@@ -6,7 +6,7 @@ package com.browntowndev.pocketcrew.domain.port.media
 data class FileAttachmentMetadata(
     val name: String,
     val mimeType: String?,
-    val content: String
+    val content: String,
 )
 
 /**

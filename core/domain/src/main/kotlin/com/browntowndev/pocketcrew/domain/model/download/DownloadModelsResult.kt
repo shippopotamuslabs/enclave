@@ -21,5 +21,5 @@ data class DownloadModelsResult(
      * The model is NOT passed to CheckModelsUseCase for file scanning because
      * the missing file would trigger an unwanted re-download.
      */
-    val availableToRedownload: List<LocalModelAsset> = emptyList()
+    val availableToRedownload: List<LocalModelAsset> = emptyList(),
 )

@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * Represents a single step in the Crew ChatModeUi pipeline.
@@ -13,37 +13,42 @@ import kotlinx.serialization.encodeToString
 enum class PipelineStep {
     /** Creative/divergent thinking - broad, novel angles */
     DRAFT_ONE,
+
     /** Analytical/rigorous thinking - structured, logical */
     DRAFT_TWO,
+
     /** Main synthesis - combining drafts */
     SYNTHESIS,
+
     /** Final review - producing user-facing response (terminal state) */
-    FINAL;
+    FINAL,
+
+    ;
 
     /**
      * Returns the next step in the pipeline, or null if this is the final step.
      */
-    fun next(): PipelineStep? = when (this) {
-        DRAFT_ONE -> DRAFT_TWO
-        DRAFT_TWO -> SYNTHESIS
-        SYNTHESIS -> FINAL
-        FINAL -> null
-    }
+    fun next(): PipelineStep? =
+        when (this) {
+            DRAFT_ONE -> DRAFT_TWO
+            DRAFT_TWO -> SYNTHESIS
+            SYNTHESIS -> FINAL
+            FINAL -> null
+        }
 
     /**
      * Human-readable display name for UI and notifications.
      */
-    fun displayName(): String = when (this) {
-        DRAFT_ONE -> "Draft One"
-        DRAFT_TWO -> "Draft Two"
-        SYNTHESIS -> "Synthesis"
-        FINAL -> "Final Review"
-    }
+    fun displayName(): String =
+        when (this) {
+            DRAFT_ONE -> "Draft One"
+            DRAFT_TWO -> "Draft Two"
+            SYNTHESIS -> "Synthesis"
+            FINAL -> "Final Review"
+        }
 
     companion object {
-        fun fromString(value: String): PipelineStep {
-            return entries.find { it.name == value } ?: DRAFT_ONE
-        }
+        fun fromString(value: String): PipelineStep = entries.find { it.name == value } ?: DRAFT_ONE
     }
 }
 
@@ -65,17 +70,19 @@ data class PipelineState(
     val userMessage: String,
     val stepOutputs: Map<PipelineStep, String> = emptyMap(),
     val thinkingSteps: List<String> = emptyList(),
-    val startTimeMs: Long = System.currentTimeMillis()
+    val startTimeMs: Long = System.currentTimeMillis(),
 ) {
     /**
      * Creates a copy with a new step output added.
      */
-    fun withStepOutput(step: PipelineStep, output: String): PipelineState {
-        return copy(
+    fun withStepOutput(
+        step: PipelineStep,
+        output: String,
+    ): PipelineState =
+        copy(
             stepOutputs = stepOutputs + (step to output),
-            thinkingSteps = thinkingSteps + "${step.displayName()}: ${output.take(100)}..."
+            thinkingSteps = thinkingSteps + "${step.displayName()}: ${output.take(100)}...",
         )
-    }
 
     /**
      * Creates a copy with the next step ready to run.
@@ -88,26 +95,21 @@ data class PipelineState(
     /**
      * Returns the accumulated thinking from all completed steps.
      */
-    fun accumulatedThinking(): String {
-        return stepOutputs.entries.joinToString("\n\n") { (step, output) ->
+    fun accumulatedThinking(): String =
+        stepOutputs.entries.joinToString("\n\n") { (step, output) ->
             "=== ${step.displayName()} ===\n$output"
         }
-    }
 
     /**
      * Returns the total duration in seconds since the pipeline started.
      */
-    fun durationSeconds(): Int {
-        return ((System.currentTimeMillis() - startTimeMs) / 1000).toInt()
-    }
+    fun durationSeconds(): Int = ((System.currentTimeMillis() - startTimeMs) / 1000).toInt()
 
     /**
      * Serializes to JSON string for WorkManager Data storage.
      * Internal use only - for WorkManager serialization.
      */
-    fun toJson(): String {
-        return Json.encodeToString(this)
-    }
+    fun toJson(): String = Json.encodeToString(this)
 
     companion object {
         const val KEY_CHAT_ID = "chat_id"
@@ -128,19 +130,19 @@ data class PipelineState(
         /**
          * Creates initial pipeline state for starting a Crew ChatModeUi conversation.
          */
-        fun createInitial(chatId: String, userMessage: String): PipelineState {
-            return PipelineState(
+        fun createInitial(
+            chatId: String,
+            userMessage: String,
+        ): PipelineState =
+            PipelineState(
                 chatId = chatId,
                 currentStep = PipelineStep.DRAFT_ONE,
-                userMessage = userMessage
+                userMessage = userMessage,
             )
-        }
 
         /**
          * Deserializes from JSON string.
          */
-        fun fromJson(json: String): PipelineState {
-            return Json.decodeFromString(json)
-        }
+        fun fromJson(json: String): PipelineState = Json.decodeFromString(json)
     }
 }

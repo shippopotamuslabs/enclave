@@ -13,5 +13,5 @@ data class DownloadProgressUpdate(
     val currentSpeedMBs: Double? = null,
     val waitingForUnmeteredNetwork: Boolean? = null,
     val errorMessage: String? = null,
-    val clearSession: Boolean = false
+    val clearSession: Boolean = false,
 )

@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 
 class SettingsUseCasesImplTest {
-
     @Test
     fun `root settings use cases expose grouped collaborators and getSettings shortcut`() {
         val preferences = mockk<SettingsPreferencesUseCases>()
@@ -22,18 +21,19 @@ class SettingsUseCasesImplTest {
         val getSettings = mockk<GetSettingsUseCase>()
         every { preferences.getSettings } returns getSettings
 
-        val useCases = SettingsUseCasesImpl(
-            preferences = preferences,
-            localModels = localModels,
-            apiProviders = apiProviders,
-            assignments = assignments,
-            deletion = deletion,
-            tts = tts,
-            media = media,
-            auth = auth,
-            memories = memories,
-            dataControls = dataControls,
-        )
+        val useCases =
+            SettingsUseCasesImpl(
+                preferences = preferences,
+                localModels = localModels,
+                apiProviders = apiProviders,
+                assignments = assignments,
+                deletion = deletion,
+                tts = tts,
+                media = media,
+                auth = auth,
+                memories = memories,
+                dataControls = dataControls,
+            )
 
         assertSame(preferences, useCases.preferences)
         assertSame(localModels, useCases.localModels)

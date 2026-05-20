@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
  * These tests expose bugs where whitespace is incorrectly removed.
  */
 class ProcessThinkingTokensUseCaseWhitespaceTest {
-
     private lateinit var useCase: ProcessThinkingTokensUseCase
 
     @BeforeEach
@@ -33,11 +32,11 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
         // Should preserve space after "2018" and "2020"
         assertFalse(
             thinkingText.contains("2018paper"),
-            "Should preserve space after 2018, got: $thinkingText"
+            "Should preserve space after 2018, got: $thinkingText",
         )
         assertFalse(
             thinkingText.contains("2020study"),
-            "Should preserve space after 2020, got: $thinkingText"
+            "Should preserve space after 2020, got: $thinkingText",
         )
     }
 
@@ -55,11 +54,11 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
         // Should preserve "1. First item" with space after period
         assertTrue(
             thinkingText.contains("1. First"),
-            "Should preserve list format, got: $thinkingText"
+            "Should preserve list format, got: $thinkingText",
         )
         assertFalse(
             thinkingText.contains("1.First"),
-            "Should preserve space after list marker, got: $thinkingText"
+            "Should preserve space after list marker, got: $thinkingText",
         )
     }
 
@@ -76,7 +75,7 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
 
         assertFalse(
             thinkingText.contains("2024and"),
-            "Should preserve space after year, got: $thinkingText"
+            "Should preserve space after year, got: $thinkingText",
         )
     }
 }

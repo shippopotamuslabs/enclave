@@ -7,7 +7,7 @@ interface FileDownloaderPort {
     data class FileDownloadConfig(
         val filename: String,
         val expectedSha256: String,
-        val expectedSizeBytes: Long
+        val expectedSizeBytes: Long,
     )
 
     /**
@@ -20,7 +20,10 @@ interface FileDownloaderPort {
          * @param bytesDownloaded Number of bytes downloaded so far
          * @param totalBytes Total expected bytes (may be 0 if unknown)
          */
-        fun onProgress(bytesDownloaded: Long, totalBytes: Long)
+        fun onProgress(
+            bytesDownloaded: Long,
+            totalBytes: Long,
+        )
     }
 
     /**
@@ -30,7 +33,7 @@ interface FileDownloaderPort {
         val filePath: String,
         val bytesDownloaded: Long,
         val totalBytes: Long,
-        val isResumed: Boolean
+        val isResumed: Boolean,
     )
 
     /**
@@ -49,7 +52,7 @@ interface FileDownloaderPort {
         downloadUrl: String,
         targetDirPath: String,
         existingBytes: Long = 0,
-        progressCallback: ProgressCallback? = null
+        progressCallback: ProgressCallback? = null,
     ): DownloadResult
 
     /**

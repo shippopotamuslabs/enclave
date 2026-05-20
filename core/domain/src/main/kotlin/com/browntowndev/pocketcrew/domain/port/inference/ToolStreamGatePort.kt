@@ -13,9 +13,15 @@ interface ToolStreamGatePort {
 
     fun reset(handle: ToolStreamGateHandle)
 
-    fun push(handle: ToolStreamGateHandle, chunk: String): ToolStreamGatePushResult
+    fun push(
+        handle: ToolStreamGateHandle,
+        chunk: String,
+    ): ToolStreamGatePushResult
 
-    fun finish(handle: ToolStreamGateHandle, hasNativeToolCalls: Boolean): ToolStreamGateFinish
+    fun finish(
+        handle: ToolStreamGateHandle,
+        hasNativeToolCalls: Boolean,
+    ): ToolStreamGateFinish
 
     fun bufferedText(handle: ToolStreamGateHandle): String
 }

@@ -7,7 +7,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
  * Used for CREW pipeline resume after app death/restart.
  */
 interface PipelineStateRepository {
-    
     /**
      * Persists the current pipeline state for a chat.
      * Called periodically during pipeline execution to enable resume after app death.
@@ -15,8 +14,11 @@ interface PipelineStateRepository {
      * @param chatId Unique identifier for the chat session
      * @param state The current pipeline state to persist
      */
-    suspend fun persistPipelineState(chatId: String, state: PipelineState)
-    
+    suspend fun persistPipelineState(
+        chatId: String,
+        state: PipelineState,
+    )
+
     /**
      * Retrieves the saved pipeline state for a chat.
      * Returns null if no state is saved.
@@ -25,7 +27,7 @@ interface PipelineStateRepository {
      * @return The saved pipeline state, or null if none exists
      */
     suspend fun getPipelineState(chatId: String): PipelineState?
-    
+
     /**
      * Clears the saved pipeline state for a chat.
      * Called when pipeline completes successfully or is cancelled.

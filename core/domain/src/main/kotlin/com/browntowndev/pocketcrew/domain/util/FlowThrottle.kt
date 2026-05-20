@@ -16,14 +16,15 @@ import kotlinx.coroutines.launch
  * Uses coroutine [delay] internally so [kotlinx.coroutines.test.runTest] virtual
  * time works correctly in tests — no wall-clock calls.
  */
-fun <T> Flow<T>.throttleLatest(periodMs: Long): Flow<T> = channelFlow {
-    val incoming = Channel<T>(Channel.CONFLATED)
-    launch {
-        collect { value -> incoming.send(value) }
-        incoming.close()
+fun <T> Flow<T>.throttleLatest(periodMs: Long): Flow<T> =
+    channelFlow {
+        val incoming = Channel<T>(Channel.CONFLATED)
+        launch {
+            collect { value -> incoming.send(value) }
+            incoming.close()
+        }
+        for (value in incoming) {
+            send(value)
+            kotlinx.coroutines.delay(periodMs)
+        }
     }
-    for (value in incoming) {
-        send(value)
-        kotlinx.coroutines.delay(periodMs)
-    }
-}

@@ -19,39 +19,48 @@ import org.junit.jupiter.api.Test
  * Written to match EXPECTED behavior, not production code behavior.
  */
 class NativeToolResultFormatterExtendedTest {
-
     /** Deterministic token counter: each character = 1 token. */
     private object OneCharOneToken : TokenCounter {
-        override fun countTokens(text: String, modelName: String?): Int = text.length
+        override fun countTokens(
+            text: String,
+            modelName: String?,
+        ): Int = text.length
     }
 
     /** Token counter that doubles the character count (simulates a dense tokenizer). */
     private object DenseTokenCounter : TokenCounter {
-        override fun countTokens(text: String, modelName: String?): Int = text.length * 2
+        override fun countTokens(
+            text: String,
+            modelName: String?,
+        ): Int = text.length * 2
     }
 
     // ── Token-based shouldTruncate decisions ──────────────────────────────
 
     @Nested
     inner class TokenBasedTruncationDecision {
-
         @Test
         @DisplayName("When modelId is provided, shouldTruncate uses tokenCounter (under token budget -> not truncated)")
         fun tokenBasedUnderBudgetNotTruncated() {
             val shortContent = "A".repeat(25)
             val resultJson = """{"results":[{"content":"$shortContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 2000,
-                estimatedUsedTokens = 1500,
-                bufferTokens = 100,
-                tokenCounter = DenseTokenCounter,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 2000,
+                    estimatedUsedTokens = 1500,
+                    bufferTokens = 100,
+                    tokenCounter = DenseTokenCounter,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertFalse(content.contains("truncated"), "Content under token budget should not be truncated")
         }
 
@@ -61,20 +70,25 @@ class NativeToolResultFormatterExtendedTest {
             val longContent = "X".repeat(200)
             val resultJson = """{"results":[{"content":"$longContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 900,
-                bufferTokens = 50,
-                tokenCounter = DenseTokenCounter,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 900,
+                    bufferTokens = 50,
+                    tokenCounter = DenseTokenCounter,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertTrue(
                 content.contains("truncated for context"),
-                "Content over token budget should be truncated when modelId provided"
+                "Content over token budget should be truncated when modelId provided",
             )
         }
 
@@ -84,17 +98,22 @@ class NativeToolResultFormatterExtendedTest {
             val shortContent = "Short content here"
             val resultJson = """{"results":[{"content":"$shortContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = null,
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = null,
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertEquals(shortContent, content, "Short content should not be truncated with null modelId")
         }
 
@@ -109,20 +128,25 @@ class NativeToolResultFormatterExtendedTest {
             val denseContent = "X".repeat(50)
             val resultJson = """{"results":[{"content":"$denseContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 990,
-                bufferTokens = 5,
-                tokenCounter = DenseTokenCounter,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 990,
+                    bufferTokens = 5,
+                    tokenCounter = DenseTokenCounter,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertTrue(
                 content.contains("truncated for context"),
-                "Dense content should be truncated by token count even if char count is small"
+                "Dense content should be truncated by token count even if char count is small",
             )
         }
 
@@ -132,14 +156,15 @@ class NativeToolResultFormatterExtendedTest {
             val shortContent = "Hello world"
             val resultJson = """{"results":[{"content":"$shortContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 4096,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = JTokkitTokenCounter,
-                modelId = "gpt-4",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 4096,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = JTokkitTokenCounter,
+                    modelId = "gpt-4",
+                )
 
             assertEquals(resultJson, truncated, "Short content should be preserved unchanged")
         }
@@ -150,20 +175,25 @@ class NativeToolResultFormatterExtendedTest {
             val longText = "The quick brown fox jumps over the lazy dog. ".repeat(50)
             val resultJson = """{"results":[{"content":"$longText"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 2048,
-                estimatedUsedTokens = 1800,
-                bufferTokens = 100,
-                tokenCounter = JTokkitTokenCounter,
-                modelId = "gpt-4",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 2048,
+                    estimatedUsedTokens = 1800,
+                    bufferTokens = 100,
+                    tokenCounter = JTokkitTokenCounter,
+                    modelId = "gpt-4",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertTrue(
                 content.contains("truncated for context"),
-                "Long text should be truncated with real tokenizer"
+                "Long text should be truncated with real tokenizer",
             )
         }
     }
@@ -172,25 +202,25 @@ class NativeToolResultFormatterExtendedTest {
 
     @Nested
     inner class EdgeCases {
-
         @Test
         @DisplayName("truncateToolResult returns error when no tokens available")
         fun returnsErrorWhenNoTokensAvailable() {
             val resultJson = """{"results":[{"content":"any content"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 950,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 950,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(
                 """{"error": "cannot read page, context window too full"}""",
                 truncated,
-                "Should return error when available tokens <= 0"
+                "Should return error when available tokens <= 0",
             )
         }
 
@@ -199,14 +229,15 @@ class NativeToolResultFormatterExtendedTest {
         fun passesThroughInvalidJson() {
             val invalidJson = "this is not json at all"
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = invalidJson,
-                contextWindowTokens = 4096,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = invalidJson,
+                    contextWindowTokens = 4096,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(invalidJson, truncated, "Invalid JSON should pass through unchanged")
         }
@@ -224,14 +255,15 @@ class NativeToolResultFormatterExtendedTest {
                 }]
             }"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 800,
-                bufferTokens = 50,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 800,
+                    bufferTokens = 50,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
             val item = payload["results"]!!.jsonArray[0].jsonObject
@@ -246,14 +278,15 @@ class NativeToolResultFormatterExtendedTest {
         fun handlesEmptyResultsArray() {
             val resultJson = """{"results": []}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 4096,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 4096,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(resultJson, truncated, "Empty results array should pass through unchanged")
         }
@@ -264,17 +297,22 @@ class NativeToolResultFormatterExtendedTest {
             val rawContent = "B".repeat(800)
             val resultJson = """{"results": [{"raw_content": "$rawContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 500,
-                estimatedUsedTokens = 400,
-                bufferTokens = 50,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 500,
+                    estimatedUsedTokens = 400,
+                    bufferTokens = 50,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val raw = payload["results"]!!.jsonArray[0].jsonObject["raw_content"]!!.jsonPrimitive.content
+            val raw =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["raw_content"]!!
+                    .jsonPrimitive.content
             assertTrue(raw.contains("truncated for context"), "raw_content should be truncated")
         }
 
@@ -284,14 +322,15 @@ class NativeToolResultFormatterExtendedTest {
             val longContent = "X".repeat(5000)
             val resultJson = """{"results":[{"content":"$longContent","raw_content":"$longContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
             val item = payload["results"]!!.jsonArray[0].jsonObject
@@ -305,17 +344,22 @@ class NativeToolResultFormatterExtendedTest {
             val longContent = "Z".repeat(8000)
             val resultJson = """{"results":[{"content":"$longContent"}]}"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 4096,
-                estimatedUsedTokens = 2000,
-                bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
-                tokenCounter = JTokkitTokenCounter,
-                modelId = "local-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 4096,
+                    estimatedUsedTokens = 2000,
+                    bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
+                    tokenCounter = JTokkitTokenCounter,
+                    modelId = "local-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
-            val content = payload["results"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
+            val content =
+                payload["results"]!!
+                    .jsonArray[0]
+                    .jsonObject["content"]!!
+                    .jsonPrimitive.content
             assertTrue(content.length < longContent.length || content.contains("truncated"))
         }
     }
@@ -324,7 +368,6 @@ class NativeToolResultFormatterExtendedTest {
 
     @Nested
     inner class BudgetDistribution {
-
         @Test
         @DisplayName("Token budget is divided equally across multiple results")
         fun budgetDividedAcrossResults() {
@@ -337,14 +380,15 @@ class NativeToolResultFormatterExtendedTest {
                 ]
             }"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 1000,
-                estimatedUsedTokens = 800,
-                bufferTokens = 50,
-                tokenCounter = DenseTokenCounter,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 1000,
+                    estimatedUsedTokens = 800,
+                    bufferTokens = 50,
+                    tokenCounter = DenseTokenCounter,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
             val results = payload["results"]!!.jsonArray
@@ -366,14 +410,15 @@ class NativeToolResultFormatterExtendedTest {
                 ]
             }"""
 
-            val truncated = NativeToolResultFormatter.truncateToolResult(
-                resultJson = resultJson,
-                contextWindowTokens = 4096,
-                estimatedUsedTokens = 100,
-                bufferTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val truncated =
+                NativeToolResultFormatter.truncateToolResult(
+                    resultJson = resultJson,
+                    contextWindowTokens = 4096,
+                    estimatedUsedTokens = 100,
+                    bufferTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             val payload = Json.parseToJsonElement(truncated).jsonObject
             val results = payload["results"]!!.jsonArray
@@ -388,18 +433,18 @@ class NativeToolResultFormatterExtendedTest {
 
     @Nested
     inner class TruncateForApiContext {
-
         @Test
         @DisplayName("truncateForApiContext returns original string when within token budget")
         fun returnsOriginalWhenWithinBudget() {
             val shortResult = """{"query": "test", "answer": "hello"}"""
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = shortResult,
-                availableTokens = 1000,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = shortResult,
+                    availableTokens = 1000,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(shortResult, result, "Short result should not be truncated")
         }
@@ -407,12 +452,13 @@ class NativeToolResultFormatterExtendedTest {
         @Test
         @DisplayName("truncateForApiContext returns error JSON when availableTokens <= 0")
         fun returnsErrorWhenNoTokensAvailable() {
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = """{"data": "irrelevant"}""",
-                availableTokens = 0,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = """{"data": "irrelevant"}""",
+                    availableTokens = 0,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(
                 """{"error": "cannot read page, context window too full"}""",
@@ -424,12 +470,13 @@ class NativeToolResultFormatterExtendedTest {
         @Test
         @DisplayName("truncateForApiContext returns error JSON when availableTokens is negative")
         fun returnsErrorWhenTokensNegative() {
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = """{"data": "irrelevant"}""",
-                availableTokens = -50,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = """{"data": "irrelevant"}""",
+                    availableTokens = -50,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(
                 """{"error": "cannot read page, context window too full"}""",
@@ -443,12 +490,13 @@ class NativeToolResultFormatterExtendedTest {
         fun truncatesWhenOverBudget() {
             val longResult = "A".repeat(5000)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = longResult,
-                availableTokens = 100, // 100 tokens * 4 chars/token = 400 chars max
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = longResult,
+                    availableTokens = 100, // 100 tokens * 4 chars/token = 400 chars max
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertTrue(
                 result.contains("truncated for context"),
@@ -466,12 +514,13 @@ class NativeToolResultFormatterExtendedTest {
             // 50 chars = 100 tokens with DenseTokenCounter, but availableTokens = 20
             val content = "X".repeat(50)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = content,
-                availableTokens = 20, // 20 tokens available, but content = 100 tokens
-                tokenCounter = DenseTokenCounter,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = content,
+                    availableTokens = 20, // 20 tokens available, but content = 100 tokens
+                    tokenCounter = DenseTokenCounter,
+                    modelId = "test-model",
+                )
 
             assertTrue(
                 result.contains("truncated for context"),
@@ -484,12 +533,13 @@ class NativeToolResultFormatterExtendedTest {
         fun preservesJsonStructure() {
             val tavilyResult = """{"query": "test query", "results": [{"title": "Test", "url": "https://example.com", "content": "Some content"}]}"""
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = tavilyResult,
-                availableTokens = 1000, // plenty of room
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = tavilyResult,
+                    availableTokens = 1000, // plenty of room
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(tavilyResult, result, "JSON within budget should be preserved exactly")
         }
@@ -502,12 +552,13 @@ class NativeToolResultFormatterExtendedTest {
             // 50 chars = 50 tokens with OneCharOneToken, availableTokens = 20 -> truncate
             val content = "X".repeat(50)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = content,
-                availableTokens = 20,
-                tokenCounter = OneCharOneToken,
-                modelId = null,
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = content,
+                    availableTokens = 20,
+                    tokenCounter = OneCharOneToken,
+                    modelId = null,
+                )
 
             assertTrue(
                 result.contains("truncated for context"),
@@ -520,12 +571,13 @@ class NativeToolResultFormatterExtendedTest {
         fun truncationMarkerAppended() {
             val longResult = "B".repeat(8000)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = longResult,
-                availableTokens = 100,
-                tokenCounter = OneCharOneToken,
-                modelId = "gpt-4",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = longResult,
+                    availableTokens = 100,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "gpt-4",
+                )
 
             assertTrue(
                 result.endsWith("... (truncated for context)"),
@@ -539,12 +591,13 @@ class NativeToolResultFormatterExtendedTest {
             // 50 chars = 50 tokens with OneCharOneToken, availableTokens = 50
             val content = "X".repeat(50)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = content,
-                availableTokens = 50,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = content,
+                    availableTokens = 50,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertEquals(content, result, "Content exactly at token budget should not be truncated")
         }
@@ -555,12 +608,13 @@ class NativeToolResultFormatterExtendedTest {
             // availableTokens = 1 -> maxChars = max(100, 1*4) = 100
             val longResult = "C".repeat(9000)
 
-            val result = NativeToolResultFormatter.truncateForApiContext(
-                resultJson = longResult,
-                availableTokens = 1,
-                tokenCounter = OneCharOneToken,
-                modelId = "test-model",
-            )
+            val result =
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = longResult,
+                    availableTokens = 1,
+                    tokenCounter = OneCharOneToken,
+                    modelId = "test-model",
+                )
 
             assertTrue(
                 result.contains("truncated for context"),

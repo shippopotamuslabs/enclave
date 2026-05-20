@@ -38,11 +38,30 @@ data class ToolEnvelopeFailure(
 
 sealed class ToolEnvelopeFailureReason {
     object MalformedEnvelope : ToolEnvelopeFailureReason()
-    data class InvalidJson(val detail: String) : ToolEnvelopeFailureReason()
-    data class UnknownTool(val name: String) : ToolEnvelopeFailureReason()
-    data class UnknownParameter(val tool: String, val param: String) : ToolEnvelopeFailureReason()
-    data class DuplicateParameter(val tool: String, val param: String) : ToolEnvelopeFailureReason()
-    data class MissingRequiredParameter(val tool: String, val param: String) : ToolEnvelopeFailureReason()
+
+    data class InvalidJson(
+        val detail: String,
+    ) : ToolEnvelopeFailureReason()
+
+    data class UnknownTool(
+        val name: String,
+    ) : ToolEnvelopeFailureReason()
+
+    data class UnknownParameter(
+        val tool: String,
+        val param: String,
+    ) : ToolEnvelopeFailureReason()
+
+    data class DuplicateParameter(
+        val tool: String,
+        val param: String,
+    ) : ToolEnvelopeFailureReason()
+
+    data class MissingRequiredParameter(
+        val tool: String,
+        val param: String,
+    ) : ToolEnvelopeFailureReason()
+
     data class SchemaCoercionFailed(
         val tool: String,
         val param: String,

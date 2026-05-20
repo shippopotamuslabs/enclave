@@ -30,26 +30,29 @@ data class LocalModelArtifact(
 )
 
 fun LocalModelMetadata.requiredArtifacts(): List<LocalModelArtifact> {
-    val artifacts = mutableListOf(
-        LocalModelArtifact(
-            remoteFileName = remoteFileName,
-            localFileName = localFileName,
-            sha256 = sha256,
-            sizeInBytes = sizeInBytes,
-            huggingFacePath = huggingFacePath,
+    val artifacts =
+        mutableListOf(
+            LocalModelArtifact(
+                remoteFileName = remoteFileName,
+                localFileName = localFileName,
+                sha256 = sha256,
+                sizeInBytes = sizeInBytes,
+                huggingFacePath = huggingFacePath,
+            ),
         )
-    )
-    val hasMmprojArtifacts = !mmprojRemoteFileName.isNullOrBlank() &&
-        !mmprojLocalFileName.isNullOrBlank() &&
-        !mmprojSha256.isNullOrBlank() &&
-        mmprojSizeInBytes != null
+    val hasMmprojArtifacts =
+        !mmprojRemoteFileName.isNullOrBlank() &&
+            !mmprojLocalFileName.isNullOrBlank() &&
+            !mmprojSha256.isNullOrBlank() &&
+            mmprojSizeInBytes != null
     if (hasMmprojArtifacts) {
-        artifacts += LocalModelArtifact(
-            remoteFileName = mmprojRemoteFileName,
-            localFileName = mmprojLocalFileName,
-            sha256 = mmprojSha256,
-            sizeInBytes = mmprojSizeInBytes,
-        )
+        artifacts +=
+            LocalModelArtifact(
+                remoteFileName = mmprojRemoteFileName,
+                localFileName = mmprojLocalFileName,
+                sha256 = mmprojSha256,
+                sizeInBytes = mmprojSizeInBytes,
+            )
     }
     return artifacts
 }

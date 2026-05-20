@@ -13,28 +13,28 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MediaToolDefinitionFactoryTest {
-
     private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>()
     private val factory = MediaToolDefinitionFactory(getProviderCapabilitiesUseCase)
 
     @Test
     fun `buildImageToolDefinition creates restricted schema for OpenAI`() {
-        val caps = ProviderCapabilities(
-            supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE),
-            supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
-            supportedVideoQualities = emptyList(),
-            supportedVideoResolutions = emptyList(),
-            supportedVideoDurations = emptyList(),
-            supportsReferenceImage = true,
-            supportsVideo = false
-        )
+        val caps =
+            ProviderCapabilities(
+                supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE),
+                supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
+                supportedVideoQualities = emptyList(),
+                supportedVideoResolutions = emptyList(),
+                supportedVideoDurations = emptyList(),
+                supportsReferenceImage = true,
+                supportsVideo = false,
+            )
         every { getProviderCapabilitiesUseCase("openai") } returns caps
 
         val toolDef = factory.buildImageToolDefinition("openai")
 
         val schema = toolDef.schema
         val properties = schema.properties
-        
+
         // Check aspect_ratio enum
         val aspectRatioEnum = properties["aspect_ratio"]!!.jsonObject["enum"]!!.jsonArray
         assertEquals(2, aspectRatioEnum.size)
@@ -50,15 +50,16 @@ class MediaToolDefinitionFactoryTest {
 
     @Test
     fun `buildVideoToolDefinition creates restricted schema for Google`() {
-        val caps = ProviderCapabilities(
-            supportedAspectRatios = listOf(AspectRatio.SIXTEEN_NINE),
-            supportedImageQualities = emptyList(),
-            supportedVideoQualities = listOf(GenerationQuality.QUALITY),
-            supportedVideoResolutions = listOf("1080p"),
-            supportedVideoDurations = listOf(6, 12),
-            supportsReferenceImage = true,
-            supportsVideo = true
-        )
+        val caps =
+            ProviderCapabilities(
+                supportedAspectRatios = listOf(AspectRatio.SIXTEEN_NINE),
+                supportedImageQualities = emptyList(),
+                supportedVideoQualities = listOf(GenerationQuality.QUALITY),
+                supportedVideoResolutions = listOf("1080p"),
+                supportedVideoDurations = listOf(6, 12),
+                supportsReferenceImage = true,
+                supportsVideo = true,
+            )
         every { getProviderCapabilitiesUseCase("google") } returns caps
 
         val toolDef = factory.buildVideoToolDefinition("google")

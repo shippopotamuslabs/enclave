@@ -13,5 +13,8 @@ interface CloudDocumentExtractorPort {
      * @return [FileAttachmentMetadata] with extracted text.
      * @throws Exception if extraction fails.
      */
-    suspend fun extractText(uri: String, mimeType: String): FileAttachmentMetadata
+    suspend fun extractText(
+        uri: String,
+        mimeType: String,
+    ): FileAttachmentMetadata
 }

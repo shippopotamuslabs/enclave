@@ -8,12 +8,13 @@ interface DeleteLocalModelConfigurationUseCase {
     suspend operator fun invoke(configurationId: LocalModelConfigurationId): Result<Unit>
 }
 
-class DeleteLocalModelConfigurationUseCaseImpl @Inject constructor(
-    private val localModelRepository: LocalModelRepositoryPort,
-) : DeleteLocalModelConfigurationUseCase {
-    override suspend fun invoke(configurationId: LocalModelConfigurationId): Result<Unit> {
-        return Result.runCatching {
-            localModelRepository.deleteConfiguration(configurationId)
-        }
+class DeleteLocalModelConfigurationUseCaseImpl
+    @Inject
+    constructor(
+        private val localModelRepository: LocalModelRepositoryPort,
+    ) : DeleteLocalModelConfigurationUseCase {
+        override suspend fun invoke(configurationId: LocalModelConfigurationId): Result<Unit> =
+            Result.runCatching {
+                localModelRepository.deleteConfiguration(configurationId)
+            }
     }
-}

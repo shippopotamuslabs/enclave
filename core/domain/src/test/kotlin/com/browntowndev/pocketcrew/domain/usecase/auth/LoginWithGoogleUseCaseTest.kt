@@ -20,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class LoginWithGoogleUseCaseTest {
-
     private val authManager = mockk<AuthManager>()
     private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>()
@@ -44,43 +43,46 @@ class LoginWithGoogleUseCaseTest {
     }
 
     @Test
-    fun `google sign-in does not initialize or sync vault while encryption is locked`() = runTest {
-        val user = UserProfile("uid1", "Name", "email@test.com", null)
-        coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
+    fun `google sign-in does not initialize or sync vault while encryption is locked`() =
+        runTest {
+            val user = UserProfile("uid1", "Name", "email@test.com", null)
+            coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
 
-        val result = loginWithGoogleUseCase()
+            val result = loginWithGoogleUseCase()
 
-        assertTrue(result.isSuccess)
-        verify(exactly = 0) { cryptoManager.generateSalt() }
-        verify(exactly = 0) { cryptoManager.encodeBase64(any()) }
-        coVerify(exactly = 0) { cloudSyncPort.getVaultSalt() }
-        coVerify(exactly = 0) { cloudSyncPort.updateVaultSalt(any()) }
-        coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-        verify(exactly = 0) { cloudSyncPort.startListening() }
-    }
-
-    @Test
-    fun `google sign-in does NOT auto-sync even when vault is unlocked`() = runTest {
-        val user = UserProfile("uid1", "Name", "email@test.com", null)
-        coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
-        every { cryptoManager.hasCachedKey() } returns true
-
-        val result = loginWithGoogleUseCase()
-
-        assertTrue(result.isSuccess)
-        coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-        coVerify(exactly = 0) { cloudSyncPort.enqueueEmbeddingRegeneration() }
-        verify(exactly = 0) { cloudSyncPort.startListening() }
-    }
+            assertTrue(result.isSuccess)
+            verify(exactly = 0) { cryptoManager.generateSalt() }
+            verify(exactly = 0) { cryptoManager.encodeBase64(any()) }
+            coVerify(exactly = 0) { cloudSyncPort.getVaultSalt() }
+            coVerify(exactly = 0) { cloudSyncPort.updateVaultSalt(any()) }
+            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+        }
 
     @Test
-    fun `google sign-in failure does not start listener`() = runTest {
-        coEvery { authManager.signInWithGoogle() } returns Result.failure(IllegalStateException("network"))
+    fun `google sign-in does NOT auto-sync even when vault is unlocked`() =
+        runTest {
+            val user = UserProfile("uid1", "Name", "email@test.com", null)
+            coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
+            every { cryptoManager.hasCachedKey() } returns true
 
-        val result = loginWithGoogleUseCase()
+            val result = loginWithGoogleUseCase()
 
-        assertTrue(result.isFailure)
-        verify(exactly = 0) { cloudSyncPort.startListening() }
-        coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-    }
+            assertTrue(result.isSuccess)
+            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
+            coVerify(exactly = 0) { cloudSyncPort.enqueueEmbeddingRegeneration() }
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+        }
+
+    @Test
+    fun `google sign-in failure does not start listener`() =
+        runTest {
+            coEvery { authManager.signInWithGoogle() } returns Result.failure(IllegalStateException("network"))
+
+            val result = loginWithGoogleUseCase()
+
+            assertTrue(result.isFailure)
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
+        }
 }

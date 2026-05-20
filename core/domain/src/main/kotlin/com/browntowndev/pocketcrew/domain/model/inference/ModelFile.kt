@@ -30,5 +30,5 @@ data class ModelFile(
     val topP: Double = 0.95,
     val maxTokens: Int,
     val systemPrompt: String,
-    val isMultimodal: Boolean = false
+    val isMultimodal: Boolean = false,
 )

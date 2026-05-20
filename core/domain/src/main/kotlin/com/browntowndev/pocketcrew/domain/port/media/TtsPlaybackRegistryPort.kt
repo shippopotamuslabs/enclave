@@ -45,7 +45,10 @@ interface TtsPlaybackRegistryPort {
      * @param status The latest playback status.
      * @return True if the request was found and updated, false otherwise.
      */
-    fun publishStatus(requestId: String, status: TtsPlaybackStatus): Boolean
+    fun publishStatus(
+        requestId: String,
+        status: TtsPlaybackStatus,
+    ): Boolean
 
     /**
      * Removes a request from the registry. Called after playback completes,

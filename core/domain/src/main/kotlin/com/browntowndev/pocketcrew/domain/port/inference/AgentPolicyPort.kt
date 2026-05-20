@@ -7,11 +7,20 @@ data class AgentPolicyRepairResult(
 )
 
 interface AgentPolicyPort {
-    fun repairTool(name: String, argsJson: String): AgentPolicyRepairResult
+    fun repairTool(
+        name: String,
+        argsJson: String,
+    ): AgentPolicyRepairResult
 
-    fun truncateResult(json: String, budgetBytes: ULong): String
+    fun truncateResult(
+        json: String,
+        budgetBytes: ULong,
+    ): String
 
-    fun shouldAllowTool(softFailureStreak: UInt, maxStreak: UInt): Boolean
+    fun shouldAllowTool(
+        softFailureStreak: UInt,
+        maxStreak: UInt,
+    ): Boolean
 
     fun resultJsonLooksSoftFailure(json: String): Boolean
 }

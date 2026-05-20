@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class UpdateAllowMemoriesUseCaseTest {
-
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var useCase: UpdateAllowMemoriesUseCase
 
@@ -20,26 +19,28 @@ class UpdateAllowMemoriesUseCaseTest {
     }
 
     @Test
-    fun `invoke with true calls updateAllowMemories with true`() = runTest {
-        // Arrange
-        coEvery { settingsRepository.updateAllowMemories(true) } returns Unit
+    fun `invoke with true calls updateAllowMemories with true`() =
+        runTest {
+            // Arrange
+            coEvery { settingsRepository.updateAllowMemories(true) } returns Unit
 
-        // Act
-        useCase(true)
+            // Act
+            useCase(true)
 
-        // Assert
-        coVerify(exactly = 1) { settingsRepository.updateAllowMemories(true) }
-    }
+            // Assert
+            coVerify(exactly = 1) { settingsRepository.updateAllowMemories(true) }
+        }
 
     @Test
-    fun `invoke with false calls updateAllowMemories with false`() = runTest {
-        // Arrange
-        coEvery { settingsRepository.updateAllowMemories(false) } returns Unit
+    fun `invoke with false calls updateAllowMemories with false`() =
+        runTest {
+            // Arrange
+            coEvery { settingsRepository.updateAllowMemories(false) } returns Unit
 
-        // Act
-        useCase(false)
+            // Act
+            useCase(false)
 
-        // Assert
-        coVerify(exactly = 1) { settingsRepository.updateAllowMemories(false) }
-    }
+            // Assert
+            coVerify(exactly = 1) { settingsRepository.updateAllowMemories(false) }
+        }
 }

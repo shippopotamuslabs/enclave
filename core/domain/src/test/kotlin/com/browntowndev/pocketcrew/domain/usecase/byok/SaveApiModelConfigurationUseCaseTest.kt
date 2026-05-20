@@ -23,28 +23,30 @@ class SaveApiModelConfigurationUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository saveConfiguration`() = runTest {
-        val credId = ApiCredentialsId("10")
-        val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
-        coEvery { repository.getCredentialsById(credId) } returns mockk()
-        coEvery { repository.saveConfiguration(config) } returns ApiModelConfigurationId("1")
+    fun `invoke calls repository saveConfiguration`() =
+        runTest {
+            val credId = ApiCredentialsId("10")
+            val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
+            coEvery { repository.getCredentialsById(credId) } returns mockk()
+            coEvery { repository.saveConfiguration(config) } returns ApiModelConfigurationId("1")
 
-        val result = useCase(config)
+            val result = useCase(config)
 
-        assertTrue(result.isSuccess)
-        assertEquals(ApiModelConfigurationId("1"), result.getOrNull())
-        coVerify(exactly = 1) { repository.saveConfiguration(config) }
-    }
+            assertTrue(result.isSuccess)
+            assertEquals(ApiModelConfigurationId("1"), result.getOrNull())
+            coVerify(exactly = 1) { repository.saveConfiguration(config) }
+        }
 
     @Test
-    fun `invoke returns failure when parent credentials do not exist`() = runTest {
-        val credId = ApiCredentialsId("999")
-        val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
-        coEvery { repository.getCredentialsById(credId) } returns null
+    fun `invoke returns failure when parent credentials do not exist`() =
+        runTest {
+            val credId = ApiCredentialsId("999")
+            val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
+            coEvery { repository.getCredentialsById(credId) } returns null
 
-        val result = useCase(config)
+            val result = useCase(config)
 
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-    }
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        }
 }

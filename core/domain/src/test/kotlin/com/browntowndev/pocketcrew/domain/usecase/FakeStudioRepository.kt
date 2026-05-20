@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Lightweight fake for settings cleanup tests — only media listing/deletion is functional. */
 class FakeStudioRepository : StudioRepositoryPort {
-
     private val _allMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val deletedIds = mutableSetOf<String>()
 
@@ -29,14 +28,17 @@ class FakeStudioRepository : StudioRepositoryPort {
         _allMedia.value = _allMedia.value.filter { it.id != id }
     }
 
-    override fun observeAllAlbums(): Flow<List<StudioAlbumAsset>> =
-        throw UnsupportedOperationException()
+    override suspend fun deleteAllMedia() {
+        deleteMediaFailure?.let { throw it }
+        deletedIds.addAll(_allMedia.value.map { it.id })
+        _allMedia.value = emptyList()
+    }
 
-    override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> =
-        throw UnsupportedOperationException()
+    override fun observeAllAlbums(): Flow<List<StudioAlbumAsset>> = throw UnsupportedOperationException()
 
-    override fun observeGenerationError(): Flow<String?> =
-        throw UnsupportedOperationException()
+    override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = throw UnsupportedOperationException()
+
+    override fun observeGenerationError(): Flow<String?> = throw UnsupportedOperationException()
 
     override suspend fun reportGenerationError(message: String?) = unsupported()
 
@@ -64,13 +66,17 @@ class FakeStudioRepository : StudioRepositoryPort {
         createdAt: Long?,
     ): StudioMediaAsset = unsupported()
 
-    override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset =
-        unsupported()
+    override suspend fun promoteEphemeralMedia(
+        id: String,
+        albumId: String?,
+    ): StudioMediaAsset = unsupported()
 
     override suspend fun updateMedia(asset: StudioMediaAsset) = unsupported()
 
-    override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String =
-        unsupported()
+    override suspend fun cacheEphemeralMedia(
+        bytes: ByteArray,
+        mediaType: String,
+    ): String = unsupported()
 
     override suspend fun clearEphemeralCache() = unsupported()
 
@@ -78,14 +84,19 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override suspend fun createAlbum(name: String): String = unsupported()
 
-    override suspend fun renameAlbum(id: String, name: String) = unsupported()
+    override suspend fun renameAlbum(
+        id: String,
+        name: String,
+    ) = unsupported()
 
     override suspend fun deleteAlbum(id: String) = unsupported()
 
-    override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) = unsupported()
+    override suspend fun moveMediaToAlbum(
+        mediaIds: List<String>,
+        albumId: String,
+    ) = unsupported()
 
     override suspend fun readMediaBytes(localUri: String): ByteArray? = unsupported()
 
-    private fun unsupported(): Nothing =
-        throw UnsupportedOperationException("FakeStudioRepository: not implemented")
+    private fun unsupported(): Nothing = throw UnsupportedOperationException("FakeStudioRepository: not implemented")
 }

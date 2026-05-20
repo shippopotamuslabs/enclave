@@ -14,18 +14,20 @@ data class StreamingAudioConfig(
 ) {
     companion object {
         /** Standard configuration for TTS PCM 16-bit 24kHz mono audio. */
-        val PCM_16_24KHZ_MONO = StreamingAudioConfig(
-            sampleRate = 24_000,
-            channels = 1,
-            bitsPerSample = 16
-        )
+        val PCM_16_24KHZ_MONO =
+            StreamingAudioConfig(
+                sampleRate = 24_000,
+                channels = 1,
+                bitsPerSample = 16,
+            )
 
         /** Standard configuration for TTS PCM 16-bit 16kHz mono audio. */
-        val PCM_16_16KHZ_MONO = StreamingAudioConfig(
-            sampleRate = 16_000,
-            channels = 1,
-            bitsPerSample = 16
-        )
+        val PCM_16_16KHZ_MONO =
+            StreamingAudioConfig(
+                sampleRate = 16_000,
+                channels = 1,
+                bitsPerSample = 16,
+            )
     }
 }
 

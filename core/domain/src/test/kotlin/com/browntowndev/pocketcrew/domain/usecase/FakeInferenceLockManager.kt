@@ -10,16 +10,15 @@ import kotlinx.coroutines.flow.StateFlow
  * Tracks lock acquisition/release and allows simulating blocked states.
  */
 class FakeInferenceLockManager : InferenceLockManager {
-    
     private val _isInferenceBlocked = MutableStateFlow(false)
     override val isInferenceBlocked: StateFlow<Boolean> = _isInferenceBlocked
-    
+
     private var isLocked = false
     private var lockCount = 0
     private var releaseCount = 0
-    
-    override fun acquireLock(inferenceType: InferenceType): Boolean {
-        return if (!isLocked) {
+
+    override fun acquireLock(inferenceType: InferenceType): Boolean =
+        if (!isLocked) {
             isLocked = true
             lockCount++
             _isInferenceBlocked.value = true
@@ -27,18 +26,19 @@ class FakeInferenceLockManager : InferenceLockManager {
         } else {
             false
         }
-    }
-    
+
     override fun releaseLock() {
         isLocked = false
         releaseCount++
         _isInferenceBlocked.value = false
     }
-    
+
     fun getLockCount(): Int = lockCount
+
     fun getReleaseCount(): Int = releaseCount
+
     fun isCurrentlyLocked(): Boolean = isLocked
-    
+
     fun reset() {
         isLocked = false
         lockCount = 0

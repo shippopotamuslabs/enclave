@@ -17,5 +17,5 @@ enum class ToolCallStrategy {
      * Cloud APIs that use their own SDK-level tool registration.
      * Often no system prompt instructions are needed as the "tools" field handles it.
      */
-    SDK_NATIVE
+    SDK_NATIVE,
 }

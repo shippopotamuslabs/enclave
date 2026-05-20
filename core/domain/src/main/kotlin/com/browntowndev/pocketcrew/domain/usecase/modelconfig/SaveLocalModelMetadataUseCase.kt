@@ -9,12 +9,13 @@ interface SaveLocalModelMetadataUseCase {
     suspend operator fun invoke(metadata: LocalModelMetadata): Result<LocalModelId>
 }
 
-class SaveLocalModelMetadataUseCaseImpl @Inject constructor(
-    private val localModelRepository: LocalModelRepositoryPort,
-) : SaveLocalModelMetadataUseCase {
-    override suspend fun invoke(metadata: LocalModelMetadata): Result<LocalModelId> {
-        return Result.runCatching {
-            localModelRepository.saveLocalModelMetadata(metadata)
-        }
+class SaveLocalModelMetadataUseCaseImpl
+    @Inject
+    constructor(
+        private val localModelRepository: LocalModelRepositoryPort,
+    ) : SaveLocalModelMetadataUseCase {
+        override suspend fun invoke(metadata: LocalModelMetadata): Result<LocalModelId> =
+            Result.runCatching {
+                localModelRepository.saveLocalModelMetadata(metadata)
+            }
     }
-}

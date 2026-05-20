@@ -10,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ProcessFileAttachmentUseCaseTest {
-
     private val fileAttachmentPort: FileAttachmentPort = mockk()
     private val cloudDocumentExtractor: CloudDocumentExtractorPort = mockk()
     private lateinit var useCase: ProcessFileAttachmentUseCase
@@ -21,30 +20,32 @@ class ProcessFileAttachmentUseCaseTest {
     }
 
     @Test
-    fun `invoke calls readFileContent on port for plain text`() = runTest {
-        val uri = "content://test"
-        val metadata = FileAttachmentMetadata("test.txt", "text/plain", "content")
-        coEvery { fileAttachmentPort.readFileContent(uri) } returns metadata
+    fun `invoke calls readFileContent on port for plain text`() =
+        runTest {
+            val uri = "content://test"
+            val metadata = FileAttachmentMetadata("test.txt", "text/plain", "content")
+            coEvery { fileAttachmentPort.readFileContent(uri) } returns metadata
 
-        val result = useCase(uri)
+            val result = useCase(uri)
 
-        assertEquals(metadata, result)
-        coVerify(exactly = 1) { fileAttachmentPort.readFileContent(uri) }
-        coVerify(exactly = 0) { cloudDocumentExtractor.extractText(any(), any()) }
-    }
+            assertEquals(metadata, result)
+            coVerify(exactly = 1) { fileAttachmentPort.readFileContent(uri) }
+            coVerify(exactly = 0) { cloudDocumentExtractor.extractText(any(), any()) }
+        }
 
     @Test
-    fun `invoke calls cloud extractor for PDF`() = runTest {
-        val uri = "content://test.pdf"
-        val initialMetadata = FileAttachmentMetadata("test.pdf", "application/pdf", "BASE64:...")
-        val extractedMetadata = FileAttachmentMetadata("test.pdf", "application/pdf", "Extracted text")
-        
-        coEvery { fileAttachmentPort.readFileContent(uri) } returns initialMetadata
-        coEvery { cloudDocumentExtractor.extractText(uri, "application/pdf") } returns extractedMetadata
+    fun `invoke calls cloud extractor for PDF`() =
+        runTest {
+            val uri = "content://test.pdf"
+            val initialMetadata = FileAttachmentMetadata("test.pdf", "application/pdf", "BASE64:...")
+            val extractedMetadata = FileAttachmentMetadata("test.pdf", "application/pdf", "Extracted text")
 
-        val result = useCase(uri)
+            coEvery { fileAttachmentPort.readFileContent(uri) } returns initialMetadata
+            coEvery { cloudDocumentExtractor.extractText(uri, "application/pdf") } returns extractedMetadata
 
-        assertEquals(extractedMetadata, result)
-        coVerify(exactly = 1) { cloudDocumentExtractor.extractText(uri, "application/pdf") }
-    }
+            val result = useCase(uri)
+
+            assertEquals(extractedMetadata, result)
+            coVerify(exactly = 1) { cloudDocumentExtractor.extractText(uri, "application/pdf") }
+        }
 }

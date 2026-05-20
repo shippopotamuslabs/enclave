@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
 class ToolEnvelopeParserExtractTest {
-
     @Test
     fun `requireSupportedTool accepts web_extract`() {
         // Should not throw
@@ -15,11 +14,12 @@ class ToolEnvelopeParserExtractTest {
 
     @Test
     fun `buildExtractArgumentsJson serializes urls and defaults`() {
-        val json = ToolEnvelopeParser.buildExtractArgumentsJson(
-            urls = listOf("https://example.com"),
-            extractDepth = null,
-            format = null,
-        )
+        val json =
+            ToolEnvelopeParser.buildExtractArgumentsJson(
+                urls = listOf("https://example.com"),
+                extractDepth = null,
+                format = null,
+            )
 
         assertTrue(json.contains("\"urls\""), "JSON should contain 'urls' key")
         assertTrue(json.contains("https://example.com"), "JSON should contain the URL")
@@ -29,11 +29,12 @@ class ToolEnvelopeParserExtractTest {
 
     @Test
     fun `buildExtractArgumentsJson serializes custom extract_depth and format`() {
-        val json = ToolEnvelopeParser.buildExtractArgumentsJson(
-            urls = listOf("https://example.com", "https://example.org"),
-            extractDepth = "advanced",
-            format = "text",
-        )
+        val json =
+            ToolEnvelopeParser.buildExtractArgumentsJson(
+                urls = listOf("https://example.com", "https://example.org"),
+                extractDepth = "advanced",
+                format = "text",
+            )
 
         assertTrue(json.contains("https://example.com"), "JSON should contain first URL")
         assertTrue(json.contains("https://example.org"), "JSON should contain second URL")
@@ -43,9 +44,10 @@ class ToolEnvelopeParserExtractTest {
 
     @Test
     fun `extractRequiredUrls parses urls array from argumentsJson`() {
-        val urls = ToolEnvelopeParser.extractRequiredUrls(
-            "{\"urls\":[\"https://a.com\",\"https://b.com\"]}"
-        )
+        val urls =
+            ToolEnvelopeParser.extractRequiredUrls(
+                "{\"urls\":[\"https://a.com\",\"https://b.com\"]}",
+            )
 
         assertEquals(listOf("https://a.com", "https://b.com"), urls)
     }

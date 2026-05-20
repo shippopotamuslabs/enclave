@@ -39,7 +39,7 @@ object ToolEnvelopeParser {
         val visibleSuffix: String,
     )
 
-    fun installPort(port: ToolEnvelopeParserPort): Unit {
+    fun installPort(port: ToolEnvelopeParserPort) {
         portProvider = { port }
     }
 
@@ -49,10 +49,12 @@ object ToolEnvelopeParser {
         }
     }
 
-    fun buildArgumentsJson(query: String): String =
-        ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query))
+    fun buildArgumentsJson(query: String): String = ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query))
 
-    fun buildArgumentsJson(toolName: String, arguments: Map<String, *>): String {
+    fun buildArgumentsJson(
+        toolName: String,
+        arguments: Map<String, *>,
+    ): String {
         val jsonObject = buildJsonObjectFromMap(arguments)
         return requirePort()
             .coerceProviderArguments(toolName, jsonObject.toString())
@@ -64,23 +66,26 @@ object ToolEnvelopeParser {
         ReplaceWith("buildArgumentsJson(toolName, arguments)"),
     )
     fun buildArgumentsJson(arguments: Map<String, *>): String {
-        val query = (arguments["query"] as? String)
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
+        val query =
+            (arguments["query"] as? String)
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
         if (query != null) {
             return buildArgumentsJson(query)
         }
 
-        val question = (arguments["question"] as? String)
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
+        val question =
+            (arguments["question"] as? String)
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
         if (question != null) {
             return buildImageInspectArgumentsJson(question)
         }
 
-        val urls = (arguments["urls"] as? List<*>)
-            ?.filterIsInstance<String>()
-            ?.takeIf(List<String>::isNotEmpty)
+        val urls =
+            (arguments["urls"] as? List<*>)
+                ?.filterIsInstance<String>()
+                ?.takeIf(List<String>::isNotEmpty)
         if (urls != null) {
             val extractDepth = arguments["extract_depth"] as? String
             val format = arguments["format"] as? String
@@ -97,27 +102,31 @@ object ToolEnvelopeParser {
         urls: List<String>,
         extractDepth: String? = null,
         format: String? = null,
-    ): String = ToolDefinition.WEB_EXTRACT.encodeArguments(
-        WebExtractParams(
-            urls = urls,
-            extract_depth = extractDepth?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
-            format = format?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown,
-        ),
-    )
+    ): String =
+        ToolDefinition.WEB_EXTRACT.encodeArguments(
+            WebExtractParams(
+                urls = urls,
+                extract_depth = extractDepth?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
+                format = format?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown,
+            ),
+        )
 
-    fun extractRequiredQuery(argumentsJson: String): String =
-        extractRequiredString(argumentsJson, "query")
+    fun extractRequiredQuery(argumentsJson: String): String = extractRequiredString(argumentsJson, "query")
 
-    fun extractRequiredQuestion(argumentsJson: String): String =
-        extractRequiredString(argumentsJson, "question")
+    fun extractRequiredQuestion(argumentsJson: String): String = extractRequiredString(argumentsJson, "question")
 
-    fun extractRequiredChatId(argumentsJson: String): String =
-        extractRequiredString(argumentsJson, "chat_id")
+    fun extractRequiredChatId(argumentsJson: String): String = extractRequiredString(argumentsJson, "chat_id")
 
-    fun buildSearchChatArgumentsJson(chatId: String, query: String): String =
-        ToolDefinition.SEARCH_CHAT.encodeArguments(SearchChatParams(chatId, query))
+    fun buildSearchChatArgumentsJson(
+        chatId: String,
+        query: String,
+    ): String = ToolDefinition.SEARCH_CHAT.encodeArguments(SearchChatParams(chatId, query))
 
-    fun buildGetMessageContextArgumentsJson(messageId: String, before: Int? = null, after: Int? = null): String =
+    fun buildGetMessageContextArgumentsJson(
+        messageId: String,
+        before: Int? = null,
+        after: Int? = null,
+    ): String =
         ToolDefinition.GET_MESSAGE_CONTEXT.encodeArguments(
             GetMessageContextParams(
                 message_id = messageId,
@@ -126,15 +135,15 @@ object ToolEnvelopeParser {
             ),
         )
 
-    fun extractRequiredMessageId(argumentsJson: String): String =
-        extractRequiredString(argumentsJson, "message_id")
+    fun extractRequiredMessageId(argumentsJson: String): String = extractRequiredString(argumentsJson, "message_id")
 
     @Suppress("ThrowsCount")
     fun extractRequiredUrls(argumentsJson: String): List<String> {
         parseUrls(argumentsJson)?.let { return it }
 
-        val port = portProvider?.invoke()
-            ?: throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
+        val port =
+            portProvider?.invoke()
+                ?: throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
         val batch = port.parse("""<tool_call>{"name":"web_extract","arguments":$argumentsJson}</tool_call>""")
         batch.failures.firstOrNull()?.let { throw it.toException() }
         val repairedArguments = batch.successes.firstOrNull()?.argumentsJson
@@ -145,21 +154,21 @@ object ToolEnvelopeParser {
         throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
-    fun extractLocalToolEnvelopes(text: String): List<LocalToolEnvelope> =
-        envelopesFromPortBatch(requirePort().parse(text))
+    fun extractLocalToolEnvelopes(text: String): List<LocalToolEnvelope> = envelopesFromPortBatch(requirePort().parse(text))
 
-    fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? =
-        extractLocalToolEnvelopes(text).firstOrNull()
+    fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? = extractLocalToolEnvelopes(text).firstOrNull()
 
-    fun hasLocalToolContract(systemPrompt: String?): Boolean =
-        requirePort().hasLocalToolContract(systemPrompt)
+    fun hasLocalToolContract(systemPrompt: String?): Boolean = requirePort().hasLocalToolContract(systemPrompt)
 
-    fun buildLocalToolResultMessage(resultJson: String): String =
-        requirePort().buildToolResultMessage(resultJson)
+    fun buildLocalToolResultMessage(resultJson: String): String = requirePort().buildToolResultMessage(resultJson)
 
     @Suppress("MaxLineLength")
     fun stubResultJson(query: String): String =
-        """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson("Pocket Crew stub result for query: $query")}"}]}"""
+        """{"query":"${escapeJson(
+            query,
+        )}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson(
+            "Pocket Crew stub result for query: $query",
+        )}"}]}"""
 
     private fun envelopesFromPortBatch(batch: ToolEnvelopeBatch): List<LocalToolEnvelope> {
         batch.failures.firstOrNull()?.let { failure ->
@@ -199,34 +208,38 @@ object ToolEnvelopeParser {
                 IllegalArgumentException("Tool argument '${failureReason.param}' is required")
         }
 
-    private fun missingRequiredMessage(tool: String, param: String): String =
+    private fun missingRequiredMessage(
+        tool: String,
+        param: String,
+    ): String =
         if (tool == ToolDefinition.WEB_EXTRACT.name && param == "urls") {
             "Tool argument 'urls' is required and must be a non-empty array"
         } else {
             "Tool argument '$param' is required"
         }
 
-    private fun buildJsonObjectFromMap(map: Map<String, *>): JsonObject {
-        return buildJsonObject {
+    private fun buildJsonObjectFromMap(map: Map<String, *>): JsonObject =
+        buildJsonObject {
             map.forEach { (key, value) ->
                 put(key, toJsonElement(value))
             }
         }
-    }
 
-    private fun toJsonElement(value: Any?): JsonElement {
-        return when (value) {
+    private fun toJsonElement(value: Any?): JsonElement =
+        when (value) {
             null -> JsonNull
             is Boolean -> JsonPrimitive(value)
             is Number -> JsonPrimitive(value)
             is String -> JsonPrimitive(value)
-            is Map<*, *> -> @Suppress("UNCHECKED_CAST") (buildJsonObjectFromMap(value as Map<String, *>))
-            is List<*> -> buildJsonArray {
-                value.forEach { add(toJsonElement(it)) }
-            }
+            is Map<*, *> ->
+                @Suppress("UNCHECKED_CAST")
+                (buildJsonObjectFromMap(value as Map<String, *>))
+            is List<*> ->
+                buildJsonArray {
+                    value.forEach { add(toJsonElement(it)) }
+                }
             else -> JsonPrimitive(value.toString())
         }
-    }
 
     private fun parseUrls(argumentsJson: String): List<String>? =
         runCatching {
@@ -242,12 +255,13 @@ object ToolEnvelopeParser {
 
     private fun normalizeUrlValue(value: JsonElement): List<String>? =
         when (value) {
-            is JsonArray -> value.mapNotNull { item ->
-                item.jsonPrimitive.content
-                    .trim()
-                    .trimStart('[')
-                    .takeIf(String::isNotEmpty)
-            }
+            is JsonArray ->
+                value.mapNotNull { item ->
+                    item.jsonPrimitive.content
+                        .trim()
+                        .trimStart('[')
+                        .takeIf(String::isNotEmpty)
+                }
             is JsonPrimitive -> {
                 val trimmed = value.content.trim()
                 when {
@@ -258,7 +272,10 @@ object ToolEnvelopeParser {
             else -> null
         }
 
-    private fun extractRequiredString(argumentsJson: String, fieldName: String): String {
+    private fun extractRequiredString(
+        argumentsJson: String,
+        fieldName: String,
+    ): String {
         try {
             val json = Json.parseToJsonElement(argumentsJson).jsonObject
             val value = json[fieldName]?.jsonPrimitive?.content
@@ -280,30 +297,29 @@ object ToolEnvelopeParser {
             ?: throw IllegalArgumentException("Tool argument '$fieldName' is required")
     }
 
-    private fun jsonStringFieldRegex(fieldName: String): Regex =
-        Regex(""""$fieldName"\s*:\s*"((?:\\.|[^"\\])*)"?""")
+    private fun jsonStringFieldRegex(fieldName: String): Regex = Regex(""""$fieldName"\s*:\s*"((?:\\.|[^"\\])*)"?""")
 
-    private fun normalizeTypographyQuotesInExtractedField(value: String): String =
-        value.replace('“', '"').replace('”', '"')
+    private fun normalizeTypographyQuotesInExtractedField(value: String): String = value.replace('“', '"').replace('”', '"')
 
     private fun requirePort(): ToolEnvelopeParserPort =
         portProvider?.invoke()
             ?: throw IllegalStateException("ToolEnvelopeParserPort is not installed")
 
-    private fun escapeJson(value: String): String = buildString(value.length) {
-        value.forEach { char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\b' -> append("\\b")
-                '\u000C' -> append("\\f")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(char)
+    private fun escapeJson(value: String): String =
+        buildString(value.length) {
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\b' -> append("\\b")
+                    '\u000C' -> append("\\f")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
             }
         }
-    }
 
     @Suppress("LoopWithTooManyJumpStatements")
     private fun unescapeJson(value: String): String {

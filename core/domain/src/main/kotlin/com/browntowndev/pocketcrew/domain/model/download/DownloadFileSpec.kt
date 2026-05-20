@@ -51,26 +51,29 @@ data class DownloadArtifact(
  * Primary file is always present; mmproj is included when all mmproj fields are set.
  */
 fun DownloadFileSpec.requiredArtifacts(): List<DownloadArtifact> {
-    val artifacts = mutableListOf(
-        DownloadArtifact(
-            remoteFileName = remoteFileName,
-            localFileName = localFileName,
-            sha256 = sha256,
-            sizeInBytes = sizeInBytes,
-            huggingFacePath = huggingFacePath,
+    val artifacts =
+        mutableListOf(
+            DownloadArtifact(
+                remoteFileName = remoteFileName,
+                localFileName = localFileName,
+                sha256 = sha256,
+                sizeInBytes = sizeInBytes,
+                huggingFacePath = huggingFacePath,
+            ),
         )
-    )
-    val hasMmprojArtifacts = !mmprojRemoteFileName.isNullOrBlank() &&
-        !mmprojLocalFileName.isNullOrBlank() &&
-        !mmprojSha256.isNullOrBlank() &&
-        mmprojSizeInBytes != null
+    val hasMmprojArtifacts =
+        !mmprojRemoteFileName.isNullOrBlank() &&
+            !mmprojLocalFileName.isNullOrBlank() &&
+            !mmprojSha256.isNullOrBlank() &&
+            mmprojSizeInBytes != null
     if (hasMmprojArtifacts) {
-        artifacts += DownloadArtifact(
-            remoteFileName = mmprojRemoteFileName,
-            localFileName = mmprojLocalFileName,
-            sha256 = mmprojSha256,
-            sizeInBytes = mmprojSizeInBytes,
-        )
+        artifacts +=
+            DownloadArtifact(
+                remoteFileName = mmprojRemoteFileName,
+                localFileName = mmprojLocalFileName,
+                sha256 = mmprojSha256,
+                sizeInBytes = mmprojSizeInBytes,
+            )
     }
     return artifacts
 }

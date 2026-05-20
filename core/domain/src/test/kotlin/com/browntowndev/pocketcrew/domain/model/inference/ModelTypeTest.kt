@@ -1,13 +1,12 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 /**
  * Unit tests for ModelType enum.
  */
 class ModelTypeTest {
-
     @Test
     fun `ModelType has correct names`() {
         assertEquals("VISION", ModelType.VISION.name)

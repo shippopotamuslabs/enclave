@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.domain.util
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -15,7 +14,6 @@ import kotlinx.serialization.json.jsonPrimitive
  * where context windows are limited.
  */
 object NativeToolResultFormatter {
-
     /**
      * Truncates large text fields in tool results to prevent context window overflow.
      * Focused on 'content' (search) and 'raw_content' (extract) fields.
@@ -45,42 +43,48 @@ object NativeToolResultFormatter {
             // for precise truncation. If modelId is unavailable, fall back to the
             // standard 4-chars-per-token BPE estimate.
             val maxTokensPerResult = maxOf(10, availableTokens / results.size)
-            val maxCharsPerResult = maxOf(100, maxTokensPerResult * 4)  // fallback BPE estimate
+            val maxCharsPerResult = maxOf(100, maxTokensPerResult * 4) // fallback BPE estimate
 
             var truncated = false
-            val newResults = buildJsonArray {
-                for (itemElement in results) {
-                    val item = itemElement.jsonObject
-                    val newItemMap = item.toMutableMap()
+            val newResults =
+                buildJsonArray {
+                    for (itemElement in results) {
+                        val item = itemElement.jsonObject
+                        val newItemMap = item.toMutableMap()
 
-                    // Truncate 'content' (search) or 'raw_content' (extract)
-                    listOf("content", "raw_content").forEach { field ->
-                        val original = item[field]?.jsonPrimitive?.content ?: ""
-                        // Use tokenCounter for precise truncation when modelId is available,
-                        // otherwise fall back to the BPE-estimated char limit.
-                        val shouldTruncate = if (modelId != null) {
-                            tokenCounter.countTokens(original, modelId) > maxTokensPerResult
-                        } else {
-                            original.length > maxCharsPerResult
+                        // Truncate 'content' (search) or 'raw_content' (extract)
+                        listOf("content", "raw_content").forEach { field ->
+                            val original = item[field]?.jsonPrimitive?.content ?: ""
+                            // Use tokenCounter for precise truncation when modelId is available,
+                            // otherwise fall back to the BPE-estimated char limit.
+                            val shouldTruncate =
+                                if (modelId != null) {
+                                    tokenCounter.countTokens(original, modelId) > maxTokensPerResult
+                                } else {
+                                    original.length > maxCharsPerResult
+                                }
+                            if (shouldTruncate) {
+                                // Truncate to the char-based limit (still needed even with precise
+                                // counting, since we can't remove tokens precisely from strings).
+                                newItemMap[field] = JsonPrimitive(original.take(maxCharsPerResult) + "... (truncated for context)")
+                                truncated = true
+                            }
                         }
-                        if (shouldTruncate) {
-                            // Truncate to the char-based limit (still needed even with precise
-                            // counting, since we can't remove tokens precisely from strings).
-                            newItemMap[field] = JsonPrimitive(original.take(maxCharsPerResult) + "... (truncated for context)")
-                            truncated = true
-                        }
+                        add(JsonObject(newItemMap))
                     }
-                    add(JsonObject(newItemMap))
                 }
-            }
 
             if (truncated) {
-                val newPayload = buildJsonObject {
-                    payload.forEach { (k, v) ->
-                        if (k == "results") put(k, newResults)
-                        else put(k, v)
+                val newPayload =
+                    buildJsonObject {
+                        payload.forEach { (k, v) ->
+                            if (k == "results") {
+                                put(k, newResults)
+                            } else {
+                                put(k, v)
+                            }
+                        }
                     }
-                }
                 newPayload.toString()
             } else {
                 resultJson
@@ -122,10 +126,11 @@ object NativeToolResultFormatter {
     /**
      * Parses URLs from model output, handling both comma-separated strings and JSON-like arrays.
      */
-    fun parseUrls(rawUrls: String): List<String> {
-        return when {
+    fun parseUrls(rawUrls: String): List<String> =
+        when {
             rawUrls.contains(",") -> {
-                rawUrls.split(",")
+                rawUrls
+                    .split(",")
                     .map { it.trim(' ', '"', '\'', '[', ']') }
                     .filter { it.startsWith("http") }
             }
@@ -139,5 +144,4 @@ object NativeToolResultFormatter {
             }
             else -> listOf(rawUrls.trim(' ', '"', '\''))
         }
-    }
 }

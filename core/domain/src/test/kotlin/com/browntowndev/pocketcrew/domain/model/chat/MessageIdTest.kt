@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class MessageIdTest {
-
     // ========================================================================
     // Test: Blank MessageId throws IllegalArgumentException
     // Evidence: Invariant — MessageId must never be blank (prevents Firestore corruption)

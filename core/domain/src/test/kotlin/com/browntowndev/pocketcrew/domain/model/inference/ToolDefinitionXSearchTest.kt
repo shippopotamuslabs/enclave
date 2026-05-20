@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ToolDefinitionXSearchTest {
-
     @Test
     fun `X_SEARCH is registered in ALL_TOOLS`() {
         val xSearch = ToolDefinition.ALL_TOOLS.find { it.name == "search_x_recent" }

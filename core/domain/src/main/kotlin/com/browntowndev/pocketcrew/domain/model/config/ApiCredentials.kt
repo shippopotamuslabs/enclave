@@ -28,7 +28,9 @@ data class ApiCredentials(
         if (encryptedApiKey != null) {
             if (other.encryptedApiKey == null) return false
             if (!encryptedApiKey.contentEquals(other.encryptedApiKey)) return false
-        } else if (other.encryptedApiKey != null) return false
+        } else if (other.encryptedApiKey != null) {
+            return false
+        }
 
         return true
     }

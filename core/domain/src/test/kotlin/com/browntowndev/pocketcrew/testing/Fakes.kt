@@ -26,7 +26,6 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
-import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
@@ -48,9 +47,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
-
+import kotlinx.coroutines.flow.map
 
 fun createFakeLocalModelAsset(
     id: LocalModelId = LocalModelId("0"),
@@ -60,18 +58,19 @@ fun createFakeLocalModelAsset(
     sha256: String = "abc123",
     sizeInBytes: Long = 1024,
     modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
-    configurations: List<LocalModelConfiguration> = emptyList()
+    configurations: List<LocalModelConfiguration> = emptyList(),
 ) = LocalModelAsset(
-    metadata = LocalModelMetadata(
-        id = id,
-        huggingFaceModelName = huggingFaceModelName,
-        remoteFileName = remoteFileName,
-        localFileName = localFileName,
-        sha256 = sha256,
-        sizeInBytes = sizeInBytes,
-        modelFileFormat = modelFileFormat
-    ),
-    configurations = configurations
+    metadata =
+        LocalModelMetadata(
+            id = id,
+            huggingFaceModelName = huggingFaceModelName,
+            remoteFileName = remoteFileName,
+            localFileName = localFileName,
+            sha256 = sha256,
+            sizeInBytes = sizeInBytes,
+            modelFileFormat = modelFileFormat,
+        ),
+    configurations = configurations,
 )
 
 fun createFakeLocalModelConfiguration(
@@ -85,7 +84,7 @@ fun createFakeLocalModelConfiguration(
     topK: Int? = 40,
     repetitionPenalty: Double = 1.0,
     systemPrompt: String = "You are a helpful assistant.",
-    isSystemPreset: Boolean = false
+    isSystemPreset: Boolean = false,
 ) = LocalModelConfiguration(
     id = id,
     localModelId = localModelId,
@@ -97,9 +96,8 @@ fun createFakeLocalModelConfiguration(
     topK = topK,
     repetitionPenalty = repetitionPenalty,
     systemPrompt = systemPrompt,
-    isSystemPreset = isSystemPreset
+    isSystemPreset = isSystemPreset,
 )
-
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
@@ -128,19 +126,25 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
         _downloadState.value = _downloadState.value.copy(status = status)
     }
 
-    fun emitProgress(progress: Float, modelsComplete: Int = 0, modelsTotal: Int = 0) {
-        _downloadState.value = _downloadState.value.copy(
-            overallProgress = progress,
-            modelsComplete = modelsComplete,
-            modelsTotal = modelsTotal
-        )
+    fun emitProgress(
+        progress: Float,
+        modelsComplete: Int = 0,
+        modelsTotal: Int = 0,
+    ) {
+        _downloadState.value =
+            _downloadState.value.copy(
+                overallProgress = progress,
+                modelsComplete = modelsComplete,
+                modelsTotal = modelsTotal,
+            )
     }
 
     fun emitError(message: String) {
-        _downloadState.value = _downloadState.value.copy(
-            status = DownloadStatus.ERROR,
-            errorMessage = message
-        )
+        _downloadState.value =
+            _downloadState.value.copy(
+                status = DownloadStatus.ERROR,
+                errorMessage = message,
+            )
     }
 
     fun emitCurrentDownloads(downloads: List<FileProgress>) {
@@ -155,33 +159,40 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 
     override fun initializeWithStartupResult(result: DownloadModelsResult) {
         _lastModelsResult = result
-        _downloadState.value = when {
-            result.modelsToDownload.isEmpty() -> DownloadState(status = DownloadStatus.READY)
-            else -> DownloadState(status = DownloadStatus.IDLE)
-        }
+        _downloadState.value =
+            when {
+                result.modelsToDownload.isEmpty() -> DownloadState(status = DownloadStatus.READY)
+                else -> DownloadState(status = DownloadStatus.IDLE)
+            }
     }
 
-    override suspend fun startDownloads(modelsResult: DownloadModelsResult, wifiOnly: Boolean): Boolean {
+    override suspend fun startDownloads(
+        modelsResult: DownloadModelsResult,
+        wifiOnly: Boolean,
+    ): Boolean {
         _lastStartDownloadsParams = modelsResult to wifiOnly
         _lastModelsResult = modelsResult
-        _downloadState.value = DownloadState(
-            status = DownloadStatus.DOWNLOADING,
-            modelsTotal = modelsResult.modelsToDownload.size
-        )
+        _downloadState.value =
+            DownloadState(
+                status = DownloadStatus.DOWNLOADING,
+                modelsTotal = modelsResult.modelsToDownload.size,
+            )
         return true
     }
 
     override suspend fun startDownloads(wifiOnly: Boolean): Boolean {
-        val modelsResult = _lastModelsResult ?: DownloadModelsResult(
-            allModels = emptyMap(),
-            modelsToDownload = emptyList(),
-            scanResult = ModelScanResult(
-                missingModels = emptyList(),
-                partialDownloads = emptyMap(),
-                allValid = true
-            ),
-            availableToRedownload = emptyList()
-        )
+        val modelsResult =
+            _lastModelsResult ?: DownloadModelsResult(
+                allModels = emptyMap(),
+                modelsToDownload = emptyList(),
+                scanResult =
+                    ModelScanResult(
+                        missingModels = emptyList(),
+                        partialDownloads = emptyMap(),
+                        allValid = true,
+                    ),
+                availableToRedownload = emptyList(),
+            )
         return startDownloads(modelsResult, wifiOnly)
     }
 
@@ -215,7 +226,10 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 class FakeLocalModelRepository : LocalModelRepositoryPort {
     private val _assets = MutableStateFlow<Map<LocalModelId, LocalModelAsset>>(emptyMap())
 
-    fun registerAsset(modelType: ModelType, asset: LocalModelAsset) {
+    fun registerAsset(
+        modelType: ModelType,
+        asset: LocalModelAsset,
+    ) {
         _assets.value = _assets.value + (asset.metadata.id to asset)
     }
 
@@ -224,12 +238,17 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     }
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+
     override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+
     override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? = null
 
-    override suspend fun clearAll() { clearModels() }
+    override suspend fun clearAll() {
+        clearModels()
+    }
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId = asset.metadata.id
+
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId = config.id
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId = metadata.id
@@ -242,38 +261,38 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     }
 
     private val _configs = MutableStateFlow<Map<LocalModelConfigurationId, LocalModelConfiguration>>(emptyMap())
- 
+
     override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
         _configs.value = _configs.value + (config.id to config)
         return config.id
     }
- 
+
     override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
         _configs.value = _configs.value - id
     }
- 
-    override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? {
-        return _configs.value[id]
-    }
 
-    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> {
-        return _configs.value.values.filter { it.localModelId == localModelId }
-    }
+    override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? = _configs.value[id]
+
+    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> =
+        _configs.value.values.filter {
+            it.localModelId == localModelId
+        }
 
     override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {
-        val keysToRemove = _configs.value.entries.filter { it.value.localModelId == localModelId }.map { it.key }
+        val keysToRemove =
+            _configs.value.entries
+                .filter { it.value.localModelId == localModelId }
+                .map { it.key }
         _configs.value = _configs.value - keysToRemove.toSet()
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
 
-    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
-        return _assets.value.values.find { it.metadata.id == id }
-    }
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? = _assets.value.values.find { it.metadata.id == id }
 
     override suspend fun restoreSoftDeletedModel(
         id: LocalModelId,
-        configurations: List<LocalModelConfiguration>
+        configurations: List<LocalModelConfiguration>,
     ): LocalModelAsset {
         val asset = getAssetById(id) ?: throw NoSuchElementException("Model $id not found")
         val restoredAsset = asset.copy(configurations = configurations)
@@ -289,9 +308,13 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     val savedKeys = mutableMapOf<ApiCredentialsId, String>()
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> = _credentials
+
     override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> = _configs
+
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
+
     override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? = _credentials.value.find { it.id == id }
+
     override suspend fun findMatchingCredentials(
         provider: ApiProvider,
         modelId: String,
@@ -299,13 +322,15 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         apiKey: String,
         sourceCredentialAlias: String?,
     ): ApiCredentials? {
-        val resolvedApiKey = when {
-            apiKey.isNotBlank() -> apiKey
-            !sourceCredentialAlias.isNullOrBlank() -> _credentials.value
-                .firstOrNull { it.credentialAlias == sourceCredentialAlias }
-                ?.let { savedKeys[it.id] }
-            else -> null
-        } ?: return null
+        val resolvedApiKey =
+            when {
+                apiKey.isNotBlank() -> apiKey
+                !sourceCredentialAlias.isNullOrBlank() ->
+                    _credentials.value
+                        .firstOrNull { it.credentialAlias == sourceCredentialAlias }
+                        ?.let { savedKeys[it.id] }
+                else -> null
+            } ?: return null
 
         return _credentials.value.firstOrNull { credential ->
             credential.provider == provider &&
@@ -318,22 +343,24 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun saveCredentials(
         credentials: ApiCredentials,
         apiKey: String,
-        sourceCredentialAlias: String?
+        sourceCredentialAlias: String?,
     ): ApiCredentialsId {
         val id = if (credentials.id.value.isEmpty()) ApiCredentialsId((nextCredId++).toString()) else credentials.id
         val saved = credentials.copy(id = id)
         _credentials.value = _credentials.value.filter { it.id != id } + saved
-        savedKeys[id] = if (apiKey.isNotBlank()) {
-            apiKey
-        } else {
-            sourceCredentialAlias?.let { alias ->
-                _credentials.value
-                    .firstOrNull { it.credentialAlias == alias }
-                    ?.id
-                    ?.let(savedKeys::get)
-                    .orEmpty()
-            }.orEmpty()
-        }
+        savedKeys[id] =
+            if (apiKey.isNotBlank()) {
+                apiKey
+            } else {
+                sourceCredentialAlias
+                    ?.let { alias ->
+                        _credentials.value
+                            .firstOrNull { it.credentialAlias == alias }
+                            ?.id
+                            ?.let(savedKeys::get)
+                            .orEmpty()
+                    }.orEmpty()
+            }
         return id
     }
 
@@ -346,20 +373,28 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun getConfigurationsForCredentials(credentialsId: ApiCredentialsId): List<ApiModelConfiguration> =
         _configs.value.filter { it.apiCredentialsId == credentialsId }
 
-    override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
-        _configs.value.find { it.id == id }
- 
+    override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? = _configs.value.find { it.id == id }
+
     override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
-        val id = if (config.id.value.isEmpty()) ApiModelConfigurationId(java.util.UUID.randomUUID().toString()) else config.id
+        val id =
+            if (config.id.value.isEmpty()) {
+                ApiModelConfigurationId(
+                    java.util.UUID
+                        .randomUUID()
+                        .toString(),
+                )
+            } else {
+                config.id
+            }
         val saved = config.copy(id = id)
         _configs.value = _configs.value.filter { it.id != id } + saved
         return id
     }
- 
+
     override suspend fun deleteConfigurationsForCredentials(credentialsId: ApiCredentialsId) {
         _configs.value = _configs.value.filter { it.apiCredentialsId != credentialsId }
     }
- 
+
     override suspend fun deleteConfiguration(id: ApiModelConfigurationId) {
         _configs.value = _configs.value.filter { it.id != id }
     }
@@ -370,8 +405,7 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 class FakeDefaultModelRepository : DefaultModelRepositoryPort {
     private val _defaults = MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
 
-    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? =
-        _defaults.value.find { it.modelType == modelType }
+    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? = _defaults.value.find { it.modelType == modelType }
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = _defaults
 
@@ -380,7 +414,7 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
-        mediaProviderId: MediaProviderId?
+        mediaProviderId: MediaProviderId?,
     ) {
         val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
@@ -396,22 +430,55 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
 }
 
 class FakeLoggingPort : LoggingPort {
-    override fun debug(tag: String, message: String) {}
-    override fun info(tag: String, message: String) {}
-    override fun warning(tag: String, message: String) {}
-    override fun error(tag: String, message: String, throwable: Throwable?) {}
-    override fun recordException(tag: String, message: String, throwable: Throwable) {}
+    override fun debug(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun info(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun warning(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun error(
+        tag: String,
+        message: String,
+        throwable: Throwable?,
+    ) {}
+
+    override fun recordException(
+        tag: String,
+        message: String,
+        throwable: Throwable,
+    ) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {
-    override fun calculateSpeedAndEta(filename: String, bytesDownloaded: Long, totalSize: Long): Pair<Double, Long> = 0.0 to -1L
-    override fun calculateAggregateSpeedAndEta(totalBytesDownloaded: Long, totalSize: Long): Pair<Double, Long> = 0.0 to -1L
-    override fun formatEta(seconds: Long): String = when {
-        seconds < 0 -> "Calculating..."
-        seconds < 60 -> "< 1 min"
-        seconds < 3600 -> "${seconds / 60} min"
-        else -> "${seconds / 3600.0} hours"
-    }
+    override fun calculateSpeedAndEta(
+        filename: String,
+        bytesDownloaded: Long,
+        totalSize: Long,
+    ): Pair<Double, Long> = 0.0 to -1L
+
+    override fun calculateAggregateSpeedAndEta(
+        totalBytesDownloaded: Long,
+        totalSize: Long,
+    ): Pair<Double, Long> = 0.0 to -1L
+
+    override fun formatEta(seconds: Long): String =
+        when {
+            seconds < 0 -> "Calculating..."
+            seconds < 60 -> "< 1 min"
+            seconds < 3600 -> "${seconds / 60} min"
+            else -> "${seconds / 3600.0} hours"
+        }
+
     override fun clear(filename: String) {}
+
     override fun clearAll() {}
 }

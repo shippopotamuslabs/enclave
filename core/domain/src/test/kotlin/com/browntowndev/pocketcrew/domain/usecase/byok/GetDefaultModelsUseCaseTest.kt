@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GetDefaultModelsUseCaseTest {
-
     private lateinit var repository: FakeDefaultModelRepository
     private lateinit var useCase: GetDefaultModelsUseCase
 
@@ -23,12 +22,13 @@ class GetDefaultModelsUseCaseTest {
     }
 
     @Test
-    fun `returns seeded defaults`() = runTest {
-        repository.seed(ModelType.entries.map { DefaultModelAssignment(it, localConfigId = LocalModelConfigurationId("1")) })
+    fun `returns seeded defaults`() =
+        runTest {
+            repository.seed(ModelType.entries.map { DefaultModelAssignment(it, localConfigId = LocalModelConfigurationId("1")) })
 
-        val result = useCase().first()
+            val result = useCase().first()
 
-        assertEquals(ModelType.entries.size, result.size)
-        result.forEach { assertNotNull(it.localConfigId) }
-    }
+            assertEquals(ModelType.entries.size, result.size)
+            result.forEach { assertNotNull(it.localConfigId) }
+        }
 }

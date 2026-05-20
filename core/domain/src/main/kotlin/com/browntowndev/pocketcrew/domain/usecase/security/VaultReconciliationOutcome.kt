@@ -14,8 +14,11 @@ package com.browntowndev.pocketcrew.domain.usecase.security
  */
 sealed interface VaultReconciliationOutcome {
     data object AlreadyMatching : VaultReconciliationOutcome
+
     data object NoCloudVault : VaultReconciliationOutcome
+
     data object NoLocalVault : VaultReconciliationOutcome
+
     data object PasswordMismatch : VaultReconciliationOutcome
 
     /**

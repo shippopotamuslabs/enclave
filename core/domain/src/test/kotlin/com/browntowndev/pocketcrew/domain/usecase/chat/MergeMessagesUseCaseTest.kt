@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
  * Unit tests for MergeMessagesUseCase.
  */
 class MergeMessagesUseCaseTest {
-
     private val useCase = MergeMessagesUseCase()
 
     @Test
@@ -74,18 +73,19 @@ class MergeMessagesUseCaseTest {
     private fun createMessage(
         id: MessageId,
         state: MessageState,
-        content: String
-    ): Message = Message(
-        id = id,
-        chatId = ChatId("1"),
-        role = Role.ASSISTANT,
-        content = Content(text = content, pipelineStep = null),
-        thinkingRaw = null,
-        thinkingDurationSeconds = null,
-        thinkingStartTime = null,
-        thinkingEndTime = null,
-        createdAt = 0L,
-        messageState = state,
-        modelType = null
-    )
+        content: String,
+    ): Message =
+        Message(
+            id = id,
+            chatId = ChatId("1"),
+            role = Role.ASSISTANT,
+            content = Content(text = content, pipelineStep = null),
+            thinkingRaw = null,
+            thinkingDurationSeconds = null,
+            thinkingStartTime = null,
+            thinkingEndTime = null,
+            createdAt = 0L,
+            messageState = state,
+            modelType = null,
+        )
 }

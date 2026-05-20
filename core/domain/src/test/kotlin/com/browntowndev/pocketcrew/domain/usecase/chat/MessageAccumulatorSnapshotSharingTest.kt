@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 
 class MessageAccumulatorSnapshotSharingTest {
-
     @Test
     fun `toSnapshot reuses list references when accumulator collections are unchanged`() {
         val accumulator = populatedAccumulator()
@@ -44,8 +43,8 @@ class MessageAccumulatorSnapshotSharingTest {
         assertSame(first.transcriptSegments, second.transcriptSegments)
     }
 
-    private fun populatedAccumulator(): MessageAccumulator {
-        return MessageAccumulator(
+    private fun populatedAccumulator(): MessageAccumulator =
+        MessageAccumulator(
             messageId = MessageId("assistant"),
             modelType = ModelType.FAST,
         ).apply {
@@ -55,7 +54,7 @@ class MessageAccumulatorSnapshotSharingTest {
                     title = "Source",
                     url = "https://example.com/source",
                     content = "source content",
-                )
+                ),
             )
             artifacts.add(artifact(id = "artifact-1", title = "First"))
             generatedMediaUris.add("content://media/1")
@@ -64,17 +63,15 @@ class MessageAccumulatorSnapshotSharingTest {
             generatedMediaPrompts.add("draw it")
             appendContent("answer")
         }
-    }
 
     private fun artifact(
         id: String,
         title: String,
-    ): ArtifactGenerationRequest {
-        return ArtifactGenerationRequest(
+    ): ArtifactGenerationRequest =
+        ArtifactGenerationRequest(
             artifactId = id,
             title = title,
             targetFormat = MimeType.PDF,
             content = "content",
         )
-    }
 }

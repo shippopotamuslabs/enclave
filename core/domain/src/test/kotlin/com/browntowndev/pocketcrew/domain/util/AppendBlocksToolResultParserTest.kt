@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AppendBlocksToolResultParserTest {
-
     @Test
     fun `parseCompleteArtifact accepts nested fullDocument object`() {
         val raw =

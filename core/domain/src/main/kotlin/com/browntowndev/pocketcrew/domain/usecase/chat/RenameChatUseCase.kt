@@ -23,16 +23,21 @@ import javax.inject.Inject
 /**
  * Use case for renaming a chat.
  */
-class RenameChatUseCase @Inject constructor(
-    private val chatRepository: ChatRepository
-) {
-    /**
-     * Renames a chat.
-     *
-     * @param chatId The ID of the chat to rename
-     * @param newName The new name for the chat
-     */
-    suspend operator fun invoke(chatId: ChatId, newName: String) {
-        chatRepository.renameChat(chatId, newName)
+class RenameChatUseCase
+    @Inject
+    constructor(
+        private val chatRepository: ChatRepository,
+    ) {
+        /**
+         * Renames a chat.
+         *
+         * @param chatId The ID of the chat to rename
+         * @param newName The new name for the chat
+         */
+        suspend operator fun invoke(
+            chatId: ChatId,
+            newName: String,
+        ) {
+            chatRepository.renameChat(chatId, newName)
+        }
     }
-}

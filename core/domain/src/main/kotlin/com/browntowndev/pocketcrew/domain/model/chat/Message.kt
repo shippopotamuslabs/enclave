@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.domain.model.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 /**
  * Domain model representing a message within a chat conversation.

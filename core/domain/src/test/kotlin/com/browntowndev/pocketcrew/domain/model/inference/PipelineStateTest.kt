@@ -1,14 +1,12 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class PipelineStateTest {
-
     @Test
     fun `createInitial creates state with DRAFT_ONE step`() {
         val state = PipelineState.createInitial("chat123", "Hello")
@@ -63,11 +61,12 @@ class PipelineStateTest {
 
     @Test
     fun `withNextStep advances to next step`() {
-        val state = PipelineState(
-            chatId = "chat123",
-            currentStep = PipelineStep.DRAFT_ONE,
-            userMessage = "Hello"
-        )
+        val state =
+            PipelineState(
+                chatId = "chat123",
+                currentStep = PipelineStep.DRAFT_ONE,
+                userMessage = "Hello",
+            )
         val next = state.withNextStep()
 
         assertNotNull(next)
@@ -76,11 +75,12 @@ class PipelineStateTest {
 
     @Test
     fun `withNextStep returns null for FINAL step`() {
-        val state = PipelineState(
-            chatId = "chat123",
-            currentStep = PipelineStep.FINAL,
-            userMessage = "Hello"
-        )
+        val state =
+            PipelineState(
+                chatId = "chat123",
+                currentStep = PipelineStep.FINAL,
+                userMessage = "Hello",
+            )
         val next = state.withNextStep()
 
         assertNull(next)
@@ -88,17 +88,19 @@ class PipelineStateTest {
 
     @Test
     fun `toJson and fromJson round-trip serialization`() {
-        val original = PipelineState(
-            chatId = "chat123",
-            currentStep = PipelineStep.DRAFT_TWO,
-            userMessage = "Test prompt",
-            stepOutputs = mapOf(
-                PipelineStep.DRAFT_ONE to "Draft one output",
-                PipelineStep.DRAFT_TWO to "Draft two output"
-            ),
-            thinkingSteps = listOf("Step 1", "Step 2"),
-            startTimeMs = 1000L
-        )
+        val original =
+            PipelineState(
+                chatId = "chat123",
+                currentStep = PipelineStep.DRAFT_TWO,
+                userMessage = "Test prompt",
+                stepOutputs =
+                    mapOf(
+                        PipelineStep.DRAFT_ONE to "Draft one output",
+                        PipelineStep.DRAFT_TWO to "Draft two output",
+                    ),
+                thinkingSteps = listOf("Step 1", "Step 2"),
+                startTimeMs = 1000L,
+            )
 
         val json = original.toJson()
         val restored = PipelineState.fromJson(json)
@@ -113,15 +115,17 @@ class PipelineStateTest {
 
     @Test
     fun `accumulatedThinking joins all step outputs`() {
-        val state = PipelineState(
-            chatId = "chat123",
-            currentStep = PipelineStep.SYNTHESIS,
-            userMessage = "Hello",
-            stepOutputs = mapOf(
-                PipelineStep.DRAFT_ONE to "Creative draft",
-                PipelineStep.DRAFT_TWO to "Analytical draft"
+        val state =
+            PipelineState(
+                chatId = "chat123",
+                currentStep = PipelineStep.SYNTHESIS,
+                userMessage = "Hello",
+                stepOutputs =
+                    mapOf(
+                        PipelineStep.DRAFT_ONE to "Creative draft",
+                        PipelineStep.DRAFT_TWO to "Analytical draft",
+                    ),
             )
-        )
 
         val accumulated = state.accumulatedThinking()
 
@@ -134,12 +138,13 @@ class PipelineStateTest {
     @Test
     fun `durationSeconds calculates correct elapsed time`() {
         val startTime = System.currentTimeMillis() - 5000 // 5 seconds ago
-        val state = PipelineState(
-            chatId = "chat123",
-            currentStep = PipelineStep.FINAL,
-            userMessage = "Hello",
-            startTimeMs = startTime
-        )
+        val state =
+            PipelineState(
+                chatId = "chat123",
+                currentStep = PipelineStep.FINAL,
+                userMessage = "Hello",
+                startTimeMs = startTime,
+            )
 
         val duration = state.durationSeconds()
 

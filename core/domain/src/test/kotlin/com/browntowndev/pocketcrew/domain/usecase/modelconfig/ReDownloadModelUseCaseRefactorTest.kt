@@ -3,9 +3,8 @@ package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.download.DownloadRequestKind
-import com.browntowndev.pocketcrew.domain.model.download.ScheduledDownload
+import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.port.download.DownloadWorkSchedulerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -32,7 +31,6 @@ import org.junit.jupiter.api.Test
  * because restoration now happens in DownloadFinalizeWorker.
  */
 class ReDownloadModelUseCaseRefactorTest {
-
     private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var downloadWorkScheduler: DownloadWorkSchedulerPort
     private lateinit var loggingPort: LoggingPort
@@ -41,19 +39,21 @@ class ReDownloadModelUseCaseRefactorTest {
     private val modelId = LocalModelId("test-model-id")
     private val sha256 = "abc123def456"
 
-    private val softDeletedAsset = LocalModelAsset(
-        metadata = LocalModelMetadata(
-            id = modelId,
-            huggingFaceModelName = "test/model",
-            remoteFileName = "test.gguf",
-            localFileName = "test.gguf",
-            sha256 = sha256,
-            sizeInBytes = 1_000_000_000L,
-            modelFileFormat = ModelFileFormat.GGUF,
-            source = DownloadSource.HUGGING_FACE,
-        ),
-        configurations = emptyList() // Soft-deleted - no configurations
-    )
+    private val softDeletedAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = modelId,
+                    huggingFaceModelName = "test/model",
+                    remoteFileName = "test.gguf",
+                    localFileName = "test.gguf",
+                    sha256 = sha256,
+                    sizeInBytes = 1_000_000_000L,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+            configurations = emptyList(), // Soft-deleted - no configurations
+        )
 
     @BeforeEach
     fun setup() {
@@ -61,11 +61,12 @@ class ReDownloadModelUseCaseRefactorTest {
         downloadWorkScheduler = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
 
-        useCase = ReDownloadModelUseCase(
-            localModelRepository = localModelRepository,
-            downloadWorkScheduler = downloadWorkScheduler,
-            loggingPort = loggingPort
-        )
+        useCase =
+            ReDownloadModelUseCase(
+                localModelRepository = localModelRepository,
+                downloadWorkScheduler = downloadWorkScheduler,
+                loggingPort = loggingPort,
+            )
     }
 
     /**
@@ -78,21 +79,22 @@ class ReDownloadModelUseCaseRefactorTest {
      * EXPECTED: This test should PASS with the refactored implementation.
      */
     @Test
-    fun `REDOWN_01 - does NOT call restoreSoftDeletedModel() before bytes land`() = runTest {
-        // Given
-        coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+    fun `REDOWN_01 - does NOT call restoreSoftDeletedModel() before bytes land`() =
+        runTest {
+            // Given
+            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
 
-        // When
-        val result = useCase(modelId)
+            // When
+            val result = useCase(modelId)
 
-        // Then - verify restoreSoftDeletedModel was NOT called
-        // The new design moves this call to DownloadFinalizeWorker
-        coVerify(exactly = 0) {
-            localModelRepository.restoreSoftDeletedModel(any(), any())
+            // Then - verify restoreSoftDeletedModel was NOT called
+            // The new design moves this call to DownloadFinalizeWorker
+            coVerify(exactly = 0) {
+                localModelRepository.restoreSoftDeletedModel(any(), any())
+            }
+
+            assertTrue(result.isSuccess)
         }
-
-        assertTrue(result.isSuccess)
-    }
 
     /**
      * REDOWN_03: No repository mutation occurs before bytes are downloaded.
@@ -102,26 +104,27 @@ class ReDownloadModelUseCaseRefactorTest {
      * EXPECTED: This test should PASS with the refactored implementation.
      */
     @Test
-    fun `REDOWN_03 - no repository mutation before bytes are downloaded`() = runTest {
-        // Given
-        coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+    fun `REDOWN_03 - no repository mutation before bytes are downloaded`() =
+        runTest {
+            // Given
+            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
 
-        // When - scheduling happens, not completion
-        val result = useCase(modelId)
+            // When - scheduling happens, not completion
+            val result = useCase(modelId)
 
-        // Then - no repository mutations should have occurred
-        assertTrue(result.isSuccess)
+            // Then - no repository mutations should have occurred
+            assertTrue(result.isSuccess)
 
-        // Verify restoreSoftDeletedModel was NOT called (main mutation)
-        coVerify(exactly = 0) {
-            localModelRepository.restoreSoftDeletedModel(any(), any())
+            // Verify restoreSoftDeletedModel was NOT called (main mutation)
+            coVerify(exactly = 0) {
+                localModelRepository.restoreSoftDeletedModel(any(), any())
+            }
+
+            // Verify upsertLocalAsset was NOT called (another mutation)
+            coVerify(exactly = 0) {
+                localModelRepository.upsertLocalAsset(any())
+            }
         }
-
-        // Verify upsertLocalAsset was NOT called (another mutation)
-        coVerify(exactly = 0) {
-            localModelRepository.upsertLocalAsset(any())
-        }
-    }
 
     /**
      * REDOWN_02: Returns ScheduledDownload with session info for progress tracking.
@@ -132,22 +135,23 @@ class ReDownloadModelUseCaseRefactorTest {
      * EXPECTED: This test should PASS with the refactored implementation.
      */
     @Test
-    fun `REDOWN_02 - returns session info for progress tracking`() = runTest {
-        // Given
-        coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+    fun `REDOWN_02 - returns session info for progress tracking`() =
+        runTest {
+            // Given
+            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
 
-        // When
-        val result = useCase(modelId)
+            // When
+            val result = useCase(modelId)
 
-        // Then
-        assertTrue(result.isSuccess)
+            // Then
+            assertTrue(result.isSuccess)
 
-        val scheduledDownload = result.getOrNull()
-        assertNotNull(scheduledDownload)
-        assertNotNull(scheduledDownload!!.sessionId)
-        assertEquals(DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL, scheduledDownload.requestKind)
-        assertEquals(modelId, scheduledDownload.targetModelId)
-    }
+            val scheduledDownload = result.getOrNull()
+            assertNotNull(scheduledDownload)
+            assertNotNull(scheduledDownload!!.sessionId)
+            assertEquals(DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL, scheduledDownload.requestKind)
+            assertEquals(modelId, scheduledDownload.targetModelId)
+        }
 
     /**
      * REDOWN_04: Schedules download via structured DownloadWorkRequest.
@@ -158,23 +162,24 @@ class ReDownloadModelUseCaseRefactorTest {
      * EXPECTED: This test should PASS with the refactored implementation.
      */
     @Test
-    fun `REDOWN_04 - schedules download via structured request`() = runTest {
-        // Given
-        coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+    fun `REDOWN_04 - schedules download via structured request`() =
+        runTest {
+            // Given
+            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
 
-        // When
-        useCase(modelId)
+            // When
+            useCase(modelId)
 
-        // Then - verify the structured scheduler was called
-        coVerify {
-            downloadWorkScheduler.enqueue(
-                match { request ->
-                    request.requestKind == DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL &&
+            // Then - verify the structured scheduler was called
+            coVerify {
+                downloadWorkScheduler.enqueue(
+                    match { request ->
+                        request.requestKind == DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL &&
                             request.targetModelId == modelId &&
                             request.files.isNotEmpty() &&
                             request.files[0].sha256 == sha256
-                }
-            )
+                    },
+                )
+            }
         }
-    }
 }

@@ -9,20 +9,27 @@ import kotlinx.coroutines.flow.Flow
 
 interface LocalModelRepositoryPort {
     suspend fun getAllLocalAssets(): List<LocalModelAsset>
+
     fun observeAllLocalAssets(): Flow<List<LocalModelAsset>>
-    
+
     suspend fun clearAll()
 
     suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId
+
     suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
 
     suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId
+
     suspend fun deleteLocalModelMetadata(id: LocalModelId)
-    
+
     suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
+
     suspend fun deleteConfiguration(id: LocalModelConfigurationId)
+
     suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration?
+
     suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration>
+
     suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId)
 
     /**
@@ -48,6 +55,7 @@ interface LocalModelRepositoryPort {
      * @return The LocalModelAsset if found, null otherwise
      */
     suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset?
+
     /**
      * Restores a soft-deleted model by re-creating its system preset configurations.
      * The model file still needs to be re-downloaded after this.
@@ -58,7 +66,6 @@ interface LocalModelRepositoryPort {
      */
     suspend fun restoreSoftDeletedModel(
         id: LocalModelId,
-        configurations: List<LocalModelConfiguration>
+        configurations: List<LocalModelConfiguration>,
     ): LocalModelAsset
 }
-

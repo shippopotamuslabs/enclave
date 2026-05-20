@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class TtsPlaybackRegistryPortTest {
-
     // Note: We test against the interface contract. The concrete InMemoryTtsPlaybackRegistry
     // will be tested in the app module where it's implemented, but we define the
     // expected behavior here as a reference.
@@ -16,15 +15,16 @@ class TtsPlaybackRegistryPortTest {
     // specification for the InMemoryTtsPlaybackRegistry implementation in :app.
     // The actual tests against the concrete impl are in the app module.
 
-    private val testRequest = TtsPlaybackRequest(
-        requestId = "test-req-1",
-        text = "Hello world",
-        provider = ApiProvider.OPENAI,
-        voiceName = "alloy",
-        modelName = "tts-1",
-        baseUrl = null,
-        credentialAlias = "openai-key",
-    )
+    private val testRequest =
+        TtsPlaybackRequest(
+            requestId = "test-req-1",
+            text = "Hello world",
+            provider = ApiProvider.OPENAI,
+            voiceName = "alloy",
+            modelName = "tts-1",
+            baseUrl = null,
+            credentialAlias = "openai-key",
+        )
 
     @Test
     fun `TtsPlaybackRequest URI format is correct`() {
@@ -34,15 +34,16 @@ class TtsPlaybackRegistryPortTest {
 
     @Test
     fun `toPlaybackRequest from TtsProviderAsset preserves fields`() {
-        val asset = TtsProviderAsset(
-            id = TtsProviderId("xai-1"),
-            displayName = "xAI TTS",
-            provider = ApiProvider.XAI,
-            voiceName = "eve",
-            modelName = "grok-tts",
-            baseUrl = "https://api.x.ai",
-            credentialAlias = "xai-key",
-        )
+        val asset =
+            TtsProviderAsset(
+                id = TtsProviderId("xai-1"),
+                displayName = "xAI TTS",
+                provider = ApiProvider.XAI,
+                voiceName = "eve",
+                modelName = "grok-tts",
+                baseUrl = "https://api.x.ai",
+                credentialAlias = "xai-key",
+            )
 
         val request = asset.toPlaybackRequest(requestId = "r-2", text = "Test")
 

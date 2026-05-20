@@ -1,15 +1,14 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertEquals
 
 /**
  * Tests for ProcessThinkingTokensUseCase - basic behavior verification.
  */
 class ProcessThinkingTokensUseCaseTest {
-
     private lateinit var useCase: ProcessThinkingTokensUseCase
 
     @BeforeEach

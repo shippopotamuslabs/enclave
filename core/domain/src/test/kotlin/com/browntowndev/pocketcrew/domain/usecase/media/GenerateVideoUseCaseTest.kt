@@ -27,67 +27,74 @@ class GenerateVideoUseCaseTest {
 
     @BeforeEach
     fun setup() {
-        useCase = GenerateVideoUseCase(
-            defaultModelRepository = defaultModelRepository,
-            mediaProviderRepository = mediaProviderRepository,
-            videoGenerationPort = videoGenerationPort,
-        )
-    }
-
-    @Test
-    fun invoke_noVideoAssignment_returnsFailure() = runTest {
-        coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns null
-
-        val result = useCase("prompt", VideoGenerationSettings())
-
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
-
-    @Test
-    fun invoke_missingAssignedProvider_returnsFailure() = runTest {
-        val providerId = MediaProviderId("provider-1")
-        coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns DefaultModelAssignment(
-            modelType = ModelType.VIDEO_GENERATION,
-            mediaProviderId = providerId,
-        )
-        coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns null
-
-        val result = useCase("prompt", VideoGenerationSettings())
-
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalStateException)
-    }
-
-    @Test
-    fun invoke_videoAssignment_delegatesToVideoPort() = runTest {
-        val providerId = MediaProviderId("provider-1")
-        val provider = MediaProviderAsset(
-            id = providerId,
-            displayName = "OpenAI Video",
-            provider = ApiProvider.OPENAI,
-            capability = MediaCapability.VIDEO,
-            credentialAlias = "openai",
-        )
-        val settings = VideoGenerationSettings(videoDuration = 8)
-        val bytes = "video".toByteArray()
-        coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns DefaultModelAssignment(
-            modelType = ModelType.VIDEO_GENERATION,
-            mediaProviderId = providerId,
-        )
-        coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
-        coEvery { videoGenerationPort.generateVideo("prompt", provider, settings) } returns Result.success(bytes)
-
-        val result = useCase("prompt", settings)
-
-        assertTrue(result.isSuccess)
-        assertArrayEquals(bytes, result.getOrThrow())
-        coVerify {
-            videoGenerationPort.generateVideo(
-                prompt = "prompt",
-                provider = provider,
-                settings = settings,
+        useCase =
+            GenerateVideoUseCase(
+                defaultModelRepository = defaultModelRepository,
+                mediaProviderRepository = mediaProviderRepository,
+                videoGenerationPort = videoGenerationPort,
             )
-        }
     }
+
+    @Test
+    fun invoke_noVideoAssignment_returnsFailure() =
+        runTest {
+            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns null
+
+            val result = useCase("prompt", VideoGenerationSettings())
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
+
+    @Test
+    fun invoke_missingAssignedProvider_returnsFailure() =
+        runTest {
+            val providerId = MediaProviderId("provider-1")
+            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.VIDEO_GENERATION,
+                    mediaProviderId = providerId,
+                )
+            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns null
+
+            val result = useCase("prompt", VideoGenerationSettings())
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
+
+    @Test
+    fun invoke_videoAssignment_delegatesToVideoPort() =
+        runTest {
+            val providerId = MediaProviderId("provider-1")
+            val provider =
+                MediaProviderAsset(
+                    id = providerId,
+                    displayName = "OpenAI Video",
+                    provider = ApiProvider.OPENAI,
+                    capability = MediaCapability.VIDEO,
+                    credentialAlias = "openai",
+                )
+            val settings = VideoGenerationSettings(videoDuration = 8)
+            val bytes = "video".toByteArray()
+            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.VIDEO_GENERATION,
+                    mediaProviderId = providerId,
+                )
+            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
+            coEvery { videoGenerationPort.generateVideo("prompt", provider, settings) } returns Result.success(bytes)
+
+            val result = useCase("prompt", settings)
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals(bytes, result.getOrThrow())
+            coVerify {
+                videoGenerationPort.generateVideo(
+                    prompt = "prompt",
+                    provider = provider,
+                    settings = settings,
+                )
+            }
+        }
 }

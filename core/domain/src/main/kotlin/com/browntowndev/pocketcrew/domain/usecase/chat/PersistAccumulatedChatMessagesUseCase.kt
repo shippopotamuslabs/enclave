@@ -55,16 +55,19 @@ internal class PersistAccumulatedChatMessagesUseCase(
         }
     }
 
-    private fun sanitizePersistedContent(content: String): String =
-        TOOL_RESULT_TRACE_REGEX
-            .replace(TOOL_CALL_TRACE_REGEX.replace(content, ""), "")
-            .trim()
+    private fun sanitizePersistedContent(content: String): String {
+        val withoutToolCalls = TOOL_CALL_TRACE_REGEX.replace(content, "")
+        return TOOL_RESULT_TRACE_REGEX.replace(withoutToolCalls, "").trim().take(MAX_PERSIST_CONTENT_CHARS)
+    }
 
     private companion object {
+        private const val MAX_PERSIST_CONTENT_CHARS = 100_000
+
         @Suppress("MaxLineLength")
-        private val TOOL_CALL_TRACE_REGEX = Regex(
-            """(?s)<!\[CDATA\[<tool>\s*\{.*?\}\s*</tool>\]\]>|autocomplete\s*\{.*?\}\s*autocomplete|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?"""
-        )
+        private val TOOL_CALL_TRACE_REGEX =
+            Regex(
+                """(?s)<tool_call\b[^>]*>.*?</tool_call>|<!\[CDATA\[<tool>\s*\{.*?\}\s*</tool>\]\]>|autocomplete\s*\{.*?\}\s*autocomplete|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?""",
+            )
         private val TOOL_RESULT_TRACE_REGEX = Regex("(?s)<tool_result>.*?</tool_result>")
     }
 }

@@ -22,15 +22,16 @@ class SaveLocalModelConfigurationUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository saveConfiguration`() = runTest {
-        val config = mockk<LocalModelConfiguration>()
-        val expectedId = LocalModelConfigurationId("1")
-        coEvery { repository.saveConfiguration(config) } returns expectedId
+    fun `invoke calls repository saveConfiguration`() =
+        runTest {
+            val config = mockk<LocalModelConfiguration>()
+            val expectedId = LocalModelConfigurationId("1")
+            coEvery { repository.saveConfiguration(config) } returns expectedId
 
-        val result = useCase(config)
+            val result = useCase(config)
 
-        assertTrue(result.isSuccess)
-        assertEquals(expectedId, result.getOrNull())
-        coVerify(exactly = 1) { repository.saveConfiguration(config) }
-    }
+            assertTrue(result.isSuccess)
+            assertEquals(expectedId, result.getOrNull())
+            coVerify(exactly = 1) { repository.saveConfiguration(config) }
+        }
 }

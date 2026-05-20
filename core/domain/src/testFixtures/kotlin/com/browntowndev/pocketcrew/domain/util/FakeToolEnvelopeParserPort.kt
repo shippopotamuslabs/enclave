@@ -13,7 +13,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolEnvelopeParserPort
  * scenarios in `:feature:inference` tests.
  */
 class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
-
     val parseCalls: MutableList<String> = mutableListOf()
     val coerceProviderArgumentsCalls: MutableList<Pair<String, String>> = mutableListOf()
     val hasLocalToolContractCalls: MutableList<String?> = mutableListOf()
@@ -23,12 +22,13 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
     val parseResponses: MutableMap<String, ToolEnvelopeBatch> = mutableMapOf()
 
     /** Default response when [parseResponses] has no entry for the raw text. */
-    var defaultParseResponse: ToolEnvelopeBatch = ToolEnvelopeBatch(
-        successes = emptyList(),
-        failures = emptyList(),
-        visiblePrefix = "",
-        visibleSuffix = "",
-    )
+    var defaultParseResponse: ToolEnvelopeBatch =
+        ToolEnvelopeBatch(
+            successes = emptyList(),
+            failures = emptyList(),
+            visiblePrefix = "",
+            visibleSuffix = "",
+        )
 
     /** Canned [ToolEnvelopeField] responses keyed by (toolName, argsJson). */
     val coerceProviderArgumentsResponses: MutableMap<Pair<String, String>, ToolEnvelopeField> =
@@ -45,7 +45,10 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
         return parseResponses[raw] ?: defaultParseResponse
     }
 
-    override fun coerceProviderArguments(toolName: String, argsJson: String): ToolEnvelopeField {
+    override fun coerceProviderArguments(
+        toolName: String,
+        argsJson: String,
+    ): ToolEnvelopeField {
         coerceProviderArgumentsCalls.add(toolName to argsJson)
         return coerceProviderArgumentsResponses[toolName to argsJson]
             ?: ToolEnvelopeField(
@@ -79,7 +82,7 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
                     "generate_video",
                     "generate_music",
                 ).any { systemPrompt.contains(it) }
-            )
+        )
     }
 
     override fun buildToolResultMessage(resultJson: String): String {

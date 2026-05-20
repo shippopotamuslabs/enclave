@@ -5,10 +5,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class WebSearchResultParserTest {
-
     @Test
     fun `parse handles standard web search results`() {
-        val json = """
+        val json =
+            """
             {
               "results": [
                 {
@@ -19,7 +19,7 @@ class WebSearchResultParserTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
         val messageId = MessageId("msg1")
         val sources = WebSearchResultParser.parse(messageId, json)
 
@@ -32,7 +32,8 @@ class WebSearchResultParserTest {
 
     @Test
     fun `parse handles flattened X search results array`() {
-        val json = """
+        val json =
+            """
             [
               {
                 "id": "123",
@@ -42,7 +43,7 @@ class WebSearchResultParserTest {
                 "impact_score": 5.5
               }
             ]
-        """.trimIndent()
+            """.trimIndent()
         val messageId = MessageId("msg1")
         val sources = WebSearchResultParser.parse(messageId, json)
 

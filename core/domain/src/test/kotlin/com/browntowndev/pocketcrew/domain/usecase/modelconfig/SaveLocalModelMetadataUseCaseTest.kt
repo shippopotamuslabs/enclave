@@ -22,15 +22,16 @@ class SaveLocalModelMetadataUseCaseTest {
     }
 
     @Test
-    fun `invoke calls repository saveLocalModelMetadata`() = runTest {
-        val metadata = mockk<LocalModelMetadata>()
-        val expectedId = LocalModelId("1")
-        coEvery { repository.saveLocalModelMetadata(metadata) } returns expectedId
+    fun `invoke calls repository saveLocalModelMetadata`() =
+        runTest {
+            val metadata = mockk<LocalModelMetadata>()
+            val expectedId = LocalModelId("1")
+            coEvery { repository.saveLocalModelMetadata(metadata) } returns expectedId
 
-        val result = useCase(metadata)
+            val result = useCase(metadata)
 
-        assertTrue(result.isSuccess)
-        assertEquals(expectedId, result.getOrNull())
-        coVerify(exactly = 1) { repository.saveLocalModelMetadata(metadata) }
-    }
+            assertTrue(result.isSuccess)
+            assertEquals(expectedId, result.getOrNull())
+            coVerify(exactly = 1) { repository.saveLocalModelMetadata(metadata) }
+        }
 }

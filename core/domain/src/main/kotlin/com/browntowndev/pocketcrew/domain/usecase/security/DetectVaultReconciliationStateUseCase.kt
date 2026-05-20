@@ -17,53 +17,63 @@ import javax.inject.Inject
  *  - [VaultReconciliationOutcome.MismatchRequiresClobber] → MUST surface user confirmation
  *    before invoking [AdoptCloudVaultUseCase] (destructive).
  */
-class DetectVaultReconciliationStateUseCase @Inject constructor(
-    private val cryptoManager: CryptoManagerPort,
-    private val vaultMetadataPort: VaultMetadataPort,
-    private val cloudSyncPort: CloudSyncPort,
-) {
-    @Suppress("ReturnCount")
-    suspend operator fun invoke(password: String): Result<VaultReconciliationOutcome> = runCatching {
-        val cloudMetadata = cloudSyncPort.fetchVaultMetadata().getOrNull()
-            ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
-        val cloudSalt = cloudMetadata.salt.takeIf { it.isNotBlank() }
-            ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
-        val cloudWrapped = cloudMetadata.wrappedDek
-            ?.takeIf { it.isNotBlank() }
-            ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
+class DetectVaultReconciliationStateUseCase
+    @Inject
+    constructor(
+        private val cryptoManager: CryptoManagerPort,
+        private val vaultMetadataPort: VaultMetadataPort,
+        private val cloudSyncPort: CloudSyncPort,
+    ) {
+        @Suppress("ReturnCount")
+        suspend operator fun invoke(password: String): Result<VaultReconciliationOutcome> =
+            runCatching {
+                val cloudMetadata =
+                    cloudSyncPort.fetchVaultMetadata().getOrNull()
+                        ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
+                val cloudSalt =
+                    cloudMetadata.salt.takeIf { it.isNotBlank() }
+                        ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
+                val cloudWrapped =
+                    cloudMetadata.wrappedDek
+                        ?.takeIf { it.isNotBlank() }
+                        ?: return@runCatching VaultReconciliationOutcome.NoCloudVault
 
-        val localWrappedBase64 = vaultMetadataPort.getWrappedDek()?.takeIf { it.isNotBlank() }
-            ?: return@runCatching VaultReconciliationOutcome.NoLocalVault
-        val localSaltBase64 = vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
-            ?: return@runCatching VaultReconciliationOutcome.NoLocalVault
+                val localWrappedBase64 =
+                    vaultMetadataPort.getWrappedDek()?.takeIf { it.isNotBlank() }
+                        ?: return@runCatching VaultReconciliationOutcome.NoLocalVault
+                val localSaltBase64 =
+                    vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
+                        ?: return@runCatching VaultReconciliationOutcome.NoLocalVault
 
-        if (localWrappedBase64 == cloudWrapped && localSaltBase64 == cloudSalt) {
-            return@runCatching VaultReconciliationOutcome.AlreadyMatching
-        }
+                if (localWrappedBase64 == cloudWrapped && localSaltBase64 == cloudSalt) {
+                    return@runCatching VaultReconciliationOutcome.AlreadyMatching
+                }
 
-        val cloudSaltBytes = cryptoManager.decodeBase64(cloudSalt)
-        val cloudWrappedBytes = cryptoManager.decodeBase64(cloudWrapped)
-        val cloudKek = cryptoManager.deriveKek(password, cloudSaltBytes).getOrElse {
-            return@runCatching VaultReconciliationOutcome.PasswordMismatch
-        }
-        val cloudDek = cryptoManager.unwrapDek(cloudWrappedBytes, cloudKek).getOrElse {
-            return@runCatching VaultReconciliationOutcome.PasswordMismatch
-        }
+                val cloudSaltBytes = cryptoManager.decodeBase64(cloudSalt)
+                val cloudWrappedBytes = cryptoManager.decodeBase64(cloudWrapped)
+                val cloudKek =
+                    cryptoManager.deriveKek(password, cloudSaltBytes).getOrElse {
+                        return@runCatching VaultReconciliationOutcome.PasswordMismatch
+                    }
+                val cloudDek =
+                    cryptoManager.unwrapDek(cloudWrappedBytes, cloudKek).getOrElse {
+                        return@runCatching VaultReconciliationOutcome.PasswordMismatch
+                    }
 
-        val localSaltBytes = cryptoManager.decodeBase64(localSaltBase64)
-        val localWrappedBytes = cryptoManager.decodeBase64(localWrappedBase64)
-        val localKek = cryptoManager.deriveKek(password, localSaltBytes).getOrNull()
-        val localDek = localKek?.let { cryptoManager.unwrapDek(localWrappedBytes, it).getOrNull() }
+                val localSaltBytes = cryptoManager.decodeBase64(localSaltBase64)
+                val localWrappedBytes = cryptoManager.decodeBase64(localWrappedBase64)
+                val localKek = cryptoManager.deriveKek(password, localSaltBytes).getOrNull()
+                val localDek = localKek?.let { cryptoManager.unwrapDek(localWrappedBytes, it).getOrNull() }
 
-        if (localDek != null && localDek.contentEquals(cloudDek)) {
-            return@runCatching VaultReconciliationOutcome.AlreadyMatching
-        }
+                if (localDek != null && localDek.contentEquals(cloudDek)) {
+                    return@runCatching VaultReconciliationOutcome.AlreadyMatching
+                }
 
-        VaultReconciliationOutcome.MismatchRequiresClobber(
-            cloudDek = cloudDek,
-            cloudSalt = cloudMetadata.salt,
-            cloudWrappedDek = cloudWrapped,
-            cloudVerification = cloudMetadata.verification,
-        )
+                VaultReconciliationOutcome.MismatchRequiresClobber(
+                    cloudDek = cloudDek,
+                    cloudSalt = cloudMetadata.salt,
+                    cloudWrappedDek = cloudWrapped,
+                    cloudVerification = cloudMetadata.verification,
+                )
+            }
     }
-}

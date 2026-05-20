@@ -9,13 +9,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.junit.jupiter.api.Assertions
 
-
 /**
  * Fake implementation of SettingsRepository for testing.
  * Allows controlling the settings flow and verifying method calls.
  */
 class FakeSettingsRepository : SettingsRepository {
-
     private val _settingsFlow = MutableStateFlow(SettingsData())
     override val settingsFlow: Flow<SettingsData> = _settingsFlow.asStateFlow()
 
@@ -147,63 +145,90 @@ class FakeSettingsRepository : SettingsRepository {
     }
 
     // Verification methods
-    fun verifyUpdateThemeCalled(times: Int, theme: AppTheme? = null) {
+    fun verifyUpdateThemeCalled(
+        times: Int,
+        theme: AppTheme? = null,
+    ) {
         assertEquals(times, updateThemeCallCount)
         if (theme != null) {
             assertEquals(theme, lastThemeValue)
         }
     }
 
-    fun verifyUpdateHapticResponseCalled(times: Int, value: Boolean? = null) {
+    fun verifyUpdateHapticResponseCalled(
+        times: Int,
+        value: Boolean? = null,
+    ) {
         assertEquals(times, updateHapticResponseCallCount)
         if (value != null) {
             assertEquals(value, lastHapticResponseValue)
         }
     }
 
-    fun verifyUpdateCustomizationEnabledCalled(times: Int, enabled: Boolean? = null) {
+    fun verifyUpdateCustomizationEnabledCalled(
+        times: Int,
+        enabled: Boolean? = null,
+    ) {
         assertEquals(times, updateCustomizationEnabledCallCount)
         if (enabled != null) {
             assertEquals(enabled, lastCustomizationEnabledValue)
         }
     }
 
-    fun verifyUpdateSelectedPromptOptionCalled(times: Int, option: SystemPromptOption? = null) {
+    fun verifyUpdateSelectedPromptOptionCalled(
+        times: Int,
+        option: SystemPromptOption? = null,
+    ) {
         assertEquals(times, updateSelectedPromptOptionCallCount)
         if (option != null) {
             assertEquals(option, lastPromptOptionValue)
         }
     }
 
-    fun verifyUpdateCustomPromptTextCalled(times: Int, text: String? = null) {
+    fun verifyUpdateCustomPromptTextCalled(
+        times: Int,
+        text: String? = null,
+    ) {
         assertEquals(times, updateCustomPromptTextCallCount)
         if (text != null) {
             assertEquals(text, lastCustomPromptTextValue)
         }
     }
 
-    fun verifyUpdateAllowMemoriesCalled(times: Int, allowed: Boolean? = null) {
+    fun verifyUpdateAllowMemoriesCalled(
+        times: Int,
+        allowed: Boolean? = null,
+    ) {
         assertEquals(times, updateAllowMemoriesCallCount)
         if (allowed != null) {
             assertEquals(allowed, lastAllowMemoriesValue)
         }
     }
 
-    fun verifyUpdateSearchEnabledCalled(times: Int, enabled: Boolean? = null) {
+    fun verifyUpdateSearchEnabledCalled(
+        times: Int,
+        enabled: Boolean? = null,
+    ) {
         assertEquals(times, updateSearchEnabledCallCount)
         if (enabled != null) {
             assertEquals(enabled, lastSearchEnabledValue)
         }
     }
 
-    fun verifyUpdateBackgroundInferenceEnabledCalled(times: Int, enabled: Boolean? = null) {
+    fun verifyUpdateBackgroundInferenceEnabledCalled(
+        times: Int,
+        enabled: Boolean? = null,
+    ) {
         assertEquals(times, updateBackgroundInferenceEnabledCallCount)
         if (enabled != null) {
             assertEquals(enabled, lastBackgroundInferenceEnabledValue)
         }
     }
 
-    fun verifySaveTavilyApiKeyCalled(times: Int, apiKey: String? = null) {
+    fun verifySaveTavilyApiKeyCalled(
+        times: Int,
+        apiKey: String? = null,
+    ) {
         assertEquals(times, saveTavilyApiKeyCallCount)
         if (apiKey != null) {
             assertEquals(apiKey, lastSavedTavilyApiKey)
@@ -227,7 +252,10 @@ class FakeSettingsRepository : SettingsRepository {
         clearTavilyApiKeyCallCount = 0
     }
 
-    private fun assertEquals(expected: Any?, actual: Any?) {
+    private fun assertEquals(
+        expected: Any?,
+        actual: Any?,
+    ) {
         Assertions.assertEquals(expected, actual)
     }
 }

@@ -17,20 +17,21 @@ import javax.inject.Inject
  * Caller MUST surface user confirmation before invoking this use case — the destructive
  * `clearAllData` call cannot be undone.
  */
-class AdoptCloudVaultUseCase @Inject constructor(
-    private val cryptoManager: CryptoManagerPort,
-    private val vaultMetadataPort: VaultMetadataPort,
-    private val cleanupRepository: CleanupRepository,
-    private val biometricPort: BiometricPort,
-) {
-    suspend operator fun invoke(
-        payload: VaultReconciliationOutcome.MismatchRequiresClobber,
-    ): Result<Unit> = runCatching {
-        cleanupRepository.clearAllData()
-        cryptoManager.cacheDek(payload.cloudDek).getOrThrow()
-        vaultMetadataPort.saveVaultSalt(payload.cloudSalt)
-        vaultMetadataPort.saveWrappedDek(payload.cloudWrappedDek)
-        vaultMetadataPort.saveVaultVerificationData(payload.cloudVerification)
-        biometricPort.clearSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+class AdoptCloudVaultUseCase
+    @Inject
+    constructor(
+        private val cryptoManager: CryptoManagerPort,
+        private val vaultMetadataPort: VaultMetadataPort,
+        private val cleanupRepository: CleanupRepository,
+        private val biometricPort: BiometricPort,
+    ) {
+        suspend operator fun invoke(payload: VaultReconciliationOutcome.MismatchRequiresClobber): Result<Unit> =
+            runCatching {
+                cleanupRepository.clearAllData()
+                cryptoManager.cacheDek(payload.cloudDek).getOrThrow()
+                vaultMetadataPort.saveVaultSalt(payload.cloudSalt)
+                vaultMetadataPort.saveWrappedDek(payload.cloudWrappedDek)
+                vaultMetadataPort.saveVaultVerificationData(payload.cloudVerification)
+                biometricPort.clearSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+            }
     }
-}

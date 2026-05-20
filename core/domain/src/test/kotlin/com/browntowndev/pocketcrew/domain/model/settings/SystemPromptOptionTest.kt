@@ -1,10 +1,9 @@
 package com.browntowndev.pocketcrew.domain.model.settings
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 class SystemPromptOptionTest {
-
     @Test
     fun `SystemPromptOption has correct values`() {
         val options = SystemPromptOption.entries
@@ -57,4 +56,3 @@ class SystemPromptOptionTest {
         }
     }
 }
-

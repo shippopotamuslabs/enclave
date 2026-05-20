@@ -4,7 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class UtilityType(val apiValue: String) {
+enum class UtilityType(
+    val apiValue: String,
+) {
     @SerialName("whisper")
     WHISPER("whisper"),
 
@@ -15,14 +17,14 @@ enum class UtilityType(val apiValue: String) {
     ONNX_MODEL("onnx_model"),
 
     @SerialName("onnx_vocab")
-    ONNX_VOCAB("onnx_vocab");
+    ONNX_VOCAB("onnx_vocab"),
+    ;
 
     companion object {
-        fun fromApiValue(value: String?): UtilityType? {
-            return entries.firstOrNull { type ->
+        fun fromApiValue(value: String?): UtilityType? =
+            entries.firstOrNull { type ->
                 type.apiValue.equals(value, ignoreCase = true) ||
                     type.name.equals(value, ignoreCase = true)
             }
-        }
     }
 }

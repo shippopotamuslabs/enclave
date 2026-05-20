@@ -4,12 +4,10 @@ import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SearchToolPromptComposerTest {
-
     private val composer = SearchToolPromptComposer()
 
     @Test
@@ -21,8 +19,8 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("Be concise."))
         assertTrue(
             composed.contains(
-                """ActionResult{"name":"web_search","arguments":{"""
-            )
+                """ActionResult{"name":"web_search","arguments":{""",
+            ),
         )
         assertEquals("Be concise.", basePrompt)
     }
@@ -37,11 +35,12 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose only includes image inspect when search is disabled but image tool is requested`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = true
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = true,
+            )
 
         assertFalse(composed.contains("web_search"), "Should not contain search contract")
         assertTrue(composed.contains("attached_image_inspect"), "Should contain image inspect contract")
@@ -50,11 +49,12 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose uses LiteRT native format when strategy is LITE_RT_NATIVE`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = true,
-            strategy = ToolCallStrategy.LITE_RT_NATIVE
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = true,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
 
         assertTrue(composed.contains("call:web_search{query: <|\"|>...<|\"|>}"))
         assertTrue(composed.contains("web_extract. Note that 'urls' must be a SINGLE string"))
@@ -65,12 +65,13 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose uses LiteRT native format for both search and image tools`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = true,
-            includeImageInspectTool = true,
-            strategy = ToolCallStrategy.LITE_RT_NATIVE
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = true,
+                includeImageInspectTool = true,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
 
         assertTrue(composed.contains("call:web_search"))
         assertTrue(composed.contains("call:attached_image_inspect"))
@@ -82,12 +83,13 @@ class SearchToolPromptComposerTest {
     @Test
     fun `compose returns empty tool contract for SDK_NATIVE strategy`() {
         val basePrompt = "API Model Prompt"
-        val composed = composer.compose(
-            baseSystemPrompt = basePrompt,
-            includeSearchTool = true,
-            includeImageInspectTool = true,
-            strategy = ToolCallStrategy.SDK_NATIVE
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = basePrompt,
+                includeSearchTool = true,
+                includeImageInspectTool = true,
+                strategy = ToolCallStrategy.SDK_NATIVE,
+            )
 
         assertEquals(basePrompt, composed)
         assertFalse(composed.contains("mandate", ignoreCase = true))
@@ -97,24 +99,26 @@ class SearchToolPromptComposerTest {
     @Test
     fun `compose with no tools enabled returns only base prompt`() {
         val basePrompt = "Base only."
-        val composed = composer.compose(
-            baseSystemPrompt = basePrompt,
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = false
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = basePrompt,
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = false,
+            )
 
         assertEquals(basePrompt, composed)
     }
 
     @Test
     fun `compose includes memory tools contract by default`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+            )
 
         assertTrue(composed.contains("search_chat_history"))
         assertTrue(composed.contains("search_chat"))
@@ -123,13 +127,14 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose includes LiteRT memory tools format for LITE_RT_NATIVE strategy`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true,
-            strategy = ToolCallStrategy.LITE_RT_NATIVE
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
 
         assertTrue(composed.contains("call:search_chat_history"))
         assertTrue(composed.contains("call:search_chat"))
@@ -137,13 +142,14 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose includes current chat ID in memory tools contract when provided`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true,
-            currentChatId = "chat-123"
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+                currentChatId = "chat-123",
+            )
 
         assertTrue(composed.contains("chat-123"))
         assertTrue(composed.contains("search_chat"))
@@ -152,25 +158,27 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose omits current chat ID when not provided`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true,
-            currentChatId = null
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+                currentChatId = null,
+            )
 
         assertFalse(composed.contains("The current chat ID is"))
     }
 
     @Test
     fun `compose includes get_message_context in JSON_XML_ENVELOPE memory tools contract`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+            )
 
         assertTrue(composed.contains("get_message_context"))
         assertTrue(composed.contains("message_id"))
@@ -178,13 +186,14 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose includes get_message_context in LITE_RT_NATIVE memory tools contract`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeSearchTool = false,
-            includeImageInspectTool = false,
-            includeMemoryTools = true,
-            strategy = ToolCallStrategy.LITE_RT_NATIVE
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeSearchTool = false,
+                includeImageInspectTool = false,
+                includeMemoryTools = true,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
 
         assertTrue(composed.contains("call:get_message_context"))
         assertTrue(composed.contains("message_id"))
@@ -192,10 +201,11 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose includes manage_memories in memory tools contract`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be concise.",
-            includeMemoryTools = true
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                includeMemoryTools = true,
+            )
 
         assertTrue(composed.contains("manage_memories"))
         assertTrue(composed.contains("save, update, delete, or search long-term memories"))
@@ -203,14 +213,16 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose formats core memories correctly`() {
-        val memories = listOf(
-            Memory(category = MemoryCategory.CORE_IDENTITY, content = "I am a helpful assistant."),
-            Memory(category = MemoryCategory.PREFERENCES, content = "User prefers short answers.")
-        )
-        val composed = composer.compose(
-            baseSystemPrompt = "Base",
-            coreMemories = memories
-        )
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.CORE_IDENTITY, content = "I am a helpful assistant."),
+                Memory(category = MemoryCategory.PREFERENCES, content = "User prefers short answers."),
+            )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                coreMemories = memories,
+            )
 
         assertTrue(composed.contains("# ABOUT THE USER:"))
         assertTrue(composed.contains("## Identity & Background:"))
@@ -221,13 +233,15 @@ class SearchToolPromptComposerTest {
 
     @Test
     fun `compose formats retrieved memories correctly`() {
-        val memories = listOf(
-            Memory(category = MemoryCategory.FACTS, content = "The sky is blue.")
-        )
-        val composed = composer.compose(
-            baseSystemPrompt = "Base",
-            retrievedMemories = memories
-        )
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.FACTS, content = "The sky is blue."),
+            )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                retrievedMemories = memories,
+            )
 
         assertTrue(composed.contains("# RELEVANT FACTS & CONTEXT:"))
         assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
