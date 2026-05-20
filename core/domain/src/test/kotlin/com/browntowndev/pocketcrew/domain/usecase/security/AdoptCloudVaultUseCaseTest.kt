@@ -194,6 +194,8 @@ class AdoptCloudVaultUseCaseTest {
             clearCallCount++
         }
 
+        override suspend fun clearUserContent() = Unit
+
         override suspend fun deleteAllArtifacts() = Unit
     }
 

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 
 class LogoutUseCaseTest {
     private val authManager = mockk<AuthManager>()
-    private val cleanupRepository = mockk<CleanupRepository>()
+    private val cleanupRepository = mockk<CleanupRepository>(relaxed = true)
     private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
     private val autoAssignLocalModelsUseCase = mockk<AutoAssignLocalModelsUseCase>(relaxed = true)
     private val logoutUseCase =
@@ -25,17 +25,17 @@ class LogoutUseCaseTest {
         )
 
     @Test
-    fun `invoke signs out and clears data on success`() =
+    fun `invoke signs out and clears user content while preserving models`() =
         runTest {
             coEvery { authManager.signOut() } returns Result.success(Unit)
-            coEvery { cleanupRepository.clearAllData() } returns Unit
             every { cloudSyncPort.stopListening() } returns Unit
 
             logoutUseCase()
 
             coVerify { authManager.signOut() }
             coVerify { cloudSyncPort.stopListening() }
-            coVerify { cleanupRepository.clearAllData() }
+            coVerify { cleanupRepository.clearUserContent() }
+            coVerify(exactly = 0) { cleanupRepository.clearAllData() }
             coVerify { autoAssignLocalModelsUseCase() }
         }
 
@@ -47,6 +47,7 @@ class LogoutUseCaseTest {
             logoutUseCase()
 
             coVerify { authManager.signOut() }
+            coVerify(exactly = 0) { cleanupRepository.clearUserContent() }
             coVerify(exactly = 0) { cleanupRepository.clearAllData() }
             coVerify(exactly = 0) { autoAssignLocalModelsUseCase() }
         }
@@ -55,13 +56,13 @@ class LogoutUseCaseTest {
     fun `invoke returns success even if cleanup fails`() =
         runTest {
             coEvery { authManager.signOut() } returns Result.success(Unit)
-            coEvery { cleanupRepository.clearAllData() } throws Exception("Database error")
+            coEvery { cleanupRepository.clearUserContent() } throws Exception("Database error")
             every { cloudSyncPort.stopListening() } returns Unit
 
             val result = logoutUseCase()
 
             assert(result.isSuccess)
             coVerify { authManager.signOut() }
-            coVerify { cleanupRepository.clearAllData() }
+            coVerify { cleanupRepository.clearUserContent() }
         }
 }

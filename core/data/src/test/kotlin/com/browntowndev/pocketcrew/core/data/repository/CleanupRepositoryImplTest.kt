@@ -25,11 +25,26 @@ class CleanupRepositoryImplTest {
     }
 
     @Test
-    fun `clearAllData clears database and ApiKeyManager`() =
+    fun `clearAllData wipes everything including models`() =
         runTest {
             cleanupRepository.clearAllData()
 
             coVerify { cleanupDao.clearUserData() }
+            verify {
+                apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
+                apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
+                apiKeyManager.delete(ApiKeyManager.X_SEARCH_ALIAS)
+            }
+            coVerify { apiKeyManager.clearAllPending() }
+        }
+
+    @Test
+    fun `clearUserContent wipes chats and search keys but preserves models`() =
+        runTest {
+            cleanupRepository.clearUserContent()
+
+            coVerify { cleanupDao.clearUserContent() }
+            coVerify(exactly = 0) { cleanupDao.clearUserData() }
             verify {
                 apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
                 apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
@@ -46,5 +61,6 @@ class CleanupRepositoryImplTest {
             coVerify { cleanupDao.deleteDocuments() }
             verify { syncTrigger.triggerCloudArtifactsPurge() }
             coVerify(exactly = 0) { cleanupDao.clearUserData() }
+            coVerify(exactly = 0) { cleanupDao.clearUserContent() }
         }
 }

@@ -73,7 +73,8 @@ class LogoutUseCase
                 // We use runCatching to ensure database cleanup errors don't crash the logout flow
                 // after the user has already been signed out from the auth provider.
                 runCatching {
-                    cleanupRepository.clearAllData()
+                    // Preserve model/provider configuration so guest mode keeps working.
+                    cleanupRepository.clearUserContent()
                     autoAssignLocalModelsUseCase()
                 }
             }
