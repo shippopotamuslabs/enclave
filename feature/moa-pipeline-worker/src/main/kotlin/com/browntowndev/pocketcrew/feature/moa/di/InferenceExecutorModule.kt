@@ -16,10 +16,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class InferenceExecutorModule {
-
     @Binds
     @Singleton
-    abstract fun bindPipelineExecutor(
-        inferenceServicePipelineExecutor: InferenceServicePipelineExecutor
-    ): PipelineExecutorPort
+    abstract fun bindPipelineExecutor(inferenceServicePipelineExecutor: InferenceServicePipelineExecutor): PipelineExecutorPort
 }

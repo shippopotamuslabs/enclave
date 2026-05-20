@@ -21,19 +21,18 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class InferenceServiceTest {
-
     private lateinit var service: InferenceService
     private val notificationManager = mockk<NotificationManager>(relaxed = true)
     private val logger = mockk<LoggingPort>(relaxed = true)
@@ -105,46 +104,56 @@ class InferenceServiceTest {
 
     @Test
     @DisplayName("ACTION_START executes full pipeline with all model types")
-    fun actionStartExecutesFullPipeline() = runTest(testDispatcher) {
-        // Given
-        val intent = mockk<Intent>(relaxed = true)
-        every { intent.action } returns InferenceService.ACTION_START
-        every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-        every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
+    fun actionStartExecutesFullPipeline() =
+        runTest(testDispatcher) {
+            // Given
+            val intent = mockk<Intent>(relaxed = true)
+            every { intent.action } returns InferenceService.ACTION_START
+            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
+            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
 
-        // When
-        service.onStartCommand(intent, 0, 1)
+            // When
+            service.onStartCommand(intent, 0, 1)
 
-        // Advance dispatcher to execute the launched pipeline coroutine
-        advanceUntilIdle()
+            // Advance dispatcher to execute the launched pipeline coroutine
+            advanceUntilIdle()
 
-        // Then - verify all pipeline steps were invoked
-        assertTrue(invokedModelTypes.contains(ModelType.DRAFT_ONE),
-            "Expected DRAFT_ONE in $invokedModelTypes")
-        assertTrue(invokedModelTypes.contains(ModelType.DRAFT_TWO),
-            "Expected DRAFT_TWO in $invokedModelTypes")
-        assertTrue(invokedModelTypes.contains(ModelType.MAIN),
-            "Expected MAIN in $invokedModelTypes")
-        assertTrue(invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
-            "Expected FINAL_SYNTHESIS in $invokedModelTypes")
+            // Then - verify all pipeline steps were invoked
+            assertTrue(
+                invokedModelTypes.contains(ModelType.DRAFT_ONE),
+                "Expected DRAFT_ONE in $invokedModelTypes",
+            )
+            assertTrue(
+                invokedModelTypes.contains(ModelType.DRAFT_TWO),
+                "Expected DRAFT_TWO in $invokedModelTypes",
+            )
+            assertTrue(
+                invokedModelTypes.contains(ModelType.MAIN),
+                "Expected MAIN in $invokedModelTypes",
+            )
+            assertTrue(
+                invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
+                "Expected FINAL_SYNTHESIS in $invokedModelTypes",
+            )
 
-        verify { service.startForeground(any(), any(), any()) }
-    }
+            verify { service.startForeground(any(), any(), any()) }
+        }
 
     @Test
     @DisplayName("ACTION_STOP cancels pipeline and stops service")
-    fun actionStopCancelsPipeline() = runTest(testDispatcher) {
-        // Given
-        val intentStop = mockk<Intent>(relaxed = true)
-        every { intentStop.action } returns InferenceService.ACTION_STOP
+    fun actionStopCancelsPipeline() =
+        runTest(testDispatcher) {
+            // Given
+            val intentStop = mockk<Intent>(relaxed = true)
+            every { intentStop.action } returns InferenceService.ACTION_STOP
 
-        // When
-        service.onStartCommand(intentStop, 0, 1)
-        
-        advanceUntilIdle()
+            // When
+            service.onStartCommand(intentStop, 0, 1)
 
-        // Then
-        verify { service.stopForeground(any<Int>()) }
-        verify { service.stopSelf() }
-    }
+            advanceUntilIdle()
+
+            // Then
+            verify { service.stopForeground(any<Int>()) }
+            verify { service.stopSelf() }
+        }
 }
