@@ -6,14 +6,24 @@ import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
 import com.browntowndev.pocketcrew.domain.model.media.StudioTemplate
-
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 
 sealed interface VideoGenerationState {
     data object Idle : VideoGenerationState
-    data class Loading(val sourceAssetId: String) : VideoGenerationState
-    data class Success(val sourceAssetId: String, val localUri: String) : VideoGenerationState
-    data class Error(val sourceAssetId: String?, val message: String) : VideoGenerationState
+
+    data class Loading(
+        val sourceAssetId: String,
+    ) : VideoGenerationState
+
+    data class Success(
+        val sourceAssetId: String,
+        val localUri: String,
+    ) : VideoGenerationState
+
+    data class Error(
+        val sourceAssetId: String?,
+        val message: String,
+    ) : VideoGenerationState
 }
 
 @Immutable

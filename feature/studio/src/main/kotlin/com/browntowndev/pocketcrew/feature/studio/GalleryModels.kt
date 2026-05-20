@@ -3,8 +3,6 @@ package com.browntowndev.pocketcrew.feature.studio
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.core.ui.model.AlbumSelectionItem
 
-import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
-
 @Immutable
 data class GalleryUiState(
     val albums: List<GalleryAlbumUi> = emptyList(),
@@ -27,7 +25,7 @@ data class GalleryAlbumUi(
             name = name,
             itemCount = itemCount,
             coverUri = coverItems.firstOrNull()?.localUri,
-            coverMediaType = coverItems.firstOrNull()?.mediaType
+            coverMediaType = coverItems.firstOrNull()?.mediaType,
         )
 }
 
