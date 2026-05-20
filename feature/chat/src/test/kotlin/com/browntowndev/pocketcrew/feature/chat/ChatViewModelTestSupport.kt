@@ -55,7 +55,6 @@ object ChatViewModelTestSupport {
                 chatUseCases = chatUseCases,
                 settingsUseCases = settingsUseCases,
                 cancelInferenceUseCase = cancelInferenceUseCase,
-                activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
                 errorHandler = errorHandler,
                 savedStateHandle = savedStateHandle,
             )

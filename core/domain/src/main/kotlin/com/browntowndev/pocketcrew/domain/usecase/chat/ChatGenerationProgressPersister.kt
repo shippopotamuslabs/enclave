@@ -60,6 +60,8 @@ class ChatGenerationProgressSession internal constructor(
         return accumulatedMessages
     }
 
+    fun accumulatedMessages(): AccumulatedMessages = accumulatorManager.toMessagesState()
+
     suspend fun flush(markIncompleteAsCancelled: Boolean) {
         if (markIncompleteAsCancelled) {
             accumulatorManager.markIncompleteAsCancelled()

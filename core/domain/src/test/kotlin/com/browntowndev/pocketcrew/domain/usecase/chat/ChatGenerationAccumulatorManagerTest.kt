@@ -137,6 +137,52 @@ class ChatGenerationAccumulatorManagerTest {
         }
 
     @Test
+    fun `processing event publishes PROCESSING on fresh accumulator`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val snapshot =
+                manager
+                    .reduce(MessageGenerationState.Processing(ModelType.FAST))
+                    .messages
+                    .getValue(MessageId("assistant"))
+
+            assertEquals(MessageState.PROCESSING, snapshot.messageState)
+        }
+
+    @Test
+    fun `processing event downgrades idle GENERATING without content`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
+            val accumulator = manager.messages.getValue(MessageId("assistant"))
+            accumulator.currentState = MessageState.GENERATING
+
+            val snapshot =
+                manager
+                    .reduce(MessageGenerationState.Processing(ModelType.FAST))
+                    .messages
+                    .getValue(MessageId("assistant"))
+
+            assertEquals(MessageState.PROCESSING, snapshot.messageState)
+        }
+
+    @Test
     fun `processing state does not downgrade active thinking`() =
         runTest {
             val manager =

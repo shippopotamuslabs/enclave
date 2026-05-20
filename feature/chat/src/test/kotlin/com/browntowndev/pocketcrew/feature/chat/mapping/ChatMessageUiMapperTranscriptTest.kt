@@ -18,6 +18,19 @@ class ChatMessageUiMapperTranscriptTest {
     private val displayNames = emptyMap<com.browntowndev.pocketcrew.domain.model.inference.ModelType, String>()
 
     @Test
+    fun `empty generating state maps to processing indicator`() {
+        val message =
+            assistantMessage(
+                state = MessageState.GENERATING,
+                transcript = emptyList(),
+            )
+
+        val ui = mapper.map(message, displayNames)
+
+        assertTrue(ui.indicatorState is IndicatorState.Processing)
+    }
+
+    @Test
     fun `open thinking segment streams while message state is processing`() {
         val message =
             assistantMessage(

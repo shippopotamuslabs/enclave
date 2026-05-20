@@ -49,6 +49,28 @@ class DbMessagesFingerprintTest {
     }
 
     @Test
+    fun `fingerprint changes when messageState changes but updatedAt is unchanged`() {
+        val initial =
+            listOf(
+                message(
+                    id = MessageId("assistant-1"),
+                    text = "thinking",
+                    updatedAt = 100L,
+                    messageState = MessageState.THINKING,
+                ),
+            )
+        val cancelled =
+            listOf(
+                initial.single().copy(messageState = MessageState.COMPLETE),
+            )
+
+        assertNotEquals(
+            initial.dbMessagesFingerprintForTesting(),
+            cancelled.dbMessagesFingerprintForTesting(),
+        )
+    }
+
+    @Test
     fun `fingerprint falls back to structural message equality when updatedAt is absent`() {
         val initial =
             listOf(
@@ -70,13 +92,14 @@ class DbMessagesFingerprintTest {
         id: MessageId,
         text: String,
         updatedAt: Long?,
+        messageState: MessageState = MessageState.PROCESSING,
     ): Message =
         Message(
             id = id,
             chatId = ChatId("chat-1"),
             content = Content(text = text),
             role = Role.ASSISTANT,
-            messageState = MessageState.PROCESSING,
+            messageState = messageState,
             createdAt = 1L,
             updatedAt = updatedAt,
         )

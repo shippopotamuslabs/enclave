@@ -10,7 +10,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -36,7 +35,6 @@ class InferenceOrchestrator
         private val chatUseCases: ChatUseCases,
         private val settingsUseCases: SettingsUseCases,
         private val cancelInferenceUseCase: CancelInferenceUseCase,
-        private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
     ) {
@@ -121,16 +119,11 @@ class InferenceOrchestrator
             }
         }
 
-        fun stopInference(scope: CoroutineScope) {
+        fun stopInference() {
             inferenceJob?.cancel()
             cancelInferenceUseCase()
-            _requestedTurnKey.value?.let { key ->
-                scope.launch {
-                    activeChatTurnSnapshotPort.clear(key)
-                    _requestedTurnKey.update { current -> if (current == key) null else current }
-                    _acknowledgedTurnKeys.update { keys -> keys + key }
-                }
-            }
+            // Snapshot retirement and turn acknowledgement are owned by the inference
+            // service (terminal COMPLETE publish + Room flush) and maybeAcknowledgeCompletedTurn.
         }
 
         fun acknowledgeTurn(key: ActiveChatTurnKey) {
