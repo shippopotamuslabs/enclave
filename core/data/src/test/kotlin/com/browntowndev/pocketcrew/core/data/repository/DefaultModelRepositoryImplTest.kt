@@ -16,7 +16,10 @@ import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
+import com.browntowndev.pocketcrew.core.data.security.CryptoAtRestEncryptionService
+import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import javax.crypto.AEADBadTagException
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -321,6 +324,107 @@ class DefaultModelRepositoryImplTest {
 
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+
+    @Test
+    fun `observeDefaults survives decrypt failure without emitting crash`() =
+        runTest {
+            val failingEncryption = mockk<LocalDataEncryptionService>()
+            every { failingEncryption.isEncrypted(any()) } answers {
+                firstArg<String>().startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
+            }
+            every { failingEncryption.decryptString(any(), any()) } throws AEADBadTagException()
+            val failingRepo =
+                DefaultModelRepositoryImpl(
+                    syncTrigger = syncTrigger,
+                    defaultModelsDao = defaultModelsDao,
+                    localModelConfigurationsDao = localConfigsDao,
+                    localModelsDao = localModelsDao,
+                    apiModelConfigurationsDao = apiConfigsDao,
+                    apiCredentialsDao = apiCredentialsDao,
+                    ttsProviderDao = ttsProviderDao,
+                    mediaProviderDao = mediaProviderDao,
+                    localEncryption = failingEncryption,
+                )
+            every { defaultModelsDao.observeAllWithDetails() } returns
+                flowOf(
+                    listOf(
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.VISION,
+                            localConfigId = null,
+                            apiConfigId = ApiModelConfigurationId("api-cfg"),
+                            localPresetName = null,
+                            apiPresetName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
+                            localAssetName = null,
+                            apiAssetName = null,
+                            apiCredentialsId = ApiCredentialsId("12"),
+                            apiProviderName = ApiProvider.OPENAI,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                    ),
+                )
+
+            failingRepo.observeDefaults().test {
+                val assignments = awaitItem()
+                assertEquals(1, assignments.size)
+                assertNull(assignments.first().presetName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `getDefault survives decrypt failure for media provider assignment`() =
+        runTest {
+            val failingEncryption = mockk<LocalDataEncryptionService>()
+            every { failingEncryption.isEncrypted(any()) } answers {
+                firstArg<String>().startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
+            }
+            every { failingEncryption.decryptString(any(), any()) } throws AEADBadTagException()
+            val failingRepo =
+                DefaultModelRepositoryImpl(
+                    syncTrigger = syncTrigger,
+                    defaultModelsDao = defaultModelsDao,
+                    localModelConfigurationsDao = localConfigsDao,
+                    localModelsDao = localModelsDao,
+                    apiModelConfigurationsDao = apiConfigsDao,
+                    apiCredentialsDao = apiCredentialsDao,
+                    ttsProviderDao = ttsProviderDao,
+                    mediaProviderDao = mediaProviderDao,
+                    localEncryption = failingEncryption,
+                )
+            val mediaId = MediaProviderId("media-1")
+            coEvery { defaultModelsDao.getDefault(ModelType.IMAGE_GENERATION) } returns
+                DefaultModelEntity(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = mediaId,
+                    pendingSync = 0,
+                )
+            coEvery { mediaProviderDao.getMediaProvider(mediaId.value) } returns
+                MediaProviderEntity(
+                    id = mediaId.value,
+                    displayName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
+                    provider = ApiProvider.GOOGLE,
+                    capability = MediaCapability.IMAGE,
+                    modelName = "model",
+                    baseUrl = "url",
+                    credentialAlias = "alias",
+                )
+
+            val result = failingRepo.getDefault(ModelType.IMAGE_GENERATION)
+
+            assertEquals(ModelType.IMAGE_GENERATION, result?.modelType)
+            assertNull(result?.displayName)
+            assertEquals("Image", result?.presetName)
         }
 
     @Test

@@ -233,6 +233,8 @@ class SettingsViewModelTest {
                 adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase,
+                mockk<com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
+                mockk<com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
                 cryptoManager,
                 vaultMetadataPort,
                 cloudSyncPort,

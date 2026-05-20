@@ -50,6 +50,10 @@ class TosSheetTest {
                 adoptCloudVaultUseCase = adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase = createVaultUseCase,
+                unlockVaultFromStoredMetadataUseCase =
+                    mockk<com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
+                startCloudSyncListeningUseCase =
+                    mockk<com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
                 cryptoManager = cryptoManager,
                 vaultMetadataPort = vaultMetadataPort,
                 cloudSyncPort = cloudSyncPort,

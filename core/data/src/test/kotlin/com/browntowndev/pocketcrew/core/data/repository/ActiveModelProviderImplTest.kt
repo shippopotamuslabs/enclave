@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -21,7 +22,9 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -123,5 +126,53 @@ class ActiveModelProviderImplTest {
             assertEquals("gpt-4o", result?.modelId)
             assertEquals(ApiProvider.OPENAI, result?.apiProvider)
             assertEquals(true, result?.isMultimodal)
+        }
+
+    @Test
+    fun `getActiveConfiguration returns null when no default assignment`() =
+        runTest {
+            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns null
+
+            val result = repository.getActiveConfiguration(ModelType.MAIN)
+
+            assertNull(result)
+        }
+
+    @Test
+    fun `getActiveConfiguration throws when display name decrypt fails`() =
+        runTest {
+            localEncryption.forceDecryptFailure = true
+            val configId = LocalModelConfigurationId("local-config-1")
+            val modelId = LocalModelId("model-1")
+            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.MAIN,
+                    localConfigId = configId,
+                )
+            coEvery { localConfigsDao.getById(configId) } returns
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = "ciphertext",
+                )
+            coEvery { localModelsDao.getById(modelId) } returns
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    huggingFaceModelName = "qwen",
+                    remoteFilename = "qwen.gguf",
+                    localFilename = "qwen.gguf",
+                    sha256 = "abc123",
+                    sizeInBytes = 42L,
+                    isMultimodal = false,
+                )
+
+            val thrown =
+                assertThrows<ActiveModelConfigurationDecryptException> {
+                    repository.getActiveConfiguration(ModelType.MAIN)
+                }
+
+            assertEquals(ModelType.MAIN, thrown.modelType)
+            assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, thrown.message)
         }
 }

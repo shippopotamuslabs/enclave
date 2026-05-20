@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.security.AadContext
 import com.browntowndev.pocketcrew.core.data.security.LocalDataEncryptionService
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -36,14 +37,15 @@ class ActiveModelProviderImpl
                     id = config.id,
                     isLocal = true,
                     name =
-                        localEncryption.decryptString(
+                        decryptRequired(
                             config.displayName,
                             AadContext("LocalModelConfigurationEntity", "displayName", config.id.value).toBytes(),
+                            modelType,
                         ),
                     modelId = model.localFilename,
                     systemPrompt =
                         config.systemPrompt?.let {
-                            localEncryption.decryptString(
+                            decryptStringOrNull(
                                 it,
                                 AadContext("LocalModelConfigurationEntity", "systemPrompt", config.id.value).toBytes(),
                             )
@@ -78,15 +80,17 @@ class ActiveModelProviderImpl
                     id = config.id,
                     isLocal = false,
                     name =
-                        localEncryption.decryptString(
+                        decryptRequired(
                             config.displayName,
                             AadContext("ApiModelConfigurationEntity", "displayName", config.id.value).toBytes(),
+                            modelType,
                         ),
                     modelId = credentials.modelId,
                     systemPrompt =
-                        localEncryption.decryptString(
+                        decryptRequired(
                             config.systemPrompt,
                             AadContext("ApiModelConfigurationEntity", "systemPrompt", config.id.value).toBytes(),
+                            modelType,
                         ),
                     isMultimodal = credentials.isMultimodal,
                     reasoningEffort =
@@ -116,4 +120,17 @@ class ActiveModelProviderImpl
 
             return null
         }
+
+        private fun decryptRequired(
+            stored: String,
+            aad: ByteArray,
+            modelType: ModelType,
+        ): String =
+            decryptStringOrNull(stored, aad)
+                ?: throw ActiveModelConfigurationDecryptException(modelType)
+
+        private fun decryptStringOrNull(
+            stored: String,
+            aad: ByteArray,
+        ): String? = runCatching { localEncryption.decryptString(stored, aad) }.getOrNull()
     }

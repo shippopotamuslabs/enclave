@@ -29,6 +29,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.CleanupDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
+import com.browntowndev.pocketcrew.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
@@ -204,6 +205,10 @@ object DataModule {
 
     @Provides
     fun provideWebSearchSourceDao(database: PocketCrewDatabase): WebSearchSourceDao = database.webSearchSourceDao()
+
+    @Provides
+    fun provideFirestoreSyncPlaceholderDao(database: PocketCrewDatabase): FirestoreSyncPlaceholderDao =
+        database.firestoreSyncPlaceholderDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao = database.messageVisionAnalysisDao()

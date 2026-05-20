@@ -58,8 +58,17 @@ abstract class ChatDao {
     @Query("DELETE FROM chat WHERE id IN (:ids) AND deleted = 1")
     abstract suspend fun purgeDeleted(ids: List<ChatId>): Int
 
-    /** Removes sync placeholder chats left behind when child Firestore docs arrive after a mass-delete. */
-    @Query("DELETE FROM chat WHERE created = 0")
+    /**
+     * Removes sync placeholder chats left behind when child Firestore docs arrive after a mass-delete.
+     * Keeps placeholder rows that already have at least one message so in-flight sync cannot orphan FKs.
+     */
+    @Query(
+        """
+        DELETE FROM chat
+        WHERE created = 0
+          AND NOT EXISTS (SELECT 1 FROM message WHERE message.chat_id = chat.id)
+        """,
+    )
     abstract suspend fun deleteOrphanedPlaceholders(): Int
 
     @Query("UPDATE chat SET name = :newName, pending_sync = 1, updated_at = :timestamp WHERE id = :chatId")

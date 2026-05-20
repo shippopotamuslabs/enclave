@@ -12,6 +12,8 @@ import com.browntowndev.pocketcrew.domain.usecase.security.AdoptCloudVaultUseCas
 import com.browntowndev.pocketcrew.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.DetectVaultReconciliationStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase
 import com.browntowndev.pocketcrew.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
@@ -41,6 +43,8 @@ internal class SettingsGeneralDelegate
         private val adoptCloudVaultUseCase: AdoptCloudVaultUseCase,
         private val bootstrapCloudVaultFromLocalUseCase: BootstrapCloudVaultFromLocalUseCase,
         private val createVaultUseCase: CreateVaultUseCase,
+        private val unlockVaultFromStoredMetadataUseCase: UnlockVaultFromStoredMetadataUseCase,
+        private val startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase,
         private val cryptoManager: CryptoManagerPort,
         private val vaultMetadataPort: VaultMetadataPort,
         private val cloudSyncPort: CloudSyncPort,
@@ -102,6 +106,10 @@ internal class SettingsGeneralDelegate
             scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to sign in with Google", "Failed to sign in")) {
                 authUseCases.loginWithGoogle().getOrThrow()
                 pendingCloudClobberPayload = null
+                // Drop any in-memory DEK so Application-level auth listeners cannot sync with a
+                // stale local key while the user re-enters their vault password.
+                cryptoManager.clearKey()
+                cloudSyncPort.stopListening()
                 vaultReauthSheet.value = VaultReauthSheetState.EnterPassword()
             }
         }
@@ -157,8 +165,7 @@ internal class SettingsGeneralDelegate
                     is VaultReconciliationOutcome.AlreadyMatching,
                     is VaultReconciliationOutcome.NoLocalVault,
                     -> {
-                        runCatching { cloudSyncPort.syncAllLocalDataToCloud() }
-                        cloudSyncPort.startListening()
+                        if (!unlockVaultAndStartCloudSync(password, vaultReauthSheet)) return@launch
                         vaultReauthSheet.value = VaultReauthSheetState.Hidden
                     }
                     is VaultReconciliationOutcome.NoCloudVault -> {
@@ -175,8 +182,7 @@ internal class SettingsGeneralDelegate
                                         )
                                     return@launch
                                 }
-                                runCatching { cloudSyncPort.syncAllLocalDataToCloud() }
-                                cloudSyncPort.startListening()
+                                if (!unlockVaultAndStartCloudSync(password, vaultReauthSheet)) return@launch
                                 vaultReauthSheet.value = VaultReauthSheetState.Hidden
                             }
                             localSalt == null && localWrappedDek == null -> {
@@ -277,6 +283,23 @@ internal class SettingsGeneralDelegate
                 }
                 Unit
             }
+
+        private suspend fun unlockVaultAndStartCloudSync(
+            password: String,
+            vaultReauthSheet: MutableStateFlow<VaultReauthSheetState>,
+        ): Boolean {
+            val unlockResult = unlockVaultFromStoredMetadataUseCase(password)
+            if (unlockResult.isFailure) {
+                vaultReauthSheet.value =
+                    VaultReauthSheetState.EnterPassword(
+                        isUnlocking = false,
+                        errorMessage = "Incorrect Vault Password",
+                    )
+                return false
+            }
+            startCloudSyncListeningUseCase(uploadLocalFirst = true)
+            return true
+        }
 
         private suspend fun ensureVerificationStored(): String? {
             val existing = vaultMetadataPort.getVaultVerificationData()?.takeIf { it.isNotBlank() }

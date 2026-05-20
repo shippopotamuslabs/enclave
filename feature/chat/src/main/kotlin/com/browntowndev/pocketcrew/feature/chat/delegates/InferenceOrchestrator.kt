@@ -1,15 +1,18 @@
 package com.browntowndev.pocketcrew.feature.chat.delegates
 
 import androidx.lifecycle.SavedStateHandle
+import android.util.Log
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -35,6 +38,7 @@ class InferenceOrchestrator
         private val chatUseCases: ChatUseCases,
         private val settingsUseCases: SettingsUseCases,
         private val cancelInferenceUseCase: CancelInferenceUseCase,
+        private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
     ) {
@@ -96,7 +100,7 @@ class InferenceOrchestrator
                             chatId = promptResult.chatId,
                             assistantMessageId = promptResult.assistantMessageId,
                         )
-                    _acknowledgedTurnKeys.update { keys -> keys - turnKey }
+                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("sendMessage-unack") { keys -> keys - turnKey }
                     _requestedTurnKey.value = turnKey
 
                     onInputCleared()
@@ -113,21 +117,32 @@ class InferenceOrchestrator
                             ).onEach {
                                 // Snapshot publication is owned by the generation pipeline
                             }.catch { cause ->
-                                errorHandler.handleError(TAG, "Inference failed", cause, "Failed to generate response. Please try again.")
+                                val userMessage =
+                                    if (cause is ActiveModelConfigurationDecryptException) {
+                                        cause.message ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
+                                    } else {
+                                        "Failed to generate response. Please try again."
+                                    }
+                                errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
                             }.launchIn(scope)
                 }
             }
         }
 
-        fun stopInference() {
+        fun stopInference(scope: CoroutineScope) {
             inferenceJob?.cancel()
             cancelInferenceUseCase()
-            // Snapshot retirement and turn acknowledgement are owned by the inference
-            // service (terminal COMPLETE publish + Room flush) and maybeAcknowledgeCompletedTurn.
+            _requestedTurnKey.value?.let { key ->
+                scope.launch {
+                    activeChatTurnSnapshotPort.clear(key)
+                    _requestedTurnKey.update { current -> if (current == key) null else current }
+                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("stopInference") { keys -> keys + key }
+                }
+            }
         }
 
         fun acknowledgeTurn(key: ActiveChatTurnKey) {
-            _acknowledgedTurnKeys.update { keys -> keys + key }
+            _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("acknowledgeTurn") { keys -> keys + key }
             if (_requestedTurnKey.value == key) {
                 _requestedTurnKey.update { null }
             }
@@ -136,7 +151,7 @@ class InferenceOrchestrator
         fun createNewChat() {
             inferenceJob?.cancel()
             _requestedTurnKey.value?.let { key ->
-                _acknowledgedTurnKeys.update { keys -> keys + key }
+                _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("createNewChat") { keys -> keys + key }
             }
             _currentChatId.value = null
             _requestedTurnKey.value = null
@@ -145,6 +160,21 @@ class InferenceOrchestrator
 
         fun cancelInference() {
             inferenceJob?.cancel()
+        }
+
+        private inline fun MutableStateFlow<Set<ActiveChatTurnKey>>.updateAcknowledgedTurnKeys(
+            via: String,
+            crossinline transform: (Set<ActiveChatTurnKey>) -> Set<ActiveChatTurnKey>,
+        ) {
+            update { keys ->
+                val newKeys = transform(keys)
+                Log.d(
+                    "InfOrch",
+                    "ackUpdate from=${keys.map { it.assistantMessageId.value.take(4) }} " +
+                        "to=${newKeys.map { it.assistantMessageId.value.take(4) }} via=$via",
+                )
+                newKeys
+            }
         }
 
         private companion object {

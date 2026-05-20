@@ -42,9 +42,8 @@ internal class FirestoreSyncContext(
         if (purgeInProgress.get()) return
         if (chatId.value.isBlank()) return
         if (messageId.value.isBlank()) return
-        val chat = daos.chatDao.getChatById(chatId)
-        if (chat == null) {
-            daos.chatDao.insertIfAbsent(
+        daos.firestoreSyncPlaceholderDao.insertPlaceholderChatAndMessage(
+            chatEntity =
                 ChatEntity(
                     id = chatId,
                     name =
@@ -59,23 +58,20 @@ internal class FirestoreSyncContext(
                     deleted = false,
                     pendingSync = 0,
                 ),
-            )
-        }
-
-        daos.messageDao.insertIfAbsent(
-            MessageEntity(
-                id = messageId,
-                chatId = chatId,
-                content =
-                    localEncryption.encryptString(
-                        "Syncing...",
-                        AadContext("MessageEntity", "content", messageId.value).toBytes(),
-                    ),
-                role = Role.USER,
-                messageState = MessageState.COMPLETE,
-                createdAt = 0L,
-                pendingSync = 0,
-            ),
+            messageEntity =
+                MessageEntity(
+                    id = messageId,
+                    chatId = chatId,
+                    content =
+                        localEncryption.encryptString(
+                            "Syncing...",
+                            AadContext("MessageEntity", "content", messageId.value).toBytes(),
+                        ),
+                    role = Role.USER,
+                    messageState = MessageState.COMPLETE,
+                    createdAt = 0L,
+                    pendingSync = 0,
+                ),
         )
     }
 

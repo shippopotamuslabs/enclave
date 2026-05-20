@@ -20,6 +20,17 @@ enum class UtilityType(
     ONNX_VOCAB("onnx_vocab"),
     ;
 
+    /**
+     * Returns the human-readable display name for download UI and notifications.
+     */
+    fun displayName(): String =
+        when (this) {
+            WHISPER -> "Speech Recognition"
+            ONNX_MODEL -> "Embeddings"
+            ONNX_VOCAB -> "Embedding Vocabulary"
+            ONNX -> "Utility Model"
+        }
+
     companion object {
         fun fromApiValue(value: String?): UtilityType? =
             entries.firstOrNull { type ->

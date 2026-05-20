@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -497,6 +498,29 @@ class DirectChatInferenceExecutorTest {
             val tavilyStates = states.filterIsInstance<MessageGenerationState.WebSearchSourcesAttached>()
             assertEquals(1, tavilyStates.size)
             assertEquals(sources, tavilyStates.first().sources)
+        }
+
+    @Test
+    fun `emits failed state with decrypt message when active model cannot be read`() =
+        runTest {
+            val decryptError = ActiveModelConfigurationDecryptException(ModelType.FAST)
+            coEvery { activeModelProvider.getActiveConfiguration(any()) } throws decryptError
+
+            val states =
+                executor
+                    .execute(
+                        prompt = "hello",
+                        userMessageId = MessageId("u1"),
+                        assistantMessageId = MessageId("a1"),
+                        chatId = ChatId("c1"),
+                        userHasImage = false,
+                        modelType = ModelType.FAST,
+                        backgroundInferenceEnabled = false,
+                    ).toList()
+
+            val failed = states.filterIsInstance<MessageGenerationState.Failed>().single()
+            assertTrue(failed.error is ActiveModelConfigurationDecryptException)
+            assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, failed.error.message)
         }
 
     private fun mockActiveModelProvider(

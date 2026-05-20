@@ -24,6 +24,7 @@ internal class FirestoreSyncDaos private constructor(
     val chatSummaryDao = chatSyncDaos.chatSummaryDao
     val documentDao = chatSyncDaos.documentDao
     val embeddingDao = chatSyncDaos.embeddingDao
+    val firestoreSyncPlaceholderDao = chatSyncDaos.firestoreSyncPlaceholderDao
 
     companion object {
         fun from(

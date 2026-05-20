@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.error.InferenceIOException
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
@@ -95,6 +96,8 @@ class DirectChatInferenceExecutor
                     }
                 } catch (e: InferenceBusyException) {
                     emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: ActiveModelConfigurationDecryptException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
                 } catch (e: IllegalStateException) {
                     emit(MessageGenerationState.Failed(e, modelType))
                 } catch (e: InferenceIOException) {

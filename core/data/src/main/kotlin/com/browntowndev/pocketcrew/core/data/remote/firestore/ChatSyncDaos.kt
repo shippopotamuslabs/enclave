@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.pocketcrew.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,4 +26,5 @@ class ChatSyncDaos
         val webSearchSourceDao: WebSearchSourceDao,
         val documentDao: DocumentDao,
         val embeddingDao: EmbeddingDao,
+        val firestoreSyncPlaceholderDao: FirestoreSyncPlaceholderDao,
     )
