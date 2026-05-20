@@ -24,14 +24,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 import com.browntowndev.pocketcrew.core.ui.component.vault.VaultMismatchConfirmDialog
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.feature.settings.components.UnlockVaultScreen
 import com.browntowndev.pocketcrew.presentation.security.BiometricPromptCoordinator
 import com.browntowndev.pocketcrew.presentation.security.BiometricPromptHelper
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -71,7 +71,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     when (val currentState = state) {
                         is AppStartupState.Loading -> {
@@ -83,17 +83,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 LaunchedEffect(currentState.isBiometricEnrollmentPending) {
                                     val cipher = viewModel.getBiometricEncryptCipher()
                                     if (cipher != null) {
-                                        val result = biometricHelper.showPrompt(
-                                            title = "Enroll Biometric Unlock",
-                                            subtitle = "Scan to secure your vault password",
-                                            cipher = cipher
-                                        )
-                                        result.onSuccess { crypto ->
-                                            crypto?.cipher?.let { viewModel.finalizeBiometricEnrollment(it) }
-                                        }.onFailure {
-                                            loggingPort.error(TAG, "Biometric enrollment failed", it)
-                                            viewModel.cancelBiometricEnrollment()
-                                        }
+                                        val result =
+                                            biometricHelper.showPrompt(
+                                                title = "Enroll Biometric Unlock",
+                                                subtitle = "Scan to secure your vault password",
+                                                cipher = cipher,
+                                            )
+                                        result
+                                            .onSuccess { crypto ->
+                                                crypto?.cipher?.let { viewModel.finalizeBiometricEnrollment(it) }
+                                            }.onFailure {
+                                                loggingPort.error(TAG, "Biometric enrollment failed", it)
+                                                viewModel.cancelBiometricEnrollment()
+                                            }
                                     } else {
                                         viewModel.cancelBiometricEnrollment()
                                     }
@@ -109,11 +111,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         onPrompt = {
                                             val cipher = viewModel.getBiometricDecryptCipher()
                                             if (cipher != null) {
-                                                val result = biometricHelper.showPrompt(
-                                                    title = "Unlock Vault",
-                                                    subtitle = "Scan to unlock your encrypted data",
-                                                    cipher = cipher,
-                                                )
+                                                val result =
+                                                    biometricHelper.showPrompt(
+                                                        title = "Unlock Vault",
+                                                        subtitle = "Scan to unlock your encrypted data",
+                                                        cipher = cipher,
+                                                    )
                                                 result.onSuccess { crypto ->
                                                     crypto?.cipher?.let { viewModel.unlockWithBiometricCipher(it) }
                                                 }
@@ -134,7 +137,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     onSubmitVaultPassword = { password, enableBiometric ->
                                         loggingPort.debug(TAG, "Vault dialog submitted bio=$enableBiometric")
                                         viewModel.unlockVault(password, enableBiometric)
-                                    }
+                                    },
                                 )
                             } else {
                                 // App renders only after initialRoute is verified and vault is unlocked
@@ -198,11 +201,12 @@ private fun BiometricVaultUnlockEffect(
             launchPromptIfAllowed()
         }
 
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                launchPromptIfAllowed()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    launchPromptIfAllowed()
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
 
         onDispose {

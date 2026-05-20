@@ -16,22 +16,20 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object CoilModule {
-
     @Provides
     @Singleton
     fun provideImageLoader(
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,
-        cryptoManager: CryptoManagerPort
-    ): ImageLoader {
-        return ImageLoader.Builder(context)
+        cryptoManager: CryptoManagerPort,
+    ): ImageLoader =
+        ImageLoader
+            .Builder(context)
             .components {
                 // Add our custom fetcher for decrypted media
                 // We add it before the default OkHttpNetworkFetcherFactory
                 // so it can intercept the specific Firebase Storage URLs
                 add(StudioMediaFetcher.Factory(cryptoManager, okHttpClient))
                 add(OkHttpNetworkFetcherFactory(okHttpClient))
-            }
-            .build()
-    }
+            }.build()
 }

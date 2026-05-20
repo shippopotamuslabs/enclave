@@ -1,4 +1,24 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.presentation.navigation
 
@@ -236,7 +256,7 @@ fun PocketCrewNavGraph(
                 },
                 onNavigateToStudio = { navController.navigate(Routes.STUDIO) },
                 onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) }
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
             )
         }
 
@@ -355,7 +375,7 @@ fun PocketCrewNavGraph(
             val rehydrateUris = backStackEntry.arguments?.getString("rehydrateUris")
             val rehydrateTypes = backStackEntry.arguments?.getString("rehydrateTypes")
             val rehydratePrompts = backStackEntry.arguments?.getString("rehydratePrompts")
-            
+
             var isStudioInitialized by rememberSaveable { mutableStateOf(false) }
 
             LaunchedEffect(
@@ -366,7 +386,7 @@ fun PocketCrewNavGraph(
                 rehydrateIds,
                 rehydrateUris,
                 rehydrateTypes,
-                rehydratePrompts
+                rehydratePrompts,
             ) {
                 if (editAssetId != null || rehydrateUris != null) {
                     val json = kotlinx.serialization.json.Json
@@ -380,7 +400,7 @@ fun PocketCrewNavGraph(
                         rehydrateIds = ids,
                         rehydrateUris = uris,
                         rehydrateTypes = types,
-                        rehydratePrompts = prompts
+                        rehydratePrompts = prompts,
                     )
                     isStudioInitialized = true
                 } else if (animateAssetId != null) {
@@ -399,7 +419,7 @@ fun PocketCrewNavGraph(
                 onMediaClick = { assetId ->
                     navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", assetId))
                 },
-                onShowSnackbar = onShowSnackbar
+                onShowSnackbar = onShowSnackbar,
             )
         }
 
@@ -559,12 +579,13 @@ fun PocketCrewNavGraph(
                 onNavigateBack = { navController.popBackStack() },
                 onShareMedia = galleryViewModel::shareSingleMedia,
                 onSendToStudio = { id, mode, prompt ->
-                    val targetRoute = when (mode) {
-                        "edit" -> Routes.studioWithEditAsset(id)
-                        "animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = prompt != null, prompt = prompt)
-                        "quick_animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = true)
-                        else -> Routes.studioWithEditAsset(id)
-                    }
+                    val targetRoute =
+                        when (mode) {
+                            "edit" -> Routes.studioWithEditAsset(id)
+                            "animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = prompt != null, prompt = prompt)
+                            "quick_animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = true)
+                            else -> Routes.studioWithEditAsset(id)
+                        }
                     navController.navigate(targetRoute) {
                         popUpTo(Routes.STUDIO) { inclusive = true }
                     }
@@ -578,18 +599,19 @@ fun PocketCrewNavGraph(
 
         composable(
             route = Routes.STUDIO_DETAIL,
-            arguments = listOf(
-                navArgument("assetId") { type = NavType.StringType },
-                navArgument("animatePrompt") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("autoAnimate") {
-                    type = NavType.BoolType
-                    defaultValue = false
-                },
-            ),
+            arguments =
+                listOf(
+                    navArgument("assetId") { type = NavType.StringType },
+                    navArgument("animatePrompt") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("autoAnimate") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
+                ),
             enterTransition = {
                 val initialLevel = getRouteLevel(initialState.destination.route)
                 val targetLevel = getRouteLevel(targetState.destination.route)
@@ -690,19 +712,21 @@ fun PocketCrewNavGraph(
 
         composable(
             route = Routes.SHARED_CHAT,
-            arguments = listOf(
-                navArgument("shareId") { type = NavType.StringType },
-                navArgument("key") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
-            deepLinks = listOf(
-                navDeepLink {
-                    uriPattern = Routes.SHARED_CHAT_DEEP_LINK_PATTERN
-                },
-            )
+            arguments =
+                listOf(
+                    navArgument("shareId") { type = NavType.StringType },
+                    navArgument("key") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            deepLinks =
+                listOf(
+                    navDeepLink {
+                        uriPattern = Routes.SHARED_CHAT_DEEP_LINK_PATTERN
+                    },
+                ),
         ) { backStackEntry ->
             val shareId = backStackEntry.arguments?.getString("shareId")
             val decryptionKey = backStackEntry.arguments?.getString("key")
@@ -725,7 +749,7 @@ fun PocketCrewNavGraph(
                     navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
                 },
                 onShowSnackbar = onShowSnackbar,
-                viewModel = chatViewModel
+                viewModel = chatViewModel,
             )
         }
     }
