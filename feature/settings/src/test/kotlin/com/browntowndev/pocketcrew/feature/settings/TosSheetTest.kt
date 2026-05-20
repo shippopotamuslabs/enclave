@@ -21,7 +21,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class TosSheetTest {
-
     private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
     private val authUseCases = mockk<SettingsAuthUseCases>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
@@ -42,18 +41,19 @@ class TosSheetTest {
             errorHandler.coroutineExceptionHandler(any(), any(), any())
         } returns CoroutineExceptionHandler { _, _ -> }
 
-        delegate = SettingsGeneralDelegate(
-            preferencesUseCases = preferencesUseCases,
-            authUseCases = authUseCases,
-            errorHandler = errorHandler,
-            detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
-            adoptCloudVaultUseCase = adoptCloudVaultUseCase,
-            bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-            createVaultUseCase = createVaultUseCase,
-            cryptoManager = cryptoManager,
-            vaultMetadataPort = vaultMetadataPort,
-            cloudSyncPort = cloudSyncPort,
-        )
+        delegate =
+            SettingsGeneralDelegate(
+                preferencesUseCases = preferencesUseCases,
+                authUseCases = authUseCases,
+                errorHandler = errorHandler,
+                detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
+                adoptCloudVaultUseCase = adoptCloudVaultUseCase,
+                bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+                createVaultUseCase = createVaultUseCase,
+                cryptoManager = cryptoManager,
+                vaultMetadataPort = vaultMetadataPort,
+                cloudSyncPort = cloudSyncPort,
+            )
         sheetVisibility = MutableStateFlow(SheetVisibilityState())
     }
 

@@ -26,63 +26,65 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 
 @Composable
 fun ReassignmentView(
     modelTypes: List<ModelType>,
     reassignmentOptions: List<ReassignmentOptionUi>,
     onConfirm: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var selectedOption by remember { mutableStateOf<ReassignmentOptionUi?>(null) }
 
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
             text = "Reassignment Required",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
         val typesList = modelTypes.joinToString { it.displayLabel }
         Text(
-            text = if (reassignmentOptions.isEmpty()) {
-                "The following slot(s) are using this model as default: $typesList. " +
-                    "No compatible models exist."
-            } else {
-                "The following slot(s) are using this model as default: $typesList. " +
-                    "Please select a replacement config first."
-            },
+            text =
+                if (reassignmentOptions.isEmpty()) {
+                    "The following slot(s) are using this model as default: $typesList. " +
+                        "No compatible models exist."
+                } else {
+                    "The following slot(s) are using this model as default: $typesList. " +
+                        "Please select a replacement config first."
+                },
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         if (reassignmentOptions.isNotEmpty()) {
             LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                 items(reassignmentOptions) { option ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedOption = option }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedOption = option }
+                                .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = selectedOption == option,
-                            onClick = { selectedOption = option }
+                            onClick = { selectedOption = option },
                         )
                         Text(
                             text = option.displayName,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 8.dp)
+                            modifier = Modifier.padding(start = 8.dp),
                         )
                     }
                 }
@@ -90,10 +92,11 @@ fun ReassignmentView(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.End
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.End,
         ) {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
@@ -104,11 +107,11 @@ fun ReassignmentView(
                     selectedOption?.let { opt ->
                         onConfirm(
                             if (opt.source == ModelSource.ON_DEVICE) opt.configId as? LocalModelConfigurationId else null,
-                            if (opt.source == ModelSource.API) opt.configId as? ApiModelConfigurationId else null
+                            if (opt.source == ModelSource.API) opt.configId as? ApiModelConfigurationId else null,
                         )
                     }
                 },
-                enabled = selectedOption != null
+                enabled = selectedOption != null,
             ) {
                 Text("Delete & Reassign")
             }
@@ -122,7 +125,7 @@ fun DeleteConfirmationDialog(
     message: String,
     confirmLabel: String,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -137,6 +140,6 @@ fun DeleteConfirmationDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }

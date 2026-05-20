@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SettingsGeneralDelegateTest {
-
     private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
     private val authUseCases = mockk<SettingsAuthUseCases>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
@@ -45,54 +44,56 @@ class SettingsGeneralDelegateTest {
             errorHandler.coroutineExceptionHandler(any(), any(), any())
         } returns CoroutineExceptionHandler { _, _ -> }
 
-        delegate = SettingsGeneralDelegate(
-            preferencesUseCases = preferencesUseCases,
-            authUseCases = authUseCases,
-            errorHandler = errorHandler,
-            detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
-            adoptCloudVaultUseCase = adoptCloudVaultUseCase,
-            bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-            createVaultUseCase = createVaultUseCase,
-            cryptoManager = cryptoManager,
-            vaultMetadataPort = vaultMetadataPort,
-            cloudSyncPort = cloudSyncPort,
-        )
+        delegate =
+            SettingsGeneralDelegate(
+                preferencesUseCases = preferencesUseCases,
+                authUseCases = authUseCases,
+                errorHandler = errorHandler,
+                detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
+                adoptCloudVaultUseCase = adoptCloudVaultUseCase,
+                bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+                createVaultUseCase = createVaultUseCase,
+                cryptoManager = cryptoManager,
+                vaultMetadataPort = vaultMetadataPort,
+                cloudSyncPort = cloudSyncPort,
+            )
     }
 
     @Test
-    fun `no cloud vault and no local vault creates the first vault`() = runTest {
-        val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
-        val salt = ByteArray(16) { 0x11 }
-        val wrappedDek = ByteArray(32) { 0x22 }
-        val verificationCiphertext = ByteArray(8) { 0x33 }
+    fun `no cloud vault and no local vault creates the first vault`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            val salt = ByteArray(16) { 0x11 }
+            val wrappedDek = ByteArray(32) { 0x22 }
+            val verificationCiphertext = ByteArray(8) { 0x33 }
 
-        coEvery { detectVaultReconciliationStateUseCase("password") } returns
-            Result.success(VaultReconciliationOutcome.NoCloudVault)
-        coEvery { vaultMetadataPort.getVaultSalt() } returns null
-        coEvery { vaultMetadataPort.getWrappedDek() } returns null
-        coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
-        every { cryptoManager.generateSalt() } returns salt
-        every { cryptoManager.encodeBase64(salt) } returns "salt-b64"
-        every { cryptoManager.encodeBase64(wrappedDek) } returns "wrapped-b64"
-        every { cryptoManager.encodeBase64(verificationCiphertext) } returns "verification-b64"
-        every { cryptoManager.encrypt(any()) } returns Result.success(verificationCiphertext)
-        coEvery { createVaultUseCase("password", salt) } returns Result.success(wrappedDek)
-        coEvery { vaultMetadataPort.saveVaultSalt("salt-b64") } returns Unit
-        coEvery { vaultMetadataPort.saveWrappedDek("wrapped-b64") } returns Unit
-        coEvery { vaultMetadataPort.saveVaultVerificationData("verification-b64") } returns Unit
-        coEvery { cloudSyncPort.uploadVaultMetadata(any()) } returns Result.success(Unit)
-        every { cloudSyncPort.startListening() } returns Unit
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.NoCloudVault)
+            coEvery { vaultMetadataPort.getVaultSalt() } returns null
+            coEvery { vaultMetadataPort.getWrappedDek() } returns null
+            coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
+            every { cryptoManager.generateSalt() } returns salt
+            every { cryptoManager.encodeBase64(salt) } returns "salt-b64"
+            every { cryptoManager.encodeBase64(wrappedDek) } returns "wrapped-b64"
+            every { cryptoManager.encodeBase64(verificationCiphertext) } returns "verification-b64"
+            every { cryptoManager.encrypt(any()) } returns Result.success(verificationCiphertext)
+            coEvery { createVaultUseCase("password", salt) } returns Result.success(wrappedDek)
+            coEvery { vaultMetadataPort.saveVaultSalt("salt-b64") } returns Unit
+            coEvery { vaultMetadataPort.saveWrappedDek("wrapped-b64") } returns Unit
+            coEvery { vaultMetadataPort.saveVaultVerificationData("verification-b64") } returns Unit
+            coEvery { cloudSyncPort.uploadVaultMetadata(any()) } returns Result.success(Unit)
+            every { cloudSyncPort.startListening() } returns Unit
 
-        delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
-        advanceUntilIdle()
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
 
-        assertEquals(VaultReauthSheetState.Hidden, sheet.value)
-        coVerify(exactly = 1) { createVaultUseCase("password", salt) }
-        coVerify(exactly = 1) { vaultMetadataPort.saveVaultSalt("salt-b64") }
-        coVerify(exactly = 1) { vaultMetadataPort.saveWrappedDek("wrapped-b64") }
-        coVerify(exactly = 1) { vaultMetadataPort.saveVaultVerificationData("verification-b64") }
-        coVerify(exactly = 1) { cloudSyncPort.uploadVaultMetadata(any()) }
-        verify(exactly = 1) { cloudSyncPort.startListening() }
-        coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
-    }
+            assertEquals(VaultReauthSheetState.Hidden, sheet.value)
+            coVerify(exactly = 1) { createVaultUseCase("password", salt) }
+            coVerify(exactly = 1) { vaultMetadataPort.saveVaultSalt("salt-b64") }
+            coVerify(exactly = 1) { vaultMetadataPort.saveWrappedDek("wrapped-b64") }
+            coVerify(exactly = 1) { vaultMetadataPort.saveVaultVerificationData("verification-b64") }
+            coVerify(exactly = 1) { cloudSyncPort.uploadVaultMetadata(any()) }
+            verify(exactly = 1) { cloudSyncPort.startListening() }
+            coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
+        }
 }

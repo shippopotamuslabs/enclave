@@ -10,8 +10,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.browntowndev.pocketcrew.core.ui.component.vault.VaultUnlockContent
 import com.browntowndev.pocketcrew.core.ui.component.vault.VaultAuthUiState
+import com.browntowndev.pocketcrew.core.ui.component.vault.VaultUnlockContent
 
 /**
  * Full-screen wrapper around the shared [VaultUnlockContent] body. Owns the [Surface] chrome,
@@ -39,12 +39,13 @@ fun UnlockVaultScreen(
             initialBiometricEnabled = isBiometricUnlockConfigured,
             onLoginClick = onLoginClick,
             onSubmitVaultPassword = onSubmitVaultPassword,
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
         )
     }
 }

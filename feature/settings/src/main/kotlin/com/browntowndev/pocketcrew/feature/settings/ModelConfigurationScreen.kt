@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +34,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.contentColorFor
@@ -50,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -70,7 +68,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 @Composable
 internal fun ModelConfigurationRoute(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -78,7 +76,7 @@ internal fun ModelConfigurationRoute(
         uiState = uiState,
         onNavigateBack = onNavigateBack,
         onSetDefaultModel = viewModel::onSetDefaultModel,
-        onShowAssignmentDialog = viewModel::onShowAssignmentDialog
+        onShowAssignmentDialog = viewModel::onShowAssignmentDialog,
     )
 }
 
@@ -88,7 +86,7 @@ fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
     onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
-    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
+    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -98,16 +96,17 @@ fun ModelConfigurationScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
@@ -118,28 +117,28 @@ fun ModelConfigurationScreen(
                 DefaultAssignmentsCard(
                     title = "General Chat",
                     assignments = uiState.assignments.assignments.filter { it.modelType in generalChatTypes },
-                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                    onEditAssignment = { onShowAssignmentDialog(true, it) },
                 )
             }
             item {
                 DefaultAssignmentsCard(
                     title = "Crew Mode",
                     assignments = uiState.assignments.assignments.filter { it.modelType in crewModeTypes },
-                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                    onEditAssignment = { onShowAssignmentDialog(true, it) },
                 )
             }
             item {
                 DefaultAssignmentsCard(
                     title = "Voice & Audio",
                     assignments = uiState.assignments.assignments.filter { it.modelType in audioTypes },
-                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                    onEditAssignment = { onShowAssignmentDialog(true, it) },
                 )
             }
             item {
                 DefaultAssignmentsCard(
                     title = "Studio & Media",
                     assignments = uiState.assignments.assignments.filter { it.modelType in studioMediaTypes },
-                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                    onEditAssignment = { onShowAssignmentDialog(true, it) },
                 )
             }
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -147,33 +146,41 @@ fun ModelConfigurationScreen(
 
         if (uiState.assignments.isDialogOpen && uiState.assignments.editingSlot != null) {
             val assignmentSlot = uiState.assignments.editingSlot
-            val slotLabel = uiState.assignments.assignments
-                .find { it.modelType == assignmentSlot }
-                ?.displayLabel ?: assignmentSlot.name
-            
+            val slotLabel =
+                uiState.assignments.assignments
+                    .find { it.modelType == assignmentSlot }
+                    ?.displayLabel ?: assignmentSlot.name
+
             val isVisionSlot = assignmentSlot == ModelType.VISION
             val isTtsSlot = assignmentSlot == ModelType.TTS
-            val isMediaSlot = assignmentSlot in listOf(
-                ModelType.IMAGE_GENERATION,
-                ModelType.VIDEO_GENERATION,
-                ModelType.MUSIC_GENERATION
-            )
+            val isMediaSlot =
+                assignmentSlot in
+                    listOf(
+                        ModelType.IMAGE_GENERATION,
+                        ModelType.VIDEO_GENERATION,
+                        ModelType.MUSIC_GENERATION,
+                    )
             val localAssets = if (isVisionSlot || isTtsSlot || isMediaSlot) emptyList() else uiState.localModelsSheet.models
-            val apiAssets = when {
-                isVisionSlot -> uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
-                isTtsSlot || isMediaSlot -> emptyList()
-                else -> uiState.apiProvidersSheet.assets
-            }
-            val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
-            val mediaAssets = if (isMediaSlot) {
-                val capability = when (assignmentSlot) {
-                    ModelType.IMAGE_GENERATION -> MediaCapability.IMAGE
-                    ModelType.VIDEO_GENERATION -> MediaCapability.VIDEO
-                    ModelType.MUSIC_GENERATION -> MediaCapability.MUSIC
-                    else -> MediaCapability.IMAGE // Should not happen given studioMediaTypes check
+            val apiAssets =
+                when {
+                    isVisionSlot -> uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
+                    isTtsSlot || isMediaSlot -> emptyList()
+                    else -> uiState.apiProvidersSheet.assets
                 }
-                uiState.mediaProvidersSheet.assets.filter { it.capability == capability }
-            } else emptyList()
+            val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
+            val mediaAssets =
+                if (isMediaSlot) {
+                    val capability =
+                        when (assignmentSlot) {
+                            ModelType.IMAGE_GENERATION -> MediaCapability.IMAGE
+                            ModelType.VIDEO_GENERATION -> MediaCapability.VIDEO
+                            ModelType.MUSIC_GENERATION -> MediaCapability.MUSIC
+                            else -> MediaCapability.IMAGE // Should not happen given studioMediaTypes check
+                        }
+                    uiState.mediaProvidersSheet.assets.filter { it.capability == capability }
+                } else {
+                    emptyList()
+                }
 
             AssignmentSelectionBottomSheet(
                 slotLabel = slotLabel,
@@ -184,7 +191,7 @@ fun ModelConfigurationScreen(
                 onDismiss = { onShowAssignmentDialog(false, null) },
                 onSelect = { localId, apiId, ttsId, mediaId ->
                     onSetDefaultModel(assignmentSlot, localId, apiId, ttsId, mediaId)
-                }
+                },
             )
         }
     }
@@ -195,7 +202,7 @@ fun ModelConfigurationScreen(
 fun DefaultAssignmentsCard(
     title: String,
     assignments: List<DefaultModelAssignmentUi>,
-    onEditAssignment: (ModelType) -> Unit
+    onEditAssignment: (ModelType) -> Unit,
 ) {
     Column {
         Text(
@@ -208,15 +215,16 @@ fun DefaultAssignmentsCard(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 assignments.forEach { assignment ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -224,7 +232,7 @@ fun DefaultAssignmentsCard(
                                     text = assignment.displayLabel,
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 )
                                 if (assignment.isMultimodal) {
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -232,39 +240,39 @@ fun DefaultAssignmentsCard(
                                         imageVector = Icons.Default.Visibility,
                                         contentDescription = "Vision capable",
                                         modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(4.dp))
-                                
+
                                 PersistentTooltip(description = assignment.modelType.description)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = assignment.currentModelName,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
                             )
                             if (assignment.providerName != null) {
                                 Text(
                                     text = "Provider: ${assignment.providerName}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (assignment.presetName != null) {
                                 Text(
                                     text = "Preset: ${assignment.presetName}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         IconButton(onClick = { onEditAssignment(assignment.modelType) }) {
                             Icon(
-                                imageVector = Icons.Default.Edit, 
-                                contentDescription = "Change default model for ${assignment.displayLabel}", 
-                                modifier = Modifier.size(24.dp)
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Change default model for ${assignment.displayLabel}",
+                                modifier = Modifier.size(24.dp),
                             )
                         }
                     }
@@ -290,34 +298,41 @@ fun AssignmentSelectionBottomSheet(
         localId: LocalModelConfigurationId?,
         apiId: ApiModelConfigurationId?,
         ttsId: TtsProviderId?,
-        mediaId: MediaProviderId?
-    ) -> Unit
+        mediaId: MediaProviderId?,
+    ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         AssignmentSelectionContent(
-            modifier = Modifier
-                .padding(bottom = 32.dp),
+            modifier =
+                Modifier
+                    .padding(bottom = 32.dp),
             slotLabel = slotLabel,
             localAssets = localAssets,
             apiAssets = apiAssets,
             ttsAssets = ttsAssets,
             mediaAssets = mediaAssets,
             onDismiss = onDismiss,
-            onSelect = onSelect
+            onSelect = onSelect,
         )
     }
 }
 
 private sealed interface AssignmentSelectionView {
     data object AssetList : AssignmentSelectionView
-    data class LocalConfigList(val asset: LocalModelAssetUi) : AssignmentSelectionView
-    data class ApiConfigList(val asset: ApiModelAssetUi) : AssignmentSelectionView
+
+    data class LocalConfigList(
+        val asset: LocalModelAssetUi,
+    ) : AssignmentSelectionView
+
+    data class ApiConfigList(
+        val asset: ApiModelAssetUi,
+    ) : AssignmentSelectionView
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -336,8 +351,8 @@ fun AssignmentSelectionContent(
         localId: LocalModelConfigurationId?,
         apiId: ApiModelConfigurationId?,
         ttsId: TtsProviderId?,
-        mediaId: MediaProviderId?
-    ) -> Unit
+        mediaId: MediaProviderId?,
+    ) -> Unit,
 ) {
     var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
     var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
@@ -348,25 +363,28 @@ fun AssignmentSelectionContent(
     val hasTtsTab = ttsAssets.isNotEmpty()
     val hasMediaTab = mediaAssets.isNotEmpty()
     var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab, hasMediaTab) { mutableIntStateOf(0) }
-    val tabs = buildList {
-        if (hasLocalTab) add("Local Models")
-        if (hasApiTab) add("API Models")
-        if (hasTtsTab) add("TTS Providers")
-        if (hasMediaTab) add("Media Providers")
-    }
+    val tabs =
+        buildList {
+            if (hasLocalTab) add("Local Models")
+            if (hasApiTab) add("API Models")
+            if (hasTtsTab) add("TTS Providers")
+            if (hasMediaTab) add("Media Providers")
+        }
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
+        modifier =
+            modifier
+                .fillMaxWidth(),
     ) {
         when (val state = viewState) {
             is AssignmentSelectionView.AssetList -> {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = if (onBack != null) 20.dp else 0.dp, vertical = 16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (onBack != null) 20.dp else 0.dp, vertical = 16.dp),
                 ) {
                     if (onBack != null) {
                         IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
@@ -378,20 +396,21 @@ fun AssignmentSelectionContent(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         textAlign = if (onBack != null) TextAlign.Start else TextAlign.Center,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
             is AssignmentSelectionView.LocalConfigList -> {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
                 ) {
                     IconButton(
                         onClick = { viewState = AssignmentSelectionView.AssetList },
-                        modifier = Modifier.size(40.dp).padding(end = 8.dp)
+                        modifier = Modifier.size(40.dp).padding(end = 8.dp),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to models")
                     }
@@ -401,7 +420,7 @@ fun AssignmentSelectionContent(
                                 text = state.asset.friendlyName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             if (state.asset.isMultimodal) {
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -409,14 +428,14 @@ fun AssignmentSelectionContent(
                                     imageVector = Icons.Default.Visibility,
                                     contentDescription = "Vision capable",
                                     modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         Text(
                             text = "Presets",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -424,13 +443,14 @@ fun AssignmentSelectionContent(
             is AssignmentSelectionView.ApiConfigList -> {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
                 ) {
                     IconButton(
                         onClick = { viewState = AssignmentSelectionView.AssetList },
-                        modifier = Modifier.size(40.dp).padding(end = 8.dp)
+                        modifier = Modifier.size(40.dp).padding(end = 8.dp),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
                     }
@@ -440,7 +460,7 @@ fun AssignmentSelectionContent(
                                 text = state.asset.displayName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             if (state.asset.isMultimodal) {
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -448,14 +468,14 @@ fun AssignmentSelectionContent(
                                     imageVector = Icons.Default.Visibility,
                                     contentDescription = "Vision capable",
                                     modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         Text(
                             text = "Presets",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -465,9 +485,10 @@ fun AssignmentSelectionContent(
         AnimatedContent(
             targetState = viewState,
             label = "AssignmentSelectionTransition",
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
         ) { state ->
             when (state) {
                 is AssignmentSelectionView.AssetList -> {
@@ -476,7 +497,7 @@ fun AssignmentSelectionContent(
                             SecondaryTabRow(
                                 selectedTabIndex = selectedTabIndex,
                                 containerColor = BottomSheetDefaults.ContainerColor,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 tabs.forEachIndexed { index, title ->
                                     Tab(
@@ -485,36 +506,39 @@ fun AssignmentSelectionContent(
                                         text = {
                                             Text(
                                                 text = title,
-                                                color = if (selectedTabIndex == index) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    contentColorFor(BottomSheetDefaults.ContainerColor)
-                                                },
-                                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                                                color =
+                                                    if (selectedTabIndex == index) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        contentColorFor(BottomSheetDefaults.ContainerColor)
+                                                    },
+                                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
                                             )
-                                        }
+                                        },
                                     )
                                 }
                             }
                         }
 
                         AnimatedContent(
-                            targetState = when {
-                                hasLocalTab && (hasApiTab || hasTtsTab || hasMediaTab) -> selectedTabIndex
-                                hasLocalTab -> 0
-                                hasApiTab || hasTtsTab || hasMediaTab -> selectedTabIndex
-                                else -> 0
-                            },
+                            targetState =
+                                when {
+                                    hasLocalTab && (hasApiTab || hasTtsTab || hasMediaTab) -> selectedTabIndex
+                                    hasLocalTab -> 0
+                                    hasApiTab || hasTtsTab || hasMediaTab -> selectedTabIndex
+                                    else -> 0
+                                },
                             label = "AssignmentSelectionTabTransition",
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) { tabIndex ->
                             val currentTabTitle = tabs.getOrNull(tabIndex)
                             LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp)
-                                    .padding(top = 16.dp, bottom = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
+                                        .padding(top = 16.dp, bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 when (currentTabTitle) {
                                     "Local Models" -> {
@@ -525,7 +549,7 @@ fun AssignmentSelectionContent(
                                                 presetCount = asset.configurations.size,
                                                 isMultimodal = asset.isMultimodal,
                                                 isSelected = asset.configurations.any { it.id == selectedLocalId },
-                                                onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
+                                                onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) },
                                             )
                                         }
                                     }
@@ -537,7 +561,7 @@ fun AssignmentSelectionContent(
                                                 presetCount = asset.configurations.size,
                                                 isMultimodal = asset.isMultimodal,
                                                 isSelected = asset.configurations.any { it.id == selectedApiId },
-                                                onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
+                                                onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) },
                                             )
                                         }
                                     }
@@ -553,7 +577,7 @@ fun AssignmentSelectionContent(
                                                     selectedLocalId = null
                                                     selectedApiId = null
                                                     selectedMediaId = null
-                                                }
+                                                },
                                             )
                                         }
                                     }
@@ -569,7 +593,7 @@ fun AssignmentSelectionContent(
                                                     selectedLocalId = null
                                                     selectedApiId = null
                                                     selectedTtsId = null
-                                                }
+                                                },
                                             )
                                         }
                                     }
@@ -579,7 +603,7 @@ fun AssignmentSelectionContent(
                                                 text = "No options available.",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(vertical = 16.dp)
+                                                modifier = Modifier.padding(vertical = 16.dp),
                                             )
                                         }
                                     }
@@ -591,11 +615,12 @@ fun AssignmentSelectionContent(
 
                 is AssignmentSelectionView.LocalConfigList -> {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 16.dp, bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(top = 16.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
@@ -604,7 +629,7 @@ fun AssignmentSelectionContent(
                                 onClick = {
                                     selectedLocalId = config.id
                                     selectedApiId = null
-                                }
+                                },
                             )
                         }
                     }
@@ -612,11 +637,12 @@ fun AssignmentSelectionContent(
 
                 is AssignmentSelectionView.ApiConfigList -> {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 16.dp, bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(top = 16.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
@@ -625,7 +651,7 @@ fun AssignmentSelectionContent(
                                 onClick = {
                                     selectedApiId = config.id
                                     selectedLocalId = null
-                                }
+                                },
                             )
                         }
                     }
@@ -634,15 +660,16 @@ fun AssignmentSelectionContent(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
             ) {
                 Text("Cancel")
             }
@@ -650,7 +677,7 @@ fun AssignmentSelectionContent(
                 onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId, selectedMediaId) },
                 enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null || selectedMediaId != null,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
             ) {
                 Text("Confirm")
             }
@@ -665,34 +692,36 @@ private fun AssignmentAssetCard(
     presetCount: Int,
     isMultimodal: Boolean = false,
     isSelected: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { m ->
-                if (isSelected) {
-                    m.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                } else {
-                    m
-                }
-            }
-            .clickable(onClick = onClick)
-            .defaultMinSize(minHeight = 48.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .let { m ->
+                    if (isSelected) {
+                        m.border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(16.dp),
+                        )
+                    } else {
+                        m
+                    }
+                }.clickable(onClick = onClick)
+                .defaultMinSize(minHeight = 48.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -700,7 +729,7 @@ private fun AssignmentAssetCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     if (isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -708,7 +737,7 @@ private fun AssignmentAssetCard(
                             imageVector = Icons.Default.Visibility,
                             contentDescription = "Vision capable",
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -716,19 +745,19 @@ private fun AssignmentAssetCard(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
+                    modifier = Modifier.padding(top = 2.dp),
                 )
                 Text(
                     text = "$presetCount Preset(s) available",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "View presets",
-                modifier = Modifier.padding(start = 4.dp)
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }
@@ -739,27 +768,27 @@ private fun ModelCard(
     title: String,
     subtitle: String? = null,
     isSelected: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     ListItem(
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .let { m ->
-                if (isSelected) {
-                    m.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    m
-                }
-            }
-            .clickable(onClick = onClick)
-            .defaultMinSize(minHeight = 48.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .let { m ->
+                    if (isSelected) {
+                        m.border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    } else {
+                        m
+                    }
+                }.clickable(onClick = onClick)
+                .defaultMinSize(minHeight = 48.dp),
     )
 }
 
@@ -767,41 +796,43 @@ private fun ModelCard(
 private fun ConfigSelectionCard(
     label: String,
     isSelected: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { m ->
-                if (isSelected) {
-                    m.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                } else {
-                    m
-                }
-            }
-            .clickable(onClick = onClick)
-            .defaultMinSize(minHeight = 48.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .let { m ->
+                    if (isSelected) {
+                        m.border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(16.dp),
+                        )
+                    } else {
+                        m
+                    }
+                }.clickable(onClick = onClick)
+                .defaultMinSize(minHeight = 48.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        )
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -817,7 +848,7 @@ fun PreviewModelConfigurationScreen() {
             uiState = MockSettingsData.baseUiState,
             onNavigateBack = {},
             onSetDefaultModel = { _, _, _, _, _ -> },
-            onShowAssignmentDialog = { _, _ -> }
+            onShowAssignmentDialog = { _, _ -> },
         )
     }
 }
@@ -829,8 +860,10 @@ fun PreviewDefaultAssignmentsCard() {
         Column(modifier = Modifier.padding(16.dp)) {
             DefaultAssignmentsCard(
                 title = "General Chat",
-                assignments = MockSettingsData.baseUiState.assignments.assignments.take(3),
-                onEditAssignment = {}
+                assignments =
+                    MockSettingsData.baseUiState.assignments.assignments
+                        .take(3),
+                onEditAssignment = {},
             )
         }
     }
@@ -848,7 +881,7 @@ fun PreviewAssignmentSelectionContent() {
             ttsAssets = emptyList(),
             mediaAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _, _, _ -> }
+            onSelect = { _, _, _, _ -> },
         )
     }
 }
@@ -864,14 +897,14 @@ fun PreviewAssignmentAssetCard() {
                 presetCount = 3,
                 isMultimodal = true,
                 isSelected = false,
-                onClick = {}
+                onClick = {},
             )
             AssignmentAssetCard(
                 title = "Meta Llama 3 8B",
                 subtitle = "meta-llama • GGUF",
                 presetCount = 3,
                 isSelected = true,
-                onClick = {}
+                onClick = {},
             )
         }
     }
@@ -885,12 +918,12 @@ fun PreviewConfigSelectionCard() {
             ConfigSelectionCard(
                 label = "Default",
                 isSelected = false,
-                onClick = {}
+                onClick = {},
             )
             ConfigSelectionCard(
                 label = "Creative",
                 isSelected = true,
-                onClick = {}
+                onClick = {},
             )
         }
     }
@@ -905,13 +938,13 @@ fun PreviewModelCard() {
                 title = "Llama 3 8B",
                 subtitle = "Local • GGUF",
                 isSelected = false,
-                onClick = {}
+                onClick = {},
             )
             ModelCard(
                 title = "GPT-4o",
                 subtitle = "OpenAI • Cloud",
                 isSelected = true,
-                onClick = {}
+                onClick = {},
             )
         }
     }

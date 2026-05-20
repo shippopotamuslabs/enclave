@@ -4,8 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -23,7 +23,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class UnlockVaultScreenTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -51,14 +50,15 @@ class UnlockVaultScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 UnlockVaultScreen(
-                    authState = VaultAuthUiState.Authenticated(
-                        VaultUserUiState(
-                            uid = "user-1",
-                            displayName = "Ada",
-                            email = "ada@example.com",
-                            photoUrl = null,
+                    authState =
+                        VaultAuthUiState.Authenticated(
+                            VaultUserUiState(
+                                uid = "user-1",
+                                displayName = "Ada",
+                                email = "ada@example.com",
+                                photoUrl = null,
+                            ),
                         ),
-                    ),
                     errorMessage = null,
                     onLoginClick = {},
                     onSubmitVaultPassword = { _, _ -> },
@@ -79,14 +79,15 @@ class UnlockVaultScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 UnlockVaultScreen(
-                    authState = VaultAuthUiState.Authenticated(
-                        VaultUserUiState(
-                            uid = "user-1",
-                            displayName = "Ada",
-                            email = "ada@example.com",
-                            photoUrl = null,
+                    authState =
+                        VaultAuthUiState.Authenticated(
+                            VaultUserUiState(
+                                uid = "user-1",
+                                displayName = "Ada",
+                                email = "ada@example.com",
+                                photoUrl = null,
+                            ),
                         ),
-                    ),
                     errorMessage = null,
                     isUnlocking = isUnlocking,
                     onLoginClick = {},
@@ -114,14 +115,15 @@ class UnlockVaultScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 UnlockVaultScreen(
-                    authState = VaultAuthUiState.Authenticated(
-                        VaultUserUiState(
-                            uid = "user-1",
-                            displayName = "Ada",
-                            email = "ada@example.com",
-                            photoUrl = null,
+                    authState =
+                        VaultAuthUiState.Authenticated(
+                            VaultUserUiState(
+                                uid = "user-1",
+                                displayName = "Ada",
+                                email = "ada@example.com",
+                                photoUrl = null,
+                            ),
                         ),
-                    ),
                     errorMessage = null,
                     isBiometricUnlockConfigured = true,
                     onLoginClick = {},

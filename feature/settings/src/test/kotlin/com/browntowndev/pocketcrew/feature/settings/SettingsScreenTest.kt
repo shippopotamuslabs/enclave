@@ -19,7 +19,6 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class SettingsScreenTest {
-
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -28,9 +27,10 @@ class SettingsScreenTest {
         composeTestRule.setContent {
             PocketCrewTheme {
                 SettingsScreen(
-                    uiState = MockSettingsData.baseUiState.copy(
-                        home = MockSettingsData.baseUiState.home.copy(hapticResponse = true),
-                    ),
+                    uiState =
+                        MockSettingsData.baseUiState.copy(
+                            home = MockSettingsData.baseUiState.home.copy(hapticResponse = true),
+                        ),
                     onCloseClick = {},
                     onLoginClick = {},
                     onLogoutClick = {},

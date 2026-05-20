@@ -17,19 +17,19 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SettingsUiStateFactoryTest {
-
     private lateinit var factory: SettingsUiStateFactory
 
     @BeforeEach
     fun setup() {
-        factory = SettingsUiStateFactory(
-            localModelAssetUiMapper = LocalModelAssetUiMapper(),
-            apiModelAssetUiMapper = ApiModelAssetUiMapper(),
-            ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-            mediaProviderAssetUiMapper = mockk(relaxed = true),
-            apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
-            applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
-        )
+        factory =
+            SettingsUiStateFactory(
+                localModelAssetUiMapper = LocalModelAssetUiMapper(),
+                apiModelAssetUiMapper = ApiModelAssetUiMapper(),
+                ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
+                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
+                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+            )
     }
 
     // region availableDownloads filtering
@@ -39,10 +39,11 @@ class SettingsUiStateFactoryTest {
         val downloadedModel = localAsset(id = "downloaded", withConfig = true)
         val softDeletedModel = localAsset(id = "soft-deleted", withConfig = false)
 
-        val state = factory.create(
-            localAssets = listOf(downloadedModel, softDeletedModel),
-            defaults = defaultFactoryArgs()
-        )
+        val state =
+            factory.create(
+                localAssets = listOf(downloadedModel, softDeletedModel),
+                defaults = defaultFactoryArgs(),
+            )
 
         val downloads = state.localModelsSheet.availableDownloads
         assertEquals(1, downloads.size)
@@ -55,10 +56,11 @@ class SettingsUiStateFactoryTest {
         val downloadedModel = localAsset(id = "downloaded", withConfig = true)
         val softDeletedModel = localAsset(id = "soft-deleted", withConfig = false)
 
-        val state = factory.create(
-            localAssets = listOf(downloadedModel, softDeletedModel),
-            defaults = defaultFactoryArgs()
-        )
+        val state =
+            factory.create(
+                localAssets = listOf(downloadedModel, softDeletedModel),
+                defaults = defaultFactoryArgs(),
+            )
 
         val models = state.localModelsSheet.models
         assertEquals(1, models.size)
@@ -68,10 +70,11 @@ class SettingsUiStateFactoryTest {
 
     @Test
     fun `availableDownloads is empty when no models are soft-deleted`() {
-        val assets = listOf(
-            localAsset(id = "model-1", withConfig = true),
-            localAsset(id = "model-2", withConfig = true),
-        )
+        val assets =
+            listOf(
+                localAsset(id = "model-1", withConfig = true),
+                localAsset(id = "model-2", withConfig = true),
+            )
 
         val state = factory.create(localAssets = assets, defaults = defaultFactoryArgs())
 
@@ -80,10 +83,11 @@ class SettingsUiStateFactoryTest {
 
     @Test
     fun `models is empty when all models are soft-deleted`() {
-        val assets = listOf(
-            localAsset(id = "model-1", withConfig = false),
-            localAsset(id = "model-2", withConfig = false),
-        )
+        val assets =
+            listOf(
+                localAsset(id = "model-1", withConfig = false),
+                localAsset(id = "model-2", withConfig = false),
+            )
 
         val state = factory.create(localAssets = assets, defaults = defaultFactoryArgs())
 
@@ -115,35 +119,40 @@ class SettingsUiStateFactoryTest {
 
     // region helpers
 
-    private fun localAsset(id: String, withConfig: Boolean): LocalModelAsset {
+    private fun localAsset(
+        id: String,
+        withConfig: Boolean,
+    ): LocalModelAsset {
         val modelId = LocalModelId(id)
-        val metadata = LocalModelMetadata(
-            id = modelId,
-            huggingFaceModelName = "test/$id",
-            remoteFileName = "$id.gguf",
-            localFileName = "$id.gguf",
-            sha256 = "abc",
-            sizeInBytes = 1_000_000L,
-            modelFileFormat = ModelFileFormat.GGUF,
-        )
-        val configs = if (withConfig) {
-            listOf(
-                LocalModelConfiguration(
-                    id = LocalModelConfigurationId("${id}-cfg"),
-                    localModelId = modelId,
-                    displayName = "Default",
-                    maxTokens = 4096,
-                    contextWindow = 4096,
-                    temperature = 0.7,
-                    topP = 0.95,
-                    topK = 40,
-                    repetitionPenalty = 1.1,
-                    systemPrompt = "",
-                )
+        val metadata =
+            LocalModelMetadata(
+                id = modelId,
+                huggingFaceModelName = "test/$id",
+                remoteFileName = "$id.gguf",
+                localFileName = "$id.gguf",
+                sha256 = "abc",
+                sizeInBytes = 1_000_000L,
+                modelFileFormat = ModelFileFormat.GGUF,
             )
-        } else {
-            emptyList()
-        }
+        val configs =
+            if (withConfig) {
+                listOf(
+                    LocalModelConfiguration(
+                        id = LocalModelConfigurationId("$id-cfg"),
+                        localModelId = modelId,
+                        displayName = "Default",
+                        maxTokens = 4096,
+                        contextWindow = 4096,
+                        temperature = 0.7,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "",
+                    ),
+                )
+            } else {
+                emptyList()
+            }
         return LocalModelAsset(metadata = metadata, configurations = configs)
     }
 

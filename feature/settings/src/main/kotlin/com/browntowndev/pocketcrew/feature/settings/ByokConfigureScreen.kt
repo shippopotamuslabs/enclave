@@ -19,9 +19,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -40,7 +40,7 @@ import kotlinx.coroutines.flow.collect
 @Composable
 internal fun TtsConfigureRoute(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
@@ -75,7 +75,7 @@ internal fun TtsConfigureRoute(
         onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
         onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
         onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -83,7 +83,7 @@ internal fun TtsConfigureRoute(
 internal fun ByokConfigureRoute(
     onNavigateBack: () -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
@@ -172,44 +172,47 @@ fun ByokConfigureScreen(
     val isSearchMode = uiState.searchSkillEditor.isEditing
     val isPresetMode = uiState.apiProviderEditor.presetDraft != null
     val selectedConfig = uiState.apiProviderEditor.presetDraft
-    val title = when {
-        isSearchMode -> "Web Search"
-        isPresetMode -> "Configure Preset"
-        else -> "Provider Credentials"
-    }
-    val draftAsset = uiState.apiProviderEditor.assetDraft ?: ApiModelAssetUi(
-        credentialsId = ApiCredentialsId(""),
-        displayName = "",
-        provider = ApiProvider.ANTHROPIC,
-        modelId = "",
-        baseUrl = ApiProvider.ANTHROPIC.defaultBaseUrl(),
-        isMultimodal = false,
-        credentialAlias = "",
-        configurations = emptyList()
-    )
+    val title =
+        when {
+            isSearchMode -> "Web Search"
+            isPresetMode -> "Configure Preset"
+            else -> "Provider Credentials"
+        }
+    val draftAsset =
+        uiState.apiProviderEditor.assetDraft ?: ApiModelAssetUi(
+            credentialsId = ApiCredentialsId(""),
+            displayName = "",
+            provider = ApiProvider.ANTHROPIC,
+            modelId = "",
+            baseUrl = ApiProvider.ANTHROPIC.defaultBaseUrl(),
+            isMultimodal = false,
+            credentialAlias = "",
+            configurations = emptyList(),
+        )
 
-    val isSaveEnabled = if (isSearchMode) {
-        !uiState.searchSkillEditor.enabled ||
-            uiState.searchSkillEditor.tavilyKeyPresent ||
-            searchApiKey.isNotBlank()
-    } else if (selectedConfig != null) {
-        val parameterSupport = uiState.apiProviderEditor.parameterSupport
-        val maxTokensValid = !parameterSupport.supportsMaxTokens || selectedConfig.maxTokens.isNotBlank()
-        val topKValid = !parameterSupport.supportsTopK || selectedConfig.topK.isNotBlank()
-        selectedConfig.displayName.isNotBlank() &&
+    val isSaveEnabled =
+        if (isSearchMode) {
+            !uiState.searchSkillEditor.enabled ||
+                uiState.searchSkillEditor.tavilyKeyPresent ||
+                searchApiKey.isNotBlank()
+        } else if (selectedConfig != null) {
+            val parameterSupport = uiState.apiProviderEditor.parameterSupport
+            val maxTokensValid = !parameterSupport.supportsMaxTokens || selectedConfig.maxTokens.isNotBlank()
+            val topKValid = !parameterSupport.supportsTopK || selectedConfig.topK.isNotBlank()
+            selectedConfig.displayName.isNotBlank() &&
                 maxTokensValid &&
                 selectedConfig.contextWindow.isNotBlank() &&
                 topKValid
-    } else {
-        if (draftAsset.credentialsId.value.isEmpty()) {
-            draftAsset.displayName.isNotBlank() &&
+        } else {
+            if (draftAsset.credentialsId.value.isEmpty()) {
+                draftAsset.displayName.isNotBlank() &&
                     draftAsset.modelId.isNotBlank() &&
                     (apiKey.isNotBlank() || uiState.apiProviderEditor.selectedReusableCredential != null)
-        } else {
-            draftAsset.displayName.isNotBlank() &&
+            } else {
+                draftAsset.displayName.isNotBlank() &&
                     draftAsset.modelId.isNotBlank()
+            }
         }
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -220,49 +223,54 @@ fun ByokConfigureScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
             )
         },
         bottomBar = {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.Center,
             ) {
                 Button(
-                    onClick = when {
-                        isSearchMode -> onSaveSearchSettings
-                        isPresetMode -> onSaveApiModelConfig
-                        else -> onSaveApiCredentials
-                    },
+                    onClick =
+                        when {
+                            isSearchMode -> onSaveSearchSettings
+                            isPresetMode -> onSaveApiModelConfig
+                            else -> onSaveApiCredentials
+                        },
                     enabled = isSaveEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Text(
-                        text = when {
-                            isSearchMode -> "Save Search Settings"
-                            isPresetMode -> "Save Preset"
-                            else -> "Save Credentials"
-                        },
-                        fontWeight = FontWeight.Bold
+                        text =
+                            when {
+                                isSearchMode -> "Save Search Settings"
+                                isPresetMode -> "Save Preset"
+                                else -> "Save Credentials"
+                            },
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp)
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
         ) {
             if (isSearchMode) {
                 SearchSkillConfigurationForm(
@@ -277,35 +285,37 @@ fun ByokConfigureScreen(
                     provider = draftAsset.provider,
                     parameterSupport = uiState.apiProviderEditor.parameterSupport,
                     config = selectedConfig,
-                    selectedModelMetadata = uiState.apiProviderEditor.discovery.models.find {
-                        it.modelId == draftAsset.modelId
-                    },
+                    selectedModelMetadata =
+                        uiState.apiProviderEditor.discovery.models.find {
+                            it.modelId == draftAsset.modelId
+                        },
                     onConfigChange = onApiModelConfigFieldChange,
-                    onNavigateToCustomHeaders = onNavigateToCustomHeaders
+                    onNavigateToCustomHeaders = onNavigateToCustomHeaders,
                 )
             } else {
                 CredentialsConfigurationForm(
                     asset = draftAsset,
-                    reusableCredentials = uiState.apiProvidersSheet.assets
-                        .filter { existing ->
-                            existing.provider == draftAsset.provider &&
-                                existing.credentialsId != draftAsset.credentialsId
-                        }
-                        .map { existing ->
-                            ReusableApiCredentialUi(
-                                credentialsId = existing.credentialsId,
-                                displayName = existing.displayName,
-                                modelId = existing.modelId,
-                                credentialAlias = existing.credentialAlias,
-                            )
-                        },
+                    reusableCredentials =
+                        uiState.apiProvidersSheet.assets
+                            .filter { existing ->
+                                existing.provider == draftAsset.provider &&
+                                    existing.credentialsId != draftAsset.credentialsId
+                            }.map { existing ->
+                                ReusableApiCredentialUi(
+                                    credentialsId = existing.credentialsId,
+                                    displayName = existing.displayName,
+                                    modelId = existing.modelId,
+                                    credentialAlias = existing.credentialAlias,
+                                )
+                            },
                     selectedReusableCredential = uiState.apiProviderEditor.selectedReusableCredential,
                     apiKey = apiKey,
                     availableModels = uiState.apiProviderEditor.discovery.models,
                     filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
-                    selectedModelMetadata = uiState.apiProviderEditor.discovery.models.find {
-                        it.modelId == draftAsset.modelId
-                    },
+                    selectedModelMetadata =
+                        uiState.apiProviderEditor.discovery.models.find {
+                            it.modelId == draftAsset.modelId
+                        },
                     isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
                     searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
                     providerFilters = uiState.apiProviderEditor.discovery.providerFilters,
@@ -317,10 +327,10 @@ fun ByokConfigureScreen(
                     onUpdateSearchQuery = onUpdateModelSearchQuery,
                     onToggleProviderFilter = onToggleModelProviderFilter,
                     onClearProviderFilters = onClearModelProviderFilters,
-                    onUpdateSortOption = onUpdateModelSortOption
+                    onUpdateSortOption = onUpdateModelSortOption,
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

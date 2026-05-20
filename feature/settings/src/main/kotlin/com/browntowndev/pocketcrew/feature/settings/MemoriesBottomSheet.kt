@@ -74,31 +74,32 @@ fun MemoriesBottomSheet(
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
         ) {
             AnimatedContent(
                 targetState = uiState.memories.isEditing,
-                label = "MemoriesSheetTransition"
+                label = "MemoriesSheetTransition",
             ) { isEditing ->
                 if (isEditing) {
                     MemoryEditView(
                         draft = uiState.memories.memoryDraft ?: StoredMemory(),
                         onUpdateDraft = onUpdateMemoryDraft,
                         onSave = onSaveMemory,
-                        onCancel = onCancelMemoryEdit
+                        onCancel = onCancelMemoryEdit,
                     )
                 } else {
                     MemoriesListView(
                         memories = uiState.memories.memories,
                         onAddMemory = onAddMemory,
                         onEditMemory = onEditMemory,
-                        onDeleteMemory = { memoryIdToDelete = it }
+                        onDeleteMemory = { memoryIdToDelete = it },
                     )
                 }
             }
@@ -114,7 +115,7 @@ fun MemoriesBottomSheet(
                         onClick = {
                             onDeleteMemory(id)
                             memoryIdToDelete = null
-                        }
+                        },
                     ) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
@@ -123,7 +124,7 @@ fun MemoriesBottomSheet(
                     TextButton(onClick = { memoryIdToDelete = null }) {
                         Text("Cancel")
                     }
-                }
+                },
             )
         }
     }
@@ -141,34 +142,35 @@ private fun MemoriesListView(
             text = "Memories",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
         Text(
             text = "Personalization and facts about you, your preferences, and projects.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp),
         )
 
         if (memories.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "No memories yet.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
             val groupedMemories = memories.groupBy { it.category }
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 MemoryCategory.entries.forEach { category ->
                     val categoryMemories = groupedMemories[category]
@@ -180,7 +182,7 @@ private fun MemoriesListView(
                             MemoryItem(
                                 memory = memory,
                                 onEdit = { onEditMemory(memory) },
-                                onDelete = { onDeleteMemory(memory.id) }
+                                onDelete = { onDeleteMemory(memory.id) },
                             )
                         }
                     }
@@ -192,10 +194,11 @@ private fun MemoriesListView(
 
         Button(
             onClick = onAddMemory,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
         ) {
             Icon(Icons.Default.Add, contentDescription = "Add Memory")
             Spacer(modifier = Modifier.width(8.dp))
@@ -211,7 +214,7 @@ private fun CategoryHeader(category: MemoryCategory) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
     )
 }
 
@@ -222,14 +225,17 @@ private fun MemoryItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                false
-            } else true
-        }
-    )
+    val dismissState =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) {
+                    onDelete()
+                    false
+                } else {
+                    true
+                }
+            },
+        )
 
     SwipeToDismissBox(
         state = dismissState,
@@ -237,47 +243,51 @@ private fun MemoryItem(
         enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.errorContainer),
-                contentAlignment = Alignment.CenterEnd
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.errorContainer),
+                contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(end = 16.dp)
+                    modifier = Modifier.padding(end = 16.dp),
                 )
             }
-        }
+        },
     ) {
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onEdit),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onEdit),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            )
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = memory.text,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "Edit memory",
                     modifier = Modifier.padding(start = 4.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -296,11 +306,11 @@ private fun MemoryEditView(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         ) {
             IconButton(onClick = onCancel, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to memories")
@@ -308,14 +318,14 @@ private fun MemoryEditView(
             Text(
                 text = if (draft.id.isEmpty()) "Add Memory" else "Edit Memory",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         }
 
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
                 value = draft.category.displayName,
@@ -325,14 +335,15 @@ private fun MemoryEditView(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
+                modifier =
+                    Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
             )
 
             ExposedDropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = { expanded = false },
             ) {
                 MemoryCategory.entries.forEach { category ->
                     DropdownMenuItem(
@@ -340,7 +351,7 @@ private fun MemoryEditView(
                         onClick = {
                             onUpdateDraft(draft.text, category)
                             expanded = false
-                        }
+                        },
                     )
                 }
             }
@@ -353,28 +364,30 @@ private fun MemoryEditView(
             placeholder = { Text("Enter memory text...") },
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
-            minLines = 3
+            minLines = 3,
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TextButton(
                 onClick = onCancel,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(52.dp),
             ) {
                 Text("Cancel")
             }
             Button(
                 onClick = onSave,
                 enabled = draft.text.isNotBlank(),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
             ) {
                 Text("Save", fontWeight = FontWeight.SemiBold)
             }
@@ -383,12 +396,13 @@ private fun MemoryEditView(
 }
 
 private val MemoryCategory.displayName: String
-    get() = when (this) {
-        MemoryCategory.CORE_IDENTITY -> "Core Identity"
-        MemoryCategory.PREFERENCES -> "Preferences"
-        MemoryCategory.FACTS -> "Facts"
-        MemoryCategory.PROJECT_CONTEXT -> "Project Context"
-    }
+    get() =
+        when (this) {
+            MemoryCategory.CORE_IDENTITY -> "Core Identity"
+            MemoryCategory.PREFERENCES -> "Preferences"
+            MemoryCategory.FACTS -> "Facts"
+            MemoryCategory.PROJECT_CONTEXT -> "Project Context"
+        }
 
 @Preview(showBackground = true)
 @Composable
@@ -402,7 +416,7 @@ fun PreviewMemoriesBottomSheet() {
             onUpdateMemoryDraft = { _, _ -> },
             onSaveMemory = {},
             onCancelMemoryEdit = {},
-            onDeleteMemory = {}
+            onDeleteMemory = {},
         )
     }
 }

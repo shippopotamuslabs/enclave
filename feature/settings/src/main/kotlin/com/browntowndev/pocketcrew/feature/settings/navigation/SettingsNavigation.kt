@@ -1,18 +1,38 @@
-@file:Suppress("MaxLineLength", "MagicNumber", "UnusedPrivateProperty", "UnusedParameter", "TooManyFunctions", "ComplexCondition", "LargeClass", "CyclomaticComplexMethod", "SwallowedException", "InstanceOfCheckForException", "ThrowsCount", "NestedBlockDepth", "ReturnCount", "LoopWithTooManyJumpStatements", "FunctionNaming", "LongMethod", "MatchingDeclarationName", "UnusedPrivateMember", "LongParameterList")
+@file:Suppress(
+    "MaxLineLength",
+    "MagicNumber",
+    "UnusedPrivateProperty",
+    "UnusedParameter",
+    "TooManyFunctions",
+    "ComplexCondition",
+    "LargeClass",
+    "CyclomaticComplexMethod",
+    "SwallowedException",
+    "InstanceOfCheckForException",
+    "ThrowsCount",
+    "NestedBlockDepth",
+    "ReturnCount",
+    "LoopWithTooManyJumpStatements",
+    "FunctionNaming",
+    "LongMethod",
+    "MatchingDeclarationName",
+    "UnusedPrivateMember",
+    "LongParameterList",
+)
 
 package com.browntowndev.pocketcrew.feature.settings.navigation
 
-import androidx.navigation.NavController
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavType
-import androidx.navigation.compose.composable
-import androidx.navigation.navigation
-import androidx.navigation.navArgument
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.navigation
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.feature.settings.ByokConfigureRoute
 import com.browntowndev.pocketcrew.feature.settings.ByokCustomHeadersRoute
@@ -34,12 +54,10 @@ object SettingsDestination {
     const val MODEL_DOWNLOAD = "model_download"
 }
 
-fun NavGraphBuilder.settingsGraph(
-    navController: NavController,
-) {
+fun NavGraphBuilder.settingsGraph(navController: NavController) {
     navigation(
         startDestination = SettingsDestination.MAIN,
-        route = SettingsDestination.GRAPH
+        route = SettingsDestination.GRAPH,
     ) {
         composable(
             route = SettingsDestination.MAIN,
@@ -68,9 +86,10 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             SettingsRoute(
                 onCloseClick = { navController.popBackStack() },
                 onNavigateToByokConfigure = {
@@ -86,14 +105,14 @@ fun NavGraphBuilder.settingsGraph(
                     navController.navigate(
                         SettingsDestination.MODEL_CONFIGURE.replace(
                             "{modelType}",
-                            modelType.name
-                        )
+                            modelType.name,
+                        ),
                     )
                 },
                 onNavigateToMediaConfigure = {
                     navController.navigate(SettingsDestination.MEDIA_CONFIGURE)
                 },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
@@ -124,15 +143,16 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             ByokConfigureRoute(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToCustomHeaders = {
                     navController.navigate(SettingsDestination.BYOK_CUSTOM_HEADERS)
                 },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
@@ -163,12 +183,13 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             TtsConfigureRoute(
                 onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
@@ -199,12 +220,13 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             MediaConfigureRoute(
                 onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
@@ -235,12 +257,13 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             ByokCustomHeadersRoute(
                 onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
@@ -271,22 +294,24 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             LocalModelConfigureRoute(
                 onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
 
         composable(
             route = SettingsDestination.MODEL_CONFIGURE,
-            arguments = listOf(
-                navArgument("modelType") {
-                    type = NavType.StringType
-                }
-            ),
+            arguments =
+                listOf(
+                    navArgument("modelType") {
+                        type = NavType.StringType
+                    },
+                ),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
@@ -312,20 +337,23 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val modelTypeStr = backStackEntry.arguments?.getString("modelType")
-                ?: return@composable
-            val modelType = try {
-                ModelType.valueOf(modelTypeStr)
-            } catch (e: IllegalArgumentException) {
-                return@composable
-            }
-            
-            val parentEntry = remember(backStackEntry) {
-                navController.getBackStackEntry(SettingsDestination.GRAPH)
-            }
+            val modelTypeStr =
+                backStackEntry.arguments?.getString("modelType")
+                    ?: return@composable
+            val modelType =
+                try {
+                    ModelType.valueOf(modelTypeStr)
+                } catch (e: IllegalArgumentException) {
+                    return@composable
+                }
+
+            val parentEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(SettingsDestination.GRAPH)
+                }
             ModelConfigurationRoute(
                 onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                viewModel = hiltViewModel(parentEntry),
             )
         }
     }

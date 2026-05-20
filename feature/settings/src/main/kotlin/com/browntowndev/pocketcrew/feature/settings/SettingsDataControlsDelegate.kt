@@ -2,11 +2,11 @@ package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDataControlsUseCases
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 internal class SettingsDataControlsDelegate
     @Inject
@@ -94,7 +94,7 @@ internal class SettingsDataControlsDelegate
                     .fold(
                         onSuccess = {
                             dataControlsState.update { DataControlsTransientState() }
-                            onSuccess("All chats deleted")
+                            onSuccess("All chats deleted locally. Cloud data scheduled for deletion.")
                         },
                         onFailure = { e ->
                             reportDeleteFailure(
@@ -121,7 +121,7 @@ internal class SettingsDataControlsDelegate
                     .fold(
                         onSuccess = {
                             dataControlsState.update { DataControlsTransientState() }
-                            onSuccess("All media deleted")
+                            onSuccess("All media deleted locally. Cloud data scheduled for deletion.")
                         },
                         onFailure = { e ->
                             reportDeleteFailure(
@@ -148,7 +148,7 @@ internal class SettingsDataControlsDelegate
                     .fold(
                         onSuccess = {
                             dataControlsState.update { DataControlsTransientState() }
-                            onSuccess("All memories deleted")
+                            onSuccess("All memories deleted locally. Cloud data scheduled for deletion.")
                         },
                         onFailure = { e ->
                             reportDeleteFailure(
@@ -175,7 +175,7 @@ internal class SettingsDataControlsDelegate
                     .fold(
                         onSuccess = {
                             dataControlsState.update { DataControlsTransientState() }
-                            onSuccess("All artifacts deleted")
+                            onSuccess("All artifacts deleted locally. Cloud data scheduled for deletion.")
                         },
                         onFailure = { e ->
                             reportDeleteFailure(

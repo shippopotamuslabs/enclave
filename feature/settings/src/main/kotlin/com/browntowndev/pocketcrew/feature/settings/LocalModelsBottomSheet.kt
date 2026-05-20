@@ -53,7 +53,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,10 +67,14 @@ import kotlinx.coroutines.launch
 
 private sealed interface LocalModelsSheetView {
     data object AssetList : LocalModelsSheetView
-    data class ConfigList(val asset: LocalModelAssetUi) : LocalModelsSheetView
+
+    data class ConfigList(
+        val asset: LocalModelAssetUi,
+    ) : LocalModelsSheetView
+
     data class Reassignment(
-        val modelTypes: List<ModelType>, 
-        val options: List<ReassignmentOptionUi>
+        val modelTypes: List<ModelType>,
+        val options: List<ReassignmentOptionUi>,
     ) : LocalModelsSheetView
 }
 
@@ -89,7 +92,7 @@ fun LocalModelsBottomSheet(
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
-    reDownloadViewModel: ModelReDownloadViewModel = hiltViewModel()
+    reDownloadViewModel: ModelReDownloadViewModel = hiltViewModel(),
 ) {
     val reDownloadStates by reDownloadViewModel.reDownloadStates.collectAsStateWithLifecycle()
 
@@ -104,7 +107,7 @@ fun LocalModelsBottomSheet(
         onDeleteLocalModelConfig = onDeleteLocalModelConfig,
         onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
         onDismissDeletionSafety = onDismissDeletionSafety,
-        onReDownloadModel = { modelId -> reDownloadViewModel.reDownloadModel(modelId) }
+        onReDownloadModel = { modelId -> reDownloadViewModel.reDownloadModel(modelId) },
     )
 }
 
@@ -121,7 +124,7 @@ fun LocalModelsBottomSheetContent(
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
-    onReDownloadModel: (LocalModelId) -> Unit
+    onReDownloadModel: (LocalModelId) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<LocalDeleteTarget?>(null) }
@@ -138,27 +141,29 @@ fun LocalModelsBottomSheetContent(
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
         ) {
-            val viewState = remember(uiState) {
-                when {
-                    uiState.deletion.modelTypesNeedingReassignment.isNotEmpty() ->
-                        LocalModelsSheetView.Reassignment(
-                            modelTypes = uiState.deletion.modelTypesNeedingReassignment,
-                            options = uiState.deletion.reassignmentOptions
-                        )
-                    uiState.localModelsSheet.selectedAsset != null ->
-                        LocalModelsSheetView.ConfigList(uiState.localModelsSheet.selectedAsset)
-                    else -> 
-                        LocalModelsSheetView.AssetList
+            val viewState =
+                remember(uiState) {
+                    when {
+                        uiState.deletion.modelTypesNeedingReassignment.isNotEmpty() ->
+                            LocalModelsSheetView.Reassignment(
+                                modelTypes = uiState.deletion.modelTypesNeedingReassignment,
+                                options = uiState.deletion.reassignmentOptions,
+                            )
+                        uiState.localModelsSheet.selectedAsset != null ->
+                            LocalModelsSheetView.ConfigList(uiState.localModelsSheet.selectedAsset)
+                        else ->
+                            LocalModelsSheetView.AssetList
+                    }
                 }
-            }
 
             AnimatedContent(targetState = viewState, label = "LocalModelsSheetTransition") { state ->
                 when (state) {
@@ -179,7 +184,7 @@ fun LocalModelsBottomSheetContent(
                             onAddConfig = {
                                 onSelectLocalModelConfig(LocalModelConfigUi(localModelId = state.asset.metadataId))
                                 hideAndNavigate(onNavigateToLocalModelConfigure)
-                            }
+                            },
                         )
                     }
                     is LocalModelsSheetView.AssetList -> {
@@ -191,7 +196,7 @@ fun LocalModelsBottomSheetContent(
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = LocalDeleteTarget.Asset(asset.metadataId, asset.friendlyName)
                             },
-                            onReDownloadModel = onReDownloadModel
+                            onReDownloadModel = onReDownloadModel,
                         )
                     }
                     is LocalModelsSheetView.Reassignment -> {
@@ -199,7 +204,7 @@ fun LocalModelsBottomSheetContent(
                             modelTypes = state.modelTypes,
                             reassignmentOptions = state.options,
                             onConfirm = onConfirmDeletionWithReassignment,
-                            onDismiss = onDismissDeletionSafety
+                            onDismiss = onDismissDeletionSafety,
                         )
                     }
                 }
@@ -215,22 +220,24 @@ fun LocalModelsBottomSheetContent(
                     TextButton(onClick = onDismissDeletionSafety) {
                         Text("OK")
                     }
-                }
+                },
             )
         }
 
         pendingDeleteTarget?.let { deleteTarget ->
             DeleteConfirmationDialog(
-                title = if (deleteTarget is LocalDeleteTarget.Asset) {
-                    "Delete Model?"
-                } else {
-                    "Delete Preset?"
-                },
-                message = if (deleteTarget is LocalDeleteTarget.Asset) {
-                    "Delete ${deleteTarget.displayName}? This removes the model and all of its presets."
-                } else {
-                    "Delete ${deleteTarget.displayName}? This preset will be removed."
-                },
+                title =
+                    if (deleteTarget is LocalDeleteTarget.Asset) {
+                        "Delete Model?"
+                    } else {
+                        "Delete Preset?"
+                    },
+                message =
+                    if (deleteTarget is LocalDeleteTarget.Asset) {
+                        "Delete ${deleteTarget.displayName}? This removes the model and all of its presets."
+                    } else {
+                        "Delete ${deleteTarget.displayName}? This preset will be removed."
+                    },
                 confirmLabel = "Delete",
                 onConfirm = {
                     when (deleteTarget) {
@@ -239,7 +246,7 @@ fun LocalModelsBottomSheetContent(
                     }
                     pendingDeleteTarget = null
                 },
-                onDismiss = { pendingDeleteTarget = null }
+                onDismiss = { pendingDeleteTarget = null },
             )
         }
     }
@@ -252,26 +259,26 @@ private fun LocalModelAssetListView(
     reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
-    onReDownloadModel: (LocalModelId) -> Unit
+    onReDownloadModel: (LocalModelId) -> Unit,
 ) {
     Column {
         Text(
             text = "Local AI Models",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
         Text(
             text = "Manage your downloaded models and their tuning presets.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp),
         )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (localModels.isNotEmpty()) {
                 item {
@@ -280,7 +287,7 @@ private fun LocalModelAssetListView(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
                 items(localModels, key = { it.metadataId.value }) { asset ->
@@ -288,11 +295,14 @@ private fun LocalModelAssetListView(
                         asset = asset,
                         reDownloadProgress = reDownloadStates[asset.metadataId],
                         onSelectAsset = {
-                            if (asset.isSoftDeleted) onReDownloadModel(asset.metadataId)
-                            else onSelectAsset(asset)
+                            if (asset.isSoftDeleted) {
+                                onReDownloadModel(asset.metadataId)
+                            } else {
+                                onSelectAsset(asset)
+                            }
                         },
                         onRequestDeleteAsset = onRequestDeleteAsset,
-                        onReDownloadClick = { onReDownloadModel(asset.metadataId) }
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId) },
                     )
                 }
             }
@@ -304,7 +314,7 @@ private fun LocalModelAssetListView(
                         text = "AVAILABLE FOR DOWNLOAD",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
                 items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
@@ -313,7 +323,7 @@ private fun LocalModelAssetListView(
                         reDownloadProgress = reDownloadStates[asset.metadataId],
                         onSelectAsset = { onReDownloadModel(asset.metadataId) },
                         onRequestDeleteAsset = null,
-                        onReDownloadClick = { onReDownloadModel(asset.metadataId) }
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId) },
                     )
                 }
             }
@@ -323,7 +333,7 @@ private fun LocalModelAssetListView(
                     Text(
                         text = "No models downloaded yet.",
                         style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        modifier = Modifier.padding(bottom = 16.dp),
                     )
                 }
             }
@@ -337,23 +347,26 @@ private fun LocalModelAssetCard(
     reDownloadProgress: ReDownloadProgress?,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?,
-    onReDownloadClick: () -> Unit
+    onReDownloadClick: () -> Unit,
 ) {
     val card: @Composable () -> Unit = {
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onSelectAsset(asset) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectAsset(asset) },
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            )
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -361,7 +374,7 @@ private fun LocalModelAssetCard(
                             text = asset.friendlyName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                         if (asset.isMultimodal) {
                             Spacer(modifier = Modifier.width(4.dp))
@@ -369,7 +382,7 @@ private fun LocalModelAssetCard(
                                 imageVector = Icons.Default.Visibility,
                                 contentDescription = "Vision capable",
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -377,20 +390,20 @@ private fun LocalModelAssetCard(
                         text = "${asset.providerName} • ${asset.format}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                     Text(
                         text = "${(asset.sizeInBytes / (1024 * 1024 * 1024.0)).format(2)} GB",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                     if (onRequestDeleteAsset != null) {
                         Text(
                             text = "${asset.configurations.size} Preset(s)",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
@@ -398,19 +411,19 @@ private fun LocalModelAssetCard(
                 if (onRequestDeleteAsset == null || reDownloadProgress != null || asset.isSoftDeleted) {
                     Box(
                         modifier = Modifier.size(24.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         when (reDownloadProgress) {
                             null, ReDownloadProgress.Idle -> {
                                 IconButton(
                                     onClick = onReDownloadClick,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Download,
                                         contentDescription = "Download Model ${asset.friendlyName}",
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(20.dp),
                                     )
                                 }
                             }
@@ -420,7 +433,7 @@ private fun LocalModelAssetCard(
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = StrokeCap.Round
+                                    strokeCap = StrokeCap.Round,
                                 )
                             }
                             is ReDownloadProgress.Downloading -> {
@@ -430,7 +443,7 @@ private fun LocalModelAssetCard(
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = StrokeCap.Round
+                                    strokeCap = StrokeCap.Round,
                                 )
                             }
                             is ReDownloadProgress.Complete -> {
@@ -438,7 +451,7 @@ private fun LocalModelAssetCard(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Download Complete",
                                     tint = SUCCESS_COLOR,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
                             is ReDownloadProgress.Failed -> {
@@ -446,7 +459,7 @@ private fun LocalModelAssetCard(
                                     imageVector = Icons.Default.Error,
                                     contentDescription = "Download Failed: ${reDownloadProgress.error}",
                                     tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
                         }
@@ -457,7 +470,7 @@ private fun LocalModelAssetCard(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "View details",
-                        modifier = Modifier.padding(start = 4.dp)
+                        modifier = Modifier.padding(start = 4.dp),
                     )
                 }
             }
@@ -465,33 +478,37 @@ private fun LocalModelAssetCard(
     }
 
     if (isLocalModelAssetSwipeable(onRequestDeleteAsset)) {
-        val dismissState = rememberSwipeToDismissBoxState(
-            confirmValueChange = { value ->
-                if (value == SwipeToDismissBoxValue.EndToStart) {
-                    onRequestDeleteAsset!!(asset)
-                    false
-                } else true
-            }
-        )
+        val dismissState =
+            rememberSwipeToDismissBoxState(
+                confirmValueChange = { value ->
+                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                        onRequestDeleteAsset!!(asset)
+                        false
+                    } else {
+                        true
+                    }
+                },
+            )
         SwipeToDismissBox(
             state = dismissState,
             modifier = Modifier.clip(RoundedCornerShape(16.dp)),
             enableDismissFromStartToEnd = false,
             backgroundContent = {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.errorContainer),
-                    contentAlignment = Alignment.CenterEnd
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.errorContainer),
+                    contentAlignment = Alignment.CenterEnd,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Delete",
                         tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(end = 16.dp)
+                        modifier = Modifier.padding(end = 16.dp),
                     )
                 }
-            }
+            },
         ) { card() }
     } else {
         card()
@@ -505,12 +522,12 @@ private fun LocalModelConfigListView(
     onEditConfig: (LocalModelConfigUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteConfig: (LocalModelConfigUi) -> Unit,
-    onAddConfig: () -> Unit
+    onAddConfig: () -> Unit,
 ) {
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 16.dp),
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to local models")
@@ -521,7 +538,7 @@ private fun LocalModelConfigListView(
                         text = asset.friendlyName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     if (asset.isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -529,14 +546,14 @@ private fun LocalModelConfigListView(
                             imageVector = Icons.Default.Visibility,
                             contentDescription = "Vision capable",
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 Text(
                     text = "Presets",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             TextButton(onClick = { onRequestDeleteAsset(asset) }) {
@@ -546,18 +563,21 @@ private fun LocalModelConfigListView(
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
                 val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
-                val dismissState = rememberSwipeToDismissBoxState(
-                    confirmValueChange = { value ->
-                        if (value == SwipeToDismissBoxValue.EndToStart) {
-                            onRequestDeleteConfig(config)
-                            false
-                        } else true
-                    }
-                )
+                val dismissState =
+                    rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                onRequestDeleteConfig(config)
+                                false
+                            } else {
+                                true
+                            }
+                        },
+                    )
 
                 SwipeToDismissBox(
                     state = dismissState,
@@ -566,45 +586,49 @@ private fun LocalModelConfigListView(
                     gesturesEnabled = isSwipeEnabled,
                     backgroundContent = {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.CenterEnd
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(end = 16.dp)
+                                modifier = Modifier.padding(end = 16.dp),
                             )
                         }
-                    }
+                    },
                 ) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onEditConfig(config) },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onEditConfig(config) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = config.displayName,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
                                     text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -617,21 +641,22 @@ private fun LocalModelConfigListView(
 
                 Button(
                     onClick = onAddConfig,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        tint = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Add Preset",
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -644,19 +669,18 @@ private sealed interface LocalDeleteTarget {
 
     data class Asset(
         val id: LocalModelId,
-        override val displayName: String
+        override val displayName: String,
     ) : LocalDeleteTarget
 
     data class Config(
         val id: LocalModelConfigurationId,
-        override val displayName: String
+        override val displayName: String,
     ) : LocalDeleteTarget
 }
 
 private fun Double.format(digits: Int) = "%.${digits}f".format(this)
 
-internal fun isLocalModelAssetSwipeable(onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?): Boolean =
-    onRequestDeleteAsset != null
+internal fun isLocalModelAssetSwipeable(onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?): Boolean = onRequestDeleteAsset != null
 
 // ==================== PREVIEWS ====================
 
@@ -675,7 +699,7 @@ fun PreviewLocalModelsBottomSheetAssets() {
             onDeleteLocalModelConfig = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
             onDismissDeletionSafety = {},
-            onReDownloadModel = {}
+            onReDownloadModel = {},
         )
     }
 }
@@ -685,11 +709,13 @@ fun PreviewLocalModelsBottomSheetAssets() {
 fun PreviewLocalModelsBottomSheetContext() {
     PocketCrewTheme {
         LocalModelsBottomSheetContent(
-            uiState = MockSettingsData.baseUiState.copy(
-                localModelsSheet = MockSettingsData.baseUiState.localModelsSheet.copy(
-                    selectedAsset = MockSettingsData.localModels[0]
-                )
-            ),
+            uiState =
+                MockSettingsData.baseUiState.copy(
+                    localModelsSheet =
+                        MockSettingsData.baseUiState.localModelsSheet.copy(
+                            selectedAsset = MockSettingsData.localModels[0],
+                        ),
+                ),
             reDownloadStates = emptyMap(),
             onDismiss = {},
             onNavigateToLocalModelConfigure = {},
@@ -699,7 +725,7 @@ fun PreviewLocalModelsBottomSheetContext() {
             onDeleteLocalModelConfig = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
             onDismissDeletionSafety = {},
-            onReDownloadModel = {}
+            onReDownloadModel = {},
         )
     }
 }

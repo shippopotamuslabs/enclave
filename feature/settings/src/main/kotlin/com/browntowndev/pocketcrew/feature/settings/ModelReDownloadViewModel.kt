@@ -24,93 +24,100 @@ import javax.inject.Inject
  */
 sealed class ReDownloadProgress {
     object Idle : ReDownloadProgress()
+
     object Preparing : ReDownloadProgress()
-    data class Downloading(val progress: Float) : ReDownloadProgress()
+
+    data class Downloading(
+        val progress: Float,
+    ) : ReDownloadProgress()
+
     object Complete : ReDownloadProgress()
-    data class Failed(val error: String) : ReDownloadProgress()
+
+    data class Failed(
+        val error: String,
+    ) : ReDownloadProgress()
 }
 
 @HiltViewModel
-class ModelReDownloadViewModel @Inject constructor(
-    private val reDownloadModelUseCase: ReDownloadModelUseCase,
-    private val downloadWorkRepository: DownloadWorkRepository
-) : ViewModel() {
-
-    private companion object {
-        const val SUCCESS_DELAY_MS = 2000L
-        const val FAILURE_DELAY_MS = 3000L
-    }
-
-    private val _reDownloadStates = MutableStateFlow<Map<LocalModelId, ReDownloadProgress>>(emptyMap())
-    val reDownloadStates: StateFlow<Map<LocalModelId, ReDownloadProgress>> = _reDownloadStates.asStateFlow()
-
-    fun reDownloadModel(modelId: LocalModelId) {
-        viewModelScope.launch {
-            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Preparing)
-
-            reDownloadModelUseCase(modelId)
-                .onSuccess {
-                    observeDownloadProgress(modelId)
-                }
-                .onFailure { error ->
-                    _reDownloadStates.value = _reDownloadStates.value +
-                        (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
-                    delay(FAILURE_DELAY_MS)
-                    _reDownloadStates.value = _reDownloadStates.value - modelId
-                }
+class ModelReDownloadViewModel
+    @Inject
+    constructor(
+        private val reDownloadModelUseCase: ReDownloadModelUseCase,
+        private val downloadWorkRepository: DownloadWorkRepository,
+    ) : ViewModel() {
+        private companion object {
+            const val SUCCESS_DELAY_MS = 2000L
+            const val FAILURE_DELAY_MS = 3000L
         }
-    }
 
-    private fun observeDownloadProgress(modelId: LocalModelId) {
-        viewModelScope.launch {
-            downloadWorkRepository.observeDownloadProgress()
-                .takeWhile { workInfo ->
-                    // Null = work not started yet; keep the flow alive.
-                    if (workInfo == null) return@takeWhile true
+        private val _reDownloadStates = MutableStateFlow<Map<LocalModelId, ReDownloadProgress>>(emptyMap())
+        val reDownloadStates: StateFlow<Map<LocalModelId, ReDownloadProgress>> = _reDownloadStates.asStateFlow()
 
-                    val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
-                    val modelProgress = filesProgress?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
+        fun reDownloadModel(modelId: LocalModelId) {
+            viewModelScope.launch {
+                _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Preparing)
 
-                    if (modelProgress != null) {
-                        val parts = modelProgress.split("|")
-                        if (parts.size >= 3) {
-                            val downloaded = parts[1].toLongOrNull() ?: 0L
-                            val total = parts[2].toLongOrNull() ?: 1L
-                            val progress = if (total > 0) downloaded.toFloat() / total else 0f
-                            _reDownloadStates.value = _reDownloadStates.value +
-                                (modelId to ReDownloadProgress.Downloading(progress))
-                        }
+                reDownloadModelUseCase(modelId)
+                    .onSuccess {
+                        observeDownloadProgress(modelId)
+                    }.onFailure { error ->
+                        _reDownloadStates.value = _reDownloadStates.value +
+                            (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
+                        delay(FAILURE_DELAY_MS)
+                        _reDownloadStates.value = _reDownloadStates.value - modelId
                     }
+            }
+        }
 
-                    when (workInfo.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            // In a two-worker chain, the downloader SUCCEEDED is intermediate.
-                            // Wait for the finalizer to complete before marking as done.
-                            val stage = runCatching {
-                                workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
-                            }.getOrNull()
-                            if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
-                                return@takeWhile true
+        private fun observeDownloadProgress(modelId: LocalModelId) {
+            viewModelScope.launch {
+                downloadWorkRepository
+                    .observeDownloadProgress()
+                    .takeWhile { workInfo ->
+                        // Null = work not started yet; keep the flow alive.
+                        if (workInfo == null) return@takeWhile true
+
+                        val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
+                        val modelProgress = filesProgress?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
+
+                        if (modelProgress != null) {
+                            val parts = modelProgress.split("|")
+                            if (parts.size >= 3) {
+                                val downloaded = parts[1].toLongOrNull() ?: 0L
+                                val total = parts[2].toLongOrNull() ?: 1L
+                                val progress = if (total > 0) downloaded.toFloat() / total else 0f
+                                _reDownloadStates.value = _reDownloadStates.value +
+                                    (modelId to ReDownloadProgress.Downloading(progress))
                             }
-                            _reDownloadStates.value = _reDownloadStates.value +
-                                (modelId to ReDownloadProgress.Complete)
-                            delay(SUCCESS_DELAY_MS)
-                            _reDownloadStates.value = _reDownloadStates.value - modelId
-                            false
                         }
-                        WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                            _reDownloadStates.value = _reDownloadStates.value +
-                                (modelId to ReDownloadProgress.Failed("Download failed"))
-                            delay(FAILURE_DELAY_MS)
-                            _reDownloadStates.value = _reDownloadStates.value - modelId
-                            false
+
+                        when (workInfo.state) {
+                            WorkInfo.State.SUCCEEDED -> {
+                                // In a two-worker chain, the downloader SUCCEEDED is intermediate.
+                                // Wait for the finalizer to complete before marking as done.
+                                val stage =
+                                    runCatching {
+                                        workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+                                    }.getOrNull()
+                                if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
+                                    return@takeWhile true
+                                }
+                                _reDownloadStates.value = _reDownloadStates.value +
+                                    (modelId to ReDownloadProgress.Complete)
+                                delay(SUCCESS_DELAY_MS)
+                                _reDownloadStates.value = _reDownloadStates.value - modelId
+                                false
+                            }
+                            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
+                                _reDownloadStates.value = _reDownloadStates.value +
+                                    (modelId to ReDownloadProgress.Failed("Download failed"))
+                                delay(FAILURE_DELAY_MS)
+                                _reDownloadStates.value = _reDownloadStates.value - modelId
+                                false
+                            }
+                            else -> true
                         }
-                        else -> true
-                    }
-                }
-                .collect()
+                    }.collect()
+            }
         }
     }
-
-
-}

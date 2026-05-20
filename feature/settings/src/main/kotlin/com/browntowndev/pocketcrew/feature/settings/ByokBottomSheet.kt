@@ -64,10 +64,14 @@ import kotlinx.coroutines.launch
 
 private sealed interface ByokSheetView {
     data object AssetList : ByokSheetView
-    data class ConfigList(val asset: ApiModelAssetUi) : ByokSheetView
+
+    data class ConfigList(
+        val asset: ApiModelAssetUi,
+    ) : ByokSheetView
+
     data class Reassignment(
         val modelTypes: List<ModelType>,
-        val options: List<ReassignmentOptionUi>
+        val options: List<ReassignmentOptionUi>,
     ) : ByokSheetView
 }
 
@@ -83,7 +87,7 @@ fun ByokBottomSheet(
     onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
     onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
-    onDismissDeletionSafety: () -> Unit
+    onDismissDeletionSafety: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<ByokDeleteTarget?>(null) }
@@ -100,27 +104,29 @@ fun ByokBottomSheet(
     JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
         ) {
-            val viewState = remember(uiState) {
-                when {
-                    uiState.deletion.modelTypesNeedingReassignment.isNotEmpty() ->
-                        ByokSheetView.Reassignment(
-                            modelTypes = uiState.deletion.modelTypesNeedingReassignment,
-                            options = uiState.deletion.reassignmentOptions
-                        )
-                    uiState.apiProvidersSheet.selectedAsset != null ->
-                        ByokSheetView.ConfigList(uiState.apiProvidersSheet.selectedAsset)
-                    else ->
-                        ByokSheetView.AssetList
+            val viewState =
+                remember(uiState) {
+                    when {
+                        uiState.deletion.modelTypesNeedingReassignment.isNotEmpty() ->
+                            ByokSheetView.Reassignment(
+                                modelTypes = uiState.deletion.modelTypesNeedingReassignment,
+                                options = uiState.deletion.reassignmentOptions,
+                            )
+                        uiState.apiProvidersSheet.selectedAsset != null ->
+                            ByokSheetView.ConfigList(uiState.apiProvidersSheet.selectedAsset)
+                        else ->
+                            ByokSheetView.AssetList
+                    }
                 }
-            }
 
             AnimatedContent(targetState = viewState, label = "ByokSheetTransition") { state ->
                 when (state) {
@@ -151,7 +157,7 @@ fun ByokBottomSheet(
                                     onSelectApiModelConfig(ApiModelConfigUi())
                                     onNavigateToByokConfigure()
                                 }
-                            }
+                            },
                         )
                     }
                     is ByokSheetView.AssetList -> {
@@ -166,7 +172,7 @@ fun ByokBottomSheet(
                                     onStartCreateApiModelAsset()
                                     onNavigateToByokConfigure()
                                 }
-                            }
+                            },
                         )
                     }
                     is ByokSheetView.Reassignment -> {
@@ -174,7 +180,7 @@ fun ByokBottomSheet(
                             modelTypes = state.modelTypes,
                             reassignmentOptions = state.options,
                             onConfirm = onConfirmDeletionWithReassignment,
-                            onDismiss = onDismissDeletionSafety
+                            onDismiss = onDismissDeletionSafety,
                         )
                     }
                 }
@@ -190,22 +196,24 @@ fun ByokBottomSheet(
                     TextButton(onClick = onDismissDeletionSafety) {
                         Text("OK")
                     }
-                }
+                },
             )
         }
 
         pendingDeleteTarget?.let { deleteTarget ->
             DeleteConfirmationDialog(
-                title = if (deleteTarget is ByokDeleteTarget.Asset) {
-                    "Delete Provider?"
-                } else {
-                    "Delete Preset?"
-                },
-                message = if (deleteTarget is ByokDeleteTarget.Asset) {
-                    "Delete ${deleteTarget.displayName}? This removes the provider and all of its presets."
-                } else {
-                    "Delete ${deleteTarget.displayName}? This preset will be removed."
-                },
+                title =
+                    if (deleteTarget is ByokDeleteTarget.Asset) {
+                        "Delete Provider?"
+                    } else {
+                        "Delete Preset?"
+                    },
+                message =
+                    if (deleteTarget is ByokDeleteTarget.Asset) {
+                        "Delete ${deleteTarget.displayName}? This removes the provider and all of its presets."
+                    } else {
+                        "Delete ${deleteTarget.displayName}? This preset will be removed."
+                    },
                 confirmLabel = "Delete",
                 onConfirm = {
                     when (deleteTarget) {
@@ -214,7 +222,7 @@ fun ByokBottomSheet(
                     }
                     pendingDeleteTarget = null
                 },
-                onDismiss = { pendingDeleteTarget = null }
+                onDismiss = { pendingDeleteTarget = null },
             )
         }
     }
@@ -225,36 +233,39 @@ private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
-    onAddAsset: () -> Unit
+    onAddAsset: () -> Unit,
 ) {
     Column {
         Text(
             text = "API AI Models",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 8.dp),
         )
 
         Text(
             text = "Manage your own API keys and model configurations.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp),
         )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(apiModels, key = { it.credentialsId.value }) { asset ->
-                val dismissState = rememberSwipeToDismissBoxState(
-                    confirmValueChange = { value ->
-                        if (value == SwipeToDismissBoxValue.EndToStart) {
-                            onRequestDeleteAsset(asset)
-                            false
-                        } else true
-                    }
-                )
+                val dismissState =
+                    rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                onRequestDeleteAsset(asset)
+                                false
+                            } else {
+                                true
+                            }
+                        },
+                    )
 
                 SwipeToDismissBox(
                     state = dismissState,
@@ -262,34 +273,38 @@ private fun ByokAssetListView(
                     enableDismissFromStartToEnd = false,
                     backgroundContent = {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.CenterEnd
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(end = 16.dp)
+                                modifier = Modifier.padding(end = 16.dp),
                             )
                         }
-                    }
+                    },
                 ) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectAsset(asset) },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectAsset(asset) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -298,7 +313,7 @@ private fun ByokAssetListView(
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                     if (asset.isMultimodal) {
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -306,7 +321,7 @@ private fun ByokAssetListView(
                                             imageVector = Icons.Default.Visibility,
                                             contentDescription = "Vision capable",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
@@ -314,20 +329,20 @@ private fun ByokAssetListView(
                                     text = "${asset.provider.displayName} • ${asset.modelId}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 2.dp)
+                                    modifier = Modifier.padding(top = 2.dp),
                                 )
                                 Text(
                                     text = "${asset.configurations.size} Preset(s)",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 4.dp)
+                                    modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
 
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = "View configurations",
-                                modifier = Modifier.padding(start = 4.dp)
+                                modifier = Modifier.padding(start = 4.dp),
                             )
                         }
                     }
@@ -339,10 +354,11 @@ private fun ByokAssetListView(
 
         Button(
             onClick = onAddAsset,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
         ) {
             Icon(Icons.Default.Add, contentDescription = "Add new API Provider")
             Spacer(modifier = Modifier.width(8.dp))
@@ -359,12 +375,12 @@ private fun ByokConfigListView(
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onEditConfig: (ApiModelConfigUi) -> Unit,
     onRequestDeleteConfig: (ApiModelConfigUi) -> Unit,
-    onAddConfig: () -> Unit
+    onAddConfig: () -> Unit,
 ) {
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 16.dp),
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
@@ -374,7 +390,7 @@ private fun ByokConfigListView(
                     Text(
                         text = asset.displayName,
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                     if (asset.isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -382,14 +398,14 @@ private fun ByokConfigListView(
                             imageVector = Icons.Default.Visibility,
                             contentDescription = "Vision capable",
                             modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 Text(
                     text = "Presets",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Box {
@@ -399,13 +415,13 @@ private fun ByokConfigListView(
                     Icon(
                         Icons.Default.MoreVert,
                         contentDescription = "Options",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
 
                 DropdownMenu(
                     expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false }
+                    onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
                         text = { Text("Edit") },
@@ -413,7 +429,7 @@ private fun ByokConfigListView(
                         onClick = {
                             menuExpanded = false
                             onEditAsset()
-                        }
+                        },
                     )
                     DropdownMenuItem(
                         text = { Text("Delete") },
@@ -421,7 +437,7 @@ private fun ByokConfigListView(
                         onClick = {
                             menuExpanded = false
                             onRequestDeleteAsset(asset)
-                        }
+                        },
                     )
                 }
             }
@@ -429,18 +445,21 @@ private fun ByokConfigListView(
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
                 val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
-                val dismissState = rememberSwipeToDismissBoxState(
-                    confirmValueChange = { value ->
-                        if (value == SwipeToDismissBoxValue.EndToStart) {
-                            onRequestDeleteConfig(config)
-                            false
-                        } else true
-                    }
-                )
+                val dismissState =
+                    rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                onRequestDeleteConfig(config)
+                                false
+                            } else {
+                                true
+                            }
+                        },
+                    )
 
                 SwipeToDismissBox(
                     state = dismissState,
@@ -449,45 +468,49 @@ private fun ByokConfigListView(
                     gesturesEnabled = isSwipeEnabled,
                     backgroundContent = {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.CenterEnd
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.errorContainer),
+                            contentAlignment = Alignment.CenterEnd,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Delete",
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(end = 16.dp)
+                                modifier = Modifier.padding(end = 16.dp),
                             )
                         }
-                    }
+                    },
                 ) {
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onEditConfig(config) },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onEditConfig(config) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ),
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = config.displayName,
                                     style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
                                     text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -500,21 +523,22 @@ private fun ByokConfigListView(
 
                 Button(
                     onClick = onAddConfig,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        tint = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Add Preset",
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -527,12 +551,12 @@ private sealed interface ByokDeleteTarget {
 
     data class Asset(
         val id: ApiCredentialsId,
-        override val displayName: String
+        override val displayName: String,
     ) : ByokDeleteTarget
 
     data class Config(
         val id: ApiModelConfigurationId,
-        override val displayName: String
+        override val displayName: String,
     ) : ByokDeleteTarget
 }
 
@@ -556,7 +580,7 @@ fun PreviewByokBottomSheetAssets() {
             onDeleteApiModelAsset = {},
             onDeleteApiModelConfig = {},
             onDismissDeletionSafety = {},
-            onConfirmDeletionWithReassignment = {_, _ -> },
+            onConfirmDeletionWithReassignment = { _, _ -> },
         )
     }
 }
@@ -566,11 +590,13 @@ fun PreviewByokBottomSheetAssets() {
 fun PreviewByokBottomSheetContext() {
     PocketCrewTheme {
         ByokBottomSheet(
-            uiState = MockSettingsData.baseUiState.copy(
-                apiProvidersSheet = MockSettingsData.baseUiState.apiProvidersSheet.copy(
-                    selectedAsset = MockSettingsData.apiModels[0]
-                )
-            ),
+            uiState =
+                MockSettingsData.baseUiState.copy(
+                    apiProvidersSheet =
+                        MockSettingsData.baseUiState.apiProvidersSheet.copy(
+                            selectedAsset = MockSettingsData.apiModels[0],
+                        ),
+                ),
             onDismiss = {},
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
@@ -579,7 +605,7 @@ fun PreviewByokBottomSheetContext() {
             onDeleteApiModelAsset = {},
             onDeleteApiModelConfig = {},
             onDismissDeletionSafety = {},
-            onConfirmDeletionWithReassignment = {_, _ -> },
+            onConfirmDeletionWithReassignment = { _, _ -> },
         )
     }
 }
