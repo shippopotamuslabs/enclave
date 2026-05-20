@@ -14,19 +14,13 @@ import javax.inject.Singleton
 object DocGenModule {
     @Provides
     @Singleton
-    fun provideDocumentValidationPort(): DocumentValidationPort {
-        return RustDocumentValidationAdapter()
-    }
+    fun provideDocumentValidationPort(): DocumentValidationPort = RustDocumentValidationAdapter()
 
     @Provides
     @Singleton
-    fun provideCloudDocumentExtractorPort(adapter: LocalDocumentExtractorAdapter): CloudDocumentExtractorPort {
-        return adapter
-    }
+    fun provideCloudDocumentExtractorPort(adapter: LocalDocumentExtractorAdapter): CloudDocumentExtractorPort = adapter
 
     @Provides
     @Singleton
-    fun provideDocumentGeneratorPort(): DocumentGeneratorPort {
-        return LocalDocumentGeneratorAdapter()
-    }
+    fun provideDocumentGeneratorPort(): DocumentGeneratorPort = LocalDocumentGeneratorAdapter()
 }
