@@ -11,9 +11,10 @@ object RustToolParserTestLibrary {
             return
         }
 
-        val hostLibrary = locateProjectRoot()
-            .resolve("third_party/agent_core/target/debug/libagent_core.so")
-            .absoluteFile
+        val hostLibrary =
+            locateProjectRoot()
+                .resolve("third_party/agent_core/target/debug/libagent_core.so")
+                .absoluteFile
         require(hostLibrary.isFile) {
             "Missing host agent_core library at ${hostLibrary.path}; run " +
                 "`cargo build --manifest-path third_party/agent_core/Cargo.toml` first."
@@ -22,9 +23,10 @@ object RustToolParserTestLibrary {
     }
 
     private fun locateProjectRoot(): File {
-        val userDir = checkNotNull(System.getProperty("user.dir")) {
-            "Missing user.dir system property"
-        }
+        val userDir =
+            checkNotNull(System.getProperty("user.dir")) {
+                "Missing user.dir system property"
+            }
         var candidate = File(userDir).absoluteFile
         while (true) {
             if (candidate.resolve("third_party/agent_core/Cargo.toml").isFile) {

@@ -4,10 +4,10 @@ package com.browntowndev.pocketcrew.core.agent
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
 import com.browntowndev.pocketcrew.domain.model.inference.AgentContextReference
-import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopConfig
+import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopCompactionTrigger
+import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopConfig
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
@@ -17,14 +17,14 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentSummaryRequest
 import com.browntowndev.pocketcrew.domain.model.inference.AgentSummaryResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentToolCall
 import com.browntowndev.pocketcrew.domain.model.inference.AgentToolResult
-import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactRequest
-import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactResult
 import com.browntowndev.pocketcrew.domain.model.inference.toAgentLoopMessages
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopEvent
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopPort
+import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactRequest
+import com.browntowndev.pocketcrew.domain.port.inference.AgentManualCompactResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import javax.inject.Inject
-import javax.inject.Singleton
+import com.browntowndev.pocketcrew.domain.port.inference.ToolStreamGatePort
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -32,6 +32,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Drives the UniFFI [FfiAgentEngine] using domain [AgentLoopHostCallbacks].
@@ -43,7 +45,14 @@ import kotlinx.serialization.json.put
 @Singleton
 class RustAgentEngineAdapter
     @Inject
-    constructor(private val loggingPort: LoggingPort) : AgentLoopPort {
+    constructor(
+        private val loggingPort: LoggingPort,
+        private val toolStreamGatePort: ToolStreamGatePort,
+    ) : AgentLoopPort {
+        companion object {
+            private const val TAG = "RustAgentEngineAdapter"
+        }
+
         private var activeEngine: FfiAgentEngine? = null
         private var activeSession: FfiSession? = null
         private var activeHost: AgentLoopHostCallbacks? = null
@@ -88,123 +97,153 @@ class RustAgentEngineAdapter
                 activeSession = session
                 activeHost = host
 
-                while (true) {
-                    for (ev in engine.drainEvents(session)) {
-                        AgentEventMapper.log(ev, loggingPort)
-                        AgentEventMapper.toDomain(ev)?.let { send(it) }
-                    }
-                    when (val action = engine.nextAction(session)) {
-                        is FfiAgentAction.CallModel -> {
-                            val resp =
-                                withContext(Dispatchers.IO) {
-                                    host.completeModelTurn(
-                                        sessionMessages =
-                                            action.request.sessionMessages.map { it.toDomain() },
-                                        systemPrompt = action.request.systemPrompt,
-                                        toolsSchemaJson = action.request.toolsSchemaJson,
-                                        allowToolCall = action.request.allowToolCall,
-                                        contextReferences = action.request.contextReferences.map { it.toDomain() },
-                                        stateLedgerJson = action.request.stateLedgerJson,
-                                        toolContextIndexJson = action.request.toolContextIndexJson,
-                                        fileContextIndexJson = action.request.fileContextIndexJson,
-                                        cacheHints = action.request.cacheHints,
-                                        onTextToken = { text -> channel.send(AgentLoopEvent.TextToken(text)) },
-                                        onThinkingToken = { text -> channel.send(AgentLoopEvent.ThinkingToken(text)) },
-                                    )
-                                }
-                            engine.submitModelResponse(session, resp.toFfi())
+                try {
+                    while (true) {
+                        for (ev in engine.drainEvents(session)) {
+                            AgentEventMapper.log(ev, loggingPort)
+                            AgentEventMapper.toDomain(ev)?.let { send(it) }
                         }
-                        is FfiAgentAction.ExecuteTools -> {
-                            val domainCalls =
-                                action.calls.map { c ->
-                                    AgentToolCall(
-                                        callId = c.callId,
-                                        name = c.name,
-                                        argumentsJson = c.argumentsJson,
+                        when (val action = engine.nextAction(session)) {
+                            is FfiAgentAction.CallModel -> {
+                                val textGate =
+                                    ModelTurnStreamGate(
+                                        toolStreamGatePort,
+                                        action.request.allowToolCall,
                                     )
-                                }
-                            val results =
-                                withContext(Dispatchers.IO) {
-                                    host.executeTools(domainCalls)
-                                }
-                            domainCalls.zip(results).forEach { (call, result) ->
-                                host.onToolResult(call.name, call.argumentsJson, result.resultJson)
-                                send(
-                                    AgentLoopEvent.ToolCallExecuted(
-                                        toolName = call.name,
-                                        resultJson = result.resultJson,
-                                    ),
+                                val resp =
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            host.completeModelTurn(
+                                                sessionMessages =
+                                                    action.request.sessionMessages.map { it.toDomain() },
+                                                systemPrompt = action.request.systemPrompt,
+                                                toolsSchemaJson = action.request.toolsSchemaJson,
+                                                allowToolCall = action.request.allowToolCall,
+                                                contextReferences = action.request.contextReferences.map { it.toDomain() },
+                                                stateLedgerJson = action.request.stateLedgerJson,
+                                                toolContextIndexJson = action.request.toolContextIndexJson,
+                                                fileContextIndexJson = action.request.fileContextIndexJson,
+                                                cacheHints = action.request.cacheHints,
+                                                onTextToken = { text ->
+                                                    textGate.onProviderTextChunk(text) { emitted ->
+                                                        channel.send(AgentLoopEvent.TextToken(emitted))
+                                                    }
+                                                },
+                                                onThinkingToken = { text ->
+                                                    channel.send(AgentLoopEvent.ThinkingToken(text))
+                                                },
+                                            )
+                                        }
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        loggingPort.error(TAG, "model turn failed: ${e.message}", e)
+                                        send(AgentLoopEvent.Failed("model turn failed: ${e.message}"))
+                                        return@channelFlow
+                                    }
+                                val bufferedText =
+                                    textGate.finish(resp.toolCalls.isNotEmpty()) { trailing ->
+                                        if (trailing.isNotEmpty()) {
+                                            channel.send(AgentLoopEvent.TextToken(trailing))
+                                        }
+                                    }
+                                engine.submitModelResponse(
+                                    session,
+                                    resp.copy(assistantText = bufferedText.takeIf { it.isNotBlank() }).toFfi(loggingPort),
                                 )
                             }
-                            engine.submitToolResults(session, results.map { it.toFfi() })
-                        }
-                        is FfiAgentAction.RequestSummary -> {
-                            val summary =
-                                withContext(Dispatchers.IO) {
-                                    host.summarize(
-                                        AgentSummaryRequest(
-                                            messagesToSummarize =
-                                                action.request.messagesToSummarize.map { it.toDomain() },
-                                            instruction = action.request.instruction,
-                                            lastMessageId = action.request.lastMessageId,
-                                            trigger = action.request.trigger.toDomain(),
-                                            focusInstruction = action.request.focusInstruction,
-                                            historyRef = action.request.historyRef,
-                                            stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
+                            is FfiAgentAction.ExecuteTools -> {
+                                val domainCalls =
+                                    action.calls.map { c ->
+                                        AgentToolCall(
+                                            callId = c.callId,
+                                            name = c.name,
+                                            argumentsJson = c.argumentsJson,
+                                        )
+                                    }
+                                val results =
+                                    withContext(Dispatchers.IO) {
+                                        host.executeTools(domainCalls)
+                                    }
+                                domainCalls.zip(results).forEach { (call, result) ->
+                                    host.onToolResult(call.name, call.argumentsJson, result.resultJson)
+                                    send(
+                                        AgentLoopEvent.ToolCallExecuted(
+                                            toolName = call.name,
+                                            resultJson = result.resultJson,
                                         ),
                                     )
                                 }
-                            engine.submitSummary(session, summary.toFfi())
-                        }
-                        is FfiAgentAction.Finished -> {
-                            drainEvents(engine, session)
-                            activeEngine = null
-                            activeSession = null
-                            activeHost = null
-                            send(AgentLoopEvent.Finished)
-                            return@channelFlow
-                        }
-                        is FfiAgentAction.Failed -> {
-                            drainEvents(engine, session)
-                            activeEngine = null
-                            activeSession = null
-                            activeHost = null
-                            send(AgentLoopEvent.Failed(action.error.message ?: "agent failed"))
-                            return@channelFlow
-                        }
-                        is FfiAgentAction.ManualCompactCompleted -> {
-                            drainEvents(engine, session)
+                                engine.submitToolResults(session, results.map { it.toFfi() })
+                            }
+                            is FfiAgentAction.RequestSummary -> {
+                                val summary =
+                                    withContext(Dispatchers.IO) {
+                                        host.summarize(
+                                            AgentSummaryRequest(
+                                                messagesToSummarize =
+                                                    action.request.messagesToSummarize.map { it.toDomain() },
+                                                instruction = action.request.instruction,
+                                                lastMessageId = action.request.lastMessageId,
+                                                trigger = action.request.trigger.toDomain(),
+                                                focusInstruction = action.request.focusInstruction,
+                                                historyRef = action.request.historyRef,
+                                                stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
+                                            ),
+                                        )
+                                    }
+                                engine.submitSummary(session, summary.toFfi())
+                            }
+                            is FfiAgentAction.Finished -> {
+                                drainEvents(engine, session)
+                                send(AgentLoopEvent.Finished)
+                                return@channelFlow
+                            }
+                            is FfiAgentAction.Failed -> {
+                                drainEvents(engine, session)
+                                send(AgentLoopEvent.Failed(action.error.message ?: "agent failed"))
+                                return@channelFlow
+                            }
+                            is FfiAgentAction.ManualCompactCompleted -> {
+                                drainEvents(engine, session)
+                            }
                         }
                     }
+                } finally {
+                    activeEngine = null
+                    activeSession = null
+                    activeHost = null
                 }
             }
 
         override suspend fun requestManualCompact(request: AgentManualCompactRequest): AgentManualCompactResult {
             val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
             val session = requireNotNull(activeSession) { "No active Rust agent session" }
-            val action = engine.requestManualCompact(
-                session,
-                FfiManualCompactRequest(
-                    focusInstruction = request.focusInstruction,
-                    forceSummary = request.forceSummary,
-                ),
-            )
+            val action =
+                engine.requestManualCompact(
+                    session,
+                    FfiManualCompactRequest(
+                        focusInstruction = request.focusInstruction,
+                        forceSummary = request.forceSummary,
+                    ),
+                )
             val requestEvents = collectDomainEvents(engine, session)
             return when (action) {
                 is FfiAgentAction.ManualCompactCompleted -> action.result.toDomain(requestEvents)
                 is FfiAgentAction.RequestSummary -> {
                     val host = requireNotNull(activeHost) { "No active Rust agent host" }
-                    val summary = host.summarize(
-                        AgentSummaryRequest(
-                            messagesToSummarize = action.request.messagesToSummarize.map { it.toDomain() },
-                            instruction = action.request.instruction,
-                            lastMessageId = action.request.lastMessageId,
-                            trigger = action.request.trigger.toDomain(),
-                            focusInstruction = action.request.focusInstruction,
-                            historyRef = action.request.historyRef,
-                            stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
-                        ),
-                    )
+                    val summary =
+                        host.summarize(
+                            AgentSummaryRequest(
+                                messagesToSummarize = action.request.messagesToSummarize.map { it.toDomain() },
+                                instruction = action.request.instruction,
+                                lastMessageId = action.request.lastMessageId,
+                                trigger = action.request.trigger.toDomain(),
+                                focusInstruction = action.request.focusInstruction,
+                                historyRef = action.request.historyRef,
+                                stateLedgerSnapshotJson = action.request.stateLedgerSnapshotJson,
+                            ),
+                        )
                     engine.submitSummary(session, summary.toFfi())
                     val summaryEvents = collectDomainEvents(engine, session)
                     val events = requestEvents + summaryEvents
@@ -232,7 +271,10 @@ class RustAgentEngineAdapter
             return engine.readContextReference(session, referenceId)
         }
 
-        override suspend fun searchContextReferences(query: String, limit: Int): List<AgentContextReference> {
+        override suspend fun searchContextReferences(
+            query: String,
+            limit: Int,
+        ): List<AgentContextReference> {
             val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
             val session = requireNotNull(activeSession) { "No active Rust agent session" }
             return engine.searchContextReferences(session, query, limit.toUInt()).map { it.toDomain() }
@@ -255,18 +297,19 @@ class RustAgentEngineAdapter
             }
 
         private fun sessionContextJson(map: Map<String, String>): String {
-            val obj = buildJsonObject {
-                map.forEach { (key, value) ->
-                    if (key == "included_files") {
-                        runCatching { Json.parseToJsonElement(value) }
-                            .getOrNull()
-                            ?.let { put(key, it) }
-                            ?: put(key, value)
-                    } else {
-                        put(key, value)
+            val obj =
+                buildJsonObject {
+                    map.forEach { (key, value) ->
+                        if (key == "included_files") {
+                            runCatching { Json.parseToJsonElement(value) }
+                                .getOrNull()
+                                ?.let { put(key, it) }
+                                ?: put(key, value)
+                        } else {
+                            put(key, value)
+                        }
                     }
                 }
-            }
             return obj.toString()
         }
     }
@@ -393,18 +436,18 @@ private fun com.browntowndev.pocketcrew.domain.model.inference.AgentLoopSessionI
         systemPrompt = systemPrompt,
     )
 
-private fun AgentModelTurnResult.toFfi(): FfiModelResponse =
+private fun AgentModelTurnResult.toFfi(loggingPort: LoggingPort? = null): FfiModelResponse =
     FfiModelResponse(
-        assistantText = assistantText,
-        toolCalls = toolCalls.map { it.toFfi() },
+        assistantText = FfiPayloadGuard.capAssistantText(assistantText, loggingPort),
+        toolCalls = toolCalls.map { it.toFfi(loggingPort) },
         finishReason = finishReason.toFfi(),
     )
 
-private fun AgentRawToolCall.toFfi(): FfiRawToolCall =
+private fun AgentRawToolCall.toFfi(loggingPort: LoggingPort? = null): FfiRawToolCall =
     FfiRawToolCall(
         id = id,
         name = name,
-        argumentsJson = argumentsJson,
+        argumentsJson = FfiPayloadGuard.capToolArgs(argumentsJson, name, loggingPort),
     )
 
 private fun AgentFinishReason.toFfi(): FfiFinishReason =

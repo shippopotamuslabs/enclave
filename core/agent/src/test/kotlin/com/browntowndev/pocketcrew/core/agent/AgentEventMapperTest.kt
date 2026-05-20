@@ -2,22 +2,23 @@ package com.browntowndev.pocketcrew.core.agent
 
 import com.browntowndev.pocketcrew.domain.port.inference.AgentLoopEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import org.junit.jupiter.api.Test
 
 class AgentEventMapperTest {
     @Test
     fun toDomain_compactionApplied_mapsMetadataOnly() {
-        val event = FfiAgentEvent.CompactionApplied(
-            FfiCompactionEvent(
-                tier = FfiCompactionTier.ARTIFACT_SQUASH,
-                tokensBefore = 100u,
-                tokensAfter = 40u,
-                trigger = FfiCompactionTrigger.MID_TURN,
-            ),
-        )
+        val event =
+            FfiAgentEvent.CompactionApplied(
+                FfiCompactionEvent(
+                    tier = FfiCompactionTier.ARTIFACT_SQUASH,
+                    tokensBefore = 100u,
+                    tokensAfter = 40u,
+                    trigger = FfiCompactionTrigger.MID_TURN,
+                ),
+            )
 
         val mapped = assertIs<AgentLoopEvent.CompactionApplied>(AgentEventMapper.toDomain(event))
 
@@ -29,18 +30,20 @@ class AgentEventMapperTest {
 
     @Test
     fun toDomain_lifecycleEvents_mapToDomainEvents() {
-        val pre = assertIs<AgentLoopEvent.PreCompact>(
-            AgentEventMapper.toDomain(FfiAgentEvent.PreCompact(FfiCompactionTrigger.PREFLIGHT)),
-        )
-        val post = assertIs<AgentLoopEvent.PostCompact>(
-            AgentEventMapper.toDomain(
-                FfiAgentEvent.PostCompact(
-                    trigger = FfiCompactionTrigger.PREFLIGHT,
-                    summaryRef = null,
-                    historyRef = "history-u0-a0",
+        val pre =
+            assertIs<AgentLoopEvent.PreCompact>(
+                AgentEventMapper.toDomain(FfiAgentEvent.PreCompact(FfiCompactionTrigger.PREFLIGHT)),
+            )
+        val post =
+            assertIs<AgentLoopEvent.PostCompact>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.PostCompact(
+                        trigger = FfiCompactionTrigger.PREFLIGHT,
+                        summaryRef = null,
+                        historyRef = "history-u0-a0",
+                    ),
                 ),
-            ),
-        )
+            )
 
         assertEquals("PREFLIGHT", pre.trigger)
         assertEquals("history-u0-a0", post.historyRef)
@@ -48,11 +51,12 @@ class AgentEventMapperTest {
 
     @Test
     fun `FB-K-001 maps terminal turn completed flag`() {
-        val mapped = assertIs<AgentLoopEvent.TurnCompleted>(
-            AgentEventMapper.toDomain(
-                FfiAgentEvent.TurnCompleted(turnIndex = 7u, toolCallCount = 0u, terminal = true),
-            ),
-        )
+        val mapped =
+            assertIs<AgentLoopEvent.TurnCompleted>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.TurnCompleted(turnIndex = 7u, toolCallCount = 0u, terminal = true),
+                ),
+            )
 
         assertEquals(7, mapped.index)
         assertEquals(0, mapped.toolCallCount)
@@ -61,11 +65,12 @@ class AgentEventMapperTest {
 
     @Test
     fun `FB-K-002 maps non-terminal turn completed flag`() {
-        val mapped = assertIs<AgentLoopEvent.TurnCompleted>(
-            AgentEventMapper.toDomain(
-                FfiAgentEvent.TurnCompleted(turnIndex = 3u, toolCallCount = 2u, terminal = false),
-            ),
-        )
+        val mapped =
+            assertIs<AgentLoopEvent.TurnCompleted>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.TurnCompleted(turnIndex = 3u, toolCallCount = 2u, terminal = false),
+                ),
+            )
 
         assertEquals(3, mapped.index)
         assertEquals(2, mapped.toolCallCount)
@@ -93,23 +98,40 @@ class AgentEventMapperTest {
     private class RecordingLogger : LoggingPort {
         val messages = mutableListOf<String>()
 
-        override fun debug(tag: String, message: String) {
+        override fun debug(
+            tag: String,
+            message: String,
+        ) {
             messages += message
         }
 
-        override fun info(tag: String, message: String) {
+        override fun info(
+            tag: String,
+            message: String,
+        ) {
             messages += message
         }
 
-        override fun warning(tag: String, message: String) {
+        override fun warning(
+            tag: String,
+            message: String,
+        ) {
             messages += message
         }
 
-        override fun error(tag: String, message: String, throwable: Throwable?) {
+        override fun error(
+            tag: String,
+            message: String,
+            throwable: Throwable?,
+        ) {
             messages += message
         }
 
-        override fun recordException(tag: String, message: String, throwable: Throwable) {
+        override fun recordException(
+            tag: String,
+            message: String,
+            throwable: Throwable,
+        ) {
             messages += message
         }
     }
