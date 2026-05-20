@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.chat.components.assistantresponse
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,8 +15,8 @@ import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
-import com.browntowndev.pocketcrew.feature.chat.components.detailbottomsheet.DetailBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.components.detailbottomsheet.DetailBottomSheetConfig
+import com.browntowndev.pocketcrew.feature.chat.components.detailbottomsheet.LocalDetailBottomSheetController
 
 @Composable
 fun AssistantResponse(
@@ -39,29 +40,32 @@ fun AssistantResponse(
     var showStepDetails by remember { mutableStateOf(false) }
     var selectedStepName by remember { mutableStateOf("") }
     var showSources by remember { mutableStateOf(false) }
+    val detailSheetController = LocalDetailBottomSheetController.current
 
-    if (showStepDetails) {
-        DetailBottomSheet(
-            config =
+    LaunchedEffect(showStepDetails, selectedStepName, contentText, isStreaming) {
+        if (showStepDetails) {
+            detailSheetController.show(
                 DetailBottomSheetConfig.StepCompletion(
-                    isVisible = showStepDetails,
+                    isVisible = true,
                     content = contentText,
                     stepName = selectedStepName,
                     isStreaming = isStreaming,
                     onDismiss = { showStepDetails = false },
                 ),
-        )
+            )
+        }
     }
 
-    if (showSources) {
-        DetailBottomSheet(
-            config =
+    LaunchedEffect(showSources, message.webSearchSources) {
+        if (showSources) {
+            detailSheetController.show(
                 DetailBottomSheetConfig.Sources(
-                    isVisible = showSources,
+                    isVisible = true,
                     sources = message.webSearchSources,
                     onDismiss = { showSources = false },
                 ),
-        )
+            )
+        }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
