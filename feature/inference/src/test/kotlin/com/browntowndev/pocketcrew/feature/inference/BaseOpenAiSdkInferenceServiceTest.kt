@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.File
 import kotlin.test.assertFalse
 
 /**
@@ -753,6 +754,160 @@ class BaseOpenAiSdkInferenceServiceTest {
         assertEquals("summary thoughtraw thought", reasoningText)
     }
 
+    // ── System prompt prepend ────────────────────────────────────────────────────
+
+    @Test
+    fun `completeSingleTurn prepends system message when systemPrompt is non-blank and no system in sessionMessages`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "hello", metadataJson = "null"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            assertTrue(messages[0].isSystem())
+            assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
+            assertEquals(2, messages.size)
+        }
+
+    @Test
+    fun `completeSingleTurn does not double-prepend system message when sessionMessages already has a system message`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "sys1",
+                            role = Role.SYSTEM,
+                            content = "Existing system message",
+                            metadataJson = "null",
+                        ),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "hello", metadataJson = "null"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            val systemMessages = messages.filter { it.isSystem() }
+            assertEquals(1, systemMessages.size, "Should not double-prepend system message")
+            assertEquals("Existing system message", systemMessages[0].asSystem().content().asText())
+        }
+
+    // ── Image attachment ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `completeSingleTurn attaches images to last non-tool-result USER message`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+            val imageFile = createTempPngFile()
+
+            try {
+                service.completeSingleTurn(
+                    sessionMessages =
+                        listOf(
+                            AgentLoopMessage(id = "u1", role = Role.USER, content = "what is this?", metadataJson = "null"),
+                        ),
+                    systemPrompt = "",
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0, imageUris = listOf(imageFile.toURI().toString())),
+                )
+
+                val messages = requireNotNull(capturedParams).messages()
+                val userMsg = messages.first { it.isUser() }
+                val contentParts = userMsg.asUser().content().asArrayOfContentParts()
+                assertTrue(contentParts.any { it.isText() }, "Should have text part")
+                assertTrue(contentParts.any { it.isImageUrl() }, "Should have image_url part")
+                val textPart = contentParts.first { it.isText() }
+                assertEquals("what is this?", textPart.asText().text())
+            } finally {
+                imageFile.delete()
+            }
+        }
+
+    @Test
+    fun `completeSingleTurn does NOT attach images to tool-result messages`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+            val imageFile = createTempPngFile()
+
+            try {
+                service.completeSingleTurn(
+                    sessionMessages =
+                        listOf(
+                            AgentLoopMessage(id = "u1", role = Role.USER, content = "search for me", metadataJson = "null"),
+                            AgentLoopMessage(
+                                id = "a1",
+                                role = Role.ASSISTANT,
+                                content = "",
+                                metadataJson =
+                                    """{"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"q\":\"test\"}"}]}""",
+                            ),
+                            AgentLoopMessage(
+                                id = "tr1",
+                                role = Role.ASSISTANT,
+                                content = """{"result":"found"}""",
+                                metadataJson = """{"call_id":"call_1"}""",
+                            ),
+                        ),
+                    systemPrompt = "",
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0, imageUris = listOf(imageFile.toURI().toString())),
+                )
+
+                val messages = requireNotNull(capturedParams).messages()
+                val toolMsg = messages.first { it.isTool() }
+                assertTrue(toolMsg.isTool(), "Tool result must remain a tool message")
+                val userMsg = messages.first { it.isUser() }
+                val content = userMsg.asUser().content()
+                assertTrue(content.asArrayOfContentParts().any { it.isImageUrl() }, "Image should be on the USER message")
+            } finally {
+                imageFile.delete()
+            }
+        }
+
     // ── Helper ──────────────────────────────────────────────────────────────────
 
     private fun createSingleTurnService(
@@ -845,6 +1000,15 @@ class BaseOpenAiSdkInferenceServiceTest {
         ): ToolStreamGateFinish = ToolStreamGateFinish(trailingFlush = "", hasToolMarker = false)
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = ""
+    }
+
+    private fun createTempPngFile(): File {
+        val file = File.createTempFile("test_image", ".png")
+        // Minimal PNG signature + dummy body (enough for MIME detection)
+        val pngSignature =
+            intArrayOf(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A).map { it.toByte() }.toByteArray()
+        file.writeBytes(pngSignature + ByteArray(32))
+        return file
     }
 
     private open class TestableBaseOpenAiSdkInferenceService(

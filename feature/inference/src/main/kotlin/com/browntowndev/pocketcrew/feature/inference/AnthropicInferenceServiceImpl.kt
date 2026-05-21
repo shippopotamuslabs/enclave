@@ -2,7 +2,9 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.Base64ImageSource
 import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.ImageBlockParam
 import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
@@ -190,7 +192,17 @@ class AnthropicInferenceServiceImpl(
             builder.thinking(ThinkingConfigEnabled.builder().budgetTokens(it).build())
         }
 
-        sessionMessages.forEach { msg ->
+        val imageUris = options.imageUris.take(20)
+        val lastUserIndex = sessionMessages.indexOfLast { msg ->
+            msg.role == Role.USER && run {
+                val meta = msg.metadataJson
+                if (meta == "null" || meta.isBlank()) return@run true
+                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+            }
+        }
+
+        sessionMessages.forEachIndexed { index, msg ->
             val metadata =
                 if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
                     runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
@@ -200,14 +212,52 @@ class AnthropicInferenceServiceImpl(
 
             when (msg.role) {
                 Role.SYSTEM -> {} // already in systemPrompt param
-                Role.USER ->
-                    builder.addMessage(
-                        MessageParam
-                            .builder()
-                            .role(MessageParam.Role.USER)
-                            .content(msg.content)
-                            .build(),
-                    )
+                Role.USER -> {
+                    val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
+                    if (!attachImages) {
+                        builder.addMessage(
+                            MessageParam
+                                .builder()
+                                .role(MessageParam.Role.USER)
+                                .content(msg.content)
+                                .build(),
+                        )
+                    } else {
+                        val contentBlocks = mutableListOf<ContentBlockParam>()
+                        ImagePayloads.fromUris(imageUris).forEach { payload ->
+                            val mediaType =
+                                when (payload.mimeType) {
+                                    "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
+                                    "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
+                                    "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
+                                    else -> Base64ImageSource.MediaType.IMAGE_JPEG
+                                }
+                            contentBlocks.add(
+                                ContentBlockParam.ofImage(
+                                    ImageBlockParam
+                                        .builder()
+                                        .source(
+                                            Base64ImageSource
+                                                .builder()
+                                                .data(payload.base64)
+                                                .mediaType(mediaType)
+                                                .build(),
+                                        ).build(),
+                                ),
+                            )
+                        }
+                        contentBlocks.add(
+                            ContentBlockParam.ofText(TextBlockParam.builder().text(msg.content).build()),
+                        )
+                        builder.addMessage(
+                            MessageParam
+                                .builder()
+                                .role(MessageParam.Role.USER)
+                                .contentOfBlockParams(contentBlocks)
+                                .build(),
+                        )
+                    }
+                }
                 Role.ASSISTANT -> {
                     if (msg.id.startsWith("compact-summary-")) {
                         builder.addMessage(
@@ -217,7 +267,7 @@ class AnthropicInferenceServiceImpl(
                                 .content("[Conversation summary]\n${msg.content}")
                                 .build(),
                         )
-                        return@forEach
+                        return@forEachIndexed
                     }
                     val callId = metadata?.get("call_id")?.jsonPrimitive?.content
                     if (callId != null) {
@@ -237,7 +287,7 @@ class AnthropicInferenceServiceImpl(
                                     ),
                                 ).build(),
                         )
-                        return@forEach
+                        return@forEachIndexed
                     }
                     val rawCalls = metadata?.get("raw_tool_calls")
                     val contentBlocks = mutableListOf<ContentBlockParam>()
