@@ -5,12 +5,12 @@ import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.BiometricPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.port.security.VaultMetadataPort
-import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
@@ -825,13 +825,26 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `unlockVault AlreadyMatching starts listener and no pending reconciliation`() =
+    fun `SCN-ENTRY-001 MainViewModel matching vault path starts ordered sync`() =
         runTest(testDispatcher) {
             stubAuthenticatedExistingVaultUnlock()
             coEvery { detectVaultReconciliationStateUseCase("password") } returns
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
 
-            // Recreate VM so init picks up the new auth state stub
+            // Drive the entry path through a REAL use case so the test fails when the use case
+            // does not actually replay before starting the listener.
+            coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
+                Result.success(
+                    com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult(
+                        eventsApplied = 0,
+                        lastAppliedSequence = 0,
+                        hasMore = false,
+                    ),
+                )
+            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
+
+            // Recreate VM so init picks up the new auth state stub and the real use case
             viewModel =
                 MainViewModel(
                     getAuthStateUseCase,
@@ -847,7 +860,7 @@ class MainViewModelTest {
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
+                realStartUseCase,
                 loggingPort,
                 errorHandler,
                 )
@@ -855,14 +868,52 @@ class MainViewModelTest {
             viewModel.unlockVault("password")
             advanceUntilIdle()
 
+            // The entry path must drive upload, then replay, then live listener — in that order.
             coVerifyOrder {
-                detectVaultReconciliationStateUseCase("password")
-                initializeModelsUseCase()
+                cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.startListening()
             }
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
             coVerify(exactly = 0) { adoptCloudVaultUseCase(any()) }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertNull(state.pendingVaultReconciliation)
+        }
+
+    @Test
+    fun `cloud sync start failure leaves startup sync deferred`() =
+        runTest(testDispatcher) {
+            stubAuthenticatedExistingVaultUnlock()
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns
+                Result.failure(IllegalStateException("replay failed"))
+
+            viewModel =
+                MainViewModel(
+                    getAuthStateUseCase,
+                    loginWithGoogleUseCase,
+                    initializeModelsUseCase,
+                    cryptoManager,
+                    cloudSyncPort,
+                    vaultMetadataPort,
+                    biometricPort,
+                    biometricManager,
+                    createVaultUseCase,
+                    unlockVaultUseCase,
+                    detectVaultReconciliationStateUseCase,
+                    adoptCloudVaultUseCase,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
+                )
+            advanceUntilIdle()
+            viewModel.unlockVault("password")
+            advanceUntilIdle()
+
+            val state = viewModel.startupState.value as AppStartupState.Ready
+            assertTrue(state.cloudSyncDeferred)
+            assertTrue(state.vaultErrorMessage == "Failed to start cloud sync")
         }
 
     @Test
@@ -911,7 +962,7 @@ class MainViewModelTest {
         }
 
     @Test
-    fun `confirmAdoptCloud invokes adopter then startListener and clears pending`() =
+    fun `SCN-ENTRY-002 MainViewModel cloud adoption starts replay without upload`() =
         runTest(testDispatcher) {
             stubAuthenticatedExistingVaultUnlock()
             val payload =
@@ -922,6 +973,16 @@ class MainViewModelTest {
                     cloudVerification = null,
                 )
             coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
+
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
+                Result.success(
+                    com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult(
+                        eventsApplied = 0,
+                        lastAppliedSequence = 0,
+                        hasMore = false,
+                    ),
+                )
+            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
 
             viewModel =
                 MainViewModel(
@@ -938,7 +999,7 @@ class MainViewModelTest {
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
+                realStartUseCase,
                 loggingPort,
                 errorHandler,
                 )
@@ -950,8 +1011,12 @@ class MainViewModelTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { adoptCloudVaultUseCase(payload) }
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
-            verify(exactly = 0) { cloudSyncPort.startListening() }
+            // Adoption must skip upload, then drive replay -> listen in that order.
+            coVerifyOrder {
+                cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.startListening()
+            }
+            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertNull(state.pendingVaultReconciliation)
         }
