@@ -90,6 +90,7 @@ data class AgentModelTurnResult(
     val assistantText: String?,
     val toolCalls: List<AgentRawToolCall>,
     val finishReason: AgentFinishReason,
+    val providerReasoningContent: String? = null,
 )
 
 data class AgentRawToolCall(

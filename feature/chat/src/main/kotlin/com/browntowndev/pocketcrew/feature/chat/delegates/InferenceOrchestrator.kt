@@ -1,25 +1,29 @@
 package com.browntowndev.pocketcrew.feature.chat.delegates
 
-import androidx.lifecycle.SavedStateHandle
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 import javax.inject.Inject
 
 class InferenceOrchestrator
@@ -39,6 +44,7 @@ class InferenceOrchestrator
         private val settingsUseCases: SettingsUseCases,
         private val cancelInferenceUseCase: CancelInferenceUseCase,
         private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+        private val chatRepository: ChatRepository,
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
     ) {
@@ -52,6 +58,13 @@ class InferenceOrchestrator
         val acknowledgedTurnKeys: StateFlow<Set<ActiveChatTurnKey>> = _acknowledgedTurnKeys.asStateFlow()
 
         private var inferenceJob: Job? = null
+
+        private val _optimisticUserMessage = MutableStateFlow<Message?>(null)
+        val optimisticUserMessage: StateFlow<Message?> = _optimisticUserMessage.asStateFlow()
+
+        fun clearOptimisticUser() {
+            _optimisticUserMessage.value = null
+        }
 
         fun sendMessage(
             scope: CoroutineScope,
@@ -75,6 +88,7 @@ class InferenceOrchestrator
 
                 if (input.isNotBlank() || selectedImageUris.isNotEmpty() || fileAttachments.isNotEmpty()) {
                     val chatIdForMessage: ChatId? = _currentChatId.value ?: initialChatId
+                    val assistantMessageId = MessageId(UUID.randomUUID().toString())
 
                     val domainMessage =
                         Message(
@@ -91,27 +105,60 @@ class InferenceOrchestrator
                             createdAt = System.currentTimeMillis(),
                         )
 
-                    val promptResult = chatUseCases.processPrompt(domainMessage)
+                    _optimisticUserMessage.value = domainMessage
+                    onInputCleared()
 
-                    _currentChatId.value = promptResult.chatId
-                    savedStateHandle["chatId"] = promptResult.chatId.value
+                    val userResult =
+                        try {
+                            chatUseCases.processPrompt(domainMessage)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            _optimisticUserMessage.value = null
+                            errorHandler.handleError(
+                                tag = TAG,
+                                message = "Failed to send message",
+                                throwable = e,
+                                userMessage = "Could not send message. Please try again.",
+                            )
+                            return@launch
+                        }
+
+                    _currentChatId.value = userResult.chatId
+                    savedStateHandle["chatId"] = userResult.chatId.value
+                    val persistedUserMessage =
+                        domainMessage.copy(
+                            id = userResult.userMessageId,
+                            chatId = userResult.chatId,
+                            createdAt = userResult.userMessageCreatedAtMillis,
+                        )
+                    _optimisticUserMessage.value = persistedUserMessage
+
+                    delay(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS.milliseconds)
+
+                    chatUseCases.createAssistantPlaceholder(
+                        chatId = userResult.chatId,
+                        userMessageCreatedAtMillis = userResult.userMessageCreatedAtMillis,
+                        assistantMessageId = assistantMessageId,
+                    )
+
                     val turnKey =
                         ActiveChatTurnKey(
-                            chatId = promptResult.chatId,
-                            assistantMessageId = promptResult.assistantMessageId,
+                            chatId = userResult.chatId,
+                            assistantMessageId = assistantMessageId,
                         )
-                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("sendMessage-unack") { keys -> keys - turnKey }
+                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("sendMessage-unack") { keys ->
+                        keys - turnKey
+                    }
                     _requestedTurnKey.value = turnKey
-
-                    onInputCleared()
 
                     inferenceJob =
                         chatUseCases
                             .generateChatResponse(
                                 prompt = input,
-                                userMessageId = promptResult.userMessageId,
-                                assistantMessageId = promptResult.assistantMessageId,
-                                chatId = promptResult.chatId,
+                                userMessageId = userResult.userMessageId,
+                                assistantMessageId = assistantMessageId,
+                                chatId = userResult.chatId,
                                 mode = selectedMode.toDomain(),
                                 backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
                             ).onEach {
@@ -129,14 +176,29 @@ class InferenceOrchestrator
             }
         }
 
-        fun stopInference(scope: CoroutineScope) {
+        fun stopInference(
+            scope: CoroutineScope,
+            activeTurnKey: ActiveChatTurnKey? = null,
+            finalContent: String? = null,
+        ) {
             inferenceJob?.cancel()
             cancelInferenceUseCase()
-            _requestedTurnKey.value?.let { key ->
-                scope.launch {
-                    activeChatTurnSnapshotPort.clear(key)
-                    _requestedTurnKey.update { current -> if (current == key) null else current }
-                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("stopInference") { keys -> keys + key }
+            val key = _requestedTurnKey.value ?: activeTurnKey
+            key?.let {
+                scope.launch(
+                    errorHandler.coroutineExceptionHandler(
+                        TAG,
+                        "Failed to stop inference",
+                        "Could not stop the response. Please try again.",
+                    ),
+                ) {
+                    if (!finalContent.isNullOrBlank()) {
+                        chatRepository.updateMessageContent(it.assistantMessageId, finalContent)
+                    }
+                    chatRepository.updateMessageState(it.assistantMessageId, MessageState.COMPLETE)
+                    activeChatTurnSnapshotPort.clear(it)
+                    _requestedTurnKey.update { current -> if (current == it) null else current }
+                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("stopInference") { keys -> keys + it }
                 }
             }
         }

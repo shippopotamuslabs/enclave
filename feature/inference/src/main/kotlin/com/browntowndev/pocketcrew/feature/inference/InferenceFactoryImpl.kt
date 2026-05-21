@@ -143,14 +143,14 @@ class InferenceFactoryImpl
                         resolveService(modelType, defaultAssignment)
                     }
                 } catch (e: Exception) {
-                    inferenceLockManager.releaseLock()
+                    inferenceLockManager.releaseLock(lockType)
                     throw e
                 }
 
             return try {
                 block(service)
             } finally {
-                inferenceLockManager.releaseLock()
+                inferenceLockManager.releaseLock(lockType)
             }
         }
 

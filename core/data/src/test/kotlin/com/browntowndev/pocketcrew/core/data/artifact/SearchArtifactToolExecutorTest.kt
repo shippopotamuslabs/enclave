@@ -10,10 +10,14 @@ import com.browntowndev.pocketcrew.domain.model.inference.SearchArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
+import androidx.sqlite.db.SupportSQLiteQuery
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
@@ -66,5 +70,60 @@ class SearchArtifactToolExecutorTest {
                 "DocumentEntity|json|artifact-1",
                 encFake.lastDecryptAad!!.toString(StandardCharsets.UTF_8),
             )
+        }
+
+    @Test
+    fun `execute rejects artifact id with sql injection characters`() =
+        runTest {
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                        argumentsJson =
+                            ToolDefinition.SEARCH_CURRENT_ARTIFACT.encodeArguments<SearchArtifactParams>(
+                                SearchArtifactParams(
+                                    artifactId = "' OR '1'='1",
+                                    query = "needle",
+                                ),
+                            ),
+                        provider = "test",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertTrue(result.resultJson.contains("\"status\":\"error\""))
+            assertTrue(result.resultJson.contains("Invalid artifactId"))
+            coVerify(exactly = 0) { documentDao.searchSimilarBlocks(any()) }
+            coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) }
+        }
+
+    @Test
+    fun `execute uses parameterized sql for vector search`() =
+        runTest {
+            coEvery { embeddingEngine.getEmbedding("find greeting") } returns floatArrayOf(0.1f, 0.2f)
+            coEvery { documentDao.searchSimilarBlocks(any()) } returns emptyList()
+
+            executor.execute(
+                ToolCallRequest(
+                    toolName = ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                    argumentsJson =
+                        ToolDefinition.SEARCH_CURRENT_ARTIFACT.encodeArguments<SearchArtifactParams>(
+                            SearchArtifactParams(
+                                artifactId = "artifact-1",
+                                query = "find greeting",
+                            ),
+                        ),
+                    provider = "test",
+                    modelType = ModelType.FAST,
+                ),
+            )
+
+            val querySlot = slot<SupportSQLiteQuery>()
+            coVerify { documentDao.searchSimilarBlocks(capture(querySlot)) }
+            val sql = querySlot.captured.sql
+            assertTrue(sql.contains("id LIKE ?"))
+            assertTrue(sql.contains("vector MATCH ?"))
+            assertFalse(sql.contains("artifact-1"))
+            assertFalse(sql.contains("[0.1,0.2]"))
         }
 }

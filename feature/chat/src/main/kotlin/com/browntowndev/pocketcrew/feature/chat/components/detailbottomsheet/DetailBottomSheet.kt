@@ -42,11 +42,11 @@ fun DetailBottomSheet(
     val displayDuration =
         when (config) {
             is DetailBottomSheetConfig.Thinking -> {
-                if (config.durationSeconds == 0L && elapsedSeconds > 0) {
-                    elapsedSeconds.toLong()
-                } else {
-                    config.durationSeconds
-                }
+                thinkingSheetDisplayDuration(
+                    isStreaming = config.isStreaming,
+                    durationSeconds = config.durationSeconds,
+                    elapsedSeconds = elapsedSeconds,
+                )
             }
             else -> 0L
         }
@@ -103,7 +103,11 @@ private fun DetailBottomSheetHeader(
                         modifier = Modifier.padding(end = 8.dp),
                     )
                     Text(
-                        text = "Thought for ${formatSheetThinkingDuration(displayDuration)}",
+                        text =
+                            thinkingSheetHeaderTitle(
+                                isStreaming = config.isStreaming,
+                                durationSeconds = displayDuration,
+                            ),
                         style =
                             MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.SemiBold,

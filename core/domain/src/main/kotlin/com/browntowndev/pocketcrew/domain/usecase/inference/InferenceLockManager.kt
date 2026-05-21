@@ -31,10 +31,11 @@ interface InferenceLockManager {
     fun acquireLock(inferenceType: InferenceType): Boolean
 
     /**
-     * Releases the previously acquired lock.
+     * Releases the previously acquired lock for the given type.
      * Must be called exactly once for each successful acquireLock().
+     * @param inferenceType Must match the type passed to the corresponding acquireLock().
      */
-    fun releaseLock()
+    fun releaseLock(inferenceType: InferenceType)
 }
 
 /**

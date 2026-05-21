@@ -8,6 +8,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
 import com.browntowndev.pocketcrew.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.pocketcrew.domain.model.inference.AgentRawToolCall
+import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
@@ -33,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -91,23 +95,33 @@ abstract class BaseOpenAiSdkInferenceService(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val messages = sessionMessages.mapNotNull { it.toOpenAiChatParam() }
+        val messages = sessionMessages.toOpenAiChatParams()
+        val requestModelId = options.modelId ?: modelId
+        val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
 
         val builder =
             ChatCompletionCreateParams
                 .builder()
-                .model(options.modelId ?: modelId)
+                .model(requestModelId)
                 .messages(messages)
 
-        if (allowToolCall && availableTools.isNotEmpty()) {
+        if (allowToolCall && availableTools.isNotEmpty() && supportsClientTools(requestModelId)) {
             availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
             builder.parallelToolCalls(false)
         }
 
-        options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        if (parameterSupport?.supportsReasoningEffort != false) {
+            options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
+        }
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+        }
 
         val response =
             streamChatCompletions(
@@ -142,79 +156,166 @@ abstract class BaseOpenAiSdkInferenceService(
                         ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
                         ?: AgentFinishReason.Stop
                 },
+            providerReasoningContent = response.providerReasoningContent,
         )
     }
 
-    private fun AgentLoopMessage.toOpenAiChatParam(): ChatCompletionMessageParam? {
-        val metadata =
-            if (metadataJson != "null" && metadataJson.isNotBlank()) {
-                runCatching { Json.parseToJsonElement(metadataJson).jsonObject }.getOrNull()
-            } else {
-                null
-            }
+    private fun parameterSupport(
+        options: GenerationOptions,
+        requestModelId: String,
+    ): ApiModelParameterSupport? {
+        val requestProvider = options.apiProvider ?: provider.toApiProviderOrNull()
+        return requestProvider?.let {
+            ApiProviderModelPolicy.parameterSupport(provider = it, modelId = requestModelId)
+        }
+    }
+
+    private fun supportsClientTools(requestModelId: String): Boolean {
+        val requestProvider = provider.toApiProviderOrNull()
+        return requestProvider != ApiProvider.XAI || !ApiProviderModelPolicy.isXaiMultiAgentModel(requestModelId)
+    }
+
+    private fun List<AgentLoopMessage>.toOpenAiChatParams(): List<ChatCompletionMessageParam> {
+        val pendingToolCallIds = mutableSetOf<String>()
+        return mapNotNull { message ->
+            val mappedMessage =
+                message.toOpenAiChatParam(
+                    pendingToolCallIds = pendingToolCallIds,
+                )
+            mappedMessage?.toolCallIds?.let { pendingToolCallIds.addAll(it) }
+            mappedMessage?.param
+        }
+    }
+
+    private fun AgentLoopMessage.toOpenAiChatParam(pendingToolCallIds: MutableSet<String>): MappedChatMessage? {
+        val metadata = metadataJson.toMetadataJsonObject()
+        val toolCallId = metadata?.get("call_id")?.jsonPrimitive?.contentOrNull
+        if (toolCallId != null) {
+            return toToolResultChatParam(toolCallId = toolCallId, pendingToolCallIds = pendingToolCallIds)
+        }
 
         return when (role) {
             Role.SYSTEM ->
-                ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam.builder().content(content).build(),
+                MappedChatMessage(
+                    param =
+                        ChatCompletionMessageParam.ofSystem(
+                            ChatCompletionSystemMessageParam.builder().content(content).build(),
+                        ),
                 )
             Role.USER ->
-                ChatCompletionMessageParam.ofUser(
-                    ChatCompletionUserMessageParam.builder().content(content).build(),
+                MappedChatMessage(
+                    param =
+                        ChatCompletionMessageParam.ofUser(
+                            ChatCompletionUserMessageParam.builder().content(content).build(),
+                        ),
                 )
-            Role.ASSISTANT -> {
-                // CompactSummary (FfiAgentRole.COMPACT_SUMMARY collapsed to ASSISTANT by toDomain())
-                if (id.startsWith("compact-summary-")) {
-                    return ChatCompletionMessageParam.ofSystem(
+            Role.ASSISTANT -> toAssistantChatParam(metadata)
+        }
+    }
+
+    private fun String.toMetadataJsonObject() =
+        if (this != "null" && isNotBlank()) {
+            runCatching { Json.parseToJsonElement(this).jsonObject }.getOrNull()
+        } else {
+            null
+        }
+
+    private fun AgentLoopMessage.toToolResultChatParam(
+        toolCallId: String,
+        pendingToolCallIds: MutableSet<String>,
+    ): MappedChatMessage {
+        if (toolCallId.isNotBlank() && pendingToolCallIds.remove(toolCallId)) {
+            return MappedChatMessage(
+                param =
+                    ChatCompletionMessageParam.ofTool(
+                        ChatCompletionToolMessageParam
+                            .builder()
+                            .content(content.ifBlank { "{}" })
+                            .toolCallId(toolCallId)
+                            .build(),
+                    ),
+            )
+        }
+
+        loggingPort.warning(
+            tag,
+            "Converting orphan tool result to user message model=$modelId messageId=$id callId=$toolCallId",
+        )
+        return MappedChatMessage(
+            param =
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam
+                        .builder()
+                        .content("[Tool result]\n${content.ifBlank { "{}" }}")
+                        .build(),
+                ),
+        )
+    }
+
+    private fun AgentLoopMessage.toAssistantChatParam(metadata: JsonObject?): MappedChatMessage? {
+        if (id.startsWith("compact-summary-")) {
+            return MappedChatMessage(
+                param =
+                    ChatCompletionMessageParam.ofSystem(
                         ChatCompletionSystemMessageParam
                             .builder()
                             .content("[Conversation summary]\n$content")
                             .build(),
-                    )
-                }
+                    ),
+            )
+        }
 
-                // Tool result (FfiAgentRole.TOOL collapsed to ASSISTANT by toDomain())
-                val callId = metadata?.get("call_id")?.jsonPrimitive?.content
-                if (callId != null) {
-                    return ChatCompletionMessageParam.ofTool(
-                        ChatCompletionToolMessageParam
-                            .builder()
-                            .content(content)
-                            .toolCallId(callId)
-                            .build(),
+        val assistantBuilder = ChatCompletionAssistantMessageParam.builder()
+        if (content.isNotBlank()) {
+            assistantBuilder.content(content)
+        }
+        metadata.providerReasoningContent()?.let { reasoningContent ->
+            assistantBuilder.putAdditionalProperty("reasoning_content", JsonValue.from(reasoningContent))
+        }
+        val toolCallIds = mutableListOf<String>()
+        val rawCalls = metadata?.get("raw_tool_calls")
+        if (rawCalls is JsonArray) {
+            rawCalls.forEach { tc ->
+                val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
+                val callName = obj["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@forEach
+                val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                if (rawCallId == null) {
+                    loggingPort.warning(
+                        tag,
+                        "Dropping assistant tool call without provider id model=$modelId messageId=$id tool=$callName",
                     )
+                    return@forEach
                 }
-
-                // Assistant message with optional tool calls
-                val assistantBuilder = ChatCompletionAssistantMessageParam.builder()
-                if (content.isNotBlank()) {
-                    assistantBuilder.content(content)
-                }
-                val rawCalls = metadata?.get("raw_tool_calls")
-                if (rawCalls is JsonArray) {
-                    rawCalls.forEach { tc ->
-                        val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
-                        val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
-                        val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
-                        val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-                        assistantBuilder.addToolCall(
-                            ChatCompletionMessageFunctionToolCall
+                val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
+                assistantBuilder.addToolCall(
+                    ChatCompletionMessageFunctionToolCall
+                        .builder()
+                        .id(rawCallId)
+                        .function(
+                            ChatCompletionMessageFunctionToolCall.Function
                                 .builder()
-                                .id(rawCallId)
-                                .function(
-                                    ChatCompletionMessageFunctionToolCall.Function
-                                        .builder()
-                                        .name(callName)
-                                        .arguments(argsJson)
-                                        .build(),
-                                ).build(),
-                        )
-                    }
-                }
-                ChatCompletionMessageParam.ofAssistant(assistantBuilder.build())
+                                .name(callName)
+                                .arguments(argsJson)
+                                .build(),
+                        ).build(),
+                )
+                toolCallIds.add(rawCallId)
             }
         }
+        if (content.isBlank() && toolCallIds.isEmpty()) {
+            loggingPort.warning(tag, "Skipping empty assistant chat message model=$modelId messageId=$id")
+            return null
+        }
+        return MappedChatMessage(
+            param = ChatCompletionMessageParam.ofAssistant(assistantBuilder.build()),
+            toolCallIds = toolCallIds,
+        )
     }
+
+    private data class MappedChatMessage(
+        val param: ChatCompletionMessageParam,
+        val toolCallIds: List<String> = emptyList(),
+    )
 
     protected open suspend fun streamChatCompletions(
         params: ChatCompletionCreateParams,
@@ -240,6 +341,11 @@ abstract class BaseOpenAiSdkInferenceService(
                         tag,
                         "Chat stream ended without finishReason model=$modelId outputTextDeltas=${state.outputTextDeltaCount}",
                     )
+                    if (state.outputTextDeltaCount > 0 && state.trackedToolCalls.isEmpty()) {
+                        throw RuntimeException(
+                            "Stream ended mid-response without finish signal (provider=$provider model=$modelId)",
+                        )
+                    }
                 }
             }
         } catch (e: OpenAIServiceException) {
@@ -284,6 +390,7 @@ abstract class BaseOpenAiSdkInferenceService(
             providerToolItemIds = providerToolItemIds,
             assistantMessageText = state.accumulatedText.toString(),
             finishReason = state.finishReason,
+            providerReasoningContent = state.accumulatedReasoning.toString().takeIf { it.isNotBlank() },
         )
     }
 
@@ -317,6 +424,7 @@ abstract class BaseOpenAiSdkInferenceService(
 
         val reasoningText = openAiChatDeltaReasoningText(delta._additionalProperties())
         if (reasoningText != null) {
+            state.accumulatedReasoning.append(reasoningText)
             emitEvent(InferenceEvent.Thinking(reasoningText, modelType))
         }
 
@@ -407,6 +515,7 @@ abstract class BaseOpenAiSdkInferenceService(
         var finishReason: String? = null,
         var finishedEmitted: Boolean = false,
         var outputTextDeltaCount: Int = 0,
+        val accumulatedReasoning: StringBuilder = StringBuilder(),
         val trackedToolCalls: MutableMap<Long, TrackedToolCall> = mutableMapOf(),
     )
 
@@ -495,7 +604,28 @@ abstract class BaseOpenAiSdkInferenceService(
         }
         return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
     }
+
+    private fun String.toApiProviderOrNull(): ApiProvider? =
+        ApiProvider.entries.firstOrNull { apiProvider -> apiProvider.name.equals(this, ignoreCase = true) }
+
+    private fun GenerationOptions.safeMaxCompletionTokens(): Int? {
+        val configuredMaxTokens = maxTokens ?: return null
+        val configuredContextWindow = contextWindow
+        if (configuredContextWindow != null && configuredMaxTokens >= configuredContextWindow) {
+            return null
+        }
+        return configuredMaxTokens
+    }
 }
+
+private fun JsonObject?.providerReasoningContent(): String? =
+    this
+        ?.get("provider_reasoning")
+        ?.jsonObject
+        ?.get("reasoning_content")
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.takeIf { it.isNotBlank() }
 
 internal fun openAiChatDeltaReasoningText(additionalProperties: Map<String, JsonValue>): String? {
     val directReasoning =

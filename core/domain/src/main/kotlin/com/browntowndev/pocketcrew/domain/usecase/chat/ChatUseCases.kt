@@ -13,6 +13,16 @@ interface ChatUseCases {
     val processPromptUseCase: CreateUserMessageUseCase
 
     /**
+     * Persists the assistant placeholder after the user message is saved.
+     */
+    val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase
+
+    /**
+     * Merges database messages with an optimistic user row for UI projection.
+     */
+    val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase
+
+    /**
      * Generates a chat response for the given prompt.
      */
     val generateChatResponseUseCase: GenerateChatResponseUseCase
@@ -41,7 +51,21 @@ interface ChatUseCases {
      * Creates the initial user prompt.
      * @param message The user's input text
      */
-    suspend fun processPrompt(message: Message) = processPromptUseCase(message)
+    suspend fun processPrompt(message: Message): UserPromptResult = processPromptUseCase(message)
+
+    /**
+     * Persists an empty assistant placeholder row after the user message.
+     */
+    suspend fun createAssistantPlaceholder(
+        chatId: ChatId,
+        userMessageCreatedAtMillis: Long,
+        assistantMessageId: MessageId,
+    ): AssistantPlaceholderResult =
+        createAssistantPlaceholderUseCase(
+            chatId = chatId,
+            userMessageCreatedAtMillis = userMessageCreatedAtMillis,
+            assistantMessageId = assistantMessageId,
+        )
 
     /**
      * Generates a chat response for the given prompt using streaming.

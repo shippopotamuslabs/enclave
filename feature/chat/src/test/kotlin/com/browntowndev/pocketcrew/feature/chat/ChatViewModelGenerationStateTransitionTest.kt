@@ -17,11 +17,13 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
-import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatTurnTiming
+import com.browntowndev.pocketcrew.domain.usecase.chat.UserPromptResult
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
@@ -31,6 +33,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -43,9 +46,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -74,6 +77,9 @@ class ChatViewModelGenerationStateTransitionTest {
     private lateinit var messagesFlow: MutableStateFlow<List<Message>>
     private lateinit var turnStore: ActiveChatTurnStore
     private lateinit var viewModel: ChatViewModel
+    private lateinit var inferenceOrchestrator: com.browntowndev.pocketcrew.feature.chat.delegates.InferenceOrchestrator
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
+    private lateinit var chatRepository: ChatRepository
 
     @BeforeEach
     fun setup() {
@@ -90,6 +96,8 @@ class ChatViewModelGenerationStateTransitionTest {
         val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
         val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
+        chatRepository = mockk(relaxed = true)
 
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         every { settingsUseCases.assignments } returns assignmentUseCases
@@ -103,13 +111,39 @@ class ChatViewModelGenerationStateTransitionTest {
         every {
             errorHandler.coroutineExceptionHandler(any(), any(), any())
         } returns CoroutineExceptionHandler { _: CoroutineContext, _ -> }
+        coEvery { chatRepository.updateMessageState(any(), any()) } answers {
+            val messageId = invocation.args[0] as MessageId
+            val messageState = invocation.args[1] as MessageState
+            messagesFlow.value =
+                messagesFlow.value.map { message ->
+                    if (message.id == messageId) message.copy(messageState = messageState) else message
+                }
+        }
+        coEvery { chatRepository.updateMessageContent(any(), any()) } answers {
+            val messageId = invocation.args[0] as MessageId
+            val content = invocation.args[1] as String
+            messagesFlow.value =
+                messagesFlow.value.map { message ->
+                    if (message.id == messageId) message.copy(content = message.content.copy(text = content)) else message
+                }
+        }
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "LiteRT Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
         coEvery { chatUseCases.processPrompt(any()) } returns
-            CreateUserMessageUseCase.PromptResult(
+            UserPromptResult(
                 userMessageId = userMessageId,
-                assistantMessageId = assistantMessageId,
                 chatId = chatId,
+                userMessageCreatedAtMillis = 2L,
+            )
+        coEvery {
+            chatUseCases.createAssistantPlaceholder(
+                chatId = any(),
+                userMessageCreatedAtMillis = any(),
+                assistantMessageId = any(),
+            )
+        } returns
+            com.browntowndev.pocketcrew.domain.usecase.chat.AssistantPlaceholderResult(
+                assistantMessageId = assistantMessageId,
             )
         coEvery {
             chatUseCases.generateChatResponse(
@@ -122,12 +156,12 @@ class ChatViewModelGenerationStateTransitionTest {
             )
         } returns flowOf()
 
-        viewModel =
-            ChatViewModelTestSupport.createViewModel(
+        val harness =
+            ChatViewModelTestSupport.createHarness(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
                 savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value)),
-                cancelInferenceUseCase = mockk(relaxed = true),
+                cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
                 modelDisplayNamesUseCase = modelDisplayNamesUseCase,
                 activeModelProvider = activeModelProvider,
@@ -138,10 +172,12 @@ class ChatViewModelGenerationStateTransitionTest {
                 playbackController = mockk(relaxed = true),
                 studioRepository = studioRepository,
                 shareChatUseCase = mockk<ShareChatUseCase>(relaxed = true),
-                chatRepository = mockk(relaxed = true),
+                chatRepository = chatRepository,
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
                 stageImageAttachmentUseCase = mockk<StageImageAttachmentUseCase>(relaxed = true),
             )
+        viewModel = harness.viewModel
+        inferenceOrchestrator = harness.inferenceOrchestrator
     }
 
     @Test
@@ -210,18 +246,28 @@ class ChatViewModelGenerationStateTransitionTest {
 
             viewModel.onInputChange("follow up")
             viewModel.onSendMessage()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            publishSnapshot(thinkingSnapshot("planning"))
+            val sentAssistantId =
+                checkNotNull(inferenceOrchestrator.requestedTurnKey.value?.assistantMessageId) {
+                    "Expected requested turn after send pipeline"
+                }
+            publishSnapshot(
+                snapshot = thinkingSnapshot("planning", sentAssistantId),
+                activeTurnKey = ActiveChatTurnKey(chatId, sentAssistantId),
+            )
             advanceUntilIdle()
-
             assertTrue(
-                viewModel.uiState.value.messages.any { message -> message.id == assistantMessageId },
-                "Expected orphan assistant row before Room catch-up; messages=${viewModel.uiState.value.messages.map { it.id.value to it.indicatorState }}",
+                viewModel.uiState.value.messages.any { message -> message.id == sentAssistantId },
+                "Expected orphan assistant row before Room catch-up; messages=" +
+                    viewModel.uiState.value.messages.map { message ->
+                        message.id.value to message.indicatorState
+                    },
             )
             assertEquals(
                 IndicatorState.Processing,
-                viewModel.uiState.value.indicatorFor(assistantMessageId),
+                viewModel.uiState.value.indicatorFor(sentAssistantId),
                 "history=${indicators.history()}",
             )
 
@@ -235,7 +281,7 @@ class ChatViewModelGenerationStateTransitionTest {
                     ),
                     userMessage(),
                     assistantMessage(
-                        id = assistantMessageId,
+                        id = sentAssistantId,
                         state = MessageState.PROCESSING,
                         createdAt = 3L,
                     ),
@@ -341,6 +387,7 @@ class ChatViewModelGenerationStateTransitionTest {
 
             viewModel.onInputChange("Hello")
             viewModel.onSendMessage()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
             messagesFlow.value =
@@ -375,6 +422,38 @@ class ChatViewModelGenerationStateTransitionTest {
             advanceUntilIdle()
             assertTrue(indicators.last() is IndicatorState.Thinking)
             assertTrue(viewModel.uiState.value.canStop)
+            indicators.cancel()
+        }
+
+    @Test
+    fun `stopGeneration completes retained incomplete turn after ViewModel recreation`() =
+        runTest {
+            val indicators = collectAssistantIndicators()
+
+            messagesFlow.value =
+                listOf(
+                    userMessage(),
+                    assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
+                )
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isGenerating)
+
+            viewModel.stopGeneration()
+            advanceUntilIdle()
+
+            coVerify { cancelInferenceUseCase() }
+            coVerify { chatRepository.updateMessageState(assistantMessageId, MessageState.COMPLETE) }
+            messagesFlow.value =
+                listOf(
+                    userMessage(),
+                    assistantMessage(id = assistantMessageId, state = MessageState.COMPLETE),
+                )
+            advanceUntilIdle()
+            assertFalse(
+                viewModel.uiState.value.isGenerating,
+                "messages=${viewModel.uiState.value.messages.map { it.id.value to it.indicatorState }}",
+            )
+            assertFalse(viewModel.uiState.value.indicatorFor(assistantMessageId) is IndicatorState.Processing)
             indicators.cancel()
         }
 
@@ -436,8 +515,11 @@ class ChatViewModelGenerationStateTransitionTest {
         }
     }
 
-    private suspend fun kotlinx.coroutines.test.TestScope.publishSnapshot(snapshot: AccumulatedMessages) {
-        turnStore.publish(turnKey, snapshot)
+    private suspend fun kotlinx.coroutines.test.TestScope.publishSnapshot(
+        snapshot: AccumulatedMessages,
+        activeTurnKey: ActiveChatTurnKey = turnKey,
+    ) {
+        turnStore.publish(activeTurnKey, snapshot)
         advanceTimeBy(20)
     }
 
@@ -481,7 +563,10 @@ class ChatViewModelGenerationStateTransitionTest {
             modelType = ModelType.THINKING,
         )
 
-    private fun thinkingSnapshot(text: String): AccumulatedMessages =
+    private fun thinkingSnapshot(
+        text: String,
+        targetAssistantId: MessageId = assistantMessageId,
+    ): AccumulatedMessages =
         snapshot(
             state = MessageState.THINKING,
             thinkingRaw = text,
@@ -493,6 +578,7 @@ class ChatViewModelGenerationStateTransitionTest {
                         thinkingStartTime = 1L,
                     ),
                 ),
+            targetAssistantId = targetAssistantId,
         )
 
     private fun snapshot(
@@ -503,13 +589,14 @@ class ChatViewModelGenerationStateTransitionTest {
         thinkingStartTime: Long = 0L,
         transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
         isComplete: Boolean = state == MessageState.COMPLETE,
+        targetAssistantId: MessageId = assistantMessageId,
     ): AccumulatedMessages =
         AccumulatedMessages(
             messages =
                 mapOf(
-                    assistantMessageId to
+                    targetAssistantId to
                         MessageSnapshot(
-                            messageId = assistantMessageId,
+                            messageId = targetAssistantId,
                             modelType = ModelType.THINKING,
                             content = content,
                             thinkingRaw = thinkingRaw,

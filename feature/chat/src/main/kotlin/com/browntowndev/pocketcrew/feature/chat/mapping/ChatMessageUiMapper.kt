@@ -22,6 +22,9 @@ import javax.inject.Inject
 class ChatMessageUiMapper
     @Inject
     constructor() {
+        /** UI-only sentinel until [Message.chatId] is assigned after first persist. */
+        private val optimisticPendingChatId = ChatId("optimistic-pending")
+
         private data class CachedChatMessage(
             val sourceMessage: Message,
             val modelDisplayNames: Map<ModelType, String>,
@@ -59,9 +62,7 @@ class ChatMessageUiMapper
             val chatMessage =
                 ChatMessage(
                     id = message.id,
-                    chatId = requireNotNull(message.chatId) {
-                        "mapToChatMessage called with null chatId on message ${message.id.value}"
-                    },
+                    chatId = message.chatId ?: cachedChatId ?: optimisticPendingChatId,
                     role = role,
                     content =
                         ContentUi(

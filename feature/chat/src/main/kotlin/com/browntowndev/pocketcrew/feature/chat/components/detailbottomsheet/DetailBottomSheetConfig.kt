@@ -45,3 +45,35 @@ fun formatSheetThinkingDuration(seconds: Long): String =
         seconds < 60 -> "${seconds}s"
         else -> "${seconds / 60}m ${seconds % 60}s"
     }
+
+/**
+ * Title for the thinking detail sheet header.
+ * Active thinking uses "Thinking" (optionally with a live elapsed counter); completed uses "Thought for …".
+ */
+fun thinkingSheetHeaderTitle(
+    isStreaming: Boolean,
+    durationSeconds: Long,
+): String =
+    if (isStreaming) {
+        if (durationSeconds > 0L) {
+            "Thinking • ${formatSheetThinkingDuration(durationSeconds)}"
+        } else {
+            "Thinking"
+        }
+    } else {
+        "Thought for ${formatSheetThinkingDuration(durationSeconds)}"
+    }
+
+internal fun thinkingSheetDisplayDuration(
+    isStreaming: Boolean,
+    durationSeconds: Long,
+    elapsedSeconds: Int,
+): Long =
+    when {
+        isStreaming -> {
+            val elapsed = elapsedSeconds.toLong()
+            if (elapsed > 0L) elapsed else durationSeconds
+        }
+        durationSeconds == 0L && elapsedSeconds > 0 -> elapsedSeconds.toLong()
+        else -> durationSeconds
+    }

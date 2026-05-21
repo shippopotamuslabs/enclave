@@ -77,7 +77,7 @@ class InferenceLockManagerTest {
             manager.acquireLock(InferenceType.ON_DEVICE)
 
             // When
-            manager.releaseLock()
+            manager.releaseLock(InferenceType.ON_DEVICE)
 
             // Then - should be able to acquire again
             val result = manager.acquireLock(InferenceType.ON_DEVICE)
@@ -105,7 +105,7 @@ class InferenceLockManagerTest {
             assertTrue(manager.isInferenceBlocked.first())
 
             // When
-            manager.releaseLock()
+            manager.releaseLock(InferenceType.ON_DEVICE)
 
             // Then
             assertFalse(manager.isInferenceBlocked.first())
@@ -177,21 +177,55 @@ class InferenceLockManagerTest {
             manager.acquireLock(InferenceType.BYOK)
 
             // When - release one
-            manager.releaseLock()
+            manager.releaseLock(InferenceType.BYOK)
 
             // Then - still not blocked (2 remaining)
             assertFalse(manager.isInferenceBlocked.first())
 
             // When - release second
-            manager.releaseLock()
+            manager.releaseLock(InferenceType.BYOK)
 
             // Then - still not blocked (1 remaining)
             assertFalse(manager.isInferenceBlocked.first())
 
             // When - release third
-            manager.releaseLock()
+            manager.releaseLock(InferenceType.BYOK)
 
             // Then - now unblocked (0 remaining)
             assertFalse(manager.isInferenceBlocked.first())
+        }
+
+    @Test
+    fun `releaseLock BYOK does not decrement onDeviceCount when both locks active`() =
+        runTest {
+            // Given - BYOK starts, then ON_DEVICE starts concurrently
+            manager.acquireLock(InferenceType.BYOK)
+            manager.acquireLock(InferenceType.ON_DEVICE)
+            assertTrue(manager.isInferenceBlocked.first())
+
+            // When - BYOK finishes first
+            manager.releaseLock(InferenceType.BYOK)
+
+            // Then - ON_DEVICE still running: must remain blocked
+            assertTrue(manager.isInferenceBlocked.first())
+            // And a second ON_DEVICE must still be rejected
+            assertFalse(manager.acquireLock(InferenceType.ON_DEVICE))
+        }
+
+    @Test
+    fun `releaseLock ON_DEVICE unblocks correctly while BYOK still active`() =
+        runTest {
+            // Given - BYOK starts, then ON_DEVICE starts
+            manager.acquireLock(InferenceType.BYOK)
+            manager.acquireLock(InferenceType.ON_DEVICE)
+            assertTrue(manager.isInferenceBlocked.first())
+
+            // When - ON_DEVICE finishes
+            manager.releaseLock(InferenceType.ON_DEVICE)
+
+            // Then - unblocked; BYOK still holds its count but doesn't block
+            assertFalse(manager.isInferenceBlocked.first())
+            // And a new ON_DEVICE can now start
+            assertTrue(manager.acquireLock(InferenceType.ON_DEVICE))
         }
 }

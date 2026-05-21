@@ -47,18 +47,20 @@ class InferenceLockManagerImpl
             }
 
         @Synchronized
-        override fun releaseLock() {
-            // Determine which type to release (prefer ON_DEVICE if both active)
-            when {
-                onDeviceCount > 0 -> {
-                    onDeviceCount--
-                    if (onDeviceCount == 0) {
-                        _isInferenceBlocked.value = false
+        override fun releaseLock(inferenceType: InferenceType) {
+            when (inferenceType) {
+                InferenceType.ON_DEVICE -> {
+                    if (onDeviceCount > 0) {
+                        onDeviceCount--
+                        if (onDeviceCount == 0) {
+                            _isInferenceBlocked.value = false
+                        }
                     }
                 }
-                byokCount > 0 -> {
-                    byokCount--
-                    // isInferenceBlocked unaffected by BYOK
+                InferenceType.BYOK -> {
+                    if (byokCount > 0) {
+                        byokCount--
+                    }
                 }
             }
         }

@@ -7,8 +7,14 @@ import android.os.VibratorManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.browntowndev.pocketcrew.feature.chat.ResponseHapticPhase
 
 private val THINKING_PULSE_TIMINGS_MS = longArrayOf(0L, 45L, 130L, 55L, 920L)
@@ -31,11 +37,37 @@ fun StreamingResponseHapticEffect(
     pulseKey: Long = 0L,
     controller: StreamingResponseHapticController = rememberStreamingResponseHapticController(),
 ) {
-    DisposableEffect(controller) {
-        onDispose { controller.stop() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isForeground by remember {
+        mutableStateOf(
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED),
+        )
     }
 
-    LaunchedEffect(hapticsEnabled, phase, pulseKey, controller) {
+    DisposableEffect(lifecycleOwner, controller) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> isForeground = true
+                    Lifecycle.Event.ON_STOP -> {
+                        isForeground = false
+                        controller.stop()
+                    }
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            controller.stop()
+        }
+    }
+
+    LaunchedEffect(hapticsEnabled, phase, pulseKey, controller, isForeground) {
+        if (!isForeground) {
+            controller.stop()
+            return@LaunchedEffect
+        }
         when {
             !hapticsEnabled -> controller.stop()
             phase == ResponseHapticPhase.ThinkingPulse -> {

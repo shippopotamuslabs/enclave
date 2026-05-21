@@ -27,8 +27,14 @@ import com.browntowndev.pocketcrew.feature.chat.delegates.TtsController
 import com.browntowndev.pocketcrew.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import io.mockk.mockk
+import io.mockk.spyk
 
 object ChatViewModelTestSupport {
+    data class Harness(
+        val viewModel: ChatViewModel,
+        val inferenceOrchestrator: InferenceOrchestrator,
+    )
+
     fun createViewModel(
         settingsUseCases: SettingsUseCases,
         chatUseCases: ChatUseCases,
@@ -47,16 +53,57 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-    ): ChatViewModel {
+    ): ChatViewModel = createHarness(
+        settingsUseCases = settingsUseCases,
+        chatUseCases = chatUseCases,
+        savedStateHandle = savedStateHandle,
+        cancelInferenceUseCase = cancelInferenceUseCase,
+        inferenceLockManager = inferenceLockManager,
+        modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+        activeModelProvider = activeModelProvider,
+        toolExecutionEventPort = toolExecutionEventPort,
+        errorHandler = errorHandler,
+        loggingPort = loggingPort,
+        activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+        playbackController = playbackController,
+        studioRepository = studioRepository,
+        shareChatUseCase = shareChatUseCase,
+        chatRepository = chatRepository,
+        exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+        stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+    ).viewModel
+
+    fun createHarness(
+        settingsUseCases: SettingsUseCases,
+        chatUseCases: ChatUseCases,
+        savedStateHandle: SavedStateHandle,
+        cancelInferenceUseCase: CancelInferenceUseCase,
+        inferenceLockManager: InferenceLockManager,
+        modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
+        activeModelProvider: com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort,
+        toolExecutionEventPort: ToolExecutionEventPort,
+        errorHandler: ViewModelErrorHandler,
+        loggingPort: LoggingPort = mockk(relaxed = true),
+        activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+        playbackController: TtsPlaybackControllerPort,
+        studioRepository: StudioRepositoryPort,
+        shareChatUseCase: ShareChatUseCase,
+        chatRepository: ChatRepository,
+        exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
+        stageImageAttachmentUseCase: StageImageAttachmentUseCase,
+    ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
-            InferenceOrchestrator(
-                chatUseCases = chatUseCases,
-                settingsUseCases = settingsUseCases,
-                cancelInferenceUseCase = cancelInferenceUseCase,
-                activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
-                errorHandler = errorHandler,
-                savedStateHandle = savedStateHandle,
+            spyk(
+                InferenceOrchestrator(
+                    chatUseCases = chatUseCases,
+                    settingsUseCases = settingsUseCases,
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+                    chatRepository = chatRepository,
+                    errorHandler = errorHandler,
+                    savedStateHandle = savedStateHandle,
+                ),
             )
         val chatInputCoordinator =
             ChatInputCoordinator(
@@ -93,7 +140,10 @@ object ChatViewModelTestSupport {
         val photoAttachmentPolicyResolver =
             PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
 
-        return ChatViewModel(
+        return Harness(
+            inferenceOrchestrator = inferenceOrchestrator,
+            viewModel =
+                ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
@@ -113,6 +163,7 @@ object ChatViewModelTestSupport {
             chatUiStateReducer = chatUiStateReducer,
             chatMessageUiMapper = chatMessageUiMapper,
             photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
+                ),
         )
     }
 }

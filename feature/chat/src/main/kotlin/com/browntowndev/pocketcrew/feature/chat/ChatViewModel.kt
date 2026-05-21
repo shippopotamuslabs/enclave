@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.delegates.ArtifactExportCoordinator
@@ -48,7 +49,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -89,6 +89,8 @@ class ChatViewModel
         private val chatMessageUiMapper: ChatMessageUiMapper,
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
     ) : ViewModel() {
+        private val mergeDbMessagesWithOptimisticUseCase = MergeDbMessagesWithOptimisticUseCase()
+
         val initialChatId: ChatId?
             get() = savedStateHandle.get<String>("chatId")?.let { ChatId(it) }
 
@@ -137,10 +139,33 @@ class ChatViewModel
                     replay = 1,
                 )
 
+        private val mergedDbMessagesFlow =
+            combine(
+                dbMessagesFlow,
+                inferenceOrchestrator.optimisticUserMessage,
+            ) { dbMessages, optimisticUserMessage ->
+                if (optimisticUserMessage == null) {
+                    dbMessages
+                } else if (dbMessages.any { it.id == optimisticUserMessage.id }) {
+                    inferenceOrchestrator.clearOptimisticUser()
+                    dbMessages
+                } else {
+                    mergeDbMessagesWithOptimisticUseCase(
+                        dbMessages = dbMessages,
+                        optimisticUserMessage = optimisticUserMessage,
+                    )
+                }
+            }.distinctUntilChangedBy { messages -> messages.dbMessagesFingerprint() }
+                .shareIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    replay = 1,
+                )
+
         private val activeTurnCandidateFlow =
             combine(
                 activeChatIdFlow,
-                dbMessagesFlow,
+                mergedDbMessagesFlow,
                 inferenceOrchestrator.requestedTurnKey,
             ) { chatId, messages, requestedTurnKey ->
                 val incompleteKey =
@@ -189,7 +214,7 @@ class ChatViewModel
 
         private val activeTurnSnapshotObserveKeyFlow =
             combine(
-                dbMessagesFlow,
+                mergedDbMessagesFlow,
                 activeChatIdFlow,
                 inferenceOrchestrator.requestedTurnKey,
                 inferenceOrchestrator.acknowledgedTurnKeys,
@@ -295,7 +320,7 @@ class ChatViewModel
             combine(
                 uiInputsWithPolicyFlow,
                 inferenceLockManager.isInferenceBlocked,
-                dbMessagesFlow,
+                mergedDbMessagesFlow,
                 activeTurnSnapshotStateFlow,
                 ttsPlaybackFlow,
                 studioMediaFlow,
@@ -522,7 +547,16 @@ class ChatViewModel
                 )
                 return
             }
-            inferenceOrchestrator.stopInference(viewModelScope)
+            val activeTurnKey = activeTurnKeyFlow.value ?: currentUiState.activeTurnKeyFromIndicator()
+            val finalContent =
+                activeTurnKey
+                    ?.let { key -> activeTurnSnapshotStateFlow.value.snapshot?.messages?.get(key.assistantMessageId) }
+                    ?.content
+            inferenceOrchestrator.stopInference(
+                scope = viewModelScope,
+                activeTurnKey = activeTurnKey,
+                finalContent = finalContent,
+            )
             toolExecutionBannerCoordinator.clearBanner()
         }
 
@@ -659,6 +693,15 @@ class ChatViewModel
             private const val UI_STATE_CHAT_ID_INDEX = 11
         }
     }
+
+private fun ChatUiState.activeTurnKeyFromIndicator(): ActiveChatTurnKey? {
+    val chatId = chatId ?: return null
+    val messageId = activeIndicatorMessageId ?: return null
+    return messageId
+        .takeIf { id ->
+            messages.any { message -> message.id == id && message.role == MessageRole.Assistant }
+        }?.let { id -> ActiveChatTurnKey(chatId, id) }
+}
 
 internal fun List<Message>.dbMessagesFingerprintForTesting(): Any = dbMessagesFingerprint()
 

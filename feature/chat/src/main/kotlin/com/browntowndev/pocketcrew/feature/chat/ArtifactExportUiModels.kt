@@ -1,11 +1,13 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
 /**
  * Chat row chip for a generated artifact — no domain types in composable parameters.
  */
+@Immutable
 data class ArtifactCardUiModel(
     val artifactId: String,
     val title: String,

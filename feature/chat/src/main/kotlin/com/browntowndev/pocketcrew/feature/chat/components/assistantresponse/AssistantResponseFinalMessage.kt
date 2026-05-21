@@ -104,9 +104,10 @@ internal fun AssistantResponseFinalMessage(
     }
 
     val isComplete =
-        message.indicatorState is IndicatorState.Complete ||
+        (message.indicatorState is IndicatorState.Complete ||
             message.indicatorState is IndicatorState.None ||
-            isPreview
+            isPreview) &&
+            toolCallBanner == null
 
     AssistantResponseActionRow(
         message = message,

@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.AgentFinishReason
 import com.browntowndev.pocketcrew.domain.model.inference.AgentLoopMessage
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
@@ -146,9 +148,13 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
-    fun `toOpenAiChatParam maps call_id metadata to tool message`() =
+    fun `toOpenAiChatParam maps call_id metadata to tool message after matching assistant tool call`() =
         runTest {
             var capturedParams: ChatCompletionCreateParams? = null
+            val rawToolCallsMetadata =
+                """
+                {"raw_tool_calls":[{"id":"call_xyz","name":"web_search","arguments_json":"{\"q\":\"test\"}"}]}
+                """.trimIndent()
             val service =
                 createSingleTurnService(
                     onParams = { capturedParams = it },
@@ -158,6 +164,12 @@ class BaseOpenAiSdkInferenceServiceTest {
             service.completeSingleTurn(
                 sessionMessages =
                     listOf(
+                        AgentLoopMessage(
+                            id = "assistant-tool-call",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson = rawToolCallsMetadata,
+                        ),
                         AgentLoopMessage(
                             id = "tool-result-1",
                             role = Role.ASSISTANT,
@@ -174,9 +186,10 @@ class BaseOpenAiSdkInferenceServiceTest {
             )
 
             val messages = capturedParams!!.messages()
-            assertEquals(1, messages.size)
-            assertTrue(messages[0].isTool())
-            assertEquals("call_xyz", messages[0].asTool().toolCallId())
+            assertEquals(2, messages.size)
+            assertTrue(messages[0].isAssistant())
+            assertTrue(messages[1].isTool())
+            assertEquals("call_xyz", messages[1].asTool().toolCallId())
         }
 
     @Test
@@ -264,6 +277,10 @@ class BaseOpenAiSdkInferenceServiceTest {
     fun `toOpenAiChatParam maps raw_tool_calls metadata to assistant message with tool calls`() =
         runTest {
             var capturedParams: ChatCompletionCreateParams? = null
+            val rawToolCallsMetadata =
+                """
+                {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"q\":\"test\"}"}]}
+                """.trimIndent()
             val service =
                 createSingleTurnService(
                     onParams = { capturedParams = it },
@@ -277,7 +294,7 @@ class BaseOpenAiSdkInferenceServiceTest {
                             id = "assistant-1",
                             role = Role.ASSISTANT,
                             content = "I'll search.",
-                            metadataJson = """{"raw_tool_calls": [{"id": "call_1", "name": "web_search", "arguments_json": "{\"q\":\"test\"}"}]}""",
+                            metadataJson = rawToolCallsMetadata,
                         ),
                     ),
                 systemPrompt = "",
@@ -297,6 +314,49 @@ class BaseOpenAiSdkInferenceServiceTest {
             val functionCall = toolCalls.get()[0].asFunction()
             assertEquals("web_search", functionCall.function().name())
             assertEquals("call_1", functionCall.id())
+        }
+
+    @Test
+    fun `toOpenAiChatParam replays provider reasoning content on assistant tool call`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val metadata =
+                """
+                {
+                  "provider_reasoning":{"reasoning_content":"need tool output first"},
+                  "raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"q\":\"test\"}"}]
+                }
+                """.trimIndent()
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(""),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-1",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson = metadata,
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val assistant = requireNotNull(capturedParams).messages()[0].asAssistant()
+            val reasoning =
+                assistant
+                    ._additionalProperties()["reasoning_content"]
+                    ?.convert(String::class.java)
+            assertEquals("need tool output first", reasoning)
         }
 
     @Test
@@ -400,6 +460,45 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
+    fun `completeSingleTurn carries provider reasoning content from streamed response`() =
+        runTest {
+            val service =
+                createSingleTurnService(
+                    response =
+                        StreamedOpenAiResponse(
+                            emittedAny = true,
+                            functionCalls =
+                                listOf(
+                                    ToolCallRequest(
+                                        toolName = "web_search",
+                                        argumentsJson = """{"q":"test"}""",
+                                        provider = "TEST",
+                                        modelType = ModelType.FAST,
+                                    ),
+                                ),
+                            responseId = "resp_1",
+                            providerToolCallIds = listOf("call_abc"),
+                            providerToolItemIds = listOf("item_abc"),
+                            assistantMessageText = "",
+                            providerReasoningContent = "need tool output first",
+                        ),
+                )
+
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "search", metadataJson = "null")),
+                    systemPrompt = "",
+                    availableTools = emptyList(),
+                    allowToolCall = true,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0),
+                )
+
+            assertEquals("need tool output first", result.providerReasoningContent)
+        }
+
+    @Test
     fun cl_k_04_base_open_ai_does_not_call_tool_stream_gate_port_push() =
         runTest {
             val recordingGate = RecordingToolStreamGatePort()
@@ -464,6 +563,163 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
+    fun `completeSingleTurn omits unsupported xAI multi-agent chat parameters`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "XAI",
+                    modelId = "grok-4.20-multi-agent",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.XAI,
+                        modelId = "grok-4.20-multi-agent",
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                        temperature = 0.7f,
+                        topP = 0.9f,
+                        maxTokens = 4_096,
+                    ),
+            )
+
+            val params = requireNotNull(capturedParams)
+            assertTrue(params.reasoningEffort().isPresent)
+            assertTrue(params.temperature().isPresent)
+            assertTrue(params.topP().isPresent)
+            assertFalse(params.maxCompletionTokens().isPresent)
+            assertFalse(params.tools().isPresent)
+            assertFalse(params.parallelToolCalls().isPresent)
+        }
+
+    @Test
+    fun `completeSingleTurn omits unsupported OpenAI reasoning model sampling parameters`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "OPENAI",
+                    modelId = "o3-mini",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "o3-mini",
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                        temperature = 0.7f,
+                        topP = 0.9f,
+                        maxTokens = 1_024,
+                    ),
+            )
+
+            val params = requireNotNull(capturedParams)
+            assertTrue(params.reasoningEffort().isPresent)
+            assertFalse(params.temperature().isPresent)
+            assertFalse(params.topP().isPresent)
+            assertTrue(params.maxCompletionTokens().isPresent)
+            assertEquals(1_024L, params.maxCompletionTokens().get())
+        }
+
+    @Test
+    fun `completeSingleTurn converts orphan tool result to user message`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "tool-call_1",
+                            role = Role.ASSISTANT,
+                            content = """{"result":"ok"}""",
+                            metadataJson = """{"call_id":"call_1"}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            assertEquals(1, messages.size)
+            assertTrue(messages[0].isUser())
+            assertTrue(
+                messages[0]
+                    .asUser()
+                    .content()
+                    .asText()
+                    .contains("[Tool result]"),
+            )
+        }
+
+    @Test
+    fun `completeSingleTurn skips empty assistant with no valid tool call ids`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-empty-tool",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[{"id":"","name":"web_search","arguments_json":"{\"q\":\"test\"}"}]}
+                                """.trimIndent(),
+                        ),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "continue", metadataJson = "null"),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            assertEquals(1, messages.size)
+            assertTrue(messages[0].isUser())
+            assertEquals("continue", messages[0].asUser().content().asText())
+        }
+
+    @Test
     fun `openAiChatDeltaReasoningText reads OpenRouter reasoning field`() {
         val reasoningText =
             openAiChatDeltaReasoningText(
@@ -501,11 +757,15 @@ class BaseOpenAiSdkInferenceServiceTest {
 
     private fun createSingleTurnService(
         response: StreamedOpenAiResponse,
+        provider: String = "OPENAI",
+        modelId: String = "openai/gpt-5.2",
         onParams: (ChatCompletionCreateParams) -> Unit = {},
         toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
     ): TestableSingleTurnService =
         TestableSingleTurnService(
             client = client,
+            modelId = modelId,
+            provider = provider,
             loggingPort = loggingPort,
             stubResponse = response,
             onParams = onParams,
@@ -534,14 +794,16 @@ class BaseOpenAiSdkInferenceServiceTest {
 
     private class TestableSingleTurnService(
         client: OpenAIClient,
+        modelId: String,
+        provider: String,
         loggingPort: LoggingPort,
         private val stubResponse: StreamedOpenAiResponse,
         private val onParams: (ChatCompletionCreateParams) -> Unit,
         toolStreamGatePort: ToolStreamGatePort,
     ) : TestableBaseOpenAiSdkInferenceService(
             client = client,
-            modelId = "openai/gpt-5.2",
-            provider = "OPENAI",
+            modelId = modelId,
+            provider = provider,
             modelType = ModelType.FAST,
             baseUrl = null,
             loggingPort = loggingPort,
