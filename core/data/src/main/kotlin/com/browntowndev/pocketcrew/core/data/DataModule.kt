@@ -54,6 +54,7 @@ import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
+import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl

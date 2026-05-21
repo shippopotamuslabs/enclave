@@ -3,7 +3,9 @@ package com.browntowndev.pocketcrew.domain.port.repository
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.security.VaultMetadata
+import com.browntowndev.pocketcrew.domain.model.sync.CloudSyncEventReplayResult
 
+@Suppress("TooManyFunctions")
 interface CloudSyncPort {
     /**
      * Starts listening to cloud changes and synchronizing them to the local database.
@@ -36,6 +38,11 @@ interface CloudSyncPort {
      * Called by SyncWorker on every triggered sync. Handles vault-lock check internally.
      */
     suspend fun syncPendingChanges(): Result<Unit>
+
+    /**
+     * Replays server-sequenced remote sync events into the local source of truth.
+     */
+    suspend fun syncRemoteChangesFromCloud(): Result<CloudSyncEventReplayResult>
 
     /**
      * Updates the user's vault salt in the cloud.

@@ -78,14 +78,6 @@ internal class WebSearchSourceSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val chatId =
-            doc.getString("chat_id")
-                ?.takeIf { it.isNotBlank() }
-                ?.let { ChatId(it) }
-                ?: ctx.daos.messageDao.getMessageById(entity.messageId)?.message?.chatId
-        if (chatId != null) {
-            ctx.ensurePlaceholderMessage(entity.messageId, chatId)
-        }
         val existing = ctx.daos.webSearchSourceDao.getById(entity.id)
         if (existing == null || entity.updatedAt > existing.updatedAt) {
             ctx.daos.webSearchSourceDao.upsert(entity.copy(pendingSync = 0))

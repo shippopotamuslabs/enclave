@@ -10,7 +10,15 @@ import kotlinx.coroutines.tasks.await
 internal class FirestorePendingSyncEngine(
     private val ctx: FirestoreSyncContext,
     private val adapters: List<EntitySyncAdapter<*>>,
+    private val syncStateStore: FirestoreSyncStateStore = FirestoreSyncStateStore(),
 ) {
+    private suspend fun syncMetadata(): Map<String, Any?> =
+        mapOf(
+            "_sync_device_id" to syncStateStore.deviceId(),
+            "_sync_client_mutation_id" to syncStateStore.newClientMutationId(),
+            "_sync_written_at" to syncStateStore.currentTimeMillis(),
+        )
+
     suspend fun syncAllLocalDataToCloud(userId: String): Result<Unit> =
         runCatching {
             adapters.forEach { it.claimPending() }
@@ -25,6 +33,7 @@ internal class FirestorePendingSyncEngine(
         messages: List<Message>,
     ): Result<Unit> =
         runCatching {
+            val metadata = syncMetadata()
             val allEntities = mutableListOf<Pair<String, Map<String, Any?>>>()
             chats.forEach { chat ->
                 if (chat.id.value.isBlank()) {
@@ -35,7 +44,7 @@ internal class FirestorePendingSyncEngine(
                     return@forEach
                 }
                 val data =
-                    mapOf(
+                    mutableMapOf<String, Any?>(
                         "name" to
                             ctx.localEncryption.encryptString(
                                 chat.name,
@@ -45,7 +54,7 @@ internal class FirestorePendingSyncEngine(
                         "last_modified" to chat.lastModified.time,
                         "pinned" to chat.pinned,
                         "updated_at" to System.currentTimeMillis(),
-                    )
+                    ).apply { putAll(metadata) }
                 allEntities.add("users/$userId/chats/${chat.id.value}" to data)
             }
             messages.forEach { msg ->
@@ -77,7 +86,7 @@ internal class FirestorePendingSyncEngine(
                         "created_at" to msg.createdAt,
                         "model_type" to msg.modelType?.name,
                         "updated_at" to System.currentTimeMillis(),
-                    )
+                    ).apply { putAll(metadata) }
                 allEntities.add("users/$userId/messages/${msg.id.value}" to data)
             }
 
@@ -125,20 +134,36 @@ internal class FirestorePendingSyncEngine(
             "Syncing ${pending.size} pending changes for ${adapter.collectionPath}",
         )
         pending.chunked(500).forEach { batchItems ->
+            val metadata = syncMetadata()
             val upserts =
                 batchItems
                     .filter { !adapter.shouldDelete(it) }
                     .map { entity ->
                         val repairedEntity = adapter.repairForSync(entity)
+                        val rawData = adapter.toFirestore(repairedEntity)
                         val data =
-                            ctx.firestoreSensitiveFieldRepairer.repairOutbound(
-                                collectionPath = adapter.collectionPath,
-                                entityId = adapter.getEntityId(repairedEntity),
-                                data = adapter.toFirestore(repairedEntity),
-                            )
+                            if (rawData.isEmpty()) {
+                                emptyMap()
+                            } else {
+                                ctx.firestoreSensitiveFieldRepairer
+                                    .repairOutbound(
+                                        collectionPath = adapter.collectionPath,
+                                        entityId = adapter.getEntityId(repairedEntity),
+                                        data = rawData,
+                                    ).toMutableMap()
+                                    .apply { putAll(metadata) }
+                            }
                         repairedEntity to data
                     }
             val deletes = batchItems.filter { adapter.shouldDelete(it) }
+            val writableUpserts =
+                upserts.filter { (entity, data) ->
+                    data.isNotEmpty() && adapter.getEntityId(entity).isNotBlank()
+                }
+            val writableDeletes =
+                deletes.filter { entity ->
+                    adapter.getEntityId(entity).isNotBlank()
+                }
 
             ctx.firestore
                 .runBatch { batch ->
@@ -169,7 +194,10 @@ internal class FirestorePendingSyncEngine(
                         batch.delete(ctx.firestore.document(path))
                     }
                 }.await()
-            adapter.markSynced(batchItems)
+            val syncedEntities = writableUpserts.map { it.first } + writableDeletes
+            if (syncedEntities.isNotEmpty()) {
+                adapter.markSynced(syncedEntities)
+            }
         }
     }
 }

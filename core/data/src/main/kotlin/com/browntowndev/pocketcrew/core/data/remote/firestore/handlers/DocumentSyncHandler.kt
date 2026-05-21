@@ -62,11 +62,6 @@ internal class DocumentSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val chatIdStr = doc.getString("chat_id")
-        val chatId = chatIdStr?.takeIf { it.isNotBlank() }?.let { ChatId(it) }
-        if (chatId != null) {
-            ctx.ensurePlaceholderMessage(entity.messageId, chatId)
-        }
         val existing = ctx.daos.documentDao.getDocumentById(entity.id)
         if (existing == null || entity.updatedAt > existing.updatedAt) {
             ctx.daos.documentDao.insertDocument(entity.copy(pendingSync = 0))

@@ -43,6 +43,7 @@ internal class MessageFileSyncHandler(
         val chatId = message.chatId.value
         return mapOf(
             "message_id" to local.messageId,
+            "chat_id" to chatId,
             "name" to local.name.encryptedForFirestore(ctx, collectionPath, local.id, "name"),
             "mime_type" to local.mimeType.name,
             "remote_url" to local.remoteUrl?.let { it.encryptedForFirestore(ctx, collectionPath, local.id, "remote_url") },
@@ -82,10 +83,6 @@ internal class MessageFileSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val chatId = doc.getString("chat_id")?.let { ChatId(it) }
-        if (chatId != null) {
-            ctx.ensurePlaceholderMessage(MessageId(entity.messageId), chatId)
-        }
         val existing = ctx.daos.messageFileDao.getById(entity.id)
         if (existing == null || entity.updatedAt >= existing.updatedAt) {
             // Preserve local content if we already have it
