@@ -4,7 +4,8 @@
 
 TypeScript Functions tests:
 
-- `npm --prefix functions test`
+- `npm --prefix functions test` (pure handler tests; runs without the Firestore emulator)
+- `npm --prefix functions run test:rules` (security-rules tests; wraps `mocha lib/*.rules.test.js` inside `firebase emulators:exec --only firestore`)
 
 Focused Android domain tests:
 
@@ -27,6 +28,7 @@ Focused app and settings tests:
 Required implementation validation after focused tests pass:
 
 - `npm --prefix functions test`
+- `npm --prefix functions run test:rules`
 - `./gradlew :core:domain:testDebugUnitTest`
 - `./gradlew :core:data:testDebugUnitTest`
 - `./gradlew :app:testDebugUnitTest`
