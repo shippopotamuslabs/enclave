@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isServerOwnedSyncCollection(collection) {
+      return collection == 'sync_events'
+        || collection == 'sync_meta'
+        || collection == 'sync_processed_events';
+    }
+
+    function isAllowlistedEntityCollection(collection) {
+      return collection == 'chats'
+        || collection == 'messages'
+        || collection == 'chat_summaries'
+        || collection == 'memories'
+        || collection == 'vision_analysis'
+        || collection == 'message_files'
+        || collection == 'web_search_sources'
+        || collection == 'message_transcript_segments'
+        || collection == 'documents'
+        || collection == 'api_credentials'
+        || collection == 'api_keys'
+        || collection == 'api_model_configs'
+        || collection == 'local_models'
+        || collection == 'local_model_configs'
+        || collection == 'default_models'
+        || collection == 'tts_providers'
+        || collection == 'media_providers'
+        || collection == 'studio_albums'
+        || collection == 'studio_gallery';
+    }
+
+    function hasStringField(fieldName) {
+      return request.resource.data.keys().hasAny([fieldName])
+        && request.resource.data[fieldName] is string;
+    }
+
+    function hasNumberField(fieldName) {
+      return request.resource.data.keys().hasAny([fieldName])
+        && request.resource.data[fieldName] is number;
+    }
+
+    function validSyncMetadata() {
+      return (!request.resource.data.keys().hasAny(['_sync_device_id']) || hasStringField('_sync_device_id'))
+        && (!request.resource.data.keys().hasAny(['_sync_client_mutation_id'])
+          || hasStringField('_sync_client_mutation_id'))
+        && (!request.resource.data.keys().hasAny(['_sync_written_at']) || hasNumberField('_sync_written_at'));
+    }
+
+    // Owner-scoped user document.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // Allowlisted entity collections: owner read/write only for known synced
+      // entity collections. Server-owned sync collections are handled below.
+      match /{collection}/{document} {
+        allow read, delete: if isOwner(uid) && isAllowlistedEntityCollection(collection);
+        allow create, update: if isOwner(uid)
+          && isAllowlistedEntityCollection(collection)
+          && validSyncMetadata();
+      }
+
+      // Server-owned sync feed: owners may READ their own events, but never write.
+      // Cloud Functions use the Admin SDK and are not constrained by these rules.
+      match /sync_events/{eventId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      match /sync_meta/{doc} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // Server-only idempotency ledger — clients may not read or write.
+      match /sync_processed_events/{doc} {
+        allow read, write: if false;
+      }
+    }
+
+    // Public/shared content remains readable; writes restricted to Cloud Functions.
+    match /shared_chats/{shareId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
