@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
@@ -14,10 +15,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import com.browntowndev.pocketcrew.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
+import com.hrm.markdown.parser.MarkdownParser
+import com.hrm.markdown.parser.ast.Document
 import com.hrm.markdown.renderer.Markdown
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
 private val codeRegex = Regex("`([^`]+)`")
+
+/**
+ * Process-lifetime cache of pre-parsed markdown ASTs. Survives LazyColumn composition
+ * cache eviction, so items re-entering the viewport render synchronously without the
+ * async-parse spinner.
+ */
+private val markdownDocumentCache = ConcurrentHashMap<String, Document>(64)
 
 /**
  * A composable that renders markdown text.
@@ -54,8 +67,37 @@ fun StreamableMarkdownText(
             text = markdown,
             modifier = modifier,
         )
+        return
+    }
+
+    val theme = remember { themeFactory.create() }
+
+    // Read the cache at composition entry. Non-null on re-entry after LazyColumn eviction,
+    // allowing synchronous render with no async-parse spinner.
+    val cachedDocument = remember(markdown) { markdownDocumentCache[markdown] }
+
+    // Always register the effect (unconditional placement avoids slot-order violations).
+    // Populates the cache in the background without triggering a recompose, so there is no
+    // subtree swap for the currently-visible item.
+    LaunchedEffect(markdown, isStreaming) {
+        if (!isStreaming && markdownDocumentCache[markdown] == null) {
+            val parsed = withContext(Dispatchers.Default) { MarkdownParser().parse(markdown) }
+            markdownDocumentCache[markdown] = parsed
+        }
+    }
+
+    if (!isStreaming && cachedDocument != null) {
+        // Fast path: pre-parsed document is available — renders synchronously, no spinner.
+        SelectionContainer(modifier = modifier) {
+            Markdown(
+                document = cachedDocument,
+                theme = theme,
+                enableScroll = enableScroll,
+                onLinkClick = onLinkClick,
+            )
+        }
     } else {
-        val theme = remember { themeFactory.create() }
+        // Streaming or first render before cache is populated: library handles async parse.
         // Do not key the subtree on streaming vs complete: that disposal remeasures the
         // LazyColumn parent row and snaps scroll when streaming finishes.
         SelectionContainer(modifier = modifier) {

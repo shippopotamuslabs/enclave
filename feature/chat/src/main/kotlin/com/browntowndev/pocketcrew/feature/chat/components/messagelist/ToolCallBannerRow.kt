@@ -17,7 +17,7 @@ internal fun resolveActiveToolCallBanner(
 ): ToolCallBannerUi? = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null
 
 internal fun usesInlineToolCallBannerInTranscript(message: ChatMessage): Boolean =
-    message.role == MessageRole.Assistant && message.transcriptSegments.isNotEmpty()
+    (message.role == MessageRole.Assistant) && message.transcriptSegments.isNotEmpty()
 
 @Composable
 internal fun ToolCallBannerRow(
@@ -33,14 +33,13 @@ internal fun ToolCallBannerRow(
 @Composable
 internal fun StandaloneToolCallBannerRow(
     message: ChatMessage,
-    activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     modifier: Modifier = Modifier,
 ) {
     if (usesInlineToolCallBannerInTranscript(message)) return
 
     ToolCallBannerRow(
-        banner = resolveActiveToolCallBanner(message, activeIndicatorMessageId, activeToolCallBanner),
+        banner = activeToolCallBanner,
         modifier = modifier.padding(bottom = 8.dp),
     )
 }

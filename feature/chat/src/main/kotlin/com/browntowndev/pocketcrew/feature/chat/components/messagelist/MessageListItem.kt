@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -28,6 +27,7 @@ import com.browntowndev.pocketcrew.feature.chat.components.detailbottomsheet.Thi
 import com.browntowndev.pocketcrew.feature.chat.components.messagebubble.MessageBubble
 import com.browntowndev.pocketcrew.feature.chat.components.thinkingindicator.ThinkingIndicator
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 
 /** Reserved height for [GeneratingIndicator] so completion does not collapse layout and shift scroll. */
 private val CrewGeneratingIndicatorReservedHeight = 62.dp
@@ -35,7 +35,6 @@ private val CrewGeneratingIndicatorReservedHeight = 62.dp
 @Composable
 internal fun MessageListItem(
     message: ChatMessage,
-    activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
     chatMode: ChatModeUi,
@@ -43,9 +42,9 @@ internal fun MessageListItem(
     isPreview: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var reserveCrewGeneratingSlot by remember(message.id) { mutableStateOf(false) }
+    var reserveCrewGeneratingSlot by remember(message.id) { mutableStateOf(value = false) }
     LaunchedEffect(message.id, chatMode, message.indicatorState) {
-        if (chatMode == ChatModeUi.CREW && message.indicatorState is IndicatorState.Generating) {
+        if ((chatMode == ChatModeUi.CREW) && (message.indicatorState is IndicatorState.Generating)) {
             reserveCrewGeneratingSlot = true
         }
     }
@@ -64,12 +63,10 @@ internal fun MessageListItem(
             reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
         )
 
-        val activeBanner = resolveActiveToolCallBanner(message, activeIndicatorMessageId, activeToolCallBanner)
         val inlineToolCallBannerInTranscript = usesInlineToolCallBannerInTranscript(message)
 
         StandaloneToolCallBannerRow(
             message = message,
-            activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeToolCallBanner,
         )
 
@@ -83,7 +80,7 @@ internal fun MessageListItem(
                 message = message,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
-                toolCallBanner = if (inlineToolCallBannerInTranscript) activeBanner else null,
+                toolCallBanner = if (inlineToolCallBannerInTranscript) activeToolCallBanner else null,
                 onPlayAudio = callbacks.onPlayAudio,
                 onArtifactCardClick = callbacks.onArtifactCardClick,
                 onNavigateToStudio = callbacks.onNavigateToStudio,
@@ -103,17 +100,17 @@ private fun MessageListItemIndicators(
 ) {
     if (indicatorState == null) return
 
-    var isThinkingSheetVisible by remember { mutableStateOf(false) }
+    var isThinkingSheetVisible by remember { mutableStateOf(value = false) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
 
     val startTime = indicatorThinkingStartTime(indicatorState)
     val isThinkingActive = isIndicatorThinkingActive(indicatorState)
 
-    if (startTime > 0 && isThinkingActive) {
+    if ((startTime > 0) && isThinkingActive) {
         LaunchedEffect(startTime) {
             while (true) {
                 elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
-                delay(1000L)
+                delay(1.seconds)
             }
         }
     }
@@ -133,12 +130,13 @@ private fun MessageListItemIndicators(
         reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
         elapsedSeconds = elapsedSeconds,
         isThinkingSheetVisible = isThinkingSheetVisible,
-        onToggleThinkingSheet = { isThinkingSheetVisible = !isThinkingSheetVisible },
-    )
+    ) {
+        isThinkingSheetVisible = !isThinkingSheetVisible
+    }
 
     if (isThinkingSheetVisible) {
         ThinkingDetailsBottomSheet(
-            isVisible = isThinkingSheetVisible,
+            isVisible = true,
             thinkingRaw = indicatorThinkingRawForSheet(indicatorState),
             thinkingDurationSeconds = indicatorThinkingDurationForSheet(indicatorState),
             elapsedSeconds = elapsedSeconds,

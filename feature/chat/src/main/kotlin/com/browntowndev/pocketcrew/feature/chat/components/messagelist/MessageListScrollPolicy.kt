@@ -1,11 +1,15 @@
 package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import kotlin.math.roundToInt
 
-/**
- * Programmatic list scroll triggered only for chat open or a new user turn — never for
- * streaming token updates or assistant completion.
- */
+internal fun activeInteractionMinHeight(
+    viewportHeight: Dp,
+    bottomContentPadding: Dp,
+): Dp = maxOf(0.dp, viewportHeight - bottomContentPadding)
+
 internal sealed interface MessageListProgrammaticScrollAction {
     data object None : MessageListProgrammaticScrollAction
 
@@ -13,6 +17,40 @@ internal sealed interface MessageListProgrammaticScrollAction {
         val lazyIndex: Int,
         val animated: Boolean,
     ) : MessageListProgrammaticScrollAction
+}
+
+internal fun messageListScrollTargetLazyIndex(
+    messageCount: Int,
+    latestUserMessageIndex: Int,
+): Int {
+    if (messageCount <= 0) return 0
+    return if (latestUserMessageIndex != -1) {
+        latestUserMessageIndex
+    } else {
+        messageCount - 1
+    }
+}
+
+internal fun messageListActiveTurnContentHeightPx(
+    itemHeightsPx: List<Int>,
+    itemSpacingPx: Float,
+): Int {
+    if (itemHeightsPx.isEmpty()) return 0
+    val spacingPx = itemSpacingPx * (itemHeightsPx.size - 1)
+    return (itemHeightsPx.sum() + spacingPx).roundToInt()
+}
+
+internal fun messageListBottomSpacerHeightPx(
+    targetMinHeightPx: Float,
+    activeTurnContentHeightPx: Int,
+    bottomSpacerSpacingPx: Float,
+): Int {
+    if (targetMinHeightPx <= 0f) return 0
+    val remaining =
+        targetMinHeightPx -
+            activeTurnContentHeightPx -
+            bottomSpacerSpacingPx.coerceAtLeast(0f)
+    return maxOf(0f, remaining).roundToInt()
 }
 
 internal fun resolveMessageListProgrammaticScrollAction(
@@ -38,7 +76,7 @@ internal fun resolveMessageListProgrammaticScrollAction(
         )
     }
 
-    if (latestUserMessageId != null && latestUserMessageId != lastScrolledUserMessageId) {
+    if ((latestUserMessageId != null) && (latestUserMessageId != lastScrolledUserMessageId)) {
         return MessageListProgrammaticScrollAction.ScrollToUserTurn(
             lazyIndex = latestUserMessageIndex.coerceAtLeast(0),
             animated = true,
@@ -46,23 +84,6 @@ internal fun resolveMessageListProgrammaticScrollAction(
     }
 
     return MessageListProgrammaticScrollAction.None
-}
-
-/**
- * Scroll delta (px) to apply when the viewport filler shrinks so visible content does not jump.
- * Returns null when no compensation should run.
- */
-internal fun messageListFillerScrollCompensationPx(
-    previousFillerHeightPx: Int,
-    newFillerHeightPx: Int,
-    isScrollInProgress: Boolean,
-    suppressScrollAnchor: Boolean,
-): Int? {
-    if (suppressScrollAnchor) return null
-    if (previousFillerHeightPx <= 0) return null
-    if (newFillerHeightPx >= previousFillerHeightPx) return null
-    if (isScrollInProgress) return null
-    return previousFillerHeightPx - newFillerHeightPx
 }
 
 internal sealed interface MessageListFabVisibilityUpdate {
@@ -73,16 +94,12 @@ internal sealed interface MessageListFabVisibilityUpdate {
     data object ScheduleAutoHide : MessageListFabVisibilityUpdate
 }
 
-/**
- * FAB visibility transitions driven by list scroll position
- * ([androidx.compose.foundation.lazy.LazyListState.canScrollForward]).
- */
 internal fun resolveMessageListFabVisibilityUpdate(
     isScrollInProgress: Boolean,
     canScrollForward: Boolean,
 ): MessageListFabVisibilityUpdate =
     when {
-        isScrollInProgress -> MessageListFabVisibilityUpdate.SetVisible(canScrollForward)
-        !canScrollForward -> MessageListFabVisibilityUpdate.SetVisible(false)
+        isScrollInProgress -> MessageListFabVisibilityUpdate.SetVisible(visible = canScrollForward)
+        !canScrollForward -> MessageListFabVisibilityUpdate.SetVisible(visible = false)
         else -> MessageListFabVisibilityUpdate.ScheduleAutoHide
     }

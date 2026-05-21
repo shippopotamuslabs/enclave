@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +13,7 @@ import androidx.compose.runtime.withFrameNanos
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 
 @Composable
 internal fun MessageListScrollToLatestEffect(
@@ -23,12 +23,17 @@ internal fun MessageListScrollToLatestEffect(
     latestUserMessageIndex: Int,
     messageCount: Int,
     listState: LazyListState,
-    suppressScrollAnchor: MutableState<Boolean>,
 ) {
-    var initialScrollDone by remember(chatId) { mutableStateOf(false) }
+    var initialScrollDone by remember(chatId) { mutableStateOf(value = false) }
     var lastScrolledUserMessageId by remember(chatId) { mutableStateOf<MessageId?>(null) }
 
-    LaunchedEffect(chatId, messagesNotEmpty, latestUserMessageId, latestUserMessageIndex) {
+    LaunchedEffect(
+        chatId,
+        messagesNotEmpty,
+        latestUserMessageId,
+        latestUserMessageIndex,
+        messageCount,
+    ) {
         when (
             val action =
                 resolveMessageListProgrammaticScrollAction(
@@ -42,15 +47,12 @@ internal fun MessageListScrollToLatestEffect(
         ) {
             MessageListProgrammaticScrollAction.None -> Unit
             is MessageListProgrammaticScrollAction.ScrollToUserTurn -> {
-                suppressScrollAnchor.value = true
                 if (action.animated) {
                     withFrameNanos { }
                     listState.animateScrollToItem(action.lazyIndex)
                 } else {
                     listState.scrollToItem(action.lazyIndex)
                 }
-                withFrameNanos { }
-                suppressScrollAnchor.value = false
                 initialScrollDone = true
                 lastScrolledUserMessageId = latestUserMessageId
             }
@@ -60,7 +62,7 @@ internal fun MessageListScrollToLatestEffect(
 
 @Composable
 internal fun rememberScrollToBottomFabVisible(listState: LazyListState): Boolean {
-    var fabVisible by remember { mutableStateOf(false) }
+    var fabVisible by remember { mutableStateOf(value = false) }
     var fabAutoHideSignal by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(listState) {
@@ -81,7 +83,7 @@ internal fun rememberScrollToBottomFabVisible(listState: LazyListState): Boolean
     }
     LaunchedEffect(fabAutoHideSignal) {
         if (fabAutoHideSignal > 0) {
-            delay(3_000)
+            delay(3.seconds)
             fabVisible = false
         }
     }
