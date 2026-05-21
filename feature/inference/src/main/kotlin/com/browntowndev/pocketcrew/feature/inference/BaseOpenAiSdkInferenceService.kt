@@ -26,6 +26,9 @@ import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
+import com.openai.models.chat.completions.ChatCompletionContentPart
+import com.openai.models.chat.completions.ChatCompletionContentPartImage
+import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
@@ -95,7 +98,29 @@ abstract class BaseOpenAiSdkInferenceService(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val messages = sessionMessages.toOpenAiChatParams()
+        val lastUserIndex = sessionMessages.indexOfLast { msg ->
+            msg.role == Role.USER && run {
+                val meta = msg.metadataJson
+                if (meta == "null" || meta.isBlank()) return@run true
+                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+            }
+        }
+        val imageUris = options.imageUris.take(maxImages)
+        val mappedMessages = sessionMessages.toOpenAiChatParams(
+            imageUris = imageUris,
+            imageTargetIndex = lastUserIndex,
+        )
+        val messages =
+            if (systemPrompt.isNotBlank() && mappedMessages.none { it.isSystem() }) {
+                val systemMessage =
+                    ChatCompletionMessageParam.ofSystem(
+                        ChatCompletionSystemMessageParam.builder().content(systemPrompt).build(),
+                    )
+                listOf(systemMessage) + mappedMessages
+            } else {
+                mappedMessages
+            }
         val requestModelId = options.modelId ?: modelId
         val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
 
@@ -175,19 +200,27 @@ abstract class BaseOpenAiSdkInferenceService(
         return requestProvider != ApiProvider.XAI || !ApiProviderModelPolicy.isXaiMultiAgentModel(requestModelId)
     }
 
-    private fun List<AgentLoopMessage>.toOpenAiChatParams(): List<ChatCompletionMessageParam> {
+    private fun List<AgentLoopMessage>.toOpenAiChatParams(
+        imageUris: List<String>,
+        imageTargetIndex: Int,
+    ): List<ChatCompletionMessageParam> {
         val pendingToolCallIds = mutableSetOf<String>()
-        return mapNotNull { message ->
+        return mapIndexedNotNull { index, message ->
+            val attachImages = index == imageTargetIndex && imageUris.isNotEmpty()
             val mappedMessage =
                 message.toOpenAiChatParam(
                     pendingToolCallIds = pendingToolCallIds,
+                    imageUris = if (attachImages) imageUris else emptyList(),
                 )
             mappedMessage?.toolCallIds?.let { pendingToolCallIds.addAll(it) }
             mappedMessage?.param
         }
     }
 
-    private fun AgentLoopMessage.toOpenAiChatParam(pendingToolCallIds: MutableSet<String>): MappedChatMessage? {
+    private fun AgentLoopMessage.toOpenAiChatParam(
+        pendingToolCallIds: MutableSet<String>,
+        imageUris: List<String> = emptyList(),
+    ): MappedChatMessage? {
         val metadata = metadataJson.toMetadataJsonObject()
         val toolCallId = metadata?.get("call_id")?.jsonPrimitive?.contentOrNull
         if (toolCallId != null) {
@@ -205,12 +238,46 @@ abstract class BaseOpenAiSdkInferenceService(
             Role.USER ->
                 MappedChatMessage(
                     param =
-                        ChatCompletionMessageParam.ofUser(
-                            ChatCompletionUserMessageParam.builder().content(content).build(),
-                        ),
+                        if (imageUris.isEmpty()) {
+                            ChatCompletionMessageParam.ofUser(
+                                ChatCompletionUserMessageParam.builder().content(content).build(),
+                            )
+                        } else {
+                            ChatCompletionMessageParam.ofUser(buildUserMessageWithImages(content, imageUris))
+                        },
                 )
             Role.ASSISTANT -> toAssistantChatParam(metadata)
         }
+    }
+
+    private fun buildUserMessageWithImages(
+        content: String,
+        imageUris: List<String>,
+    ): ChatCompletionUserMessageParam {
+        val parts =
+            buildList {
+                add(
+                    ChatCompletionContentPart.ofText(
+                        ChatCompletionContentPartText.builder().text(content).build(),
+                    ),
+                )
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ChatCompletionContentPart.ofImageUrl(
+                            ChatCompletionContentPartImage
+                                .builder()
+                                .imageUrl(
+                                    ChatCompletionContentPartImage.ImageUrl
+                                        .builder()
+                                        .url(payload.dataUrl)
+                                        .build(),
+                                ).build(),
+                        ),
+                    )
+                }
+            }
+        return ChatCompletionUserMessageParam.builder().contentOfArrayOfContentParts(parts).build()
     }
 
     private fun String.toMetadataJsonObject() =

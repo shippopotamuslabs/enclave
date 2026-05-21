@@ -274,6 +274,9 @@ class LlamaInferenceServiceImpl
             options: GenerationOptions,
         ): AgentModelTurnResult {
             val targetModelType = options.modelType ?: modelType
+            if (options.imageUris.isNotEmpty()) {
+                loggingPort.warning(TAG, "Images are not supported in Llama agent loop turns; imageUris will be ignored")
+            }
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),

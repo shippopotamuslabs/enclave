@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.CopyOnWriteArrayList
@@ -150,6 +151,7 @@ class GoogleInferenceServiceImpl(
         conversationHistory.clear()
     }
 
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
@@ -160,8 +162,17 @@ class GoogleInferenceServiceImpl(
         options: GenerationOptions,
     ): AgentModelTurnResult {
         val contents = mutableListOf<Content>()
+        val imageUris = options.imageUris.take(3600)
+        val lastUserIndex = sessionMessages.indexOfLast { msg ->
+            msg.role == Role.USER && run {
+                val meta = msg.metadataJson
+                if (meta == "null" || meta.isBlank()) return@run true
+                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+            }
+        }
 
-        sessionMessages.forEach { msg ->
+        sessionMessages.forEachIndexed { index, msg ->
             val metadata =
                 if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
                     runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
@@ -171,14 +182,27 @@ class GoogleInferenceServiceImpl(
 
             when (msg.role) {
                 Role.SYSTEM -> {} // handled via systemInstruction in config
-                Role.USER ->
+                Role.USER -> {
+                    val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
+                    val parts =
+                        if (!attachImages) {
+                            listOf(Part.fromText(msg.content))
+                        } else {
+                            buildList {
+                                add(Part.fromText(msg.content))
+                                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                                    add(Part.fromBytes(payload.bytes, payload.mimeType))
+                                }
+                            }
+                        }
                     contents.add(
                         Content
                             .builder()
                             .role("user")
-                            .parts(listOf(Part.fromText(msg.content)))
+                            .parts(parts)
                             .build(),
                     )
+                }
                 Role.ASSISTANT -> {
                     if (msg.id.startsWith("compact-summary-")) {
                         contents.add(
@@ -188,7 +212,7 @@ class GoogleInferenceServiceImpl(
                                 .parts(listOf(Part.fromText("[Conversation summary]\n${msg.content}")))
                                 .build(),
                         )
-                        return@forEach
+                        return@forEachIndexed
                     }
                     val callId = metadata?.get("call_id")?.jsonPrimitive?.content
                     if (callId != null) {
@@ -199,7 +223,7 @@ class GoogleInferenceServiceImpl(
                                 .parts(listOf(buildFunctionResponsePart(callId, msg.content)))
                                 .build(),
                         )
-                        return@forEach
+                        return@forEachIndexed
                     }
                     val rawCalls = metadata?.get("raw_tool_calls")
                     val parts = mutableListOf<Part>()
