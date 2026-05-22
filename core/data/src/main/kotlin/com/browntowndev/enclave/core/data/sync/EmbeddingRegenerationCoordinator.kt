@@ -20,6 +20,7 @@ class EmbeddingRegenerationCoordinator
         private val pendingMemoryIds = mutableSetOf<String>()
         private val pendingDocumentIds = mutableSetOf<String>()
         private var fullScanPending = false
+        private var workScheduled = false
         private val mutex = kotlinx.coroutines.sync.Mutex()
 
         fun enqueueMessage(messageId: String) {
@@ -59,6 +60,9 @@ class EmbeddingRegenerationCoordinator
         }
 
         private fun triggerWorker() {
+            if (workScheduled) return
+            workScheduled = true
+
             val constraints =
                 androidx.work.Constraints
                     .Builder()
@@ -71,13 +75,32 @@ class EmbeddingRegenerationCoordinator
                     .setConstraints(constraints)
                     .build()
 
-            // Use a unique name to collapse multiple triggers into a single batch
+            // Unique work + in-memory gate: one WM request per burst of sync enqueues.
             workManager.enqueueUniqueWork(
                 "enclave_embedding_regen",
                 ExistingWorkPolicy.KEEP,
                 request,
             )
         }
+
+        /** Called when [EmbeddingRegenerationWorker] finishes so a new burst can schedule again. */
+        suspend fun onWorkerFinished() {
+            mutex.withLock {
+                workScheduled = false
+                if (hasPendingLocked()) {
+                    triggerWorker()
+                }
+            }
+        }
+
+        suspend fun hasPendingWork(): Boolean =
+            mutex.withLock { hasPendingLocked() }
+
+        private fun hasPendingLocked(): Boolean =
+            fullScanPending ||
+                pendingMessageIds.isNotEmpty() ||
+                pendingMemoryIds.isNotEmpty() ||
+                pendingDocumentIds.isNotEmpty()
 
         suspend fun consumePending(): PendingWork =
             mutex.withLock {
