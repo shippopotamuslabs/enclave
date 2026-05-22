@@ -22,7 +22,7 @@ interface DefaultModelsDao {
             dm.api_config_id as apiConfigId,
             lmc.display_name as localPresetName,
             amc.display_name as apiPresetName,
-            lm.huggingface_model_name as localAssetName,
+            lm.display_name as localAssetName,
             ac.display_name as apiAssetName,
             ac.id as apiCredentialsId,
             ac.provider as apiProviderName,

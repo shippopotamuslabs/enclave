@@ -36,12 +36,7 @@ class ActiveModelProviderImpl
                 return ActiveModelConfiguration(
                     id = config.id,
                     isLocal = true,
-                    name =
-                        decryptRequired(
-                            config.displayName,
-                            AadContext("LocalModelConfigurationEntity", "displayName", config.id.value).toBytes(),
-                            modelType,
-                        ),
+                    name = model.displayName,
                     modelId = model.localFilename,
                     systemPrompt =
                         config.systemPrompt?.let {

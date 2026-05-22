@@ -70,7 +70,7 @@ class DefaultModelRepositoryImplTest {
     }
 
     @Test
-    fun `get default with resolved display data for local model`() =
+    fun `SCN-REPO-DEFAULT-001 getDefault uses asset displayName for local assignment`() =
         runTest {
             val configId = LocalModelConfigurationId("test-local-config-1")
             val modelId = LocalModelId("10")
@@ -88,13 +88,14 @@ class DefaultModelRepositoryImplTest {
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = modelId,
-                    displayName = localEncryption.encryptString("Precise"),
+                    displayName = localEncryption.encryptString("Synthesis"),
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
                     id = modelId,
                     modelFileFormat = ModelFileFormat.GGUF,
-                    huggingFaceModelName = "qwen",
+                    displayName = "Jamba Reasoning 3B",
+                    huggingFaceModelName = "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
                     remoteFilename = "qwen.gguf",
                     localFilename = "qwen.gguf",
                     sha256 = "abc",
@@ -105,9 +106,9 @@ class DefaultModelRepositoryImplTest {
 
             assertEquals(configId, result?.localConfigId)
             assertNull(result?.apiConfigId)
-            assertEquals("qwen", result?.displayName)
+            assertEquals("Jamba Reasoning 3B", result?.displayName)
             assertEquals("Local", result?.providerName)
-            assertEquals("Precise", result?.presetName)
+            assertEquals("Synthesis", result?.presetName)
         }
 
     @Test
@@ -215,6 +216,42 @@ class DefaultModelRepositoryImplTest {
         }
 
     @Test
+    fun `SCN-REPO-DEFAULT-002 observeDefaults uses asset displayName from SQL view`() =
+        runTest {
+            every { defaultModelsDao.observeAllWithDetails() } returns
+                flowOf(
+                    listOf(
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.THINKING,
+                            localConfigId = LocalModelConfigurationId("cfg-thinking"),
+                            apiConfigId = null,
+                            localPresetName = localEncryption.encryptString("Thinking"),
+                            apiPresetName = null,
+                            localAssetName = "Gemma 4 E4B",
+                            apiAssetName = null,
+                            apiCredentialsId = null,
+                            apiProviderName = null,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                    ),
+                )
+
+            repo.observeDefaults().test {
+                val thinking = awaitItem().single { it.modelType == ModelType.THINKING }
+                assertEquals("Gemma 4 E4B", thinking.displayName)
+                assertEquals("Thinking", thinking.presetName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `observeDefaults decrypts assignment view labels from Room`() =
         runTest {
             every { defaultModelsDao.observeAllWithDetails() } returns
@@ -226,7 +263,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = localEncryption.encryptString("Precise"),
                             apiPresetName = null,
-                            localAssetName = "qwen",
+                            localAssetName = "Gemma 4 E4B",
                             apiAssetName = null,
                             apiCredentialsId = null,
                             apiProviderName = null,
@@ -303,7 +340,7 @@ class DefaultModelRepositoryImplTest {
                 val assignments = awaitItem().associateBy { it.modelType }
 
                 val main = requireNotNull(assignments[ModelType.MAIN])
-                assertEquals("qwen", main.displayName)
+                assertEquals("Gemma 4 E4B", main.displayName)
                 assertEquals("Precise", main.presetName)
                 assertEquals("Local", main.providerName)
 

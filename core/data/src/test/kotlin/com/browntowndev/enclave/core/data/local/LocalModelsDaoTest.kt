@@ -46,6 +46,46 @@ class LocalModelsDaoTest {
     private fun nextId() = LocalModelId(UUID.randomUUID().toString())
 
     @Test
+    fun `SCN-DAO-001 local models dao round-trips display_name`() =
+        runTest {
+            val entityId = LocalModelId("model-asset-1")
+            val entity =
+                LocalModelEntity(
+                    id = entityId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "Jamba Reasoning 3B",
+                    huggingFaceModelName = "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
+                    remoteFilename = "jamba.gguf",
+                    localFilename = "jamba.gguf",
+                    sha256 = "jamba-sha",
+                    sizeInBytes = 100L,
+                )
+            dao.upsert(entity)
+            val retrieved = dao.getById(entityId)
+            assertEquals("Jamba Reasoning 3B", retrieved?.displayName)
+        }
+
+    @Test
+    fun `SCN-SCHEMA-001 version 1 database creates display_name column`() =
+        runTest {
+            val entityId = nextId()
+            val entity =
+                LocalModelEntity(
+                    id = entityId,
+                    modelFileFormat = ModelFileFormat.LITERTLM,
+                    displayName = "Gemma 4 E4B",
+                    huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
+                    remoteFilename = "gemma-4-E4B-it.litertlm",
+                    localFilename = "gemma-4-E4B-it.litertlm",
+                    sha256 = "gemma-sha",
+                    sizeInBytes = 100L,
+                )
+            dao.upsert(entity)
+            val retrieved = dao.getById(entityId)
+            assertEquals("Gemma 4 E4B", retrieved?.displayName)
+        }
+
+    @Test
     fun `test register and retrieve model`() =
         runTest {
             val entityId = nextId()

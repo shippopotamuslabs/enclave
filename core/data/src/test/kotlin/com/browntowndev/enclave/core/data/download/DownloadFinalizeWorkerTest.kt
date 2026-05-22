@@ -23,6 +23,7 @@ import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.slot
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
@@ -366,6 +367,37 @@ class DownloadFinalizeWorkerTest {
             assertTrue(result is androidx.work.ListenableWorker.Result.Success)
             val outputData = (result as androidx.work.ListenableWorker.Result.Success).outputData
             assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
+        }
+
+    @Test
+    fun `SCN-FINALIZE-001 download finalize persists asset displayName from catalog`() =
+        runTest {
+            val gemmaSha = "gemma-sha"
+            val downloadedShas = Json.encodeToString(listOf(gemmaSha))
+            val inputData =
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                )
+            setInputData(inputData)
+
+            val remoteAsset =
+                createTestAsset("gemma-4-E4B-it.litertlm", gemmaSha).copy(
+                    metadata =
+                        createTestAsset("gemma-4-E4B-it.litertlm", gemmaSha).metadata.copy(
+                            displayName = "Gemma 4 E4B",
+                        ),
+                )
+            val capturedAsset = slot<LocalModelAsset>()
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteAsset))
+            coEvery {
+                mockSyncLocalModelRegistryUseCase.invoke(any(), capture(capturedAsset))
+            } returns mockk()
+
+            worker.doWork()
+
+            assertEquals("Gemma 4 E4B", capturedAsset.captured.metadata.displayName)
         }
 
     // ===== 3.3 Startup Finalization Tests =====

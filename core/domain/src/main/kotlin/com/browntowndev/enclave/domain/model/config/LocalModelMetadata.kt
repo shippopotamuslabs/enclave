@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 
 data class LocalModelMetadata(
     val id: LocalModelId,
+    val displayName: String = "",
     val huggingFaceModelName: String,
     val huggingFacePath: String? = null,
     val remoteFileName: String,
