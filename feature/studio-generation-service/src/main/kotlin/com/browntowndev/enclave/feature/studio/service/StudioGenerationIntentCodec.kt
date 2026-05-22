@@ -25,6 +25,8 @@ object StudioGenerationIntentCodec {
     private const val EXTRA_AUTO_GENERATE_VIDEO = "AUTO_GENERATE_VIDEO"
     private const val EXTRA_MUSIC_DURATION = "MUSIC_DURATION"
     private const val EXTRA_MUSIC_TEMPO = "MUSIC_TEMPO"
+    private const val DEFAULT_MUSIC_DURATION_SECONDS = 30
+    private const val DEFAULT_MUSIC_TEMPO_BPM = 120
 
     fun writeSettings(
         intent: Intent,
@@ -79,8 +81,8 @@ object StudioGenerationIntentCodec {
                 )
             KIND_MUSIC ->
                 MusicGenerationSettings(
-                    duration = intent.getIntExtra(EXTRA_MUSIC_DURATION, 30),
-                    tempo = intent.getIntExtra(EXTRA_MUSIC_TEMPO, 120),
+                    duration = intent.getIntExtra(EXTRA_MUSIC_DURATION, DEFAULT_MUSIC_DURATION_SECONDS),
+                    tempo = intent.getIntExtra(EXTRA_MUSIC_TEMPO, DEFAULT_MUSIC_TEMPO_BPM),
                 )
             else -> null
         }
