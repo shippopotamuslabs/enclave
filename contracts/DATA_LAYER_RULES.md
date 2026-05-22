@@ -1,7 +1,7 @@
 # DATA_LAYER_RULES.md
-**Pocket Crew – Data Layer Contract v2.4**
+**Enclave – Data Layer Contract v2.4**
 
-Rules for the `:data` module: Room database, repositories, entities, mappers, and persistence.
+Rules for the `:core:data` module: Room database, repositories, entities, mappers, Firebase/network integration, WorkManager, and persistence.
 
 Always enforce together with `ARCHITECTURE_RULES.md`.
 
@@ -12,7 +12,7 @@ Always enforce together with `ARCHITECTURE_RULES.md`.
 | Always | Never |
 |--------|-------|
 | Return `Flow<List<Entity>>` for observable queries. | Modify the database schema for transient UI state (e.g., `is_typing`). |
-| Map Entity ↔ Domain strictly inside the `:data` module. | Expose Room `@Entity` classes or Room annotations to `:app` or `:domain`. |
+| Map Entity ↔ Domain strictly inside the `:core:data` module. | Expose Room `@Entity` classes or Room annotations to `:app`, feature modules, or `:core:domain`. |
 | Use `@Transaction` for multi-table operations. | Return domain models directly from DAOs. |
 | Use `withContext(Dispatchers.IO)` for heavy file/hash ops. | Wrap Room DAO calls in manual `withContext(Dispatchers.IO)`. |
 | Store timestamps as `Long` (epoch millis). | Use `List`, `Map`, or complex objects as columns without `@TypeConverter`. |
@@ -21,13 +21,13 @@ Always enforce together with `ARCHITECTURE_RULES.md`.
 ## 1. Room Database & Anti-Hallucination Lock
 
 
-- Single `PocketCrewDatabase` class annotated `@Database`.
+- Single `EnclaveDatabase` class annotated `@Database`.
 - Database instance provided via Hilt `@Singleton` module.
 - **SCHEMA LOCK:** Never invent new tables or columns (e.g., `is_typing`, `is_thinking`, `is_loading`) for transient presentation state. Transient state belongs in the UI layer. Database schema changes require explicit developer authorization.
 
 ## 2. Entity Rules
 
-- Entities live in `:data` only. Never exposed to `:app` or UI.
+- Entities live in `:core:data` only. Never exposed to `:app`, feature modules, or UI.
 - One entity per logical data table, annotated `@Entity` with explicit `tableName`.
 - **Primary key:** Prefer explicit UUID string for sync-ready data.
 - **CRDT Support:** Incorporate logical clocks or vector clock columns into entity schemas to support robust offline-first sync operations.
@@ -45,11 +45,11 @@ Always enforce together with `ARCHITECTURE_RULES.md`.
 
 ## 4. Repository Pattern, Mapping & Threading
 
-- Repositories implement `:domain` interfaces.
+- Repositories implement `:core:domain` interfaces.
 - Data sources (DAOs, DataStore) injected via constructor.
 - **Mapping Boundaries:**
-  - Entity ↔ Domain mapping happens entirely in `:data` (repository or dedicated mapper functions). Mappers are pure functions.
-  - Domain → Presentation mapping happens in `:app` (ViewModel).
+  - Entity ↔ Domain mapping happens entirely in `:core:data` (repository or dedicated mapper functions). Mappers are pure functions.
+  - Domain → Presentation mapping happens in feature/app ViewModels.
   - Presentation models must never reference Entity types or Room annotations.
 - **Threading Boundaries:**
   - All DAO calls are `suspend` or return `Flow`. Room handles the dispatcher internally. Do **not** use manual `withContext(Dispatchers.IO)` for Room DAO calls.
@@ -86,6 +86,6 @@ Minimum required tables for v1:
 
 ## 6. Executable Validation (Agent MUST run before TASK_STATUS: COMPLETE)
 
-1. **Verify Isolation:** Run `gradlew.bat :data:assemble`. Ensure no compilation errors from bleeding Android/Compose dependencies.
-2. **Compile Schema:** Run `gradlew.bat :app:kspDebugKotlin` to ensure the Room compiler generates schemas without errors or missing TypeConverters.
-3. **Check Style:** Run `gradlew.bat :data:ktlintCheck`.
+1. **Verify Isolation:** Run `./gradlew :core:data:assembleDebug`. Ensure no compilation errors from bleeding Compose dependencies.
+2. **Compile Schema:** Run `./gradlew :app:kspDebugKotlin` to ensure the Room compiler generates schemas without errors or missing TypeConverters.
+3. **Check Style:** Run `./gradlew :core:data:ktlintCheck`.

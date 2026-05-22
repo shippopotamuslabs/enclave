@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "storage": {
     "rules": "storage.rules"
   },
@@ -6,6 +9,7 @@
     {
       "source": "functions",
       "codebase": "default",
+      "runtime": "nodejs22",
       "disallowLegacyRuntimeConfig": true,
       "ignore": [
         "node_modules",

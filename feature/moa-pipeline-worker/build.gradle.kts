@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.moa"
+    namespace = "com.browntowndev.enclave.feature.moa"
     compileSdk = 37
 
     defaultConfig {

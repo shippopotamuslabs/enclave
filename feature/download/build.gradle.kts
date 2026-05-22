@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.download"
+    namespace = "com.browntowndev.enclave.feature.download"
     compileSdk = 37
 
     defaultConfig {
@@ -17,7 +17,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
 
     buildFeatures {
         compose = true

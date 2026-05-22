@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "review-singularity": {
+      "source": "/home/sean/.agents/skills/review-singularity",
+      "sourceType": "local",
+      "computedHash": "86a9f75584fba779e1c642e291188a41dacc363020cc31ce0b350155d8f9ae07"
+    }
+  }
+}

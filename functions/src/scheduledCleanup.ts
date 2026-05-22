@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 
 export const cleanupExpiredShares = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {

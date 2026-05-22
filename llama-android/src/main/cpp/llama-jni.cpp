@@ -285,7 +285,7 @@ static jmethodID getCallbackMethod(JNIEnv* env, jobject callback, const char* na
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLoadModel(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadModel(
     JNIEnv* env,
     jobject /* this */,
     jstring modelPath,
@@ -537,7 +537,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
 }
 
 JNIEXPORT void JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeUnloadModel(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeUnloadModel(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -604,7 +604,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeUn
 }
 
 JNIEXPORT void JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeClearKvCache(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeClearKvCache(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -625,7 +625,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCl
 }
 
 JNIEXPORT void JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeStartCompletion(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStartCompletion(
     JNIEnv* env,
     jobject /* this */,
     jobjectArray roles,  // Array of role strings
@@ -1322,7 +1322,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 }
 
 JNIEXPORT void JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeStopCompletion(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStopCompletion(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -1332,7 +1332,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
 // Get current context size (n_ctx from config)
 JNIEXPORT jint JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGetContextSize(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeGetContextSize(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -1344,7 +1344,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGe
 
 // Get current KV cache token count (positions used)
 JNIEXPORT jint JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGetContextUsage(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeGetContextUsage(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -1359,7 +1359,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGe
 // factor: divisor for positions (e.g., 2 halves the context window)
 // Returns true if compression was successful, false otherwise
 JNIEXPORT jboolean JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCompressContext(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeCompressContext(
     JNIEnv* env,
     jobject /* this */,
     jint seqId,
@@ -1400,7 +1400,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCo
 
 // Get state size for save/load (in bytes)
 JNIEXPORT jint JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGetStateSize(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeGetStateSize(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -1412,7 +1412,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGe
 
 // Save state to byte array
 JNIEXPORT jbyteArray JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGetState(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeGetState(
     JNIEnv* env,
     jobject /* this */
 ) {
@@ -1443,7 +1443,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGe
 
 // Load state from byte array
 JNIEXPORT jboolean JNICALL
-Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSetState(
+Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeSetState(
     JNIEnv* env,
     jobject /* this */,
     jbyteArray stateArray

@@ -1,6 +1,6 @@
-**Pocket Crew – Inference Layer Contract v2.5**
+**Enclave – Inference Layer Contract v2.5**
 
-Non-negotiable rules for the `:inference` module and all model/runtime operations. 
+Non-negotiable rules for the `:feature:inference` module and all model/runtime operations.
 Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Never** Kotlin standards.
 
 ---
@@ -70,6 +70,6 @@ Execute the required 6-step pipeline for complex queries:
 - **UX Requirement:** **Silent rewrite.** Display a small red shield icon (`Color.Red`). Tapping the icon shows a one-line reason. No disclosure of original text.
 
 ## 7. Executable Validation
-1. **Compile Inference Module:** Run `./gradlew :inference:assemble`. Must pass.
-2. **Architectural Isolation:** Run `./gradlew dependencies :inference:runtimeClasspath | grep compose`. Output **MUST** be empty.
+1. **Compile Inference Module:** Run `./gradlew :feature:inference:assembleDebug`. Must pass.
+2. **Architectural Isolation:** Run `./gradlew :feature:inference:dependencies --configuration debugRuntimeClasspath` and verify no Compose UI dependency is introduced.
 3. **State Management:** Ensure all UI-facing inference results are handled via `collectAsStateWithLifecycle()` in the UI layer, with state hoisted to the `ViewModel`.

@@ -4,3 +4,6 @@
 [submodule "third_party/docgen_core"]
 	path = third_party/docgen_core
 	url = https://gitlab.com/browntown.development-group/docgen_core.git
+[submodule "third_party/agent_core"]
+	path = third_party/agent_core
+	url = https://gitlab.com/browntown.development-group/agent_core.git

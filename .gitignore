@@ -15,13 +15,10 @@ build/
 local.properties
 .aider*
 /.proxyai
-.kilocode/mcp.json
 /.keystore
 /.idea
 app/release/app-release.aab
 /.kotlin
-
-.kilocode/
 
 mcp.config
 
@@ -45,6 +42,7 @@ llama-android/src/main/cpp/CMakeFiles/
 third_party/*
 !third_party/whisper.cpp/
 !third_party/docgen_core/
+!third_party/agent_core/
 
 bin/
 
@@ -100,3 +98,5 @@ functions/node_modules/
 .worktrees/
 
 node_modules/
+build_output.txt
+.antigravitycli/

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.chat"
+    namespace = "com.browntowndev.enclave.feature.chat"
     compileSdk = 37
 
     defaultConfig {
@@ -21,11 +21,13 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -42,6 +44,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

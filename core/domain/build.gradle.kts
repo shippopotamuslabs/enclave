@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.domain"
+    namespace = "com.browntowndev.enclave.core.domain"
     compileSdk = 37
 
     defaultConfig {

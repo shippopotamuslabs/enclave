@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.ui"
+    namespace = "com.browntowndev.enclave.core.ui"
     compileSdk = 37
 
     defaultConfig {
@@ -18,7 +18,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
 
     testOptions {
         unitTests {

@@ -1,4 +1,4 @@
-# Detekt configuration for Pocket Crew
+# Detekt configuration for Enclave
 # Strict but pragmatic rule sets optimized for Jetpack Compose and Hilt
 
 build:
@@ -108,7 +108,7 @@ complexity:
   LongMethod:
     # Relaxed for declarative UI and Navigation graphs
     # Compose functions with many parameters naturally exceed 100 lines
-    # Navigation graphs are inherently long (PocketCrewNavGraph is 705 lines)
+    # Navigation graphs are inherently long (EnclaveNavGraph is 705 lines)
     threshold: 350
   CyclomaticComplexMethod:
     # Relaxed for complex UI branching

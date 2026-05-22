@@ -1,5 +1,5 @@
 # CODE_STYLE_RULES.md
-**Pocket Crew – Code Style Contract v2.4**
+**Enclave – Code Style Contract v2.4**
 
 Kotlin and Compose idioms, naming, formatting, and stability rules.
 
@@ -37,7 +37,7 @@ Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Package | lowercase dot-separated | `com.browntowndev.pocketcrew.presentation.screen.chat` |
+| Package | lowercase dot-separated | `com.browntowndev.enclave.presentation.screen.chat` |
 | Class / Object | PascalCase | `ChatViewModel`, `Routes` |
 | Function | camelCase, verb-first | `onSendMessage()`, `calculateTopPadding()` |
 | Composable | PascalCase (noun) | `MessageBubble()`, `InputBar()` |
@@ -117,7 +117,7 @@ Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 ### 8.1 Test Coverage Discipline (Agent Mandate)
 
-- Whenever the task **adds** new production code (new classes, public functions, significant logic in `:domain`, `:data`, `:inference`, ViewModels, repositories, mappers, use cases, etc.) **or modifies** existing code, the agent **MUST**:
+- Whenever the task **adds** new production code (new classes, public functions, significant logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, etc.) **or modifies** existing code, the agent **MUST**:
   - Write new unit tests (or extend existing ones) in the matching `src/test/kotlin` source set that cover the new/modified behavior, main paths, edge cases, and error conditions.
   - Use JUnit 5 + Turbine (for `StateFlow`/`Flow`) + MockK exactly as defined in the conventions above.
 - For pure UI/Compose changes that affect behavior or interactions: also add or update Compose UI tests using `createComposeRule()` and semantic matchers.
@@ -128,9 +128,9 @@ Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 ## 9. Executable Validation (Agent MUST run before TASK_STATUS: COMPLETE)
 
-1. **Check Formatting:** Run `gradlew.bat ktlintCheck`. Fix any reported styling errors.
-2. **Run Tests:** Run `gradlew.bat testDebugUnitTest` (use `--tests "*[ChangedClass]*"` when possible for speed). Ensure the full suite passes and that new/modified code has corresponding tests.
-3. **Run Full Build:** Run `gradlew.bat build`.
+1. **Check Formatting:** Run `./gradlew ktlintCheck` or a module-scoped ktlint task when iterating. Fix any reported styling errors.
+2. **Run Tests:** Run the narrowest affected test task, e.g. `./gradlew :feature:inference:testDebugUnitTest --tests "*ChangedClass*"`, then broaden to `./gradlew testDebugUnitTest` before merge-sized changes.
+3. **Run Build:** Run the narrowest affected assemble task, e.g. `./gradlew :app:assembleDebug` or `./gradlew :core:data:assembleDebug`.
 
 ## 10. 2026 Exception & Notification Discipline
 

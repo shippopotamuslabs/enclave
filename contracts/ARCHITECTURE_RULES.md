@@ -1,5 +1,5 @@
 # ARCHITECTURE_RULES.md
-**Pocket Crew – Structural Architecture Contract v2.4**
+**Enclave – Structural Architecture Contract v2.4**
 
 Non-negotiable architectural rules. Always enforce together with relevant companion contracts.
 
@@ -13,11 +13,13 @@ All code generation must prioritize 2026 OS constraints:
 
 **Clean Architecture Supremacy Rule (ZERO TOLERANCE – HIGHEST PRIORITY)**
 
-This project **strictly and exclusively follows Clean Architecture** (Uncle Bob / Robert C. Martin – Hexagonal / Ports-and-Adapters pattern). 
+This project follows Clean Architecture / ports-and-adapters. Dependencies point
+inward toward `:core:domain`; implementation modules adapt framework, storage,
+network, native, and UI concerns around those domain ports.
 
 **The agent MUST NEVER:**
 - Write, propose, or allow any code that violates the dependency rule.
-- Leak Android, Compose, Hilt, Room, WorkManager, LiteRT, or any framework/SDK types into `:domain`.
+- Leak Android, Compose, Hilt, Room, WorkManager, LiteRT, or any framework/SDK types through `:core:domain` public APIs.
 - Bypass module boundaries, forbidden imports, or layer responsibilities.
 - Use any other architectural pattern (MVVM-only, monolithic, etc.).
 
@@ -39,45 +41,54 @@ All rules below are non-negotiable implementations of Clean Architecture.
 | Expose a single `StateFlow<UiState>` from ViewModels. | Expose mutable flows or Android framework types from ViewModels. |
 | Ensure each screen owns its own `Scaffold` and `TopAppBar`. | Thread `paddingValues` down the UI tree from a root-level Scaffold. |
 | Consume one-shot events via `Channel<Event>` and `LaunchedEffect`. | Use `SharedFlow` for one-shot UI events (can cause dropped events). |
-| Use stable keys on all `LazyColumn` and `LazyRow` items. | Import `:app`, `:data`, or framework code into `:domain`. |
-| Enforce 100% Clean Architecture dependency inversion at all times | Allow any framework code in `:domain` or reverse dependencies |
-| `:domain` contains ONLY pure Kotlin models, repository interfaces, use cases | Ever import Android/Compose/Hilt/Room/LiteRT in `:domain` |
+| Use stable keys on all `LazyColumn` and `LazyRow` items. | Import `:app`, feature, data, UI, or native bridge code into `:core:domain`. |
+| Enforce Clean Architecture dependency inversion at module boundaries. | Allow reverse dependencies into `:core:domain`. |
+| Keep `:core:domain` APIs as domain models, ports, use cases, and test fixtures. | Expose Android/Compose/Hilt/Room/LiteRT types from domain APIs. |
 | All other rules in this file | Deviate from the exact module dependency graph shown below |
 
 ## 1. Module Boundaries
 
 
-Modules: `:app`, `:domain`, `:data`, `:inference`
+Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:agent`,
+`:core:docgen`, `:feature:*`, `:llama-android`, and `:whisper-android`.
 
 ### 1.1 Dependency Direction (Strict)
 
 ```text
-:app       → :domain, :data, :inference
-:data      → :domain
-:inference → :domain
-:domain    → nothing
+:app                 → :core:domain, :core:data, :core:ui, :core:agent, :core:docgen, :feature:*
+:feature:*           → :core:domain and only the core/feature modules declared in that module's Gradle file
+:core:data           → :core:domain, :core:docgen
+:core:ui             → :core:domain
+:core:agent          → :core:domain
+:core:docgen         → :core:domain
+:feature:inference   → :core:domain, :llama-android
+:llama-android       → native C/C++ wrapper
+:whisper-android     → :core:domain plus native C/C++ wrapper
+:core:domain         → no app, feature, data, UI, or native bridge modules
 ```
 
-No other directions allowed.
+No reverse dependencies into `:core:domain` are allowed.
 
 ### 1.2 Forbidden Imports
 
 | Module | Must NOT import |
 |--------|----------------|
-| `:domain` | Android SDK, Compose, Hilt, Room, any framework types |
-| `:data` | Compose |
-| `:inference` | Compose |
+| `:core:domain` | App, feature, data, UI, native bridge modules, Android UI/framework types in public APIs, Compose, Hilt, Room, LiteRT |
+| `:core:data` | Compose UI |
+| `:feature:inference` | Compose UI |
 
-All UI code lives exclusively in `:app`.
+Reusable UI code lives in `:core:ui`; feature UI lives in feature modules and is
+wired by `:app`.
 
 ---
 
 ## 2. Layer Responsibilities
 
-- **`:domain`** — Pure Kotlin only. Models, repository interfaces, use cases. Zero framework code.
-- **`:data`** — Implements repository interfaces from `:domain`. Persistence, mapping, network. No UI.
-- **`:inference`** — Implements engine abstractions from `:domain`. Model loading, generation, routing. No UI.
-- **`:app`** — ViewModels, Composables, Navigation, Theme, DI wiring. ViewModels depend only on `:domain` abstractions.
+- **`:core:domain`** — Domain models, ports, use cases, and test fixtures. Keep domain APIs free of Android/UI/storage/native implementation types.
+- **`:core:data`** — Implements persistence, Room, repositories, network/Firebase integration, WorkManager, and entity/domain mapping. No Compose UI.
+- **`:feature:inference`** — Implements model/provider inference abstractions from domain. No Compose UI.
+- **`:core:ui` and `:feature:*`** — Compose UI and presentation logic. ViewModels map domain to presentation models.
+- **`:app`** — Application shell, navigation wiring, DI composition, app resources, and platform entrypoints.
 
 ---
 
@@ -177,9 +188,9 @@ Every composable file MUST include previews for:
 
 ## 9. Executable Validation (Agent MUST run before TASK_STATUS: COMPLETE)
 
-1. **Check Domain Purity:** Run `gradlew.bat :domain:assemble`. It must pass without Android/Compose dependencies.
-2. **Check App Compilation:** Run `gradlew.bat :app:assembleDebug`. It must pass.
-3. **Verify App Module Imports:** Run `gradlew.bat :app:ktlintCheck` to ensure formatting and import rules hold.
+1. **Check Domain Module:** Run `./gradlew :core:domain:assembleDebug`.
+2. **Check App Compilation:** Run `./gradlew :app:assembleDebug`.
+3. **Verify Imports/Style:** Run `./gradlew ktlintCheck` for the changed modules, or the root task before merge.
 
 ### 9.1 Rigor Validation (Pre-Completion)
 Before declaring `TASK_STATUS: COMPLETE`, the agent must verify:

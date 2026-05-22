@@ -1,6 +1,6 @@
-# Unit Testing Contract — Pocket Crew
+# Unit Testing Contract — Enclave
 
-This contract defines the mandatory standards for unit testing in the Pocket Crew project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
+This contract defines the mandatory standards for unit testing in the Enclave project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
 
 ---
 
@@ -100,4 +100,4 @@ Refer to the following files in `golden-test-examples/` for validated implementa
 
 ## 5. Implementation Mandate
 
-Any sub-agent or architect creating new features **MUST** include a matching unit test file in the `src/test` directory of the modified module, following these standards. Tests must be executed and PASS via `./gradlew testDebugUnitTest` before the task is considered complete.
+Any sub-agent or architect creating new features **MUST** include a matching unit test file in the `src/test` directory of the modified module, following these standards. Run the narrowest affected test task during iteration (for example, `./gradlew :feature:chat:testDebugUnitTest --tests "*ChatViewModelTest*"`), then broaden to `./gradlew testDebugUnitTest` for merge-sized or cross-module changes.

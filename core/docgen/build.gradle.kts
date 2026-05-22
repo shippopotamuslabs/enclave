@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.docgen"
+    namespace = "com.browntowndev.enclave.core.docgen"
     compileSdk = 37
 
     defaultConfig {
