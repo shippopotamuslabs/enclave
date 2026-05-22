@@ -188,7 +188,22 @@ class XaiImageGenerationAdapter
                 runCatching { value.convert(Boolean::class.javaObjectType) }.getOrNull()
             }
 
-        private fun Throwable.isXaiPromptRejection(): Boolean = this is BadRequestException && statusCode() == HTTP_BAD_REQUEST
+        private fun Throwable.isXaiPromptRejection(): Boolean {
+            if (this !is BadRequestException || statusCode() != HTTP_BAD_REQUEST) {
+                return false
+            }
+            return containsModerationIndicator(message) || bodyContainsModerationIndicator()
+        }
+
+        private fun BadRequestException.bodyContainsModerationIndicator(): Boolean {
+            val bodyText =
+                runCatching { body().convert(String::class.javaObjectType) }.getOrNull()
+                    ?: runCatching { body().toString() }.getOrNull()
+            return containsModerationIndicator(bodyText)
+        }
+
+        private fun containsModerationIndicator(text: String?): Boolean =
+            !text.isNullOrBlank() && text.contains("moderation", ignoreCase = true)
 
         private class XaiImageModerationRejectedException(
             cause: Throwable? = null,

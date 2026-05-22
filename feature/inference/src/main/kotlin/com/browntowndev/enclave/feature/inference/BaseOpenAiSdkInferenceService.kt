@@ -222,6 +222,17 @@ abstract class BaseOpenAiSdkInferenceService(
         imageUris: List<String> = emptyList(),
     ): MappedChatMessage? {
         val metadata = metadataJson.toMetadataJsonObject()
+        if (metadata.isEngineInternalToolSidecar()) {
+            return MappedChatMessage(
+                param =
+                    ChatCompletionMessageParam.ofSystem(
+                        ChatCompletionSystemMessageParam
+                            .builder()
+                            .content("[Agent]\n${content.ifBlank { "{}" }}")
+                            .build(),
+                    ),
+            )
+        }
         val toolCallId = metadata?.get("call_id")?.jsonPrimitive?.contentOrNull
         if (toolCallId != null) {
             return toToolResultChatParam(toolCallId = toolCallId, pendingToolCallIds = pendingToolCallIds)
@@ -286,6 +297,15 @@ abstract class BaseOpenAiSdkInferenceService(
         } else {
             null
         }
+
+    /** Engine-injected payloads without a provider `tool_call_id` (budget, nudges, parse errors). */
+    private fun JsonObject?.isEngineInternalToolSidecar(): Boolean =
+        this != null &&
+            (
+                containsKey("agent_tool_budget") ||
+                    containsKey("tools_blocked_nudge") ||
+                    containsKey("envelope_parse_failure")
+            )
 
     private fun AgentLoopMessage.toToolResultChatParam(
         toolCallId: String,

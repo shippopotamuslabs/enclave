@@ -643,6 +643,116 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
+    fun `toOpenAiChatParam preserves tool message order after assistant tool calls`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(""),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-1",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[
+                                  {"id":"call_reject","name":"web_search","arguments_json":"{}"},
+                                  {"id":"call_ok","name":"web_search","arguments_json":"{\"q\":\"x\"}"}
+                                ]}
+                                """.trimIndent(),
+                        ),
+                        AgentLoopMessage(
+                            id = "tool-reject",
+                            role = Role.ASSISTANT,
+                            content = """{"error":"bad args"}""",
+                            metadataJson = """{"call_id":"call_reject"}""",
+                        ),
+                        AgentLoopMessage(
+                            id = "tool-ok",
+                            role = Role.ASSISTANT,
+                            content = """{"results":[]}""",
+                            metadataJson = """{"call_id":"call_ok"}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            assertEquals(3, messages.size)
+            assertTrue(messages[0].isAssistant())
+            assertTrue(messages[1].isTool())
+            assertEquals("call_reject", messages[1].asTool().toolCallId())
+            assertTrue(messages[2].isTool())
+            assertEquals("call_ok", messages[2].asTool().toolCallId())
+        }
+
+    @Test
+    fun `toOpenAiChatParam maps agent tool budget sidecar to system message`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(""),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(
+                            id = "assistant-1",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson =
+                                """{"raw_tool_calls":[{"id":"call_ok","name":"web_search","arguments_json":"{}"}]}""",
+                        ),
+                        AgentLoopMessage(
+                            id = "tool-ok",
+                            role = Role.ASSISTANT,
+                            content = """{"results":[]}""",
+                            metadataJson = """{"call_id":"call_ok"}""",
+                        ),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.ASSISTANT,
+                            content = """{"_agent":{"tool_calls_remaining":1}}""",
+                            metadataJson = """{"agent_tool_budget":true}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = requireNotNull(capturedParams).messages()
+            assertEquals(3, messages.size)
+            assertTrue(messages[0].isAssistant())
+            assertTrue(messages[1].isTool())
+            assertTrue(messages[2].isSystem())
+            assertTrue(
+                messages[2]
+                    .asSystem()
+                    .content()
+                    .asText()
+                    .contains("[Agent]"),
+            )
+        }
+
+    @Test
     fun `completeSingleTurn converts orphan tool result to user message`() =
         runTest {
             var capturedParams: ChatCompletionCreateParams? = null

@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
@@ -31,6 +32,7 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCo
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -155,7 +157,16 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            verify { dispatcher.startGeneration("Original Prompt", MediaCapability.VIDEO, any()) }
+            val settingsSlot = slot<GenerationSettings>()
+            verify {
+                dispatcher.startGeneration(
+                    "Original Prompt",
+                    MediaCapability.VIDEO,
+                    capture(settingsSlot),
+                )
+            }
+            val settings = settingsSlot.captured as VideoGenerationSettings
+            assertEquals("file://image.jpg", settings.referenceImageUri)
             assertTrue(viewModel.uiState.value.isGenerating)
             assertEquals("", viewModel.uiState.value.prompt)
             job.cancel()
