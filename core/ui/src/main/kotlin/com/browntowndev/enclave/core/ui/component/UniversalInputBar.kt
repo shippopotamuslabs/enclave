@@ -312,7 +312,7 @@ fun StandardTrailingAction(
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
     shape: Shape = EnclaveNeoTokens.shape,
     description: String? = null,
-    withShadow: Boolean = false,
+    withShadow: Boolean = true,
 ) {
     CircularTrailingAction(
         onClick = onClick,
@@ -347,7 +347,7 @@ fun StandardTrailingAction(
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
     shape: Shape = EnclaveNeoTokens.shape,
     description: String? = null,
-    withShadow: Boolean = false,
+    withShadow: Boolean = true,
 ) {
     CircularTrailingAction(
         onClick = onClick,
@@ -379,32 +379,42 @@ private fun CircularTrailingAction(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier =
-            modifier
-                .size(EnclaveNeoTokens.trailingActionSize)
-                .neoSurface(
-                    backgroundColor = containerColor,
-                    borderColor = borderColor,
-                    withShadow = withShadow,
-                    shadowColor = neoShadowColor(),
-                    shadowOffset = neoButtonShadowOffset(),
-                    shape = shape,
-                )
-                .then(
-                    if (enabled) {
-                        Modifier.clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onClick,
-                        )
-                    } else {
-                        Modifier
-                    },
-                ),
-        contentAlignment = Alignment.Center,
-        content = content,
-    )
+    val shadowOffset = neoButtonShadowOffset()
+    Box(modifier = modifier) {
+        Box(
+            modifier =
+                Modifier
+                    .then(
+                        if (withShadow) {
+                            Modifier.padding(end = shadowOffset, bottom = shadowOffset)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .size(EnclaveNeoTokens.trailingActionSize)
+                    .neoSurface(
+                        backgroundColor = containerColor,
+                        borderColor = borderColor,
+                        withShadow = withShadow,
+                        shadowColor = neoShadowColor(),
+                        shadowOffset = shadowOffset,
+                        shape = shape,
+                    )
+                    .then(
+                        if (enabled) {
+                            Modifier.clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = onClick,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
+            contentAlignment = Alignment.Center,
+            content = content,
+        )
+    }
 }
 
 /**
@@ -555,7 +565,7 @@ fun UniversalVoiceTrailingAction(
                 enabled = enabled,
                 containerColor = containerColor,
                 contentColor = contentColor,
-                withShadow = isSending && enabled,
+                withShadow = enabled,
             )
         }
     }
