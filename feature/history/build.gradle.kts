@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.history"
+    namespace = "com.browntowndev.enclave.feature.history"
     compileSdk = 37
 
     defaultConfig {

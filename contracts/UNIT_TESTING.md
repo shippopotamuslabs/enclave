@@ -1,6 +1,6 @@
-# Unit Testing Contract — Pocket Crew
+# Unit Testing Contract — Enclave
 
-This contract defines the mandatory standards for unit testing in the Pocket Crew project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
+This contract defines the mandatory standards for unit testing in the Enclave project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
 
 ---
 

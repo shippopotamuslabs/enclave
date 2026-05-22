@@ -1,5 +1,5 @@
 # UI_DESIGN_SPEC.md
-**Pocket Crew – UI Design Contract v2.4**
+**Enclave – UI Design Contract v2.4**
 
 Immutable UI contract. This defines exact visual behavior, component structure, and interaction patterns.
 
@@ -55,7 +55,7 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 ### 2.2 ChatTopBar (`CenterAlignedTopAppBar`)
 - **Left:** Menu icon → navigates to History (via callback).
-- **Center:** "Pocket Crew" title + optional `ModeBadge` (visible only during Crew/Think mode).
+- **Center:** "Enclave" title + optional `ModeBadge` (visible only during Crew/Think mode).
 - **Right:** New chat icon → triggers `viewModel.createNewChat()`.
 
 ### 2.3 MessageList (`LazyColumn`)

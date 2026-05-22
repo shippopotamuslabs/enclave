@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.agent"
+    namespace = "com.browntowndev.enclave.core.agent"
     compileSdk = 37
 
     defaultConfig {

@@ -1,4 +1,4 @@
-# Agent Routing Contract — Pocket Crew
+# Agent Routing Contract — Enclave
 
 This is the root source of truth for agent-facing repo instructions. Agent-specific
 files such as `CLAUDE.md` and `GEMINI.md` should only point here to avoid drift.
@@ -31,7 +31,7 @@ context.
 
 ## 2. Repository Map
 
-Pocket Crew is a mixed Android monorepo, not a single-module app.
+Enclave is a mixed Android monorepo, not a single-module app.
 
 - `app/`: Android application shell, DI wiring, navigation entrypoints, app resources, signing, Firebase/Google services integration.
 - `core/domain/`: domain models, ports, use cases, and test fixtures.
@@ -139,7 +139,7 @@ or edit generated binding outputs only as part of that regeneration workflow.
 
 ## 6. Code Intelligence Setup
 
-- Android/Kotlin: import the root Gradle project in **Android Studio Quail** (or IntelliJ). Keep Studio open on **Pocket Crew** during agent sessions so `android studio` bridge commands work. Use JDK 17 and the checked-in Gradle wrapper.
+- Android/Kotlin: import the root Gradle project in **Android Studio Quail** (or IntelliJ). Keep Studio open on **Enclave** during agent sessions so `android studio` bridge commands work. Use JDK 17 and the checked-in Gradle wrapper.
 - **Android CLI:** `android` 1.0+ on PATH (`android info`). Run `android init` once per machine; project skills live under `.agents/skills/`.
 - TypeScript functions: run `npm --prefix functions install` if dependencies are missing; TypeScript server should use `functions/tsconfig.json`.
 - Rust bridge crates: use `rust-analyzer` rooted at `third_party/agent_core/Cargo.toml` or `third_party/docgen_core/Cargo.toml`.
@@ -177,7 +177,7 @@ Use MCP tools before ad-hoc web search. Prefer MCP over guessing APIs.
 | Device UI tree | `android layout` | Layout/debug on connected device or emulator |
 | Android docs | `android docs search`, `android docs fetch` | Authoritative KB lookups |
 
-**Project identifier:** `--project="Pocket Crew"` when multiple projects could be open.
+**Project identifier:** `--project="Enclave"` when multiple projects could be open.
 
 **Compose previews:** Build debug first (`./gradlew :feature:<module>:assembleDebug` or
 `:app:assembleDebug`). Release artifacts do not satisfy preview rendering. If

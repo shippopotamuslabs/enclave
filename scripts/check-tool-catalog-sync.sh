@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TOOL_DEF="$ROOT/core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/inference/ToolDefinition.kt"
+TOOL_DEF="$ROOT/core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/ToolDefinition.kt"
 CATALOG="$ROOT/third_party/agent_core/resources/tool_catalog.json"
 
 if [[ ! -f "$TOOL_DEF" || ! -f "$CATALOG" ]]; then

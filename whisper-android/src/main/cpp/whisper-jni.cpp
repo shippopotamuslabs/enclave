@@ -19,7 +19,7 @@ void throwIllegalState(JNIEnv * env, const char * message) {
 } // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_browntowndev_pocketcrew_whisper_JniWhisperInference_initContext(
+Java_com_browntowndev_enclave_whisper_JniWhisperInference_initContext(
         JNIEnv * env,
         jclass,
         jstring modelPath) {
@@ -47,7 +47,7 @@ Java_com_browntowndev_pocketcrew_whisper_JniWhisperInference_initContext(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_browntowndev_pocketcrew_whisper_JniWhisperInference_processAudio(
+Java_com_browntowndev_enclave_whisper_JniWhisperInference_processAudio(
         JNIEnv * env,
         jclass,
         jlong contextPtr,
@@ -104,7 +104,7 @@ Java_com_browntowndev_pocketcrew_whisper_JniWhisperInference_processAudio(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_browntowndev_pocketcrew_whisper_JniWhisperInference_freeContext(
+Java_com_browntowndev_enclave_whisper_JniWhisperInference_freeContext(
         JNIEnv *,
         jclass,
         jlong contextPtr) {

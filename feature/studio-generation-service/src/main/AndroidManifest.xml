@@ -3,7 +3,7 @@
 
     <application>
         <service
-            android:name="com.browntowndev.pocketcrew.feature.studio.service.MultimediaGenerationService"
+            android:name="com.browntowndev.enclave.feature.studio.service.MultimediaGenerationService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">

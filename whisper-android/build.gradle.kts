@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.whisper"
+    namespace = "com.browntowndev.enclave.whisper"
     compileSdk = 37
     ndkVersion = "28.2.13676358"
 

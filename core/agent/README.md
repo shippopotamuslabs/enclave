@@ -49,7 +49,7 @@ Top-level UniFFI functions in `agent_core.kt` (e.g. `repairTool`, `truncateResul
 ## Desktop consumers
 
 Desktop consumers should depend on `third_party/agent_core` directly as a Cargo path dependency and use the native Rust
-traits (`AgentTransport`, `AgentToolExecutor`, `AgentSummarizer`). UniFFI is Android-only glue for Pocket Crew.
+traits (`AgentTransport`, `AgentToolExecutor`, `AgentSummarizer`). UniFFI is Android-only glue for Enclave.
 
 ## Troubleshooting
 

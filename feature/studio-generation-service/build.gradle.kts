@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.studio.generation.service"
+    namespace = "com.browntowndev.enclave.feature.studio.generation.service"
     compileSdk = 37
 
     defaultConfig {

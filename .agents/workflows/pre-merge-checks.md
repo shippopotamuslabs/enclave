@@ -4,7 +4,7 @@ description: "Run all CI-aligned checks before merging (Lint, Detekt, Build, Tes
 
 # Pre-Merge Checks
 
-This workflow runs the standard CI-aligned checks for the Pocket Crew repository.
+This workflow runs the standard CI-aligned checks for the Enclave repository.
 
 ## Steps
 

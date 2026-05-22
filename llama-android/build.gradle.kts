@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.llama"
+    namespace = "com.browntowndev.enclave.llama"
     compileSdk = 37
     ndkVersion = "28.2.13676358"
 

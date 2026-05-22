@@ -1,5 +1,5 @@
 # DATA_LAYER_RULES.md
-**Pocket Crew – Data Layer Contract v2.4**
+**Enclave – Data Layer Contract v2.4**
 
 Rules for the `:core:data` module: Room database, repositories, entities, mappers, Firebase/network integration, WorkManager, and persistence.
 
@@ -21,7 +21,7 @@ Always enforce together with `ARCHITECTURE_RULES.md`.
 ## 1. Room Database & Anti-Hallucination Lock
 
 
-- Single `PocketCrewDatabase` class annotated `@Database`.
+- Single `EnclaveDatabase` class annotated `@Database`.
 - Database instance provided via Hilt `@Singleton` module.
 - **SCHEMA LOCK:** Never invent new tables or columns (e.g., `is_typing`, `is_thinking`, `is_loading`) for transient presentation state. Transient state belongs in the UI layer. Database schema changes require explicit developer authorization.
 

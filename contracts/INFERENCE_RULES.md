@@ -1,4 +1,4 @@
-**Pocket Crew – Inference Layer Contract v2.5**
+**Enclave – Inference Layer Contract v2.5**
 
 Non-negotiable rules for the `:feature:inference` module and all model/runtime operations.
 Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Never** Kotlin standards.
