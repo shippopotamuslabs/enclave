@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -22,11 +23,14 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
+import java.nio.file.Paths
 
 class ActiveModelProviderImplTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
@@ -77,7 +81,6 @@ class ActiveModelProviderImplTest {
                     localFilename = "gemma-4-E4B-it.litertlm",
                     sha256 = "gemma-sha",
                     sizeInBytes = 42L,
-                    isMultimodal = true,
                 )
 
             val result = repository.getActiveConfiguration(ModelType.FAST)
@@ -87,42 +90,71 @@ class ActiveModelProviderImplTest {
         }
 
     @Test
-    fun `getActiveConfiguration decrypts api config fields`() =
+    fun `SCN-ACTIVE-001 Active Provider Model From Preset`() =
         runTest {
-            val configId = ApiModelConfigurationId("api-config-1")
-            val credentialsId = ApiCredentialsId("creds-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.VISION) } returns
-                DefaultModelAssignment(
-                    modelType = ModelType.VISION,
-                    apiConfigId = configId,
-                )
-            coEvery { apiConfigsDao.getById(configId) } returns
-                ApiModelConfigurationEntity(
-                    id = configId,
-                    apiCredentialsId = credentialsId,
-                    displayName = localEncryption.encryptString("Default"),
-                    systemPrompt = localEncryption.encryptString("Be helpful"),
-                )
-            coEvery { apiCredentialsDao.getById(credentialsId) } returns
-                ApiCredentialsEntity(
-                    id = credentialsId,
-                    displayName = localEncryption.encryptString("OpenAI Primary"),
-                    provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
-                    baseUrl = localEncryption.encryptString("https://api.openai.com/v1"),
-                    credentialAlias = "openai-key",
-                    isMultimodal = true,
-                )
+            val result = activeApiConfigurationFromPreset()
 
-            val result = repository.getActiveConfiguration(ModelType.VISION)
-
-            assertTrue(result?.isLocal == false)
-            assertEquals("Default", result?.name)
-            assertEquals("Be helpful", result?.systemPrompt)
-            assertEquals("gpt-4o", result?.modelId)
-            assertEquals(ApiProvider.OPENAI, result?.apiProvider)
-            assertEquals(true, result?.isMultimodal)
+            assertEquals("gpt-4o", result.modelId)
+            assertEquals(ApiProvider.OPENAI, result.apiProvider)
         }
+
+    @Test
+    fun `SCN-ACTIVE-002 Active Provider Multimodal From Preset`() =
+        runTest {
+            val result = activeApiConfigurationFromPreset()
+
+            assertEquals(true, result.isMultimodal)
+        }
+
+    @Test
+    fun `SCN-MUT-002 Active Provider Must Not Read Credential Model`() =
+        runTest {
+            val result = activeApiConfigurationFromPreset(modelType = ModelType.MAIN)
+
+            assertEquals("gpt-4o", result.modelId)
+            assertFalse(ApiCredentialsEntity::class.members.any { it.name == "modelId" })
+        }
+
+    @Test
+    fun `SCN-MUT-002 source ActiveModelProviderImpl does not read credentials modelId`() {
+        val sourcePath =
+            Paths.get(
+                "src/main/kotlin/com/browntowndev/enclave/core/data/repository/ActiveModelProviderImpl.kt",
+            )
+        val source = Files.readString(sourcePath)
+        assertFalse(source.contains("credentials.modelId"))
+    }
+
+    private suspend fun activeApiConfigurationFromPreset(
+        modelType: ModelType = ModelType.VISION,
+    ): ActiveModelConfiguration {
+        val configId = ApiModelConfigurationId("cfg-9")
+        val credentialsId = ApiCredentialsId("creds-1")
+        coEvery { defaultModelRepository.getDefault(modelType) } returns
+            DefaultModelAssignment(
+                modelType = modelType,
+                apiConfigId = configId,
+            )
+        coEvery { apiConfigsDao.getById(configId) } returns
+            ApiModelConfigurationEntity(
+                id = configId,
+                apiCredentialsId = credentialsId,
+                displayName = localEncryption.encryptString("Default"),
+                modelId = "gpt-4o",
+                isMultimodal = true,
+                systemPrompt = localEncryption.encryptString("Be helpful"),
+            )
+        coEvery { apiCredentialsDao.getById(credentialsId) } returns
+            ApiCredentialsEntity(
+                id = credentialsId,
+                displayName = localEncryption.encryptString("OpenAI Primary"),
+                provider = ApiProvider.OPENAI,
+                baseUrl = localEncryption.encryptString("https://api.openai.com/v1"),
+                credentialAlias = "openai-key",
+            )
+
+        return requireNotNull(repository.getActiveConfiguration(modelType))
+    }
 
     @Test
     fun `getActiveConfiguration returns null when no default assignment`() =
@@ -162,7 +194,6 @@ class ActiveModelProviderImplTest {
                     localFilename = "qwen.gguf",
                     sha256 = "abc123",
                     sizeInBytes = 42L,
-                    isMultimodal = false,
                 )
 
             val result = repository.getActiveConfiguration(ModelType.MAIN)

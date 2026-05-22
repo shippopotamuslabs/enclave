@@ -82,7 +82,6 @@ class CascadeBehaviorTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -91,6 +90,7 @@ class CascadeBehaviorTest {
                 ApiModelConfigurationEntity(
                     id = ApiModelConfigurationId("test-api-config-1"),
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "c1",
                 ),
             )
@@ -98,6 +98,7 @@ class CascadeBehaviorTest {
                 ApiModelConfigurationEntity(
                     id = ApiModelConfigurationId("test-api-config-2"),
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "c2",
                 ),
             )
@@ -149,7 +150,6 @@ class CascadeBehaviorTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -158,6 +158,7 @@ class CascadeBehaviorTest {
                 ApiModelConfigurationEntity(
                     id = ApiModelConfigurationId("test-api-config-1"),
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "c1",
                 ),
             )

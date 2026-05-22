@@ -25,19 +25,19 @@ internal fun resolveMediaCredentialAlias(
     state.selectedReusableApiCredentialAlias?.takeIf { it.isNotBlank() }
         ?: asset.credentialAlias.takeIf { it.isNotBlank() }
 
-internal fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
-    discoveredApiModels.find { it.id == asset?.modelId }
+internal fun ApiProvidersTransientState.discoveredModelFor(preset: ApiModelConfigUi?): DiscoveredApiModel? =
+    discoveredApiModels.find { it.id == preset?.modelId }
 
 internal fun ApiProvidersTransientState.normalizeVisionCapability(
-    asset: ApiModelAssetUi?,
+    preset: ApiModelConfigUi?,
     models: List<DiscoveredApiModel> = discoveredApiModels,
-): ApiModelAssetUi? {
-    if (asset == null) return null
+): ApiModelConfigUi? {
+    if (preset == null) return null
     val discoveredVisionCapability =
         models
-            .find { it.id == asset.modelId }
+            .find { it.id == preset.modelId }
             ?.isMultimodal
-    return discoveredVisionCapability?.let { asset.copy(isMultimodal = it) } ?: asset
+    return discoveredVisionCapability?.let { preset.copy(isMultimodal = it) } ?: preset
 }
 
 internal fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
@@ -51,11 +51,11 @@ internal fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Bo
 
 internal fun String?.normalizedDiscoveryBaseUrl(): String = this?.trim().orEmpty()
 
-internal fun List<DiscoveredApiModel>.mergeSelectedModel(asset: ApiModelAssetUi?): List<DiscoveredApiModel> =
+internal fun List<DiscoveredApiModel>.mergeSelectedModel(preset: ApiModelConfigUi?): List<DiscoveredApiModel> =
     when {
-        asset == null || asset.modelId.isBlank() -> this
-        any { it.id == asset.modelId } -> this
-        else -> listOf(DiscoveredApiModel(id = asset.modelId)) + this
+        preset == null || preset.modelId.isBlank() -> this
+        any { it.id == preset.modelId } -> this
+        else -> listOf(DiscoveredApiModel(id = preset.modelId)) + this
     }
 
 internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
@@ -80,3 +80,11 @@ internal fun ApiModelAssetUi.toDiscoveryScope(): ApiModelDiscoveryScope =
         baseUrl = baseUrl.normalizedDiscoveryBaseUrl(),
         credentialAlias = credentialAlias.takeIf(String::isNotBlank),
     )
+
+internal fun apiConnectionFingerprint(
+    provider: com.browntowndev.enclave.domain.model.inference.ApiProvider,
+    baseUrl: String?,
+    apiKey: String,
+    credentialAlias: String?,
+): String =
+    "${provider.name}|${baseUrl.normalizedDiscoveryBaseUrl()}|${apiKey.ifBlank { credentialAlias.orEmpty() }}"

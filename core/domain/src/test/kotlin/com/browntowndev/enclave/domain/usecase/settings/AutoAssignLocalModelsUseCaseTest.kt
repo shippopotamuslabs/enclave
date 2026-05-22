@@ -81,8 +81,6 @@ class AutoAssignLocalModelsUseCaseTest {
                     id = apiCredsId,
                     displayName = "API",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
-                    isMultimodal = false,
                     credentialAlias = "alias",
                 ),
             configurations =
@@ -90,6 +88,7 @@ class AutoAssignLocalModelsUseCaseTest {
                     ApiModelConfiguration(
                         id = apiConfigId,
                         apiCredentialsId = apiCredsId,
+                        modelId = "gpt-4o",
                         displayName = "API cfg",
                     ),
                 ),
@@ -102,8 +101,6 @@ class AutoAssignLocalModelsUseCaseTest {
                     id = multimodalCredsId,
                     displayName = "API MM",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-vision",
-                    isMultimodal = true,
                     credentialAlias = "alias-mm",
                 ),
             configurations =
@@ -111,6 +108,8 @@ class AutoAssignLocalModelsUseCaseTest {
                     ApiModelConfiguration(
                         id = multimodalConfigId,
                         apiCredentialsId = multimodalCredsId,
+                        modelId = "gpt-4o",
+                        isMultimodal = true,
                         displayName = "API MM cfg",
                     ),
                 ),
@@ -189,7 +188,7 @@ class AutoAssignLocalModelsUseCaseTest {
         }
 
     @Test
-    fun `vision slot only assigns to first multimodal API config`() =
+    fun `SCN-USECASE-AUTO-001 Auto Assign Vision Uses Multimodal Preset`() =
         runTest {
             coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
             coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())

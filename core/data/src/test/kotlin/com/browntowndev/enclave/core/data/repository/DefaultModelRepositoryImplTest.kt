@@ -165,6 +165,7 @@ class DefaultModelRepositoryImplTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = localEncryption.encryptString("Default"),
                 )
             coEvery { apiCredentialsDao.getById(credId) } returns
@@ -172,9 +173,7 @@ class DefaultModelRepositoryImplTest {
                     id = credId,
                     displayName = localEncryption.encryptString("OpenAI Primary"),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
-                    isMultimodal = false,
                 )
 
             val result = repo.getDefault(ModelType.VISION)

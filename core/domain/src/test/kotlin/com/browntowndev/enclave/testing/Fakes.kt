@@ -319,7 +319,6 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 
     override suspend fun findMatchingCredentials(
         provider: ApiProvider,
-        modelId: String,
         baseUrl: String?,
         apiKey: String,
         sourceCredentialAlias: String?,
@@ -336,7 +335,6 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 
         return _credentials.value.firstOrNull { credential ->
             credential.provider == provider &&
-                credential.modelId == modelId &&
                 credential.baseUrl.normalizedBaseUrl() == baseUrl.normalizedBaseUrl() &&
                 savedKeys[credential.id] == resolvedApiKey
         }

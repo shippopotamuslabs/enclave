@@ -26,7 +26,13 @@ class SaveApiModelConfigurationUseCaseTest {
     fun `invoke calls repository saveConfiguration`() =
         runTest {
             val credId = ApiCredentialsId("10")
-            val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
+            val config =
+                ApiModelConfiguration(
+                    id = ApiModelConfigurationId("1"),
+                    apiCredentialsId = credId,
+                    modelId = "gpt-4o",
+                    displayName = "Test Config",
+                )
             coEvery { repository.getCredentialsById(credId) } returns mockk()
             coEvery { repository.saveConfiguration(config) } returns ApiModelConfigurationId("1")
 
@@ -41,7 +47,13 @@ class SaveApiModelConfigurationUseCaseTest {
     fun `invoke returns failure when parent credentials do not exist`() =
         runTest {
             val credId = ApiCredentialsId("999")
-            val config = ApiModelConfiguration(id = ApiModelConfigurationId("1"), apiCredentialsId = credId, displayName = "Test Config")
+            val config =
+                ApiModelConfiguration(
+                    id = ApiModelConfigurationId("1"),
+                    apiCredentialsId = credId,
+                    modelId = "gpt-4o",
+                    displayName = "Test Config",
+                )
             coEvery { repository.getCredentialsById(credId) } returns null
 
             val result = useCase(config)

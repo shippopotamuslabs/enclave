@@ -81,9 +81,7 @@ data class ApiProviderDraft(
     val id: ApiCredentialsId = ApiCredentialsId(""),
     val displayName: String,
     val provider: ApiProvider,
-    val modelId: String,
     val baseUrl: String?,
-    val isMultimodal: Boolean,
     val credentialAlias: String,
     val apiKey: String,
     val sourceCredentialAlias: String? = null,
@@ -99,6 +97,8 @@ data class ApiProviderDraftSaveResult(
 data class ApiPresetDraft(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
     val credentialsId: ApiCredentialsId = ApiCredentialsId(""),
+    val modelId: String = "",
+    val isMultimodal: Boolean = false,
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",

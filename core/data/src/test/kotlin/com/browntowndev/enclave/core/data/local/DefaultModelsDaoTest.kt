@@ -169,7 +169,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -179,6 +178,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )
@@ -219,7 +219,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -228,6 +227,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = apiId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )
@@ -270,7 +270,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -279,6 +278,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = apiId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )

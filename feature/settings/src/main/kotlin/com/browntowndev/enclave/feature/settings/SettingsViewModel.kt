@@ -266,6 +266,11 @@ internal class SettingsViewModel
 
         fun onFetchApiModels() = apiProvidersDelegate.onFetchApiModels(viewModelScope, TAG, _apiState, _currentApiKey)
 
+        fun onTestApiProviderConnection() =
+            apiProvidersDelegate.onTestApiProviderConnection(viewModelScope, _apiState, _currentApiKey) {
+                _snackbarMessages.tryEmit(it)
+            }
+
         fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) =
             apiProvidersDelegate.onSaveApiCredentials(viewModelScope, TAG, _apiState, _currentApiKey, onSuccess) {
                 _snackbarMessages.tryEmit(it)
@@ -346,7 +351,7 @@ internal class SettingsViewModel
         fun onDeleteMediaProviderAsset(id: MediaProviderId) = apiProvidersDelegate.onDeleteMediaProviderAsset(viewModelScope, TAG, id)
 
         fun onApiKeyChange(key: String) {
-            _currentApiKey.value = key
+            apiProvidersDelegate.onApiKeyChange(_apiState, _currentApiKey, key)
         }
 
         fun onSaveApiModelConfig(onSuccess: () -> Unit) =
@@ -356,12 +361,20 @@ internal class SettingsViewModel
             val reusableCredential =
                 uiState.value.apiProvidersSheet.assets
                     .find { it.credentialsId == id }
-                    ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+                    ?.let {
+                        ReusableApiCredentialUi(
+                            credentialsId = it.credentialsId,
+                            displayName = it.displayName,
+                            providerLabel = it.provider.displayName,
+                            credentialAlias = it.credentialAlias,
+                        )
+                    }
             _currentApiKey.value = ""
             _apiState.value =
                 _apiState.value.copy(
                     selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
                     selectedReusableApiCredentialName = reusableCredential?.displayName,
+                    connectionTestStatus = ApiConnectionTestStatus.IDLE,
                 )
         }
 
@@ -369,7 +382,14 @@ internal class SettingsViewModel
             val reusableCredential =
                 uiState.value.apiProvidersSheet.assets
                     .find { it.credentialsId == id }
-                    ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+                    ?.let {
+                        ReusableApiCredentialUi(
+                            credentialsId = it.credentialsId,
+                            displayName = it.displayName,
+                            providerLabel = it.provider.displayName,
+                            credentialAlias = it.credentialAlias,
+                        )
+                    }
             _currentApiKey.value = ""
             _apiState.value =
                 _apiState.value.copy(
@@ -391,7 +411,14 @@ internal class SettingsViewModel
             val reusableCredential =
                 uiState.value.apiProvidersSheet.assets
                     .find { it.credentialsId == id }
-                    ?.let { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+                    ?.let {
+                        ReusableApiCredentialUi(
+                            credentialsId = it.credentialsId,
+                            displayName = it.displayName,
+                            providerLabel = it.provider.displayName,
+                            credentialAlias = it.credentialAlias,
+                        )
+                    }
             _currentApiKey.value = ""
             _mediaState.value =
                 _mediaState.value.copy(

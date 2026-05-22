@@ -248,7 +248,14 @@ fun MediaConfigureScreen(
             val reusableCredentials =
                 uiState.apiProvidersSheet.assets
                     .filter { it.provider == draft.provider }
-                    .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+                    .map {
+                        ReusableApiCredentialUi(
+                            credentialsId = it.credentialsId,
+                            displayName = it.displayName,
+                            providerLabel = it.provider.displayName,
+                            credentialAlias = it.credentialAlias,
+                        )
+                    }
 
             if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
                 ReusableCredentialDropdown(
@@ -318,17 +325,7 @@ fun MediaConfigureScreen(
             // Model ID
             val canFetchModels = !uiState.mediaProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved)
             ModelSelectionField(
-                asset =
-                    ApiModelAssetUi(
-                        credentialsId = draft.id.toApiCredentialsId(),
-                        displayName = draft.displayName,
-                        provider = draft.provider,
-                        modelId = draft.modelName,
-                        baseUrl = draft.baseUrl,
-                        isMultimodal = false,
-                        credentialAlias = draft.credentialAlias,
-                        configurations = emptyList(),
-                    ),
+                config = ApiModelConfigUi(modelId = draft.modelName),
                 availableModels = uiState.mediaProviderEditor.discovery.models,
                 filteredModels = uiState.mediaProviderEditor.discovery.filteredModels,
                 isFetchingModels = uiState.mediaProviderEditor.discovery.isLoading,
@@ -336,8 +333,8 @@ fun MediaConfigureScreen(
                 searchQuery = uiState.mediaProviderEditor.discovery.searchQuery,
                 providerFilters = uiState.mediaProviderEditor.discovery.providerFilters,
                 sortOption = uiState.mediaProviderEditor.discovery.sortOption,
-                onAssetChange = { updatedAsset ->
-                    onMediaAssetFieldChange(draft.copy(modelName = updatedAsset.modelId))
+                onConfigChange = { updatedConfig ->
+                    onMediaAssetFieldChange(draft.copy(modelName = updatedConfig.modelId))
                 },
                 onFetchModels = onFetchMediaModels,
                 onUpdateSearchQuery = onUpdateModelSearchQuery,
@@ -387,8 +384,6 @@ fun MediaConfigureScreen(
         }
     }
 }
-
-private fun MediaProviderId.toApiCredentialsId() = ApiCredentialsId(value)
 
 @Preview(showBackground = true, name = "Media Configure Screen")
 @Composable

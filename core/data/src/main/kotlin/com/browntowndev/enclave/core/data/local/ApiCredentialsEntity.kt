@@ -23,10 +23,6 @@ data class ApiCredentialsEntity(
     val provider: ApiProvider,
     @ColumnInfo(name = "base_url")
     val baseUrl: String? = null,
-    @ColumnInfo(name = "model_id")
-    val modelId: String,
-    @ColumnInfo(name = "is_multimodal")
-    val isMultimodal: Boolean = false,
     @ColumnInfo(name = "credential_alias")
     val credentialAlias: String,
     @ColumnInfo(name = "encrypted_api_key", typeAffinity = ColumnInfo.BLOB)

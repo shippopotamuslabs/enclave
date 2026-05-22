@@ -22,9 +22,7 @@ class ApiModelAssetUiMapper
                 credentialsId = asset.credentials.id,
                 displayName = asset.credentials.displayName,
                 provider = asset.credentials.provider,
-                modelId = asset.credentials.modelId,
                 baseUrl = asset.credentials.baseUrl ?: asset.credentials.provider.defaultBaseUrl(),
-                isMultimodal = asset.credentials.isMultimodal,
                 credentialAlias = asset.credentials.credentialAlias,
                 configurations = asset.configurations.map(::mapConfig),
             )
@@ -33,7 +31,7 @@ class ApiModelAssetUiMapper
             ReusableApiCredentialUi(
                 credentialsId = asset.credentials.id,
                 displayName = asset.credentials.displayName,
-                modelId = asset.credentials.modelId,
+                providerLabel = asset.credentials.provider.displayName,
                 credentialAlias = asset.credentials.credentialAlias,
             )
 
@@ -41,6 +39,8 @@ class ApiModelAssetUiMapper
             ApiModelConfigUi(
                 id = config.id,
                 credentialsId = config.apiCredentialsId,
+                modelId = config.modelId,
+                isMultimodal = config.isMultimodal,
                 displayName = config.displayName,
                 maxTokens = config.maxTokens.toString(),
                 contextWindow = config.contextWindow.toString(),
@@ -266,11 +266,9 @@ internal fun blankApiModelAssetDraft(): ApiModelAssetUi =
         credentialsId = ApiCredentialsId(""),
         displayName = "",
         provider = com.browntowndev.enclave.domain.model.inference.ApiProvider.ANTHROPIC,
-        modelId = "",
         baseUrl =
             com.browntowndev.enclave.domain.model.inference.ApiProvider.ANTHROPIC
                 .defaultBaseUrl(),
-        isMultimodal = false,
         credentialAlias = "",
         configurations = emptyList(),
     )

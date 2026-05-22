@@ -558,7 +558,6 @@ class FirestoreDataSourceTest {
                         id = id,
                         displayName = "PCENC:v1:aes-gcm:OpenAI",
                         provider = com.browntowndev.enclave.domain.model.inference.ApiProvider.OPENAI,
-                        modelId = "gpt-4",
                         credentialAlias = "openai_main",
                         encryptedApiKey = encryptedKey,
                         pendingSync = 1,
