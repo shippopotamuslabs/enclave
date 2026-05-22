@@ -1,23 +1,23 @@
 ---
 name: pocket-crew-studio-bridge
 description: >-
-  Pocket Crew Android Studio bridge via Android CLI — find symbols, run IDE
+  Enclave Android Studio bridge via Android CLI — find symbols, run IDE
   inspections, resolve dependency versions, and render Compose @Preview PNGs.
   Use for Compose UI, refactors, navigation, and Gradle dependency work when
   Studio is open on this project.
 ---
 
-# Pocket Crew — Android Studio Bridge
+# Enclave — Android Studio Bridge
 
 ## Preconditions
 
-1. **Android Studio Quail** open with project **Pocket Crew** at repo root.
+1. **Android Studio Quail** open with project **Enclave** at repo root.
 2. **Gemini in Android Studio** enabled and signed in (required for `android studio` commands).
 3. Verify:
 
 ```bash
 android studio check
-# Expect: READY  Pocket Crew  /home/sean/Code/pocket-crew
+# Expect: READY  Enclave  /home/sean/Code/pocket-crew
 ```
 
 ## Compose preview workflow (debug)
@@ -32,7 +32,7 @@ Previews require a **debug** classpath, not release.
 
 # 2. Render preview to PNG (path + composable name are separate arguments)
 android studio render-compose-preview \
-  --project="Pocket Crew" \
+  --project="Enclave" \
   --output-image-file=/tmp/pocket-crew-preview.png \
   feature/chat/src/main/kotlin/.../BubblePreviews.kt \
   PreviewMessageBubbleUser
@@ -47,8 +47,8 @@ If you see `Missing ComposeViewAdapter unable to render`:
 ## Symbol navigation
 
 ```bash
-android studio find-declaration --project="Pocket Crew" --short ChatScreen
-android studio find-usages --project="Pocket Crew" --short PocketCrewNavGraph
+android studio find-declaration --project="Enclave" --short ChatScreen
+android studio find-usages --project="Enclave" --short EnclaveNavGraph
 ```
 
 Prefer these over repo-wide grep for Kotlin symbols across modules.
@@ -56,7 +56,7 @@ Prefer these over repo-wide grep for Kotlin symbols across modules.
 ## IDE analysis before/after edits
 
 ```bash
-android studio analyze-file --project="Pocket Crew" \
+android studio analyze-file --project="Enclave" \
   feature/chat/src/main/kotlin/com/browntowndev/pocketcrew/feature/chat/ChatScreen.kt
 ```
 
@@ -65,8 +65,8 @@ Surfaces Studio inspections (lint, Kotlin warnings) on the file under edit.
 ## Resolved versions (dependency work)
 
 ```bash
-android studio version-lookup --project="Pocket Crew" compose agp kotlin
-android studio version-lookup --project="Pocket Crew" androidx.navigation:navigation-compose
+android studio version-lookup --project="Enclave" compose agp kotlin
+android studio version-lookup --project="Enclave" androidx.navigation:navigation-compose
 ```
 
 ## APK paths and deploy

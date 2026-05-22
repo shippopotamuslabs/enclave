@@ -1,5 +1,5 @@
 # ARCHITECTURE_RULES.md
-**Pocket Crew – Structural Architecture Contract v2.4**
+**Enclave – Structural Architecture Contract v2.4**
 
 Non-negotiable architectural rules. Always enforce together with relevant companion contracts.
 

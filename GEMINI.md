@@ -1,4 +1,4 @@
-# Pocket Crew — Gemini CLI & Antigravity CLI
+# Enclave — Gemini CLI & Antigravity CLI
 
 This project has been migrated to **Antigravity CLI** (`agy`).
 

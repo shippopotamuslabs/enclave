@@ -1,0 +1,66 @@
+package com.browntowndev.enclave.domain.usecase.byok
+
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import kotlin.test.assertFailsWith
+
+class SetDefaultModelUseCaseTest {
+    private lateinit var repository: FakeDefaultModelRepository
+    private lateinit var apiModelRepository: ApiModelRepositoryPort
+    private lateinit var useCase: SetDefaultModelUseCase
+
+    @BeforeEach
+    fun setUp() {
+        repository = FakeDefaultModelRepository()
+        apiModelRepository = mockk(relaxed = true)
+        useCase = SetDefaultModelUseCaseImpl(repository, apiModelRepository)
+    }
+
+    @Test
+    fun `set FAST slot to API source`() =
+        runTest {
+            useCase(ModelType.FAST, localConfigId = null, apiConfigId = ApiModelConfigurationId("5"))
+
+            val assignment = repository.getDefault(ModelType.FAST)
+            assertEquals(ApiModelConfigurationId("5"), assignment?.apiConfigId)
+        }
+
+    @Test
+    fun `set THINKING slot back to ON_DEVICE`() =
+        runTest {
+            useCase(ModelType.THINKING, localConfigId = LocalModelConfigurationId("1"), apiConfigId = null)
+
+            val assignment = repository.getDefault(ModelType.THINKING)
+            assertEquals(LocalModelConfigurationId("1"), assignment?.localConfigId)
+        }
+
+    @Test
+    fun `set TTS slot to TTS provider`() =
+        runTest {
+            val ttsId = TtsProviderId("tts-1")
+            useCase(ModelType.TTS, localConfigId = null, apiConfigId = null, ttsProviderId = ttsId)
+
+            val assignment = repository.getDefault(ModelType.TTS)
+            assertEquals(ttsId, assignment?.ttsProviderId)
+        }
+
+    @Test
+    fun `set VISION slot rejects local model assignments`() =
+        runTest {
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.VISION, localConfigId = LocalModelConfigurationId("vision-local"), apiConfigId = null)
+                }
+
+            assertEquals("Vision slot is API-only.", error.message)
+        }
+}

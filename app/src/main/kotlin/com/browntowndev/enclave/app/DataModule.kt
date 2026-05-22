@@ -1,0 +1,31 @@
+package com.browntowndev.enclave.app
+
+import android.app.NotificationManager
+import android.content.Context
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
+import dagger.Binds
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+    @Provides
+    @Singleton
+    fun provideNotificationManager(
+        @ApplicationContext context: Context,
+    ): NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class AppBindingModule {
+    @Binds
+    @Singleton
+    abstract fun bindLoggingPort(androidLoggingAdapter: AndroidLoggingAdapter): LoggingPort
+}

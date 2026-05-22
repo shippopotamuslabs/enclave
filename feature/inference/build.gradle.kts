@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.inference"
+    namespace = "com.browntowndev.enclave.feature.inference"
     compileSdk = 37
 
     defaultConfig {

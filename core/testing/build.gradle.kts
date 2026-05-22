@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.testing"
+    namespace = "com.browntowndev.enclave.core.testing"
     compileSdk = 37
 
     defaultConfig {

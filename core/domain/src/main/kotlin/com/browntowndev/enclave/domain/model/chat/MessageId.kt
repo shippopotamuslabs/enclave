@@ -1,0 +1,10 @@
+package com.browntowndev.enclave.domain.model.chat
+
+@JvmInline
+value class MessageId(
+    val value: String,
+) {
+    init {
+        require(value.isNotBlank()) { "MessageId cannot be blank" }
+    }
+}

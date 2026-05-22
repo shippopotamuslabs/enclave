@@ -1,0 +1,429 @@
+package com.browntowndev.enclave.feature.inference
+
+import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
+import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.openai.core.JsonValue
+import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.chat.completions.ChatCompletionContentPart
+import com.openai.models.chat.completions.ChatCompletionContentPartImage
+import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionFunctionTool
+import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import com.openai.models.responses.FunctionTool
+import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputImage
+import com.openai.models.responses.ResponseInputItem
+
+object OpenRouterRequestMapper {
+    private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
+
+    fun mapToChatCompletionParams(
+        modelId: String,
+        prompt: String,
+        history: List<ChatMessage>,
+        options: GenerationOptions,
+        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    ): ChatCompletionCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
+
+        val builder =
+            ChatCompletionCreateParams
+                .builder()
+                .model(optModelId ?: modelId)
+
+        val messages = mutableListOf<ChatCompletionMessageParam>()
+        val systemMessages = mutableListOf<String>()
+
+        history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            if (msg.role == Role.SYSTEM) {
+                systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
+            } else {
+                messages.add(toContent(msg))
+            }
+        }
+
+        options.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+            if (!systemMessages.contains(it)) {
+                systemMessages.add(0, it)
+            }
+        }
+
+        val finalSystemPrompt = systemMessages.joinToString("\n\n").takeIf { it.isNotBlank() }
+        if (finalSystemPrompt != null) {
+            messages.add(
+                0,
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam
+                        .builder()
+                        .content(finalSystemPrompt)
+                        .build(),
+                ),
+            )
+        }
+
+        messages.add(
+            ChatCompletionMessageParam.ofUser(
+                buildChatCompletionUserMessage(prompt, options.imageUris),
+            ),
+        )
+
+        options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
+
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+        }
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+            builder.parallelToolCalls(false)
+        }
+
+        applyOpenRouterRoutingDefaults(builder, routing)
+        applyOpenRouterReasoning(builder, options)
+        builder.messages(messages)
+        return builder.build()
+    }
+
+    fun mapToResponseParams(
+        modelId: String,
+        prompt: String,
+        history: List<ChatMessage>,
+        options: GenerationOptions,
+        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    ): ResponseCreateParams {
+        val builder =
+            ResponseCreateParams
+                .builder()
+                .model(modelId)
+
+        val messages = mutableListOf<ResponseInputItem>()
+        val systemMessages = mutableListOf<String>()
+
+        history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            if (msg.role == Role.SYSTEM) {
+                systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
+                return@forEach
+            }
+
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
+            val role =
+                when (msg.role) {
+                    Role.USER -> ResponseInputItem.Message.Role.of("user")
+                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
+                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
+                }
+            messages.add(
+                ResponseInputItem.ofMessage(
+                    ResponseInputItem.Message
+                        .builder()
+                        .role(role)
+                        .addInputTextContent(sanitizedContent)
+                        .build(),
+                ),
+            )
+        }
+
+        messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
+
+        builder.inputOfResponse(messages)
+        systemMessages
+            .joinToString(separator = "\n\n")
+            .takeIf { it.isNotBlank() }
+            ?.let { builder.instructions(it) }
+
+        options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
+        options.temperature?.let { builder.temperature(it.toDouble()) }
+        options.topP?.let { builder.topP(it.toDouble()) }
+        options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
+            builder.parallelToolCalls(false)
+            builder.maxToolCalls(1)
+        }
+
+        applyOpenRouterRoutingDefaults(builder, routing)
+        applyOpenRouterReasoning(builder, options)
+        return builder.build()
+    }
+
+    fun applyRoutingDefaults(
+        builder: ResponseCreateParams.Builder,
+        routing: OpenRouterRoutingConfiguration,
+    ) {
+        applyOpenRouterRoutingDefaults(builder, routing)
+    }
+
+    private fun applyOpenRouterRoutingDefaults(
+        builder: ChatCompletionCreateParams.Builder,
+        routing: OpenRouterRoutingConfiguration,
+    ) {
+        builder.additionalBodyProperties(
+            mapOf(
+                "provider" to
+                    JsonValue.from(
+                        mapOf(
+                            "sort" to routing.providerSort.wireValue,
+                            "allow_fallbacks" to routing.allowFallbacks,
+                            "require_parameters" to routing.requireParameters,
+                            "data_collection" to routing.dataCollectionPolicy.wireValue,
+                            "zdr" to routing.zeroDataRetention,
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    private fun applyOpenRouterReasoning(
+        builder: ChatCompletionCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val reasoning = openRouterReasoningBody(options) ?: return
+        builder.putAdditionalBodyProperty("reasoning", JsonValue.from(reasoning))
+    }
+
+    private fun applyOpenRouterReasoning(
+        builder: ResponseCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val reasoning = openRouterReasoningBody(options) ?: return
+        builder.putAdditionalBodyProperty("reasoning", JsonValue.from(reasoning))
+    }
+
+    private fun openRouterReasoningBody(options: GenerationOptions): Map<String, Any>? {
+        val body = mutableMapOf<String, Any>("exclude" to false)
+        options.reasoningEffort?.let { body["effort"] = it.wireValue }
+        if (options.reasoningBudget > 0) {
+            body["max_tokens"] = options.reasoningBudget
+        }
+        return body.takeIf { it.size > 1 }
+    }
+
+    private fun applyOpenRouterRoutingDefaults(
+        builder: ResponseCreateParams.Builder,
+        routing: OpenRouterRoutingConfiguration,
+    ) {
+        builder.additionalBodyProperties(
+            mapOf(
+                "provider" to
+                    JsonValue.from(
+                        mapOf(
+                            "sort" to routing.providerSort.wireValue,
+                            "allow_fallbacks" to routing.allowFallbacks,
+                            "require_parameters" to routing.requireParameters,
+                            "data_collection" to routing.dataCollectionPolicy.wireValue,
+                            "zdr" to routing.zeroDataRetention,
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    private fun toContent(message: ChatMessage): ChatCompletionMessageParam =
+        when (message.role) {
+            Role.USER ->
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.ASSISTANT ->
+                ChatCompletionMessageParam.ofAssistant(
+                    ChatCompletionAssistantMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+            Role.SYSTEM ->
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam
+                        .builder()
+                        .content(ImagePayloads.stripBase64DataUris(message.content))
+                        .build(),
+                )
+        }
+
+    private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
+        message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun GenerationOptions.safeOpenRouterMaxTokens(): Int? {
+        val configuredMaxTokens = maxTokens ?: return null
+        val configuredContextWindow = contextWindow
+        if (configuredContextWindow != null && configuredMaxTokens >= configuredContextWindow) {
+            return null
+        }
+        return configuredMaxTokens
+    }
+
+    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool {
+        val paramsBuilder =
+            FunctionParameters
+                .builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                .putAdditionalProperty("required", JsonValue.from(schema.required))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
+            }
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
+            }
+        }
+        return ChatCompletionFunctionTool
+            .builder()
+            .function(
+                FunctionDefinition
+                    .builder()
+                    .name(name)
+                    .description(description)
+                    .parameters(paramsBuilder.build())
+                    .strict(false)
+                    .build(),
+            ).build()
+    }
+
+    private fun ToolDefinition.toResponsesTool(): FunctionTool {
+        val paramsBuilder =
+            FunctionTool.Parameters
+                .builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                .putAdditionalProperty("required", JsonValue.from(schema.required))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("definitions", JsonValue.from(defs.toMap()))
+            }
+        }
+        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
+            if (defs is kotlinx.serialization.json.JsonObject) {
+                paramsBuilder.putAdditionalProperty("\$defs", JsonValue.from(defs.toMap()))
+            }
+        }
+        return FunctionTool
+            .builder()
+            .name(name)
+            .description(description)
+            .parameters(paramsBuilder.build())
+            .strict(false)
+            .build()
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
+        val map = mutableMapOf<String, Any>()
+        forEach { (k, v) ->
+            map[k] = v.toPrimitiveOrMap()
+        }
+        return map
+    }
+
+    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any =
+        when (this) {
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                if (isString) {
+                    content
+                } else {
+                    content.toBooleanStrictOrNull()
+                        ?: content.toLongOrNull()
+                        ?: content.toDoubleOrNull()
+                        ?: content
+                }
+            }
+            is kotlinx.serialization.json.JsonObject -> toMap()
+            is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
+            else -> Any()
+        }
+
+    private fun buildChatCompletionUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ChatCompletionUserMessageParam {
+        if (imageUris.isEmpty()) {
+            return ChatCompletionUserMessageParam
+                .builder()
+                .content(prompt)
+                .build()
+        }
+
+        val parts =
+            buildList {
+                add(
+                    ChatCompletionContentPart.ofText(
+                        ChatCompletionContentPartText
+                            .builder()
+                            .text(prompt)
+                            .build(),
+                    ),
+                )
+                ImagePayloads.fromUris(imageUris).forEach { payload ->
+                    ImagePayloads.validate(payload)
+                    add(
+                        ChatCompletionContentPart.ofImageUrl(
+                            ChatCompletionContentPartImage
+                                .builder()
+                                .imageUrl(
+                                    ChatCompletionContentPartImage.ImageUrl
+                                        .builder()
+                                        .url(payload.dataUrl)
+                                        .build(),
+                                ).build(),
+                        ),
+                    )
+                }
+            }
+
+        return ChatCompletionUserMessageParam
+            .builder()
+            .contentOfArrayOfContentParts(parts)
+            .build()
+    }
+
+    private fun buildResponseUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ResponseInputItem.Message {
+        val builder =
+            ResponseInputItem.Message
+                .builder()
+                .role(ResponseInputItem.Message.Role.of("user"))
+                .addInputTextContent(prompt)
+
+        ImagePayloads.fromUris(imageUris).forEach { payload ->
+            ImagePayloads.validate(payload)
+            builder.addContent(
+                ResponseInputImage
+                    .builder()
+                    .detail(ResponseInputImage.Detail.AUTO)
+                    .imageUrl(payload.dataUrl)
+                    .build(),
+            )
+        }
+
+        return builder.build()
+    }
+}

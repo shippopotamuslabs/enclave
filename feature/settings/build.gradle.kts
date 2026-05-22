@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.settings"
+    namespace = "com.browntowndev.enclave.feature.settings"
     compileSdk = 37
 
     defaultConfig {

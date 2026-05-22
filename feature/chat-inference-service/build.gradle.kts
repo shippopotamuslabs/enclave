@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.chat.service"
+    namespace = "com.browntowndev.enclave.feature.chat.service"
     compileSdk = 37
 
     defaultConfig {

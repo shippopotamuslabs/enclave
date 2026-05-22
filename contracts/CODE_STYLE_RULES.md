@@ -1,5 +1,5 @@
 # CODE_STYLE_RULES.md
-**Pocket Crew – Code Style Contract v2.4**
+**Enclave – Code Style Contract v2.4**
 
 Kotlin and Compose idioms, naming, formatting, and stability rules.
 
@@ -37,7 +37,7 @@ Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Package | lowercase dot-separated | `com.browntowndev.pocketcrew.presentation.screen.chat` |
+| Package | lowercase dot-separated | `com.browntowndev.enclave.presentation.screen.chat` |
 | Class / Object | PascalCase | `ChatViewModel`, `Routes` |
 | Function | camelCase, verb-first | `onSendMessage()`, `calculateTopPadding()` |
 | Composable | PascalCase (noun) | `MessageBubble()`, `InputBar()` |

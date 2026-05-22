@@ -24,7 +24,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Pocket Crew"
+rootProject.name = "Enclave"
 include(":app")
 include(":llama-android")
 include(":whisper-android")
