@@ -40,6 +40,21 @@ internal class ChatMessageProjector {
     private var memoSnapshot: AccumulatedMessages? = null
     private var memoKey: ActiveChatTurnKey? = null
     private var memoResult: ChatMessageProjectionResult? = null
+    private var cachedActiveChatId: ChatId? = null
+
+    fun onActiveChatChanged(chatId: ChatId?) {
+        if (chatId == cachedActiveChatId) return
+        cachedActiveChatId = chatId
+        clear()
+    }
+
+    fun clear() {
+        messageCache.clear()
+        memoDbMessages = null
+        memoSnapshot = null
+        memoKey = null
+        memoResult = null
+    }
 
     fun project(
         dbMessages: List<Message>,

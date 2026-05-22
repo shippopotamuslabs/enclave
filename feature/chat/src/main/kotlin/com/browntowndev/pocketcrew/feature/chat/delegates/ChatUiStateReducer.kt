@@ -65,6 +65,7 @@ class ChatUiStateReducer
 
         fun reduce(params: ReduceParams): ReduceResult {
             chatMessageUiMapper.onActiveChatChanged(params.chatId)
+            chatMessageProjector.onActiveChatChanged(params.chatId)
             val messages = if (params.isReadOnly) params.sharedMessages else params.dbMessages
             val projectedMessages =
                 chatMessageProjector.project(

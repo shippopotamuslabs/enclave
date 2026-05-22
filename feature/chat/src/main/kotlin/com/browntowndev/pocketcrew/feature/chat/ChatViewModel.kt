@@ -37,6 +37,7 @@ import com.browntowndev.pocketcrew.feature.chat.delegates.maybeAcknowledgeComple
 import com.browntowndev.pocketcrew.feature.chat.delegates.resolveActiveTurnSnapshotObserveKey
 import com.browntowndev.pocketcrew.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicyResolver
+import com.browntowndev.pocketcrew.feature.chat.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import android.util.Log
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -66,6 +67,7 @@ import javax.inject.Inject
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
+@Suppress("TooManyFunctions")
 class ChatViewModel
     @Inject
     constructor(
@@ -119,10 +121,23 @@ class ChatViewModel
                     }
                 }.distinctUntilChanged()
 
+        private val navigationChatIdFlow =
+            savedStateHandle
+                .getStateFlow<String?>(SAVED_STATE_CHAT_ID_KEY, null)
+                .map { chatIdValue -> chatIdValue?.let { ChatId(it) } }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.Eagerly,
+                    initialValue = initialChatId,
+                )
+
         private val activeChatIdFlow =
-            inferenceOrchestrator.currentChatId
-                .map { chatId -> chatId ?: initialChatId }
-                .distinctUntilChanged()
+            combine(
+                navigationChatIdFlow,
+                inferenceOrchestrator.currentChatId,
+            ) { navigationChatId, sessionChatId ->
+                navigationChatId ?: sessionChatId
+            }.distinctUntilChanged()
 
         private val dbMessagesFlow =
             activeChatIdFlow
@@ -246,15 +261,17 @@ class ChatViewModel
                         }?.id
                         ?.value
                         ?.take(4)
-                Log.d(
-                    "ObserveKeyCompute",
-                    "chatId=${chatId?.value} dbMsgs=${messages.size}/$incompleteAssistantId " +
-                        "req=${requestedTurnKey?.assistantMessageId?.value?.take(4)}" +
-                        "@${requestedTurnKey?.chatId?.value} " +
-                        "ack=${acknowledgedKeys.map { it.assistantMessageId.value.take(4) }} " +
-                        "retained=${retainedKey?.assistantMessageId?.value?.take(4)} " +
-                        "result=${resultKey?.assistantMessageId?.value?.take(4)}",
-                )
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "ObserveKeyCompute",
+                        "chatId=${chatId?.value} dbMsgs=${messages.size}/$incompleteAssistantId " +
+                            "req=${requestedTurnKey?.assistantMessageId?.value?.take(4)}" +
+                            "@${requestedTurnKey?.chatId?.value} " +
+                            "ack=${acknowledgedKeys.map { it.assistantMessageId.value.take(4) }} " +
+                            "retained=${retainedKey?.assistantMessageId?.value?.take(4)} " +
+                            "result=${resultKey?.assistantMessageId?.value?.take(4)}",
+                    )
+                }
                 resultKey
             }.distinctUntilChanged()
                 .shareIn(
@@ -560,6 +577,10 @@ class ChatViewModel
             toolExecutionBannerCoordinator.clearBanner()
         }
 
+        fun onNavigationChatIdChanged(chatId: ChatId?) {
+            inferenceOrchestrator.syncActiveChatFromNavigation(chatId)
+        }
+
         fun createNewChat() {
             speechInputCoordinator.stopListening()
             activeTurnKeyFlow.value?.let { key ->
@@ -691,6 +712,7 @@ class ChatViewModel
             private const val TAG = "ChatViewModel"
             private const val SUBSCRIBE_TIMEOUT_MS = 5000L
             private const val UI_STATE_CHAT_ID_INDEX = 11
+            private const val SAVED_STATE_CHAT_ID_KEY = "chatId"
         }
     }
 

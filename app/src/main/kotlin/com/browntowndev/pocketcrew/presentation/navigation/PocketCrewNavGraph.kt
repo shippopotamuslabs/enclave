@@ -37,7 +37,9 @@ fun PocketCrewNavGraph(
             onNavigateBack = { navController.popBackStack() },
             onNavigateToChat = { id ->
                 if (id != null) {
-                    navController.navigate(Routes.CHAT_WITH_ID.replace("{chatId}", id.value))
+                    navController.navigate(Routes.CHAT_WITH_ID.replace("{chatId}", id.value)) {
+                        openChatFromHistory()
+                    }
                 } else {
                     navController.navigate(Routes.CHAT)
                 }

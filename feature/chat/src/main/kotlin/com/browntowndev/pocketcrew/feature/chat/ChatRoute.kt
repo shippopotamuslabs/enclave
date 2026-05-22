@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.feature.chat.artifactexport.ArtifactExportWizardContent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,10 +25,16 @@ fun ChatRoute(
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     onNewChat: () -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
+    navigationChatId: ChatId? = null,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val chatIdFromNavigation = navigationChatId ?: viewModel.initialChatId
+
+    LaunchedEffect(chatIdFromNavigation) {
+        chatIdFromNavigation?.let(viewModel::onNavigationChatIdChanged)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.shareUiEvents.collect { event ->
