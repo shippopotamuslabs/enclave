@@ -19,14 +19,26 @@ object EnclaveNeoTokens {
 
     val shape = RoundedCornerShape(cornerRadius)
 
-    /** User chat bubble with a sharp bottom-end corner. */
+    /**
+     * User chat bubble — speech/thought tail on the bottom-end corner (matches shared chat HTML:
+     * `border-radius: 20px 20px 4px 20px` — slightly reduced in-app for balance).
+     */
+    val userBubbleCornerLarge: Dp = 16.dp
+
+    val userBubbleCornerTail: Dp = 3.dp
+
     val userBubbleShape =
         RoundedCornerShape(
-            topStart = cornerRadius,
-            topEnd = cornerRadius,
-            bottomStart = cornerRadius,
-            bottomEnd = 0.dp,
+            topStart = userBubbleCornerLarge,
+            topEnd = userBubbleCornerLarge,
+            bottomEnd = userBubbleCornerTail,
+            bottomStart = userBubbleCornerLarge,
         )
+
+    /** Hard shadow under user bubbles (shared chat HTML uses 6px). */
+    val userBubbleShadowOffset: Dp = 6.dp
+
+    val userBubbleContentPadding: Dp = 20.dp
 
     /** Bottom-docked input bar (rounded top edge only). */
     val inputBarShape =
