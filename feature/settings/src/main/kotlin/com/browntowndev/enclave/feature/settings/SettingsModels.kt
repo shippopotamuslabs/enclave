@@ -453,8 +453,20 @@ data class DefaultModelAssignmentUi(
     val displayLabel: String,
     val providerName: String? = null,
     val presetName: String? = null,
+    val modelId: String? = null,
     val isMultimodal: Boolean = false,
 )
+
+/** Primary assignment label in model configuration lists. API slots use the configured model id. */
+internal val DefaultModelAssignmentUi.assignmentHeadlineName: String
+    get() =
+        when (source) {
+            ModelSource.API ->
+                modelId?.takeIf { it.isNotBlank() }
+                    ?: presetName
+                    ?: currentModelName
+            else -> currentModelName
+        }
 
 internal val ModelType.displayLabel: String
     get() =

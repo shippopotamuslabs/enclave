@@ -249,7 +249,7 @@ fun DefaultAssignmentsCard(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = assignment.currentModelName,
+                                text = assignment.assignmentHeadlineName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
