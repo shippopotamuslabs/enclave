@@ -63,6 +63,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.browntowndev.pocketcrew.core.ui.component.CircularIconButton
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalImageAttachment
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
@@ -962,7 +963,7 @@ private fun ReferenceImageAction(
     modifier: Modifier = Modifier,
 ) {
     if (mediaType != MediaCapability.MUSIC) {
-        IconButton(
+        CircularIconButton(
             onClick = onReferenceImageClick,
             modifier = modifier,
         ) {
