@@ -5,15 +5,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.browntowndev.pocketcrew.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.pocketcrew.core.ui.component.vault.VaultUserUiState
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.feature.settings.components.UnlockVaultScreen
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -111,7 +114,7 @@ class UnlockVaultScreenTest {
     }
 
     @Test
-    fun biometricToggleStartsOnWhenBiometricUnlockIsConfigured() {
+    fun configuredBiometricsShowUseBiometricsActionInsteadOfToggle() {
         composeTestRule.setContent {
             PocketCrewTheme {
                 UnlockVaultScreen(
@@ -128,11 +131,41 @@ class UnlockVaultScreenTest {
                     isBiometricUnlockConfigured = true,
                     onLoginClick = {},
                     onSubmitVaultPassword = { _, _ -> },
+                    onBiometricUnlockClick = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+        composeTestRule.onNodeWithText("Use Biometrics").assertExists()
+        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
+        composeTestRule.onNode(isToggleable()).assertDoesNotExist()
+    }
+
+    @Test
+    fun useBiometricsActionInvokesCallback() {
+        var clicked = false
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                UnlockVaultScreen(
+                    authState =
+                        VaultAuthUiState.Authenticated(
+                            VaultUserUiState(
+                                uid = "user-1",
+                                displayName = "Ada",
+                                email = "ada@example.com",
+                                photoUrl = null,
+                            ),
+                        ),
+                    errorMessage = null,
+                    isBiometricUnlockConfigured = true,
+                    onLoginClick = {},
+                    onSubmitVaultPassword = { _, _ -> },
+                    onBiometricUnlockClick = { clicked = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("use_biometrics_button").performScrollTo().performClick()
+        assertTrue(clicked)
     }
 }

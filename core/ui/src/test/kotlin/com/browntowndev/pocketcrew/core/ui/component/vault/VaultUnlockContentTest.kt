@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -67,7 +66,7 @@ class VaultUnlockContentTest {
     }
 
     @Test
-    fun biometricToggleStartsOnWhenInitialBiometricEnabledIsTrue() {
+    fun configuredBiometricsShowUseBiometricsActionInsteadOfToggle() {
         composeTestRule.setContent {
             PocketCrewTheme {
                 VaultUnlockContent(
@@ -78,16 +77,18 @@ class VaultUnlockContentTest {
                     initialBiometricEnabled = true,
                     onLoginClick = {},
                     onSubmitVaultPassword = { _, _ -> },
+                    onBiometricUnlockClick = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+        composeTestRule.onNodeWithText("Use Biometrics").assertExists()
+        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
+        composeTestRule.onNode(isToggleable()).assertDoesNotExist()
     }
 
     @Test
-    fun biometricToggleResyncsWhenInitialBiometricEnabledChangesToTrue() {
+    fun biometricToggleStartsOffWhenBiometricsNotYetConfigured() {
         var initial by mutableStateOf(false)
         composeTestRule.setContent {
             PocketCrewTheme {
@@ -105,8 +106,30 @@ class VaultUnlockContentTest {
 
         composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
         composeTestRule.onNode(isToggleable()).assertIsOff()
+    }
 
-        composeTestRule.runOnIdle { initial = true }
-        composeTestRule.onNode(isToggleable()).assertIsOn()
+    @Test
+    fun biometricToggleResyncsWhenInitialBiometricEnabledChangesToFalse() {
+        var initial by mutableStateOf(true)
+        composeTestRule.setContent {
+            PocketCrewTheme {
+                VaultUnlockContent(
+                    authState = authenticatedUser,
+                    errorMessage = null,
+                    showGoogleSignInOnUnauth = false,
+                    showBiometricToggle = true,
+                    initialBiometricEnabled = initial,
+                    onLoginClick = {},
+                    onSubmitVaultPassword = { _, _ -> },
+                    onBiometricUnlockClick = if (initial) ({}) else null,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Use Biometrics").assertExists()
+
+        composeTestRule.runOnIdle { initial = false }
+        composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
+        composeTestRule.onNode(isToggleable()).assertIsOff()
     }
 }

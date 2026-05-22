@@ -25,6 +25,7 @@ fun UnlockVaultScreen(
     isBiometricUnlockConfigured: Boolean = false,
     onLoginClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
+    onBiometricUnlockClick: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -39,6 +40,7 @@ fun UnlockVaultScreen(
             initialBiometricEnabled = isBiometricUnlockConfigured,
             onLoginClick = onLoginClick,
             onSubmitVaultPassword = onSubmitVaultPassword,
+            onBiometricUnlockClick = onBiometricUnlockClick,
             modifier =
                 Modifier
                     .fillMaxSize()

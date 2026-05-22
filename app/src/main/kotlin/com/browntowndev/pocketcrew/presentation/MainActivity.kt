@@ -16,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -103,25 +102,45 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                             }
 
                             if (currentState.isVaultLocked) {
+                                val scope = rememberCoroutineScope()
+                                val biometricCoordinator = remember { BiometricPromptCoordinator() }
+
+                                suspend fun promptBiometricUnlock() {
+                                    val cipher = viewModel.getBiometricDecryptCipher()
+                                    if (cipher != null) {
+                                        val result =
+                                            biometricHelper.showPrompt(
+                                                title = "Unlock Vault",
+                                                subtitle = "Scan to unlock your encrypted data",
+                                                cipher = cipher,
+                                            )
+                                        result.onSuccess { crypto ->
+                                            crypto?.cipher?.let { viewModel.unlockWithBiometricCipher(it) }
+                                        }
+                                    }
+                                }
+
+                                fun launchBiometricPromptIfAllowed() {
+                                    biometricCoordinator.tryStartPrompt(
+                                        isEnabled = currentState.isBiometricUnlockPossible,
+                                        isUnlocking = currentState.isUnlocking,
+                                    ) {
+                                        scope.launch {
+                                            try {
+                                                promptBiometricUnlock()
+                                            } finally {
+                                                biometricCoordinator.finishPrompt()
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Auto-trigger biometric if available
                                 if (currentState.isBiometricUnlockPossible) {
                                     BiometricVaultUnlockEffect(
                                         isEnabled = true,
                                         isUnlocking = currentState.isUnlocking,
-                                        onPrompt = {
-                                            val cipher = viewModel.getBiometricDecryptCipher()
-                                            if (cipher != null) {
-                                                val result =
-                                                    biometricHelper.showPrompt(
-                                                        title = "Unlock Vault",
-                                                        subtitle = "Scan to unlock your encrypted data",
-                                                        cipher = cipher,
-                                                    )
-                                                result.onSuccess { crypto ->
-                                                    crypto?.cipher?.let { viewModel.unlockWithBiometricCipher(it) }
-                                                }
-                                            }
-                                        },
+                                        onPrompt = { launchBiometricPromptIfAllowed() },
                                     )
                                 }
 
@@ -138,6 +157,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         loggingPort.debug(TAG, "Vault dialog submitted bio=$enableBiometric")
                                         viewModel.unlockVault(password, enableBiometric)
                                     },
+                                    onBiometricUnlockClick =
+                                        if (currentState.isBiometricUnlockPossible) {
+                                            { launchBiometricPromptIfAllowed() }
+                                        } else {
+                                            null
+                                        },
                                 )
                             } else {
                                 // App renders only after initialRoute is verified and vault is unlocked
@@ -174,37 +199,19 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
 private fun BiometricVaultUnlockEffect(
     isEnabled: Boolean,
     isUnlocking: Boolean,
-    onPrompt: suspend () -> Unit,
+    onPrompt: () -> Unit,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
-    val coordinator = remember { BiometricPromptCoordinator() }
-    val latestOnPrompt by rememberUpdatedState(onPrompt)
 
     DisposableEffect(lifecycleOwner, isEnabled, isUnlocking) {
-        fun launchPromptIfAllowed() {
-            coordinator.tryStartPrompt(
-                isEnabled = isEnabled,
-                isUnlocking = isUnlocking,
-            ) {
-                scope.launch {
-                    try {
-                        latestOnPrompt()
-                    } finally {
-                        coordinator.finishPrompt()
-                    }
-                }
-            }
-        }
-
         if (isEnabled) {
-            launchPromptIfAllowed()
+            onPrompt()
         }
 
         val observer =
             LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    launchPromptIfAllowed()
+                    onPrompt()
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
