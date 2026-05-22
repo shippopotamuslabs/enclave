@@ -86,7 +86,9 @@ class DefaultModelRepositoryImpl
                 val config = localModelConfigurationsDao.getById(entity.localConfigId)
                 if (config != null) {
                     val model = localModelsDao.getById(config.localModelId)
-                    displayName = model?.displayName
+                    displayName =
+                        model?.displayName?.takeIf { it.isNotBlank() }
+                            ?: model?.huggingFaceModelName
                     providerName = "Local"
                     presetName =
                         decryptFieldOrNull(

@@ -92,6 +92,45 @@ class DefaultModelsDaoTest {
         }
 
     @Test
+    fun `observeAllWithDetails falls back to hugging face name when display name is blank`() =
+        runTest {
+            val encryption = FakeLocalDataEncryptionService()
+            val modelId = nextModelId()
+            val configId = LocalModelConfigurationId("cfg-draft")
+            val huggingFaceName = "openbmb/MiniCPM-V-4.6-Thinking-gguf"
+            database.localModelsDao().upsert(
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "",
+                    huggingFaceModelName = huggingFaceName,
+                    remoteFilename = "minicpm.gguf",
+                    localFilename = "minicpm.gguf",
+                    sha256 = "minicpm-sha",
+                    sizeInBytes = 100L,
+                ),
+            )
+            database.localModelConfigurationsDao().upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = encryption.encryptString("Analytic Draft"),
+                ),
+            )
+            dao.upsert(
+                DefaultModelEntity(
+                    modelType = ModelType.DRAFT_ONE,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                ),
+            )
+
+            val view = dao.observeAllWithDetails().first().single { it.modelType == ModelType.DRAFT_ONE }
+
+            assertEquals(huggingFaceName, view.localAssetName)
+        }
+
+    @Test
     fun `assign a local config as default for a ModelType`() =
         runTest {
             val modelId = nextModelId()

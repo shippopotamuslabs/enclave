@@ -143,6 +143,38 @@ class FirestoreSyncEventApplierTest {
         }
 
     @Test
+    fun `default_models event resolves local and api config parents before child upsert`() =
+        runTest {
+            val harness = ApplierHarness(lastAppliedSequence = 0)
+            harness.sourceDocuments.put(
+                "users/alice/default_models/MAIN",
+                mapOf("local_config_id" to "local-preset-1", "updated_at" to 1L),
+            )
+            harness.sourceDocuments.put(
+                "users/alice/local_model_configs/local-preset-1",
+                mapOf("local_model_id" to "model-1", "display_name" to "Fast"),
+            )
+            harness.sourceDocuments.put(
+                "users/alice/local_models/model-1",
+                mapOf("huggingface_model_name" to "org/model"),
+            )
+
+            harness.applier.apply(
+                userId = "alice",
+                event = syncEvent(sequence = 1, collectionPath = "default_models", entityId = "MAIN"),
+            )
+
+            assertEquals(
+                listOf(
+                    "local_models/model-1",
+                    "local_model_configs/local-preset-1",
+                    "default_models/MAIN",
+                ),
+                harness.localStore.upsertOrder,
+            )
+        }
+
+    @Test
     fun `SCN-ANDROID-009 missing required parent fails without advancing sequence`() {
         val harness = ApplierHarness(lastAppliedSequence = 3)
         harness.sourceDocuments.put(
@@ -267,6 +299,7 @@ private class FakeSyncLocalStore(
     val decryptedChatNames = mutableMapOf<String, String>()
     val decryptedMessageContents = mutableMapOf<String, String>()
     val deletedMessages = mutableMapOf<String, Boolean>()
+    val upsertOrder = mutableListOf<String>()
     var placeholderInsertCount = 0
 
     override suspend fun upsert(
@@ -275,6 +308,7 @@ private class FakeSyncLocalStore(
         data: Map<String, Any?>,
         eventDeviceId: String?,
     ) {
+        upsertOrder.add("$collectionPath/$entityId")
         when (collectionPath) {
             "chats" -> decryptedChatNames[entityId] = data["name"].toString()
             "messages" -> decryptedMessageContents[entityId] = data["content"].toString()

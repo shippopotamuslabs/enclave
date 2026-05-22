@@ -112,6 +112,41 @@ class DefaultModelRepositoryImplTest {
         }
 
     @Test
+    fun `getDefault falls back to hugging face name when asset display name is blank`() =
+        runTest {
+            val configId = LocalModelConfigurationId("test-local-config-1")
+            val modelId = LocalModelId("10")
+            val huggingFaceName = "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
+            coEvery { defaultModelsDao.getDefault(ModelType.DRAFT_TWO) } returns
+                DefaultModelEntity(
+                    modelType = ModelType.DRAFT_TWO,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                )
+            coEvery { localConfigsDao.getById(configId) } returns
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = localEncryption.encryptString("Qwen 3.5 2B"),
+                )
+            coEvery { localModelsDao.getById(modelId) } returns
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "",
+                    huggingFaceModelName = huggingFaceName,
+                    remoteFilename = "qwen.gguf",
+                    localFilename = "qwen.gguf",
+                    sha256 = "abc",
+                    sizeInBytes = 100,
+                )
+
+            val result = repo.getDefault(ModelType.DRAFT_TWO)
+
+            assertEquals(huggingFaceName, result?.displayName)
+        }
+
+    @Test
     fun `get default with resolved display data for API model`() =
         runTest {
             val configId = ApiModelConfigurationId("test-api-config-1")
