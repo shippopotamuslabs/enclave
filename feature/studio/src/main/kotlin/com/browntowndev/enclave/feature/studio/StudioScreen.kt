@@ -4,14 +4,18 @@ package com.browntowndev.enclave.feature.studio
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.RenderEffect
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,14 +40,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -68,11 +69,16 @@ import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.enclave.core.ui.component.VideoPlayer
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
-import com.browntowndev.enclave.core.ui.theme.GoldVariant
-import com.browntowndev.enclave.core.ui.theme.PeachAccent
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
@@ -88,6 +94,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.ExperimentalStdlibApi
 import kotlin.random.Random
+import kotlin.random.nextInt
 
 private const val GRID_COLUMNS = 2
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -1109,166 +1116,71 @@ private fun GalleryItem(
 
 @Composable
 private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
-    val localHazeState = remember { HazeState() }
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val borderColor = neoBorderColor()
+    val shadowColor = neoShadowColor()
+    val shadowOffset = neoButtonShadowOffset()
+    val baseColor = surfaceColor
+    val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+    val phaseOffsetMs = remember { Random.nextInt(0..1_400) }
 
-    // Use a monotonic time that never resets to avoid jagged jumps
-    var time by remember { mutableStateOf(0f) }
-
-    // Each instance gets a slightly different speed and phase to ensure variety
-    val personalitySeed = remember { Random.nextInt() }
-    val personalities =
-        remember(personalitySeed) {
-            val random = Random(personalitySeed)
-            // [speedMultiplier, initialPhase] for each of the 4 blobs
-            List(4) {
-                floatArrayOf(
-                    random.nextFloat() * 0.3f + 0.85f, // 0.85 to 1.15 speed
-                    random.nextFloat() * 2f * Math.PI.toFloat(), // 0 to 2pi phase
-                )
-            }
-        }
-
-    LaunchedEffect(Unit) {
-        var lastFrameNanos = withFrameNanos { it }
-        while (true) {
-            withFrameNanos { frameTimeNanos ->
-                val dt = (frameTimeNanos - lastFrameNanos) / 1_000_000_000f
-                lastFrameNanos = frameTimeNanos
-
-                // Add a tiny bit of random drift to the time increment
-                // to fulfill the "random incremental changes" request.
-                // This makes the motion feel more organic and less mechanical.
-                val jitter = 1f + (Random.nextFloat() - 0.5f) * 0.03f
-                time += dt * jitter
-            }
-        }
-    }
+    val transition = rememberInfiniteTransition(label = "studio_generating_shimmer")
+    val shimmerProgress =
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 1_400, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                    initialStartOffset = StartOffset(phaseOffsetMs),
+                ),
+            label = "studio_generating_shimmer_progress",
+        )
 
     Box(
         modifier =
             modifier
                 .aspectRatio(1f)
                 .fillMaxWidth()
-                .clipToBounds(), // Fix: Prevent drawing outside the box
+                .neoSurface(
+                    backgroundColor = surfaceColor,
+                    borderColor = borderColor,
+                    withShadow = true,
+                    shadowColor = shadowColor,
+                    shadowOffset = shadowOffset,
+                )
+                .clip(EnclaveNeoTokens.shape)
+                .shimmerEffect(
+                    progressState = shimmerProgress,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor,
+                ),
     ) {
-        // Deep space background to make lava pop
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121214)))
-
-        // Lava blobs layer (Metaball effect)
         Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = localHazeState)
-                    .graphicsLayer {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val blur = RenderEffect.createBlurEffect(50f, 50f, android.graphics.Shader.TileMode.CLAMP)
-                            val colorMatrix =
-                                android.graphics.ColorMatrix().apply {
-                                    set(
-                                        floatArrayOf(
-                                            1f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            1f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            1f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            0f,
-                                            60f,
-                                            -5000f, // Alpha thresholding for metaballs
-                                        ),
-                                    )
-                                }
-                            val filter = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(colorMatrix))
-                            renderEffect = RenderEffect.createChainEffect(filter, blur).asComposeRenderEffect()
-                        } else {
-                            // Fallback for API < 31
-                            alpha = 0.9f
-                        }
-                    }.drawWithCache {
-                        onDrawBehind {
-                            val w = size.width
-                            val h = size.height
-                            val minD = size.minDimension
-
-                            // Apply personalities to create unique motion paths
-                            val t1 = time * personalities[0][0] + personalities[0][1]
-                            val t2 = time * personalities[1][0] + personalities[1][1]
-                            val t3 = time * personalities[2][0] + personalities[2][1]
-                            val t4 = time * personalities[3][0] + personalities[3][1]
-
-                            // Blob 1: Purple base, orbits slowly
-                            val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(t1)
-                            val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(t1)
-                            drawCircle(
-                                color = PurpleLightPrimary,
-                                radius = minD * 0.35f,
-                                center = Offset(x1, y1),
-                            )
-
-                            // Blob 2: Peach, dramatic vertical motion
-                            val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(t2 * 1.5f)
-                            val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(t2 * 0.8f)
-                            drawCircle(
-                                color = PeachAccent,
-                                radius = minD * 0.25f,
-                                center = Offset(x2, y2),
-                            )
-
-                            // Blob 3: Gold, counter-orbit and vertical
-                            val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(t3 * 1.2f)
-                            val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(t3 * 1.1f)
-                            drawCircle(
-                                color = GoldVariant,
-                                radius = minD * 0.2f,
-                                center = Offset(x3, y3),
-                            )
-
-                            // Blob 4: Small Peach accent, fast orbit
-                            val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(t4 * 2f)
-                            val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(t4 * 1.7f)
-                            drawCircle(
-                                color = PeachAccent,
-                                radius = minD * 0.15f,
-                                center = Offset(x4, y4),
-                            )
-
-                            // Central blob to anchor the others as they pass through
-                            drawCircle(
-                                color = PurpleLightPrimary.copy(alpha = 0.5f),
-                                radius = minD * 0.2f,
-                                center = Offset(w / 2, h / 2),
-                            )
-                        }
-                    },
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height(EnclaveNeoTokens.cornerRadius)
+                    .background(MaterialTheme.colorScheme.primary),
         )
+    }
+}
 
-        // Hazy Glass Overlay
+@Suppress("UnusedPrivateMember")
+@Preview(showBackground = true)
+@Composable
+private fun GeneratingPlaceholderItemPreview() {
+    EnclaveTheme(darkTheme = true) {
         Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .hazeEffect(state = localHazeState) {
-                        blurRadius = 24.dp
-                        tints = listOf(HazeTint(Color.White.copy(alpha = 0.05f)))
-                        noiseFactor = 0.15f
-                    }.border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.08f),
-                        shape = RectangleShape,
-                    ),
-        )
+                    .padding(20.dp)
+                    .width(160.dp),
+        ) {
+            GeneratingPlaceholderItem()
+        }
     }
 }
 
