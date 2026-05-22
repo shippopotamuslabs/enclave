@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "2662aac5838afdcbe117d5bf4acbdb79",
+    "identityHash": "03c43980fe0655998ea55698312c05eb",
     "entities": [
       {
         "tableName": "chat",
@@ -1658,6 +1658,17 @@
             "id"
           ]
         },
+        "indices": [
+          {
+            "name": "index_studio_gallery_albumId",
+            "unique": false,
+            "columnNames": [
+              "albumId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_studio_gallery_albumId` ON `${TABLE_NAME}` (`albumId`)"
+          }
+        ],
         "foreignKeys": [
           {
             "table": "studio_albums",
@@ -1911,7 +1922,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2662aac5838afdcbe117d5bf4acbdb79')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '03c43980fe0655998ea55698312c05eb')"
     ]
   }
 }

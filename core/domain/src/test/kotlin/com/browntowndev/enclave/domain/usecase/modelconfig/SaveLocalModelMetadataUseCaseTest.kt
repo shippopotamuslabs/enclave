@@ -1,0 +1,37 @@
+package com.browntowndev.enclave.domain.usecase.modelconfig
+
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
+class SaveLocalModelMetadataUseCaseTest {
+    private val repository = mockk<LocalModelRepositoryPort>()
+    private lateinit var useCase: SaveLocalModelMetadataUseCase
+
+    @BeforeEach
+    fun setup() {
+        useCase = SaveLocalModelMetadataUseCaseImpl(repository)
+    }
+
+    @Test
+    fun `invoke calls repository saveLocalModelMetadata`() =
+        runTest {
+            val metadata = mockk<LocalModelMetadata>()
+            val expectedId = LocalModelId("1")
+            coEvery { repository.saveLocalModelMetadata(metadata) } returns expectedId
+
+            val result = useCase(metadata)
+
+            assertTrue(result.isSuccess)
+            assertEquals(expectedId, result.getOrNull())
+            coVerify(exactly = 1) { repository.saveLocalModelMetadata(metadata) }
+        }
+}

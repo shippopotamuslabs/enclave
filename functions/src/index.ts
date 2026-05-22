@@ -1,81 +1,50 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
+import { APP_DOMAIN, handleUploadSharedChat } from './sharedChatUpload';
 export { cleanupExpiredShares } from './scheduledCleanup';
+export { handleSyncEntityWrite, handleSyncEntityWriteTrigger } from './syncEventFeed';
 
 admin.initializeApp();
 
-const DEEP_LINK_SCHEME = "pocketcrew";
-const APP_DOMAIN = "pocketcrew.app";
+const DEEP_LINK_SCHEME = "enclave";
 
-export const uploadSharedChat = functions.https.onCall(async (data, context) => {
-    // Basic auth check - ensure the user is logged into the app
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in to share chats.');
+/** Public HTTPS download URL for a Storage object (bucket must allow read). */
+export function buildPublicStorageMediaUrl(bucketName: string, storagePath: string): string {
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media`;
+}
+
+function resolveDefaultStorageBucketName(): string {
+    return admin.storage().bucket().name;
+}
+
+function extractShareId(req: functions.https.Request): string | null {
+    const queryId = req.query.id;
+    if (typeof queryId === 'string' && queryId.trim().length > 0) {
+        return queryId.trim();
     }
 
-    const { shareId: requestedShareId, encryptedPayload, iv, salt, mediaPaths } = data;
-    if (!encryptedPayload || !iv) {
-        throw new functions.https.HttpsError('invalid-argument', 'encryptedPayload and iv must be provided.');
+    const pathParts = req.path.split('/').filter(Boolean);
+    const shareIndex = pathParts.indexOf('share');
+    if (shareIndex >= 0 && pathParts[shareIndex + 1]) {
+        return pathParts[shareIndex + 1].split('?')[0];
     }
 
-    const shareId = requestedShareId || uuidv4();
-    
-    // Validate mediaPaths ownership
-    const validatedMediaPaths = (mediaPaths || []).map((path: string) => {
-        if (!path.startsWith(`shared_chat_media/${shareId}/`)) {
-            throw new functions.https.HttpsError('invalid-argument', `Invalid media path: ${path}`);
-        }
-        return path;
-    });
-
-    if (validatedMediaPaths.length > 50) {
-        throw new functions.https.HttpsError('invalid-argument', 'Too many media items (max 50).');
+    const lastSegment = pathParts[pathParts.length - 1];
+    if (lastSegment && lastSegment !== 'share') {
+        return lastSegment.split('?')[0];
     }
 
-    const createdAt = Date.now();
-    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000; // 7 days
+    return null;
+}
 
-    const sharedChat: any = {
-        id: shareId,
-        ownerId: context.auth.uid,
-        createdAt,
-        expiresAt,
-        shareUrl: `https://${APP_DOMAIN}/share/${shareId}`,
-        encryptedPayload,
-        iv,
-        salt: salt || "",
-        mediaPaths: validatedMediaPaths
-    };
-
-    await admin.firestore().collection('shared_chats').doc(shareId).set(sharedChat);
-
-    return {
-        shareId,
-        shareUrl: sharedChat.shareUrl
-    };
-});
-
-/**
- * Public HTTPS request handler to render the shared chat as HTML.
- */
-export const share = functions.https.onRequest(async (req, res) => {
-    // Handle both /share/{id} and /share?id={id}
-    const shareId = req.path.split('/').pop() || req.query.id as string;
-    
-    if (!shareId || shareId === 'share') {
-        res.status(400).send("Invalid share ID");
-        return;
-    }
-
-    const doc = await admin.firestore().collection('shared_chats').doc(shareId).get();
-    if (!doc.exists) {
-        res.status(404).send(`
+function renderShareNotFoundPage(): string {
+    return `
             <!DOCTYPE html>
             <html>
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>Link Expired - Pocket Crew</title>
+                <title>Link Expired - Enclave</title>
                 <style>
                     body { 
                         background-color: #18181B; 
@@ -115,10 +84,43 @@ export const share = functions.https.onRequest(async (req, res) => {
             <body>
                 <h1>Shared chat not found</h1>
                 <p>It may have expired (7-day limit).</p>
-                <a href="https://pocketcrew.app">Download Pocket Crew</a>
+                <a href="https://${APP_DOMAIN}">Download Enclave</a>
             </body>
             </html>
-        `);
+        `;
+}
+
+export const uploadSharedChat = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in to share chats.');
+    }
+
+    return handleUploadSharedChat(
+        data,
+        context.auth.uid,
+        {
+            save: async (document) => {
+                await admin.firestore().collection('shared_chats').doc(document.id).set(document);
+            },
+        },
+        { generateShareId: () => uuidv4() },
+    );
+});
+
+/**
+ * Public HTTPS request handler to render the shared chat as HTML.
+ */
+export const share = functions.https.onRequest(async (req, res) => {
+    const shareId = extractShareId(req);
+    
+    if (!shareId) {
+        res.status(400).send("Invalid share ID");
+        return;
+    }
+
+    const doc = await admin.firestore().collection('shared_chats').doc(shareId).get();
+    if (!doc.exists) {
+        res.status(404).send(renderShareNotFoundPage());
         return;
     }
 
@@ -128,16 +130,20 @@ export const share = functions.https.onRequest(async (req, res) => {
         return;
     }
 
+    const storageBucket = resolveDefaultStorageBucketName();
+
     const scriptHtml = `
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         (async () => {
             const encryptedPayload = "${data.encryptedPayload}";
             const iv = "${data.iv}";
-            const projectId = "${admin.app().options.projectId}";
+            const storageBucket = "${storageBucket}";
             
+            const queryKey = new URLSearchParams(window.location.search).get('key');
             const hash = window.location.hash;
-            const keyBase64 = hash.startsWith('#key=') ? hash.substring(5) : null;
+            const hashKey = hash.startsWith('#key=') ? hash.substring(5) : null;
+            const keyBase64 = queryKey || hashKey;
             
             if (!keyBase64) {
                 document.getElementById('messages').innerHTML = '<div class="error-box"><p class="error-title">Decryption Key Missing</p><p>This chat is end-to-end encrypted. You need the full link including the key to view it.</p></div>';
@@ -153,16 +159,18 @@ export const share = functions.https.onRequest(async (req, res) => {
                 return bytes;
             }
 
-            async function fetchAndDecryptMedia(storagePath, cryptoKey, ivData) {
+            async function fetchAndDecryptMedia(storagePath, cryptoKey) {
                 try {
-                    const url = \`https://firebasestorage.googleapis.com/v0/b/\${projectId}.appspot.com/o/\${encodeURIComponent(storagePath)}?alt=media\`;
+                    const url = \`https://firebasestorage.googleapis.com/v0/b/\${storageBucket}/o/\${encodeURIComponent(storagePath)}?alt=media\`;
                     const response = await fetch(url);
                     if (!response.ok) throw new Error('Failed to fetch media');
-                    const encryptedBuffer = await response.arrayBuffer();
+                    const encryptedBytes = new Uint8Array(await response.arrayBuffer());
+                    const iv = encryptedBytes.slice(0, 12);
+                    const ciphertext = encryptedBytes.slice(12);
                     const decryptedBuffer = await window.crypto.subtle.decrypt(
-                        { name: "AES-GCM", iv: ivData },
+                        { name: "AES-GCM", iv: iv },
                         cryptoKey,
-                        encryptedBuffer
+                        ciphertext
                     );
                     return URL.createObjectURL(new Blob([decryptedBuffer]));
                 } catch (e) {
@@ -205,9 +213,11 @@ export const share = functions.https.onRequest(async (req, res) => {
                     messageDiv.className = \`message \${m.role.toLowerCase() === 'user' ? 'user-message' : 'assistant-message'}\`;
                     
                     let mediaHtml = '';
-                    if (m.attachedImageMediaId && mediaMap[m.attachedImageMediaId]) {
-                        const mediaItem = mediaMap[m.attachedImageMediaId];
-                        const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey, ivData);
+                    const attachedIds = m.attachedImageMediaIds || (m.attachedImageMediaId ? [m.attachedImageMediaId] : []);
+                    for (const mediaId of attachedIds) {
+                        if (!mediaMap[mediaId]) continue;
+                        const mediaItem = mediaMap[mediaId];
+                        const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey);
                         if (blobUrl) {
                             mediaHtml += \`<img src="\${blobUrl}" class="shared-image" />\`;
                         }
@@ -217,7 +227,7 @@ export const share = functions.https.onRequest(async (req, res) => {
                         for (const genId of m.generatedMediaIds) {
                             if (mediaMap[genId]) {
                                 const mediaItem = mediaMap[genId];
-                                const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey, ivData);
+                                const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey);
                                 if (blobUrl) {
                                     mediaHtml += \`<img src="\${blobUrl}" class="shared-image" />\`;
                                 }
@@ -254,7 +264,7 @@ export const share = functions.https.onRequest(async (req, res) => {
     <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Shared Chat - Pocket Crew</title>
+        <title>Shared Chat - Enclave</title>
         <style>
             body { 
                 background-color: #18181B; 
@@ -269,12 +279,15 @@ export const share = functions.https.onRequest(async (req, res) => {
                 position: relative; 
             }
             .user-message { 
+                width: 85%;
+                max-width: 85%;
+                margin-left: auto;
+                margin-right: 0;
                 background-color: #27272A; 
                 border: 2px solid #52525B; 
                 padding: 20px; 
-                border-radius: 12px; 
+                border-radius: 20px 20px 4px 20px;
                 box-shadow: 6px 6px 0px #000000;
-                margin-left: 40px;
             }
             .assistant-message { 
                 padding: 0 20px; 
@@ -360,17 +373,17 @@ export const share = functions.https.onRequest(async (req, res) => {
             .logo { color: #F4A361; font-size: 2.5em; font-weight: 900; letter-spacing: -1px; text-shadow: 3px 3px 0px #000000; }
             @media (max-width: 600px) {
                 body { padding: 16px; }
-                .user-message { padding: 16px; margin-left: 0; }
+                .user-message { padding: 16px; }
                 .assistant-message { padding: 0; }
             }
         </style>
     </head>
     <body>
         <div class="header">
-            <div class="logo">Pocket Crew</div>
+            <div class="logo">Enclave</div>
         </div>
         <div id="messages"></div>
-        <a href="${DEEP_LINK_SCHEME}://shared/${shareId}" class="button">Open in Pocket Crew</a>
+        <a href="${DEEP_LINK_SCHEME}://shared/${shareId}" class="button">Open in Enclave</a>
         ${scriptHtml}
     </body>
     </html>

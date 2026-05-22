@@ -1,5 +1,5 @@
 # UI_DESIGN_SPEC.md
-**Pocket Crew – UI Design Contract v2.4**
+**Enclave – UI Design Contract v2.4**
 
 Immutable UI contract. This defines exact visual behavior, component structure, and interaction patterns.
 
@@ -55,12 +55,11 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 ### 2.2 ChatTopBar (`CenterAlignedTopAppBar`)
 - **Left:** Menu icon → navigates to History (via callback).
-- **Center:** "Pocket Crew" title + optional `ModeBadge` (visible only during Crew/Think mode).
+- **Center:** "Enclave" title + optional `ModeBadge` (visible only during Crew/Think mode).
 - **Right:** New chat icon → triggers `viewModel.createNewChat()`.
 
 ### 2.3 MessageList (`LazyColumn`)
-- `reverseLayout = true`
-- `verticalArrangement = Arrangement.Bottom`
+- `reverseLayout = false`
 - Render `MessageBubble` items based on `role` (User vs. Assistant).
 - **Bubble Corners:** 20.dp asymmetric. User bubbles have a sharper bottom-right corner (`4.dp`). Assistant bubbles have a sharper bottom-left corner (`4.dp`).
 
@@ -89,8 +88,8 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 ## 5. Executable Validation (Agent MUST run before TASK_STATUS: COMPLETE)
 
-1. **Compile UI App:** Run `gradlew.bat :app:assembleDebug`.
-2. **Verify Compose Constraints:** Run `gradlew.bat ktlintCheck` to ensure Compose formatting and modifier ordering rules are respected.
+1. **Compile UI App:** Run `./gradlew :app:assembleDebug`.
+2. **Verify Compose Constraints:** Run `./gradlew ktlintCheck` or the affected module's ktlint task to ensure Compose formatting and modifier ordering rules are respected.
 3. **Verify Previews:** Render previews via `@compose-preview` tool if instructed, otherwise ensure all files have valid Light/Dark preview annotations.
 
 ## 6. System UI Integration (2026)

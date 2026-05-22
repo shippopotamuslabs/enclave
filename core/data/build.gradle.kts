@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.core.data"
+    namespace = "com.browntowndev.enclave.core.data"
     compileSdk = 37
 
     defaultConfig {

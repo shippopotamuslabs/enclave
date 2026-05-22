@@ -28,7 +28,7 @@ ksp {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew"
+    namespace = "com.browntowndev.enclave"
     compileSdk = 37
 
     testOptions {
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.browntowndev.pocketcrew"
+        applicationId = "com.browntowndev.enclave"
         minSdk = 34
         targetSdk = 36
         versionCode = 1
@@ -52,7 +52,7 @@ android {
     signingConfigs {
         create("release") {
             // Reference the path relative to the rootProject directory
-            storeFile = rootProject.file(".keystore/pocket_crew_keystore.jks")
+            storeFile = rootProject.file(".keystore/enclave_keystore.jks")
 
             // 2. Assign secrets from the properties file
             storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
@@ -121,6 +121,7 @@ dependencies {
     implementation(project(":whisper-android"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
+    implementation(project(":core:agent"))
     implementation(project(":core:ui"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:history"))

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.browntowndev.pocketcrew.feature.inference"
+    namespace = "com.browntowndev.enclave.feature.inference"
     compileSdk = 37
 
     defaultConfig {
@@ -66,6 +66,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
+    testImplementation(testFixtures(project(":core:domain")))
     testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

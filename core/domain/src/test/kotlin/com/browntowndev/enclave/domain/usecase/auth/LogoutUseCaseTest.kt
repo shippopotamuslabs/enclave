@@ -1,0 +1,68 @@
+package com.browntowndev.enclave.domain.usecase.auth
+
+import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.domain.port.repository.CleanupRepository
+import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.domain.usecase.settings.AutoAssignLocalModelsUseCase
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Test
+
+class LogoutUseCaseTest {
+    private val authManager = mockk<AuthManager>()
+    private val cleanupRepository = mockk<CleanupRepository>(relaxed = true)
+    private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
+    private val autoAssignLocalModelsUseCase = mockk<AutoAssignLocalModelsUseCase>(relaxed = true)
+    private val logoutUseCase =
+        LogoutUseCase(
+            authManager,
+            cleanupRepository,
+            cloudSyncPort,
+            autoAssignLocalModelsUseCase,
+        )
+
+    @Test
+    fun `invoke signs out and clears user content while preserving models`() =
+        runTest {
+            coEvery { authManager.signOut() } returns Result.success(Unit)
+            every { cloudSyncPort.stopListening() } returns Unit
+
+            logoutUseCase()
+
+            coVerify { authManager.signOut() }
+            coVerify { cloudSyncPort.stopListening() }
+            coVerify { cleanupRepository.clearUserContent() }
+            coVerify(exactly = 0) { cleanupRepository.clearAllData() }
+            coVerify { autoAssignLocalModelsUseCase() }
+        }
+
+    @Test
+    fun `invoke does not clear data on sign out failure`() =
+        runTest {
+            coEvery { authManager.signOut() } returns Result.failure(Exception("Sign out failed"))
+
+            logoutUseCase()
+
+            coVerify { authManager.signOut() }
+            coVerify(exactly = 0) { cleanupRepository.clearUserContent() }
+            coVerify(exactly = 0) { cleanupRepository.clearAllData() }
+            coVerify(exactly = 0) { autoAssignLocalModelsUseCase() }
+        }
+
+    @Test
+    fun `invoke returns success even if cleanup fails`() =
+        runTest {
+            coEvery { authManager.signOut() } returns Result.success(Unit)
+            coEvery { cleanupRepository.clearUserContent() } throws Exception("Database error")
+            every { cloudSyncPort.stopListening() } returns Unit
+
+            val result = logoutUseCase()
+
+            assert(result.isSuccess)
+            coVerify { authManager.signOut() }
+            coVerify { cleanupRepository.clearUserContent() }
+        }
+}
