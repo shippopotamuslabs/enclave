@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.AspectRatio
+import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
@@ -44,11 +46,15 @@ class StudioGenerationCoordinator
         var lastProcessedEditAssetId: String? = null
         var lastProcessedAnimateAssetId: String? = null
 
+        private var pendingDetailVideoSourceAssetId: String? = null
+        private var pendingDetailVideoSourceCreatedAt: Long? = null
+
         fun startObservers(scope: CoroutineScope) {
             studioRepository
                 .observeEphemeralMedia()
-                .onEach {
+                .onEach { media ->
                     _isGenerating.value = false
+                    resolveDetailVideoGeneration(media)
                 }.launchIn(scope)
 
             studioRepository
@@ -58,6 +64,14 @@ class StudioGenerationCoordinator
                         _error.value = generationError
                         _isGenerating.value = false
                         _isContinualGenerationActive.value = false
+                        pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
+                            _videoGenerationState.value =
+                                VideoGenerationState.Error(
+                                    sourceAssetId = sourceAssetId,
+                                    message = generationError,
+                                )
+                            clearPendingDetailVideoGeneration()
+                        }
                     }
                 }.launchIn(scope)
         }
@@ -81,8 +95,22 @@ class StudioGenerationCoordinator
             asset: StudioMediaAsset,
             customPrompt: String? = null,
         ) {
-            val prompt = customPrompt ?: asset.prompt ?: ""
-            startGeneration(prompt, MediaCapability.VIDEO, VideoGenerationSettings())
+            val prompt = customPrompt ?: asset.prompt
+            pendingDetailVideoSourceAssetId = asset.id
+            pendingDetailVideoSourceCreatedAt = asset.createdAt
+            _videoGenerationState.value = VideoGenerationState.Loading(asset.id)
+            startGeneration(
+                prompt = prompt,
+                mediaType = MediaCapability.VIDEO,
+                settings =
+                    VideoGenerationSettings(
+                        aspectRatio = AspectRatio.ONE_ONE,
+                        quality = GenerationQuality.SPEED,
+                        videoDuration = DEFAULT_DETAIL_VIDEO_DURATION_SECONDS,
+                        videoResolution = DEFAULT_DETAIL_VIDEO_RESOLUTION,
+                        referenceImageUri = asset.localUri,
+                    ),
+            )
         }
 
         fun beginGenerationAttempt(
@@ -111,7 +139,32 @@ class StudioGenerationCoordinator
         }
 
         fun resetVideoGenerationState() {
+            clearPendingDetailVideoGeneration()
             _videoGenerationState.value = VideoGenerationState.Idle
+        }
+
+        private fun resolveDetailVideoGeneration(media: List<StudioMediaAsset>) {
+            val sourceAssetId = pendingDetailVideoSourceAssetId ?: return
+            val sourceCreatedAt = pendingDetailVideoSourceCreatedAt ?: return
+            val generatedVideo =
+                media
+                    .filter { asset ->
+                        asset.mediaType == MediaCapability.VIDEO.name &&
+                            asset.createdAt > sourceCreatedAt
+                    }.maxByOrNull { it.createdAt }
+                    ?: return
+
+            _videoGenerationState.value =
+                VideoGenerationState.Success(
+                    sourceAssetId = sourceAssetId,
+                    localUri = generatedVideo.localUri,
+                )
+            clearPendingDetailVideoGeneration()
+        }
+
+        private fun clearPendingDetailVideoGeneration() {
+            pendingDetailVideoSourceAssetId = null
+            pendingDetailVideoSourceCreatedAt = null
         }
 
         fun onGenerativeScrollThresholdVisible(
@@ -168,5 +221,10 @@ class StudioGenerationCoordinator
             if (id == lastProcessedAnimateAssetId) {
                 lastProcessedAnimateAssetId = null
             }
+        }
+
+        private companion object {
+            private const val DEFAULT_DETAIL_VIDEO_DURATION_SECONDS = 5
+            private const val DEFAULT_DETAIL_VIDEO_RESOLUTION = "480p"
         }
     }

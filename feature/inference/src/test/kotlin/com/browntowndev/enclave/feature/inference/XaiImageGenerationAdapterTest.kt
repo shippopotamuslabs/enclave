@@ -142,10 +142,11 @@ class XaiImageGenerationAdapterTest {
         }
 
     @Test
-    fun generateImage_badRequest_returnsModerationFailure() =
+    fun generateImage_badRequest_withModerationMessage_returnsModerationFailure() =
         runTest {
             val badRequest = mockk<BadRequestException>()
             every { badRequest.statusCode() } returns 400
+            every { badRequest.message } returns "Request rejected due to content moderation policy"
             every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(any<ImageGenerateParams>()) } throws badRequest
@@ -161,6 +162,32 @@ class XaiImageGenerationAdapterTest {
 
             assertTrue(result.isFailure)
             assertEquals("Prompt rejected due to moderation.", result.exceptionOrNull()?.message)
+        }
+
+    @Test
+    fun generateImage_badRequest_withApiKeyMessage_exposesUnderlyingError() =
+        runTest {
+            val apiKeyErrorMessage = "Incorrect API key provided: sk-invalid. You can find your API key at https://console.x.ai."
+            val badRequest = mockk<BadRequestException>()
+            every { badRequest.statusCode() } returns 400
+            every { badRequest.message } returns apiKeyErrorMessage
+            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
+            every { client.images() } returns imageService
+            every { imageService.generate(any<ImageGenerateParams>()) } throws badRequest
+
+            val result =
+                adapter.generateImage(
+                    prompt = "garden scene",
+                    apiKey = "key",
+                    modelId = "grok-imagine-image",
+                    baseUrl = null,
+                    settings = ImageGenerationSettings(),
+                )
+
+            assertTrue(result.isFailure)
+            val error = result.exceptionOrNull()
+            assertFalse(error?.message == "Prompt rejected due to moderation.")
+            assertEquals(apiKeyErrorMessage, error?.message)
         }
 
     @Test
