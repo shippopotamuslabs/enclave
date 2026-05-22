@@ -1,29 +1,31 @@
 package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
@@ -33,6 +35,9 @@ import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import kotlinx.coroutines.launch
 
+private val MessageListLazyCacheWindow = 2_400.dp
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageList(
     modifier: Modifier = Modifier,
@@ -54,16 +59,33 @@ fun MessageList(
     ) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
 ) {
+    val onEditMessageRef = rememberUpdatedState(onEditMessage)
+    val onPlayAudioRef = rememberUpdatedState(onPlayAudio)
+    val onArtifactCardClickRef = rememberUpdatedState(onArtifactCardClick)
+    val onNavigateToStudioRef = rememberUpdatedState(onNavigateToStudio)
+    val onShareClickRef = rememberUpdatedState(onShareClick)
     val callbacks =
-        MessageListCallbacks(
-            onEditMessage = onEditMessage,
-            onPlayAudio = onPlayAudio,
-            onArtifactCardClick = onArtifactCardClick,
-            onNavigateToStudio = onNavigateToStudio,
-            onShareClick = onShareClick,
+        remember {
+            MessageListCallbacks(
+                onEditMessage = { onEditMessageRef.value(it) },
+                onPlayAudio = { onPlayAudioRef.value(it) },
+                onArtifactCardClick = { messageId, card -> onArtifactCardClickRef.value(messageId, card) },
+                onNavigateToStudio = { ids, uris, types, prompts ->
+                    onNavigateToStudioRef.value(ids, uris, types, prompts)
+                },
+                onShareClick = { onShareClickRef.value(it) },
+            )
+        }
+    val listState =
+        rememberLazyListState(
+            cacheWindow =
+                remember {
+                    LazyLayoutCacheWindow(
+                        ahead = MessageListLazyCacheWindow,
+                        behind = MessageListLazyCacheWindow,
+                    )
+                },
         )
-    val listState = rememberLazyListState()
-    val suppressScrollAnchor = remember { mutableStateOf(false) }
 
     val latestUserMessageIndex = messages.indexOfLast { it.role == MessageRole.User }
     val latestUserMessageId = messages.getOrNull(latestUserMessageIndex)?.id
@@ -76,7 +98,6 @@ fun MessageList(
         latestUserMessageIndex = latestUserMessageIndex,
         messageCount = messages.size,
         listState = listState,
-        suppressScrollAnchor = suppressScrollAnchor,
     )
 
     if (messages.isEmpty() && !hasActiveIndicator) {
@@ -86,7 +107,6 @@ fun MessageList(
             modifier = modifier,
             messages = messages,
             latestUserMessageIndex = latestUserMessageIndex,
-            latestUserMessageId = latestUserMessageId,
             listState = listState,
             activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeToolCallBanner,
@@ -103,7 +123,6 @@ private fun MessageListContent(
     modifier: Modifier,
     messages: List<ChatMessage>,
     latestUserMessageIndex: Int,
-    latestUserMessageId: MessageId?,
     listState: LazyListState,
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
@@ -114,6 +133,7 @@ private fun MessageListContent(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val bottomContentPadding = 16.dp
+        val itemSpacing = 12.dp
         val activeInteractionMinHeight =
             activeInteractionMinHeight(
                 viewportHeight = maxHeight,
@@ -121,89 +141,113 @@ private fun MessageListContent(
             )
         val density = LocalDensity.current
         val targetMinHeightPx = with(density) { activeInteractionMinHeight.toPx() }
-        val userToColumnSpacingPx = with(density) { 12.dp.toPx() }
+        val itemSpacingPx = with(density) { itemSpacing.toPx() }
+        val messageHeightsPx = remember { mutableStateMapOf<String, Int>() }
 
-        var activeUserHeightPx by remember(latestUserMessageId) { mutableIntStateOf(0) }
-
-        val activeTurnColumnMinHeightPx =
-            messageListActiveTurnColumnMinHeightPx(
-                targetMinHeightPx = targetMinHeightPx,
-                userHeightPx = activeUserHeightPx,
-                userToColumnSpacingPx = userToColumnSpacingPx,
+        val activeTurnMessageHeightKeys =
+            if (latestUserMessageIndex != -1) {
+                messages.subList(latestUserMessageIndex, messages.size).map { message ->
+                    message.messageListHeightKey()
+                }
+            } else {
+                emptyList()
+            }
+        val activeTurnContentHeightPx =
+            messageListActiveTurnContentHeightPx(
+                itemHeightsPx = activeTurnMessageHeightKeys.map { key -> messageHeightsPx[key] ?: 0 },
+                itemSpacingPx = itemSpacingPx,
             )
-        val activeTurnColumnMinHeight = with(density) { activeTurnColumnMinHeightPx.toDp() }
+        val bottomSpacerHeightPx =
+            if (latestUserMessageIndex != -1) {
+                messageListBottomSpacerHeightPx(
+                    targetMinHeightPx = targetMinHeightPx,
+                    activeTurnContentHeightPx = activeTurnContentHeightPx,
+                    bottomSpacerSpacingPx = itemSpacingPx,
+                )
+            } else {
+                0
+            }
+        val bottomSpacerHeight = with(density) { bottomSpacerHeightPx.toDp() }
 
-        val totalItems =
-            messageListTotalLazyItems(
-                messageCount = messages.size,
-                latestUserMessageIndex = latestUserMessageIndex,
-            )
-        val lastLazyItemIndex = totalItems - 1
+        val hasBottomSpacer = bottomSpacerHeightPx > 0
+        val fabScrollTargetIndex =
+            if (messages.isNotEmpty()) {
+                messageListScrollTargetLazyIndex(
+                    messageCount = messages.size,
+                    latestUserMessageIndex = latestUserMessageIndex,
+                )
+            } else {
+                -1
+            }
         val fabVisible = rememberScrollToBottomFabVisible(listState)
         val coroutineScope = rememberCoroutineScope()
 
+        val focusManager = LocalFocusManager.current
+        val nestedScrollConnection =
+            remember(focusManager) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(
+                        available: Offset,
+                        source: NestedScrollSource,
+                    ): Offset {
+                        if (available.y > 0f) {
+                            focusManager.clearFocus()
+                        }
+                        return Offset.Zero
+                    }
+                }
+            }
+
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .nestedScroll(nestedScrollConnection),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 0.dp, bottom = bottomContentPadding),
+            verticalArrangement = Arrangement.spacedBy(itemSpacing),
+            contentPadding =
+                PaddingValues(
+                    top = 0.dp,
+                    bottom = bottomContentPadding,
+                ),
         ) {
-            val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
             items(
-                count = historyCount,
-                key = { index -> "history_msg_${messages[index].id}" },
+                count = messages.size,
+                key = { index -> messages[index].messageListHeightKey() },
+                contentType = { index -> messages[index].role },
             ) { index ->
+                val message = messages[index]
+                val heightKey = message.messageListHeightKey()
+                val heightModifier =
+                    remember(heightKey) {
+                        Modifier.onSizeChanged { size ->
+                            if (messageHeightsPx[heightKey] != size.height) {
+                                messageHeightsPx[heightKey] = size.height
+                            }
+                        }
+                    }
                 MessageListItem(
-                    message = messages[index],
-                    activeIndicatorMessageId = activeIndicatorMessageId,
-                    activeToolCallBanner = activeToolCallBanner,
+                    message = message,
+                    activeToolCallBanner =
+                        resolveActiveToolCallBanner(
+                            message = message,
+                            activeIndicatorMessageId = activeIndicatorMessageId,
+                            activeToolCallBanner = activeToolCallBanner,
+                        ),
                     hasTtsProviderAssigned = hasTtsProviderAssigned,
                     chatMode = chatMode,
                     callbacks = callbacks,
                     isPreview = isPreview,
+                    modifier = heightModifier,
                 )
             }
 
-            if (latestUserMessageIndex != -1 && latestUserMessageId != null) {
-                item(key = "active_user_$latestUserMessageId") {
-                    MessageListItem(
-                        message = messages[latestUserMessageIndex],
-                        activeIndicatorMessageId = activeIndicatorMessageId,
-                        activeToolCallBanner = activeToolCallBanner,
-                        hasTtsProviderAssigned = hasTtsProviderAssigned,
-                        chatMode = chatMode,
-                        callbacks = callbacks,
-                        isPreview = isPreview,
-                        modifier =
-                            Modifier.onSizeChanged { size ->
-                                activeUserHeightPx = size.height
-                            },
-                    )
-                }
-
-                item(key = "active_assistants_$latestUserMessageId") {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = activeTurnColumnMinHeight),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        val assistantStartIndex = latestUserMessageIndex + 1
-                        for (i in assistantStartIndex until messages.size) {
-                            key(messages[i].id) {
-                                MessageListItem(
-                                    message = messages[i],
-                                    activeIndicatorMessageId = activeIndicatorMessageId,
-                                    activeToolCallBanner = activeToolCallBanner,
-                                    hasTtsProviderAssigned = hasTtsProviderAssigned,
-                                    chatMode = chatMode,
-                                    callbacks = callbacks,
-                                    isPreview = isPreview,
-                                )
-                            }
-                        }
-                    }
+            if (hasBottomSpacer) {
+                item(
+                    key = "bottom_spacer",
+                    contentType = "bottom_spacer",
+                ) {
+                    Spacer(modifier = Modifier.height(bottomSpacerHeight))
                 }
             }
         }
@@ -211,8 +255,10 @@ private fun MessageListContent(
         ScrollToBottomFab(
             visible = fabVisible,
             onClick = {
-                if (lastLazyItemIndex >= 0) {
-                    coroutineScope.launch { listState.animateScrollToItem(lastLazyItemIndex) }
+                if (fabScrollTargetIndex >= 0) {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(fabScrollTargetIndex)
+                    }
                 }
             },
             modifier =
@@ -222,3 +268,5 @@ private fun MessageListContent(
         )
     }
 }
+
+private fun ChatMessage.messageListHeightKey(): String = "${chatId.value}:${id.value}"

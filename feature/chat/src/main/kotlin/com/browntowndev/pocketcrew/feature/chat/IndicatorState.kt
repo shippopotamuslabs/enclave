@@ -1,9 +1,12 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Unified indicator state for all response types.
  * No None - state is always one of these variants.
  */
+@Immutable
 sealed class IndicatorState {
     /** Engine loading state - shows engine loading indicator */
     object EngineLoading : IndicatorState()
@@ -12,6 +15,7 @@ sealed class IndicatorState {
     object Processing : IndicatorState()
 
     /** Thinking state - shows animated thinking indicator with raw markdown */
+    @Immutable
     data class Thinking(
         val thinkingRaw: String,
         val thinkingDurationSeconds: Long,
@@ -19,19 +23,21 @@ sealed class IndicatorState {
     ) : IndicatorState()
 
     /** Generating state - shows generating indicator (with optional thinking data for "Thought For" header) */
+    @Immutable
     data class Generating(
         val thinkingData: ThinkingDataUi?,
     ) : IndicatorState() {
         val hasThinkingData: Boolean
-            get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()
+            get() = (thinkingData != null) && thinkingData.thinkingRaw.isNotBlank()
     }
 
     /** Complete state - shows final response (with optional thinking data for "Thought For" header) */
+    @Immutable
     data class Complete(
         val thinkingData: ThinkingDataUi?,
     ) : IndicatorState() {
         val hasThinkingData: Boolean
-            get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()
+            get() = (thinkingData != null) && thinkingData.thinkingRaw.isNotBlank()
     }
 
     /**
@@ -48,6 +54,7 @@ sealed class IndicatorState {
  * @property thinkingRaw Raw thinking text as markdown
  * @property thinkingStartTime Timestamp when thinking started (for active counting)
  */
+@Immutable
 data class ThinkingDataUi(
     val thinkingDurationSeconds: Long,
     val thinkingRaw: String,

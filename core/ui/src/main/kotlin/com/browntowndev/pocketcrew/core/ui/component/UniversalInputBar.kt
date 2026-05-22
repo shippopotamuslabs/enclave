@@ -67,6 +67,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
@@ -421,6 +422,7 @@ fun UniversalVoiceTrailingAction(
     hasSendableContent: Boolean = inputText.isNotBlank(),
 ) {
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val isRecordingPhase =
         speechState is SpeechState.Listening ||
             speechState is SpeechState.ModelLoading ||
@@ -477,8 +479,9 @@ fun UniversalVoiceTrailingAction(
                         isGenerating -> if (canStop) onStop()
                         isRecording -> onMicClick()
                         isSending -> {
-                            onSend(inputText)
+                            keyboardController?.hide()
                             focusManager.clearFocus()
+                            onSend(inputText)
                         }
                         else -> onMicClick()
                     }

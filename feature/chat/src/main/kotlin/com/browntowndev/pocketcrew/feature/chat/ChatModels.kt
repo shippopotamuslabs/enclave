@@ -3,11 +3,11 @@ package com.browntowndev.pocketcrew.feature.chat
 import android.content.Context
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Immutable
 import androidx.core.content.ContextCompat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
-import com.browntowndev.pocketcrew.feature.chat.R
 
 enum class ChatModeUi(
     @param:StringRes val displayNameRes: Int,
@@ -44,15 +44,18 @@ enum class ResponseHapticPhase {
     GeneratingBuzz,
 }
 
+@Immutable
 data class ToolCallBannerUi(
     val kind: ToolCallBannerKind,
     val label: String,
     val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
+@Immutable
 sealed class TranscriptSegmentUi {
     abstract val ordinal: Int
 
+    @Immutable
     data class ThinkingBlock(
         override val ordinal: Int,
         val text: String,
@@ -61,6 +64,7 @@ sealed class TranscriptSegmentUi {
         val isStreaming: Boolean = false,
     ) : TranscriptSegmentUi()
 
+    @Immutable
     data class AnswerBlock(
         override val ordinal: Int,
         val text: String,
@@ -68,6 +72,7 @@ sealed class TranscriptSegmentUi {
     ) : TranscriptSegmentUi()
 }
 
+@Immutable
 data class ChatMessage(
     val id: MessageId,
     val chatId: ChatId,
