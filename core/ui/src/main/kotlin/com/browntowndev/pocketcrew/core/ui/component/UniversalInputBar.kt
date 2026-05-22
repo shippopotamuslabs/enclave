@@ -12,8 +12,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -43,8 +45,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -239,7 +241,7 @@ fun UniversalInputBar(
 
                     // Top Right: Expand/Collapse Toggle
                     if (onExpandToggle != null) {
-                        IconButton(
+                        CircularIconButton(
                             onClick = {
                                 if (isExpanded) focusManager.clearFocus()
                                 onExpandToggle()
@@ -247,8 +249,8 @@ fun UniversalInputBar(
                             modifier =
                                 Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 4.dp)
-                                    .size(32.dp),
+                                    .padding(top = 4.dp),
+                            size = 32.dp,
                         ) {
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -294,20 +296,20 @@ fun StandardTrailingAction(
     shape: Shape = CircleShape,
     description: String? = null,
 ) {
-    Box(
-        modifier =
-            modifier
-                .size(48.dp)
-                .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
-                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = if (enabled) contentColor else disabledContentColor,
-        )
-    }
+    CircularTrailingAction(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        containerColor = if (enabled) containerColor else disabledContainerColor,
+        content = {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = if (enabled) contentColor else disabledContentColor,
+            )
+        },
+    )
 }
 
 /**
@@ -326,20 +328,52 @@ fun StandardTrailingAction(
     shape: Shape = CircleShape,
     description: String? = null,
 ) {
+    CircularTrailingAction(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        containerColor = if (enabled) containerColor else disabledContainerColor,
+        content = {
+            Icon(
+                painter = painter,
+                contentDescription = description,
+                tint = if (enabled) contentColor else disabledContentColor,
+            )
+        },
+    )
+}
+
+@Composable
+private fun CircularTrailingAction(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    enabled: Boolean,
+    shape: Shape,
+    containerColor: Color,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier =
             modifier
                 .size(48.dp)
-                .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
-                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+                .clip(shape)
+                .background(containerColor, shape = shape)
+                .then(
+                    if (enabled) {
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = ripple(bounded = true, radius = 24.dp),
+                            onClick = onClick,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
         contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painter,
-            contentDescription = description,
-            tint = if (enabled) contentColor else disabledContentColor,
-        )
-    }
+        content = content,
+    )
 }
 
 /**
@@ -575,6 +609,7 @@ fun UniversalImageAttachment(
                     .padding(4.dp)
                     .size(24.dp)
                     .align(Alignment.TopEnd)
+                    .clip(CircleShape)
                     .clickable(onClick = onClear),
         ) {
             Icon(
