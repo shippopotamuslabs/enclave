@@ -23,7 +23,7 @@ class FirestoreSyncAdapterRegistryTest {
         val ctx = createMinimalContext()
         val registry = FirestoreSyncAdapterRegistry(ctx)
 
-        assertEquals(19, registry.adapters.size)
+        assertEquals(20, registry.adapters.size)
         assertTrue(registry.adapters.any { it is ChatSyncHandler })
         assertTrue(registry.adapters.any { it.collectionPath == "memories" })
         assertTrue(registry.adapters.any { it.collectionPath == "api_keys" })

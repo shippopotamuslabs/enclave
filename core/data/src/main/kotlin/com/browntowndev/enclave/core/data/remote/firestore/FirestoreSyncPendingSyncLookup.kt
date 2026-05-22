@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 
 /**
@@ -63,6 +64,7 @@ internal class FirestoreSyncPendingSyncLookup(
             "api_model_configs" ->
                 database.apiModelConfigurationsDao().getById(ApiModelConfigurationId(entityId))?.pendingSync
             "local_models" -> database.localModelsDao().getById(LocalModelId(entityId))?.pendingSync
+            "utility_models" -> database.utilityModelsDao().getById(UtilityModelId(entityId))?.pendingSync
             "local_model_configs" ->
                 database.localModelConfigurationsDao().getById(LocalModelConfigurationId(entityId))?.pendingSync
             "default_models" -> defaultModelPending(entityId)

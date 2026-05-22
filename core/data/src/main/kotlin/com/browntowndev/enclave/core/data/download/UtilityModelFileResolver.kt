@@ -3,8 +3,8 @@ package com.browntowndev.enclave.core.data.download
 import android.content.Context
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelConfig
-import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,21 +17,15 @@ class UtilityModelFileResolver
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
-        private val modelConfigFetcher: ModelConfigFetcherPort,
+        private val utilityModelRepository: UtilityModelRepositoryPort,
     ) : UtilityModelFilePort {
         override suspend fun resolveUtilityModelPath(utilityType: UtilityType): String? =
             withContext(Dispatchers.IO) {
-                val assets = modelConfigFetcher.fetchRemoteConfig().getOrThrow()
-                val asset =
-                    assets.firstOrNull { candidate ->
-                        candidate.metadata.utilityType == utilityType
-                    } ?: return@withContext null
-
+                val metadata = utilityModelRepository.getByUtilityType(utilityType) ?: return@withContext null
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
-                val modelFile = safeFile(modelsDir, asset.metadata.localFileName)
-
-                if (modelFile.exists() && modelFile.length() == asset.metadata.sizeInBytes) {
-                    modelFile.absolutePath
+                val file = safeFile(modelsDir, metadata.localFileName)
+                if (file.exists() && file.length() == metadata.sizeInBytes) {
+                    file.absolutePath
                 } else {
                     null
                 }

@@ -79,6 +79,51 @@ class EnclaveDatabaseMigrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("SCN-SCHEMA-001")
+    fun scnSchema001_freshVersion7DatabaseCreatesUtilityModelsTable() {
+        val db =
+            Room
+                .databaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                    "utility_models_schema_v7.db",
+                ).fallbackToDestructiveMigration(dropAllTables = true)
+                .allowMainThreadQueries()
+                .build()
+        try {
+            val sqliteDb = db.openHelper.writableDatabase
+            val columns =
+                buildList {
+                    val cursor = sqliteDb.query("PRAGMA table_info(utility_models)")
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+            assertTrue(columns.contains("utility_type"))
+            assertTrue(columns.contains("sha256"))
+            assertTrue(columns.contains("pending_sync"))
+            assertTrue(columns.contains("deleted"))
+
+            val indexCursor = sqliteDb.query("PRAGMA index_list('utility_models')")
+            var uniqueUtilityType = false
+            indexCursor.use {
+                while (it.moveToNext()) {
+                    val indexName = it.getString(it.getColumnIndexOrThrow("name"))
+                    val unique = it.getInt(it.getColumnIndexOrThrow("unique")) == 1
+                    if (indexName == "index_utility_models_utility_type" && unique) {
+                        uniqueUtilityType = true
+                    }
+                }
+            }
+            assertTrue(uniqueUtilityType)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun `api credentials schema does not keep identity uniqueness index`() {
         val db =
             Room
