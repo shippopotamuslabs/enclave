@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,7 +72,9 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
  *   is guaranteed signed in (e.g. settings re-auth).
  * @param showBiometricToggle when true, render the biometric opt-in switch. Bottom-sheet
  *   re-auth flows hide this since biometric enrollment happens at first unlock only.
- * @param initialBiometricEnabled initial checked state for the biometric opt-in switch.
+ * @param initialBiometricEnabled when true, biometrics are already enrolled: show a
+ *   [onBiometricUnlockClick] action instead of the opt-in toggle.
+ * @param onBiometricUnlockClick invoked when the user taps "Use Biometrics" on an enrolled device.
  */
 @Composable
 fun VaultUnlockContent(
@@ -80,6 +86,7 @@ fun VaultUnlockContent(
     initialBiometricEnabled: Boolean = false,
     onLoginClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
+    onBiometricUnlockClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var password by remember { mutableStateOf("") }
@@ -316,52 +323,77 @@ fun VaultUnlockContent(
                     if (showBiometricToggle) {
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        val surfaceColor by animateColorAsState(
-                            targetValue =
-                                if (enableBiometric) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                        .copy(
-                                            alpha = 0.5f,
-                                        )
-                                },
-                            label = "biometric_surface_color",
-                        )
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = surfaceColor,
-                            onClick = { enableBiometric = !enableBiometric },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                        if (initialBiometricEnabled && onBiometricUnlockClick != null) {
+                            TextButton(
+                                onClick = onBiometricUnlockClick,
+                                modifier = Modifier.fillMaxWidth().testTag("use_biometrics_button"),
+                                shape = RoundedCornerShape(16.dp),
+                                colors =
+                                    ButtonDefaults.textButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    ),
+                                contentPadding = PaddingValues(16.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Fingerprint,
                                     contentDescription = null,
-                                    tint = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Biometric Unlock",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                Text(
+                                    text = "Use Biometrics",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        } else {
+                            val surfaceColor by animateColorAsState(
+                                targetValue =
+                                    if (enableBiometric) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                            .copy(
+                                                alpha = 0.5f,
+                                            )
+                                    },
+                                label = "biometric_surface_color",
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = surfaceColor,
+                                onClick = { enableBiometric = !enableBiometric },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Fingerprint,
+                                        contentDescription = null,
+                                        tint = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Text(
-                                        text = "Use fingerprint next time",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Biometric Unlock",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        Text(
+                                            text = "Use fingerprint next time",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (enableBiometric) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Switch(
+                                        checked = enableBiometric,
+                                        onCheckedChange = { enableBiometric = it },
                                     )
                                 }
-                                Switch(
-                                    checked = enableBiometric,
-                                    onCheckedChange = { enableBiometric = it },
-                                )
                             }
                         }
                     }
