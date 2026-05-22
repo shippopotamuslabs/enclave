@@ -210,6 +210,31 @@ class InferenceOrchestrator
             }
         }
 
+        /**
+         * Align orchestrator session with navigation when user opens an existing chat.
+         * Does not write [SavedStateHandle] — Navigation owns `chatId` there; [createNewChat] clears it.
+         * Intentional no-op for null so [ChatRoute] cannot wipe nav args before they are applied.
+         */
+        fun syncActiveChatFromNavigation(navChatId: ChatId?) {
+            if (navChatId == null) return
+            if (_currentChatId.value == navChatId) return
+            _currentChatId.value = navChatId
+            pruneAcknowledgedTurnKeysToActiveChat(navChatId)
+            val requestedKey = _requestedTurnKey.value
+            if (requestedKey != null && requestedKey.chatId != navChatId) {
+                _requestedTurnKey.value = null
+            }
+        }
+
+        private fun pruneAcknowledgedTurnKeysToActiveChat(activeChatId: ChatId?) {
+            _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("syncActiveChatFromNavigation") { keys ->
+                when (activeChatId) {
+                    null -> emptySet()
+                    else -> keys.filter { key -> key.chatId == activeChatId }.toSet()
+                }
+            }
+        }
+
         fun createNewChat() {
             inferenceJob?.cancel()
             _requestedTurnKey.value?.let { key ->

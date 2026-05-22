@@ -13,8 +13,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ArtifactCardUiModel
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
@@ -35,7 +38,11 @@ import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import kotlinx.coroutines.launch
 
-private val MessageListLazyCacheWindow = 2_400.dp
+// ~2–3 message rows ahead/behind at typical density; avoids retaining ~30 screens off-screen.
+private val MessageListLazyCacheWindow = 360.dp
+
+/** Test-visible alias for [MessageListLazyCacheWindow]. */
+internal val MessageListLazyCacheWindowDp = MessageListLazyCacheWindow
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -106,6 +113,7 @@ fun MessageList(
         MessageListContent(
             modifier = modifier,
             messages = messages,
+            chatId = chatId,
             latestUserMessageIndex = latestUserMessageIndex,
             listState = listState,
             activeIndicatorMessageId = activeIndicatorMessageId,
@@ -122,6 +130,7 @@ fun MessageList(
 private fun MessageListContent(
     modifier: Modifier,
     messages: List<ChatMessage>,
+    chatId: ChatId?,
     latestUserMessageIndex: Int,
     listState: LazyListState,
     activeIndicatorMessageId: MessageId?,
@@ -142,7 +151,8 @@ private fun MessageListContent(
         val density = LocalDensity.current
         val targetMinHeightPx = with(density) { activeInteractionMinHeight.toPx() }
         val itemSpacingPx = with(density) { itemSpacing.toPx() }
-        val messageHeightsPx = remember { mutableStateMapOf<String, Int>() }
+        val heightTracker = remember(chatId) { MessageListHeightTracker() }
+        var heightLayoutGeneration by remember(chatId) { mutableIntStateOf(0) }
 
         val activeTurnMessageHeightKeys =
             if (latestUserMessageIndex != -1) {
@@ -153,19 +163,35 @@ private fun MessageListContent(
                 emptyList()
             }
         val activeTurnContentHeightPx =
-            messageListActiveTurnContentHeightPx(
-                itemHeightsPx = activeTurnMessageHeightKeys.map { key -> messageHeightsPx[key] ?: 0 },
-                itemSpacingPx = itemSpacingPx,
-            )
-        val bottomSpacerHeightPx =
-            if (latestUserMessageIndex != -1) {
-                messageListBottomSpacerHeightPx(
-                    targetMinHeightPx = targetMinHeightPx,
-                    activeTurnContentHeightPx = activeTurnContentHeightPx,
-                    bottomSpacerSpacingPx = itemSpacingPx,
+            remember(
+                heightLayoutGeneration,
+                latestUserMessageIndex,
+                messages.size,
+                targetMinHeightPx,
+                itemSpacingPx,
+            ) {
+                messageListActiveTurnContentHeightPx(
+                    itemHeightsPx = activeTurnMessageHeightKeys.map { key -> heightTracker.get(key) ?: 0 },
+                    itemSpacingPx = itemSpacingPx,
                 )
-            } else {
-                0
+            }
+        val bottomSpacerHeightPx =
+            remember(
+                heightLayoutGeneration,
+                latestUserMessageIndex,
+                activeTurnContentHeightPx,
+                targetMinHeightPx,
+                itemSpacingPx,
+            ) {
+                if (latestUserMessageIndex != -1) {
+                    messageListBottomSpacerHeightPx(
+                        targetMinHeightPx = targetMinHeightPx,
+                        activeTurnContentHeightPx = activeTurnContentHeightPx,
+                        bottomSpacerSpacingPx = itemSpacingPx,
+                    )
+                } else {
+                    0
+                }
             }
         val bottomSpacerHeight = with(density) { bottomSpacerHeightPx.toDp() }
 
@@ -221,8 +247,8 @@ private fun MessageListContent(
                 val heightModifier =
                     remember(heightKey) {
                         Modifier.onSizeChanged { size ->
-                            if (messageHeightsPx[heightKey] != size.height) {
-                                messageHeightsPx[heightKey] = size.height
+                            if (heightTracker.onSizeChanged(heightKey, size.height)) {
+                                heightLayoutGeneration++
                             }
                         }
                     }

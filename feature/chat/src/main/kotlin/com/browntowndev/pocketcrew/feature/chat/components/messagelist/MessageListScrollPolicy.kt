@@ -3,7 +3,19 @@ package com.browntowndev.pocketcrew.feature.chat.components.messagelist
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import kotlin.math.abs
 import kotlin.math.roundToInt
+
+internal const val MESSAGE_LIST_HEIGHT_COMMIT_MIN_DELTA_PX = 8
+
+internal fun shouldCommitMessageHeightPx(
+    previousHeightPx: Int?,
+    newHeightPx: Int,
+    minDeltaPx: Int = MESSAGE_LIST_HEIGHT_COMMIT_MIN_DELTA_PX,
+): Boolean {
+    if (previousHeightPx == null) return true
+    return abs(newHeightPx - previousHeightPx) >= minDeltaPx
+}
 
 internal fun activeInteractionMinHeight(
     viewportHeight: Dp,

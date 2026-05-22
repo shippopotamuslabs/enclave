@@ -8,6 +8,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.chat.ChatViewModel
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
@@ -36,12 +37,15 @@ fun NavGraphBuilder.chatNavGraph(
         exitTransition = { hierarchicalExitTransition() },
         popEnterTransition = { hierarchicalPopEnterTransition() },
         popExitTransition = { hierarchicalPopExitTransition() },
-    ) {
+    ) { backStackEntry ->
+        val navigationChatId =
+            backStackEntry.arguments?.getString("chatId")?.let { chatIdValue -> ChatId(chatIdValue) }
         ChatRoute(
             onNavigateToHistory = actions.onNavigateToHistory,
             onNewChat = actions.onNewChatFromChat,
             onNavigateToStudio = actions.onNavigateToStudio,
             onShowSnackbar = actions.onShowSnackbar,
+            navigationChatId = navigationChatId,
         )
     }
 
