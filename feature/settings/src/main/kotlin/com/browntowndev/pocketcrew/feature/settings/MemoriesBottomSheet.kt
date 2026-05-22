@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
+
+private const val MEMORY_TEXT_FIELD_MIN_LINES = 3
+private const val MEMORY_TEXT_FIELD_MAX_LINES = 8
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -322,50 +327,60 @@ private fun MemoryEditView(
             )
         }
 
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(
-                value = draft.category.displayName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Category") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                shape = RoundedCornerShape(16.dp),
-                modifier =
-                    Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-            )
-
-            ExposedDropdownMenu(
+            ExposedDropdownMenuBox(
                 expanded = expanded,
-                onDismissRequest = { expanded = false },
+                onExpandedChange = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                MemoryCategory.entries.forEach { category ->
-                    DropdownMenuItem(
-                        text = { Text(category.displayName) },
-                        onClick = {
-                            onUpdateDraft(draft.text, category)
-                            expanded = false
-                        },
-                    )
+                OutlinedTextField(
+                    value = draft.category.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier =
+                        Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    MemoryCategory.entries.forEach { category ->
+                        DropdownMenuItem(
+                            text = { Text(category.displayName) },
+                            onClick = {
+                                onUpdateDraft(draft.text, category)
+                                expanded = false
+                            },
+                        )
+                    }
                 }
             }
-        }
 
-        OutlinedTextField(
-            value = draft.text,
-            onValueChange = { onUpdateDraft(it, draft.category) },
-            label = { Text("Memory") },
-            placeholder = { Text("Enter memory text...") },
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 3,
-        )
+            OutlinedTextField(
+                value = draft.text,
+                onValueChange = { onUpdateDraft(it, draft.category) },
+                label = { Text("Memory") },
+                placeholder = { Text("Enter memory text...") },
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+                minLines = MEMORY_TEXT_FIELD_MIN_LINES,
+                maxLines = MEMORY_TEXT_FIELD_MAX_LINES,
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
