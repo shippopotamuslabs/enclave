@@ -78,6 +78,20 @@ class AgentEventMapperTest {
     }
 
     @Test
+    fun toDomain_visibleAssistantText_mapsToTextToken() {
+        val mapped =
+            assertIs<AgentLoopEvent.TextToken>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.VisibleAssistantText(
+                        text = "Sorry, something went wrong on my end. Please try again.",
+                    ),
+                ),
+            )
+
+        assertEquals("Sorry, something went wrong on my end. Please try again.", mapped.text)
+    }
+
+    @Test
     fun log_toolRepaired_omitsArguments() {
         val logger = RecordingLogger()
 
