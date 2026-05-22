@@ -111,6 +111,7 @@ import kotlinx.coroutines.withContext
 
 private const val ALBUM_GRID_COLUMNS = 2
 private const val ALBUM_COVER_GRID_COLUMNS = 2
+private val AlbumCoverCornerRadius = 18.dp
 
 @Composable
 fun GalleryRoute(
@@ -560,25 +561,32 @@ private fun AlbumCard(
         label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 0.dp,
+        targetValue = if (isSelected) 8.dp else AlbumCoverCornerRadius,
         label = "selection_corner_radius",
     )
+    val coverShape = RoundedCornerShape(cornerRadius)
 
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .hazeSource(state = hazeState)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onSelectionToggled,
-                ).padding(padding),
+                .padding(padding),
     ) {
-        Box {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(coverShape)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onSelectionToggled,
+                    ),
+        ) {
             AlbumCover(
                 items = album.coverItems,
                 videoThumbnails = videoThumbnails,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(cornerRadius)),
+                modifier = Modifier.fillMaxWidth(),
             )
             if (selectionModeActive) {
                 Box(
@@ -636,11 +644,8 @@ private fun AlbumCover(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier =
-            modifier
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(18.dp)),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.aspectRatio(1f),
+        shape = RoundedCornerShape(AlbumCoverCornerRadius),
         color = MaterialTheme.colorScheme.surface,
     ) {
         if (items.isEmpty()) {
@@ -984,7 +989,7 @@ private fun AlbumSkeletonItem(
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(AlbumCoverCornerRadius))
                     .shimmerEffect(
                         progressState = progress,
                         baseColor = baseColor,
