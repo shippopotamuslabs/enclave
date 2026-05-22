@@ -34,14 +34,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -64,8 +69,8 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.CircularIconButton
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
@@ -79,17 +84,11 @@ import com.browntowndev.enclave.core.ui.component.VideoPlayer
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.ExperimentalStdlibApi
@@ -138,7 +137,6 @@ fun StudioScreen(
     viewModel: MultimodalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val hazeState = rememberHazeState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val visibleGallery = remember(uiState.gallery) { uiState.gallery }
@@ -218,6 +216,7 @@ fun StudioScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             StudioTopBar(
                 selectedCount = uiState.selectedMediaItemIds.size,
@@ -226,7 +225,6 @@ fun StudioScreen(
                 onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
-                hazeState = hazeState,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -242,7 +240,6 @@ fun StudioScreen(
                 isGenerating = uiState.isGenerating,
                 activeGenerationPrompt = uiState.activeGenerationPrompt,
                 generationPlaceholderCount = generationPlaceholderCount,
-                hazeState = hazeState,
                 listState = listState,
                 topPadding = padding.calculateTopPadding(),
                 onMediaClick = { id ->
@@ -314,7 +311,6 @@ fun StudioScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StudioTopBar(
     selectedCount: Int,
@@ -323,73 +319,77 @@ private fun StudioTopBar(
     onShareClick: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
-    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
-    CenterAlignedTopAppBar(
-        colors =
-            TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = Color.Transparent,
-                scrolledContainerColor = Color.Transparent,
-                titleContentColor = Color.White,
-                navigationIconContentColor = Color.White,
-                actionIconContentColor = Color.White,
-            ),
+    Surface(
         modifier =
             modifier
-                .hazeEffect(state = hazeState) {
-                    blurRadius = 24.dp
-                    tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
-                    noiseFactor = 0.15f
-                },
-        navigationIcon = {
-            if (selectedCount > 0) {
-                IconButton(onClick = onClearSelection) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
+                .fillMaxWidth()
+                .statusBarsPadding(),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = EnclaveNeoTokens.screenHorizontalPadding,
+                            vertical = 8.dp,
+                        ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (selectedCount > 0) {
+                    NeoIconButton(
+                        onClick = onClearSelection,
+                        icon = Icons.Default.Close,
                         contentDescription = "Clear selection",
                     )
-                }
-            } else {
-                IconButton(onClick = onNavigateToHistory) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
+                } else {
+                    NeoIconButton(
+                        onClick = onNavigateToHistory,
+                        icon = Icons.Default.Menu,
                         contentDescription = "Open history",
                     )
                 }
-            }
-        },
-        title = {
-            Text(
-                text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        },
-        actions = {
-            if (selectedCount > 0) {
-                IconButton(onClick = onShareClick) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share selected items",
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                IconButton(onClick = onSaveClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                        contentDescription = "Save to album",
-                    )
-                }
-            } else {
-                IconButton(onClick = onNavigateToGallery) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
+                if (selectedCount > 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                        NeoIconButton(
+                            onClick = onShareClick,
+                            icon = Icons.Default.Share,
+                            contentDescription = "Share selected items",
+                        )
+                        NeoIconButton(
+                            onClick = onSaveClick,
+                            icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                            contentDescription = "Save to album",
+                        )
+                    }
+                } else {
+                    NeoIconButton(
+                        onClick = onNavigateToGallery,
+                        icon = Icons.Default.PhotoLibrary,
                         contentDescription = "Open gallery",
                     )
                 }
             }
-        },
-    )
+            HorizontalDivider(
+                thickness = EnclaveNeoTokens.borderWidth,
+                color = neoBorderColor(),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -400,7 +400,6 @@ private fun StudioGalleryPane(
     isGenerating: Boolean,
     activeGenerationPrompt: String?,
     generationPlaceholderCount: Int,
-    hazeState: HazeState,
     listState: LazyListState,
     topPadding: Dp,
     onMediaClick: (String) -> Unit,
@@ -417,7 +416,6 @@ private fun StudioGalleryPane(
                 isGenerating = isGenerating,
                 activeGenerationPrompt = activeGenerationPrompt,
                 generationPlaceholderCount = generationPlaceholderCount,
-                hazeState = hazeState,
                 listState = listState,
                 topPadding = topPadding,
                 onMediaClick = onMediaClick,
@@ -435,7 +433,6 @@ private fun StudioGalleryList(
     isGenerating: Boolean,
     activeGenerationPrompt: String?,
     generationPlaceholderCount: Int,
-    hazeState: HazeState,
     listState: LazyListState,
     topPadding: Dp,
     onMediaClick: (String) -> Unit,
@@ -483,11 +480,12 @@ private fun StudioGalleryList(
 
     LazyColumn(
         state = listState,
-        modifier =
-            modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState),
-        contentPadding = PaddingValues(top = topPadding),
+        modifier = modifier.fillMaxSize(),
+        contentPadding =
+            PaddingValues(
+                top = topPadding,
+                bottom = EnclaveNeoTokens.rowSpacing,
+            ),
     ) {
         groupedGallery.forEachIndexed { index, group ->
             val isActiveGenerationGroup =
@@ -504,7 +502,6 @@ private fun StudioGalleryList(
             item(key = headerKey) {
                 PromptHeaderDivider(
                     prompt = group.prompt,
-                    hazeState = hazeState,
                     isExpanded = headerKey in expandedPromptHeaderKeys,
                     onExpandedChange = { isExpanded ->
                         expandedPromptHeaderKeys =
@@ -517,6 +514,8 @@ private fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                            .padding(bottom = EnclaveNeoTokens.rowSpacing)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },
@@ -554,7 +553,6 @@ private fun StudioGalleryList(
             item(key = headerKey) {
                 PromptHeaderDivider(
                     prompt = activeGenerationPrompt,
-                    hazeState = hazeState,
                     isExpanded = headerKey in expandedPromptHeaderKeys,
                     onExpandedChange = { isExpanded ->
                         expandedPromptHeaderKeys =
@@ -567,6 +565,8 @@ private fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                            .padding(bottom = EnclaveNeoTokens.rowSpacing)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },
@@ -586,7 +586,6 @@ private fun StudioGalleryList(
     stickyHeaderLayout?.let { headerLayout ->
         PromptHeaderDivider(
             prompt = headerLayout.prompt,
-            hazeState = hazeState,
             isExpanded = headerLayout.key in expandedPromptHeaderKeys,
             onExpandedChange = { isExpanded ->
                 expandedPromptHeaderKeys =
@@ -599,6 +598,7 @@ private fun StudioGalleryList(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                     .offset { IntOffset(x = 0, y = headerLayout.yOffset) }
                     .onSizeChanged { size -> stickyHeaderHeightPx = size.height },
         )
@@ -761,7 +761,10 @@ private fun GalleryGridRow(
     Row(
         modifier =
             modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                .padding(bottom = EnclaveNeoTokens.rowSpacing),
+        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
     ) {
         rowItems.forEach { asset ->
             Box(modifier = Modifier.weight(1f)) {
@@ -791,7 +794,10 @@ private fun PlaceholderGridRow(
     Row(
         modifier =
             modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                .padding(bottom = EnclaveNeoTokens.rowSpacing),
+        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
     ) {
         repeat(placeholderCount) {
             Box(modifier = Modifier.weight(1f)) {
@@ -970,21 +976,12 @@ private fun ReferenceImageAction(
     modifier: Modifier = Modifier,
 ) {
     if (mediaType != MediaCapability.MUSIC) {
-        CircularIconButton(
+        NeoIconButton(
             onClick = onReferenceImageClick,
+            icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
+            contentDescription = "Reference image",
             modifier = modifier,
-        ) {
-            Icon(
-                imageVector = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
-                contentDescription = "Reference image",
-                tint =
-                    if (hasReferenceImage) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-            )
-        }
+        )
     }
 }
 
@@ -1003,7 +1000,7 @@ private fun GalleryItem(
         label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 0.dp,
+        targetValue = EnclaveNeoTokens.cornerRadius,
         label = "selection_corner_radius",
     )
 
@@ -1034,18 +1031,18 @@ private fun GalleryItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius))
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black),
-                            ),
+                        .clip(EnclaveNeoTokens.shape)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
                         ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(48.dp),
                 )
             }
@@ -1056,22 +1053,26 @@ private fun GalleryItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(EnclaveNeoTokens.shape),
                 contentScale = ContentScale.Crop,
             )
         }
 
-        // Saved indicator (folder icon)
         if (asset.albumId != null) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(bottomStart = 8.dp),
-                modifier = Modifier.align(Alignment.TopEnd),
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
+                        ),
             ) {
                 Icon(
                     imageVector = Icons.Default.Folder,
                     contentDescription = "Saved to album",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier =
                         Modifier
                             .padding(4.dp)
@@ -1200,12 +1201,26 @@ private fun EmptyStudioState(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 32.dp),
         ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(72.dp)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = true,
+                            shadowColor = neoShadowColor(),
+                            shadowOffset = neoButtonShadowOffset(),
+                        ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "No creations yet. Use the controls below to generate an image, video, or music track.",
