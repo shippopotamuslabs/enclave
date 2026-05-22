@@ -441,6 +441,7 @@ private fun AgentModelTurnResult.toFfi(loggingPort: LoggingPort? = null): FfiMod
         assistantText = FfiPayloadGuard.capAssistantText(assistantText, loggingPort),
         toolCalls = toolCalls.map { it.toFfi(loggingPort) },
         finishReason = finishReason.toFfi(),
+        providerReasoningContent = providerReasoningContent,
     )
 
 private fun AgentRawToolCall.toFfi(loggingPort: LoggingPort? = null): FfiRawToolCall =
