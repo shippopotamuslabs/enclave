@@ -2,47 +2,41 @@ package com.browntowndev.enclave.core.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.R
 
-private val AppUiFontFamily: FontFamily = FontFamily.SansSerif
-private val MerriweatherFont: GoogleFont = GoogleFont("Merriweather")
-private val GoogleFontsProvider: GoogleFont.Provider =
-    GoogleFont.Provider(
-        providerAuthority = "com.google.android.gms.fonts",
-        providerPackage = "com.google.android.gms",
-        certificates = R.array.com_google_android_gms_fonts_certs,
-    )
-
-val MerriweatherFontFamily: FontFamily =
+/**
+ * Neo-brutalist UI chrome: labels, settings, user bubbles, input, "Thought for …".
+ * IBM Plex Sans — technical, high legibility at small sizes.
+ */
+val EnclaveUiFontFamily: FontFamily =
     FontFamily(
-        Font(
-            googleFont = MerriweatherFont,
-            fontProvider = GoogleFontsProvider,
-            weight = FontWeight.Normal,
-        ),
-        Font(
-            googleFont = MerriweatherFont,
-            fontProvider = GoogleFontsProvider,
-            weight = FontWeight.Bold,
-        ),
-        Font(
-            googleFont = MerriweatherFont,
-            fontProvider = GoogleFontsProvider,
-            weight = FontWeight.ExtraBold,
-        ),
+        Font(R.font.ibm_plex_sans_regular, FontWeight.Normal),
+        Font(R.font.ibm_plex_sans_medium, FontWeight.Medium),
+        Font(R.font.ibm_plex_sans_semibold, FontWeight.SemiBold),
+        Font(R.font.ibm_plex_sans_bold, FontWeight.Bold),
     )
 
+/**
+ * Assistant markdown / long-form replies. Source Serif 4 — lighter than Merriweather,
+ * still distinct from UI sans.
+ */
+val EnclaveReadingFontFamily: FontFamily =
+    FontFamily(
+        Font(R.font.source_serif4_regular, FontWeight.Normal),
+        Font(R.font.source_serif4_bold, FontWeight.Bold),
+    )
+
+/** Body style for [com.browntowndev.enclave.core.ui.component.markdown.StreamableMarkdownText] and markdown theme. */
 val LlmBodyTextStyle: TextStyle =
     TextStyle(
-        fontFamily = MerriweatherFontFamily,
+        fontFamily = EnclaveReadingFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        lineHeight = 24.sp,
+        lineHeight = 26.sp,
         letterSpacing = 0.sp,
     )
 
@@ -50,15 +44,15 @@ val Typography: Typography =
     Typography(
         headlineLarge =
             TextStyle(
-                fontFamily = AppUiFontFamily,
-                fontWeight = FontWeight.ExtraBold,
+                fontFamily = EnclaveUiFontFamily,
+                fontWeight = FontWeight.Bold,
                 fontSize = 28.sp,
                 lineHeight = 36.sp,
                 letterSpacing = 0.sp,
             ),
         headlineMedium =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 24.sp,
                 lineHeight = 32.sp,
@@ -66,7 +60,7 @@ val Typography: Typography =
             ),
         headlineSmall =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp,
                 lineHeight = 30.sp,
@@ -74,7 +68,7 @@ val Typography: Typography =
             ),
         titleLarge =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 lineHeight = 28.sp,
@@ -82,7 +76,7 @@ val Typography: Typography =
             ),
         titleMedium =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
@@ -90,7 +84,7 @@ val Typography: Typography =
             ),
         titleSmall =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
@@ -98,7 +92,7 @@ val Typography: Typography =
             ),
         bodyLarge =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
@@ -106,7 +100,7 @@ val Typography: Typography =
             ),
         bodyMedium =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
@@ -114,7 +108,7 @@ val Typography: Typography =
             ),
         bodySmall =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Normal,
                 fontSize = 12.sp,
                 lineHeight = 16.sp,
@@ -122,7 +116,7 @@ val Typography: Typography =
             ),
         labelLarge =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
@@ -130,7 +124,7 @@ val Typography: Typography =
             ),
         labelMedium =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
                 lineHeight = 16.sp,
@@ -138,7 +132,7 @@ val Typography: Typography =
             ),
         labelSmall =
             TextStyle(
-                fontFamily = AppUiFontFamily,
+                fontFamily = EnclaveUiFontFamily,
                 fontWeight = FontWeight.Medium,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,

@@ -197,8 +197,9 @@ fun ThinkingDetailsBottomSheet(
     thinkingRaw: String,
     elapsedSeconds: Int = 0,
     isStreaming: Boolean = false,
+    isPreview: Boolean = false,
 ) {
-    val controller = LocalDetailBottomSheetController.current
+    val controller = rememberDetailBottomSheetController(usePreviewStub = isPreview)
 
     LaunchedEffect(isVisible, thinkingRaw, thinkingDurationSeconds, isStreaming) {
         if (isVisible) {

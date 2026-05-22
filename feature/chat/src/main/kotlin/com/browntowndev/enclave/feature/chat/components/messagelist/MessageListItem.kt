@@ -62,6 +62,7 @@ internal fun MessageListItem(
             chatMode = chatMode,
             suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
             reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
+            isPreview = isPreview,
         )
 
         val inlineToolCallBannerInTranscript = usesInlineToolCallBannerInTranscript(message)
@@ -98,6 +99,7 @@ private fun MessageListItemIndicators(
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
     reserveCrewGeneratingSlot: Boolean,
+    isPreview: Boolean,
 ) {
     if (indicatorState == null) return
 
@@ -143,6 +145,7 @@ private fun MessageListItemIndicators(
             elapsedSeconds = elapsedSeconds,
             isStreaming = isIndicatorStreaming(indicatorState),
             onDismiss = { isThinkingSheetVisible = false },
+            isPreview = isPreview,
         )
     }
 }

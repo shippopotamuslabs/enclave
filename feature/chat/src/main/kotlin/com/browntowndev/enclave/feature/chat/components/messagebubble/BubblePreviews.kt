@@ -9,7 +9,7 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ContentUi
 import com.browntowndev.enclave.feature.chat.MessageRole
 
-@Preview(showBackground = true, name = "User bubble — dark")
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble — dark")
 @Composable
 fun PreviewMessageBubbleUserDark() {
     EnclaveTheme(darkTheme = true) {
@@ -26,7 +26,7 @@ fun PreviewMessageBubbleUserDark() {
     }
 }
 
-@Preview(showBackground = true, name = "User bubble code — dark")
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble code — dark")
 @Composable
 fun PreviewMessageBubbleCodeDark() {
     EnclaveTheme(darkTheme = true) {
@@ -53,7 +53,7 @@ fun main() {
     }
 }
 
-@Preview(showBackground = true, name = "User bubble long — dark")
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble long — dark")
 @Composable
 fun PreviewMessageBubbleLongDark() {
     EnclaveTheme(darkTheme = true) {

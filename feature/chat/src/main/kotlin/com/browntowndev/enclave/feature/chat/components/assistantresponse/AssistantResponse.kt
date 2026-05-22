@@ -16,7 +16,7 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.DetailBottomSheetConfig
-import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.LocalDetailBottomSheetController
+import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.rememberDetailBottomSheetController
 
 @Composable
 fun AssistantResponse(
@@ -40,7 +40,7 @@ fun AssistantResponse(
     var showStepDetails by remember { mutableStateOf(false) }
     var selectedStepName by remember { mutableStateOf("") }
     var showSources by remember { mutableStateOf(false) }
-    val detailSheetController = LocalDetailBottomSheetController.current
+    val detailSheetController = rememberDetailBottomSheetController(usePreviewStub = isPreview)
 
     LaunchedEffect(showStepDetails, selectedStepName, contentText, isStreaming) {
         if (showStepDetails) {
@@ -75,7 +75,6 @@ fun AssistantResponse(
             CompletedStepRow(
                 stepName = pipelineStep.displayName(),
                 stepOutput = contentText,
-                modelDisplayName = message.modelDisplayName,
                 indicatorState = message.indicatorState,
                 onClick = {
                     selectedStepName = pipelineStep.displayName()

@@ -235,10 +235,8 @@ fun InputBar(
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
                 textStyle =
-                    TextStyle(
+                    MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onSurface,
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 16.sp,
                         lineHeight = 22.sp,
                     ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),

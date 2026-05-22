@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
@@ -33,22 +34,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.chat.ArtifactCardUiModel
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.R
+
+private val CouncilStepDocPreviewWidth = 52.dp
+private val CouncilStepDocPreviewHeight = 68.dp
 
 @Composable
 internal fun CompletedStepRow(
     stepName: String,
     stepOutput: String,
-    modelDisplayName: String,
     indicatorState: IndicatorState?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -62,104 +68,95 @@ internal fun CompletedStepRow(
 
     val previewText = "Tap to View"
 
-    val statusText =
-        when (indicatorState) {
-            is IndicatorState.EngineLoading -> "I'm loading the engine from disk..."
-            is IndicatorState.Processing -> "I'm processing your request now..."
-            is IndicatorState.Thinking -> "I'm thinking about the next step..."
-            is IndicatorState.Generating -> "I understand the request and I'm generating my response now."
-            is IndicatorState.Complete, IndicatorState.None, null -> "I have completed my task. Here are the results."
-        }
+    val borderColor = neoBorderColor()
+    val shadowColor = neoShadowColor()
+    val shadowOffset = EnclaveNeoTokens.buttonShadowOffsetDark
 
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(
+                    top = EnclaveNeoTokens.rowSpacing,
+                    bottom = EnclaveNeoTokens.rowSpacing + shadowOffset,
+                )
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = borderColor,
+                    withShadow = true,
+                    shadowColor = shadowColor,
+                    shadowOffset = shadowOffset,
+                    shape = EnclaveNeoTokens.shape,
+                )
+                .clickable(onClick = onClick)
+                .padding(16.dp),
     ) {
-        val completionMessage =
-            remember(modelDisplayName, statusText) {
-                buildAnnotatedString {
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(modelDisplayName)
-                    }
-                    append(": $statusText")
-                }
-            }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { onClick() }
-                    .padding(vertical = 4.dp),
-        ) {
-            Text(
-                text = completionMessage,
-                style =
-                    MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Medium,
-                    ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
-                    .clickable { onClick() }
-                    .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
                 modifier =
                     Modifier
-                        .offset(y = 12.dp)
-                        .padding(start = 12.dp)
-                        .rotate(-10f)
-                        .size(width = 60.dp, height = 90.dp)
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)),
+                        .offset(y = 4.dp)
+                        .rotate(-8f)
+                        .size(width = CouncilStepDocPreviewWidth, height = CouncilStepDocPreviewHeight)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.background,
+                            borderColor = borderColor,
+                            withShadow = true,
+                            shadowColor = shadowColor,
+                            shadowOffset = EnclaveNeoTokens.buttonShadowOffsetLight,
+                            shape = EnclaveNeoTokens.shape,
+                        ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = painterResource(R.drawable.document),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
                 )
             }
 
-            Spacer(modifier = Modifier.width(24.dp))
-
-            Column(
-                modifier = Modifier.weight(1f),
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "$stepName Results",
-                    style =
-                        MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 23.sp,
-                        ),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = previewText,
-                    style =
-                        MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                        ),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                 )
             }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp),
+            )
         }
+    }
+}
+
+@Suppress("UnusedPrivateMember")
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "Council step result card")
+@Composable
+private fun PreviewCompletedStepRow() {
+    EnclaveTheme(darkTheme = true) {
+        CompletedStepRow(
+            stepName = "Draft 1",
+            stepOutput = "Sample council step output for preview.",
+            indicatorState = IndicatorState.Complete(thinkingData = null),
+            onClick = {},
+            modifier = Modifier.padding(EnclaveNeoTokens.screenHorizontalPadding),
+        )
     }
 }
 
