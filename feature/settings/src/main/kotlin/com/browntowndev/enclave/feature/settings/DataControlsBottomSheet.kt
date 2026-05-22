@@ -1,6 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,17 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -28,12 +22,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoDestructiveRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 private const val DELETING_ROW_ALPHA = 0.4f
@@ -114,81 +111,48 @@ fun DataControlsBottomSheet(
             onConfirm = onConfirmDeleteAccount,
         )
     val allRows = dataRows + accountRow
+    val rowAlphaModifier =
+        Modifier.alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f)
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
+                    .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = "Data Controls",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            Text(
-                text = "Manage or permanently remove your data.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp),
+            NeoSheetHeader(
+                title = "Data Controls",
+                subtitle = "Manage or permanently remove your data.",
+                onDismiss = onDismiss,
             )
 
-            SectionLabel("Data")
-            Spacer(modifier = Modifier.height(6.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(16.dp),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
-            ) {
-                Column {
-                    dataRows.forEachIndexed { index, row ->
-                        DataRow(
-                            row = row,
-                            isDeleting = dc.isDeleting,
-                            isDanger = false,
-                        )
-                        if (index < dataRows.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 56.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                thickness = 0.5.dp,
-                            )
-                        }
-                    }
+            NeoSectionHeader(text = "Data")
+            Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                dataRows.forEach { row ->
+                    NeoDestructiveRow(
+                        title = row.title,
+                        subtitle = row.subtitle,
+                        onClick = row.onRequest,
+                        enabled = !dc.isDeleting,
+                        modifier = rowAlphaModifier,
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            SectionLabel(
-                text = "Account",
-                color = MaterialTheme.colorScheme.error,
+            NeoSectionHeader(text = "Account")
+            NeoDestructiveRow(
+                title = accountRow.title,
+                subtitle = accountRow.subtitle,
+                onClick = accountRow.onRequest,
+                enabled = !dc.isDeleting,
+                isAccountDanger = true,
+                modifier = rowAlphaModifier,
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
-                shape = RoundedCornerShape(16.dp),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f),
-            ) {
-                DataRow(
-                    row = accountRow,
-                    isDeleting = dc.isDeleting,
-                    isDanger = true,
-                )
-            }
 
             dc.deleteError?.let { err ->
                 Spacer(modifier = Modifier.height(12.dp))
@@ -219,7 +183,7 @@ fun DataControlsBottomSheet(
                     if (dc.isDeleting) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            androidx.compose.material3.CircularProgressIndicator(
+                            CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.error,
@@ -251,70 +215,6 @@ fun DataControlsBottomSheet(
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun SectionLabel(
-    text: String,
-    color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
-}
-
-@Composable
-private fun DataRow(
-    row: DataControlRow,
-    isDeleting: Boolean,
-    isDanger: Boolean,
-) {
-    val titleColor = if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-    val iconTint = MaterialTheme.colorScheme.error
-    val icon = if (isDanger) Icons.Default.DeleteForever else Icons.Default.Delete
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(enabled = !isDeleting, onClick = row.onRequest)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier =
-                Modifier
-                    .size(22.dp)
-                    .padding(end = 0.dp),
-        )
-        Column(
-            modifier =
-                Modifier
-                    .padding(start = 16.dp)
-                    .weight(1f),
-        ) {
-            Text(
-                text = row.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = titleColor,
-            )
-            Text(
-                text = row.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
     }
 }
 
@@ -355,12 +255,7 @@ fun PreviewDataControlsBottomSheetDark() {
             uiState =
                 MockSettingsData.baseUiState.copy(
                     home = MockSettingsData.baseUiState.home.copy(isDataControlsSheetOpen = true),
-                    dataControls =
-                        DataControlsUiState(
-                            isSheetOpen = true,
-                            isDeleting = true,
-                            pendingAction = DataControlsPendingAction.DeleteChats,
-                        ),
+                    dataControls = DataControlsUiState(isSheetOpen = true),
                 ),
             onDismiss = {},
             onRequestDeleteAllChats = {},

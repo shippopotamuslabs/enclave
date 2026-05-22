@@ -57,7 +57,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
@@ -679,48 +683,32 @@ fun SystemPromptConfiguration(
     }
 
     if (showSystemPromptSheet) {
-        JumpFreeModalBottomSheet(
+        NeoModalBottomSheet(
             onDismissRequest = { showSystemPromptSheet = false },
             sheetState = sheetState,
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 32.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Edit System Prompt",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-
-                    var expanded by remember { mutableStateOf(false) }
-                    Row {
-                        TextButton(
-                            onClick = { expanded = true },
-                        ) {
-                            Text("Import Template")
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                        ) {
-                            SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                DropdownMenuItem(
-                                    text = { Text(modelType.displayName()) },
-                                    onClick = {
-                                        onConfigChange(config.copy(systemPrompt = prompt))
-                                        expanded = false
-                                    },
-                                )
-                            }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                NeoSheetHeader(
+                    title = "Edit System Prompt",
+                    onDismiss = { showSystemPromptSheet = false },
+                )
+                var expanded by remember { mutableStateOf(false) }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { expanded = true }) {
+                        Text("Import Template")
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                    ) {
+                        SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                            DropdownMenuItem(
+                                text = { Text(modelType.displayName()) },
+                                onClick = {
+                                    onConfigChange(config.copy(systemPrompt = prompt))
+                                    expanded = false
+                                },
+                            )
                         }
                     }
                 }
@@ -734,20 +722,17 @@ fun SystemPromptConfiguration(
                         Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = EnclaveNeoTokens.shape,
                     placeholder = { Text("Enter system prompt...") },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
+                NeoPrimaryButton(
+                    text = "Done",
                     onClick = { showSystemPromptSheet = false },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text("Done", fontWeight = FontWeight.Bold)
-                }
+                )
             }
         }
     }

@@ -12,28 +12,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SwipeToDismissBox
@@ -50,11 +42,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 
@@ -76,37 +73,29 @@ fun MemoriesBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var memoryIdToDelete by remember { mutableStateOf<String?>(null) }
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-        ) {
-            AnimatedContent(
-                targetState = uiState.memories.isEditing,
-                label = "MemoriesSheetTransition",
-            ) { isEditing ->
-                if (isEditing) {
-                    MemoryEditView(
-                        draft = uiState.memories.memoryDraft ?: StoredMemory(),
-                        onUpdateDraft = onUpdateMemoryDraft,
-                        onSave = onSaveMemory,
-                        onCancel = onCancelMemoryEdit,
-                    )
-                } else {
-                    MemoriesListView(
-                        memories = uiState.memories.memories,
-                        onAddMemory = onAddMemory,
-                        onEditMemory = onEditMemory,
-                        onDeleteMemory = { memoryIdToDelete = it },
-                    )
-                }
+        AnimatedContent(
+            targetState = uiState.memories.isEditing,
+            label = "MemoriesSheetTransition",
+        ) { isEditing ->
+            if (isEditing) {
+                MemoryEditView(
+                    draft = uiState.memories.memoryDraft ?: StoredMemory(),
+                    onUpdateDraft = onUpdateMemoryDraft,
+                    onSave = onSaveMemory,
+                    onCancel = onCancelMemoryEdit,
+                )
+            } else {
+                MemoriesListView(
+                    memories = uiState.memories.memories,
+                    onDismiss = onDismiss,
+                    onAddMemory = onAddMemory,
+                    onEditMemory = onEditMemory,
+                    onDeleteMemory = { memoryIdToDelete = it },
+                )
             }
         }
 
@@ -138,23 +127,16 @@ fun MemoriesBottomSheet(
 @Composable
 private fun MemoriesListView(
     memories: List<StoredMemory>,
+    onDismiss: () -> Unit,
     onAddMemory: () -> Unit,
     onEditMemory: (StoredMemory) -> Unit,
     onDeleteMemory: (String) -> Unit,
 ) {
-    Column {
-        Text(
-            text = "Memories",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-
-        Text(
-            text = "Personalization and facts about you, your preferences, and projects.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        NeoSheetHeader(
+            title = "Memories",
+            subtitle = "Personalization and facts about you, your preferences, and projects.",
+            onDismiss = onDismiss,
         )
 
         if (memories.isEmpty()) {
@@ -175,13 +157,13 @@ private fun MemoriesListView(
             val groupedMemories = memories.groupBy { it.category }
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
             ) {
                 MemoryCategory.entries.forEach { category ->
                     val categoryMemories = groupedMemories[category]
                     if (!categoryMemories.isNullOrEmpty()) {
                         item(key = "header_${category.name}") {
-                            CategoryHeader(category = category)
+                            NeoSectionHeader(text = category.displayName)
                         }
                         items(categoryMemories, key = { it.id }) { memory ->
                             MemoryItem(
@@ -197,30 +179,12 @@ private fun MemoriesListView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        NeoPrimaryButton(
+            text = "Add Memory",
+            icon = Icons.Default.Add,
             onClick = onAddMemory,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Memory")
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Add Memory", fontWeight = FontWeight.SemiBold)
-        }
+        )
     }
-}
-
-@Composable
-private fun CategoryHeader(category: MemoryCategory) {
-    Text(
-        text = category.displayName,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -244,7 +208,7 @@ private fun MemoryItem(
 
     SwipeToDismissBox(
         state = dismissState,
-        modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+        modifier = Modifier.clip(EnclaveNeoTokens.shape),
         enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(
@@ -263,38 +227,32 @@ private fun MemoryItem(
             }
         },
     ) {
-        Card(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onEdit),
-            shape = RoundedCornerShape(16.dp),
-            colors =
-                CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
+                    .neoSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        borderColor = neoBorderColor(),
+                        withShadow = false,
+                    )
+                    .clickable(onClick = onEdit)
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = memory.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "Edit memory",
-                    modifier = Modifier.padding(start = 4.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = memory.text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "Edit memory",
+                modifier = Modifier.padding(start = 4.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -311,21 +269,13 @@ private fun MemoryEditView(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 8.dp),
-        ) {
-            IconButton(onClick = onCancel, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to memories")
-            }
-            Text(
-                text = if (draft.id.isEmpty()) "Add Memory" else "Edit Memory",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        NeoSheetHeader(
+            title = if (draft.id.isEmpty()) "Add Memory" else "Edit Memory",
+            onDismiss = onCancel,
+            onBackClick = onCancel,
+        )
 
         Column(
             modifier =
@@ -333,7 +283,7 @@ private fun MemoryEditView(
                     .fillMaxWidth()
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             ExposedDropdownMenuBox(
                 expanded = expanded,
@@ -347,7 +297,7 @@ private fun MemoryEditView(
                     label = { Text("Category") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = EnclaveNeoTokens.shape,
                     modifier =
                         Modifier
                             .menuAnchor()
@@ -375,7 +325,7 @@ private fun MemoryEditView(
                 onValueChange = { onUpdateDraft(it, draft.category) },
                 label = { Text("Memory") },
                 placeholder = { Text("Enter memory text...") },
-                shape = RoundedCornerShape(16.dp),
+                shape = EnclaveNeoTokens.shape,
                 modifier = Modifier.fillMaxWidth(),
                 minLines = MEMORY_TEXT_FIELD_MIN_LINES,
                 maxLines = MEMORY_TEXT_FIELD_MAX_LINES,
@@ -384,7 +334,7 @@ private fun MemoryEditView(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             TextButton(
                 onClick = onCancel,
@@ -395,17 +345,12 @@ private fun MemoryEditView(
             ) {
                 Text("Cancel")
             }
-            Button(
+            NeoPrimaryButton(
+                text = "Save",
                 onClick = onSave,
                 enabled = draft.text.isNotBlank(),
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text("Save", fontWeight = FontWeight.SemiBold)
-            }
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

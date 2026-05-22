@@ -14,13 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +37,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import kotlinx.coroutines.launch
@@ -68,35 +67,20 @@ fun TtsProvidersBottomSheet(
         }
     }
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-        ) {
-            Text(
-                text = "Text to Speech Models",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
+        NeoSheetHeader(
+            title = "Text to Speech Models",
+            subtitle = "Manage your TTS voices and API keys.",
+            onDismiss = onDismiss,
+        )
 
-            Text(
-                text = "Manage your TTS voices and API keys.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp),
-            )
-
+        Column(modifier = Modifier.fillMaxWidth()) {
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
             ) {
                 items(uiState.ttsProvidersSheet.assets, key = { it.id.value }) { asset ->
                     val dismissState =
@@ -113,7 +97,7 @@ fun TtsProvidersBottomSheet(
 
                     SwipeToDismissBox(
                         state = dismissState,
-                        modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                        modifier = Modifier.clip(EnclaveNeoTokens.shape),
                         enableDismissFromStartToEnd = false,
                         backgroundContent = {
                             Box(
@@ -132,41 +116,14 @@ fun TtsProvidersBottomSheet(
                             }
                         },
                     ) {
-                        Card(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onSelectTtsProviderAsset(asset)
-                                        hideAndNavigate(onNavigateToTtsConfigure)
-                                    },
-                            shape = RoundedCornerShape(16.dp),
-                            colors =
-                                CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                ),
-                        ) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = asset.displayName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    Text(
-                                        text = "${asset.provider.displayName} • ${asset.voiceName}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
+                        SettingsProviderCard(
+                            title = asset.displayName,
+                            subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
+                            onClick = {
+                                onSelectTtsProviderAsset(asset)
+                                hideAndNavigate(onNavigateToTtsConfigure)
+                            },
+                        )
                     }
                 }
 
@@ -183,22 +140,14 @@ fun TtsProvidersBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
+            NeoPrimaryButton(
+                text = "Add TTS Provider",
+                icon = Icons.Default.Add,
                 onClick = {
                     onStartCreateTtsProviderAsset()
                     hideAndNavigate(onNavigateToTtsConfigure)
                 },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add TTS Provider", fontWeight = FontWeight.SemiBold)
-            }
+            )
         }
 
         pendingDeleteTarget?.let { asset ->

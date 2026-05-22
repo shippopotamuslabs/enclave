@@ -34,7 +34,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -57,7 +58,7 @@ fun ModelSelectionBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
     ) {
@@ -98,10 +99,13 @@ fun ModelSelectionContent(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.9f)
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
+                .fillMaxHeight(0.9f),
     ) {
+        NeoSheetHeader(
+            title = "Select Model",
+            onDismiss = onDismissRequest,
+        )
+
         val providers =
             androidx.compose.runtime.remember(availableModels) {
                 availableModels.mapNotNull { it.providerName }.distinct().sorted()

@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.settings
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -26,9 +24,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,7 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -101,18 +100,11 @@ fun ByokBottomSheet(
         }
     }
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             val viewState =
                 remember(uiState) {
                     when {
@@ -133,6 +125,7 @@ fun ByokBottomSheet(
                     is ByokSheetView.ConfigList -> {
                         ByokConfigListView(
                             asset = state.asset,
+                            onDismiss = onDismiss,
                             onBack = { onSelectApiModelAsset(null) },
                             onEditAsset = {
                                 hideAndNavigate {
@@ -163,6 +156,7 @@ fun ByokBottomSheet(
                     is ByokSheetView.AssetList -> {
                         ByokAssetListView(
                             apiModels = uiState.apiProvidersSheet.assets,
+                            onDismiss = onDismiss,
                             onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
@@ -231,28 +225,21 @@ fun ByokBottomSheet(
 @Composable
 private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
+    onDismiss: () -> Unit,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onAddAsset: () -> Unit,
 ) {
-    Column {
-        Text(
-            text = "API AI Models",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-
-        Text(
-            text = "Manage your own API keys and model configurations.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        NeoSheetHeader(
+            title = "API AI Models",
+            subtitle = "Manage your own API keys and model configurations.",
+            onDismiss = onDismiss,
         )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             items(apiModels, key = { it.credentialsId.value }) { asset ->
                 val dismissState =
@@ -269,7 +256,7 @@ private fun ByokAssetListView(
 
                 SwipeToDismissBox(
                     state = dismissState,
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.clip(EnclaveNeoTokens.shape),
                     enableDismissFromStartToEnd = false,
                     backgroundContent = {
                         Box(
@@ -288,88 +275,38 @@ private fun ByokAssetListView(
                         }
                     },
                 ) {
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectAsset(asset) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                    ) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = asset.displayName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    if (asset.configurations.any { it.isMultimodal }) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Visibility,
-                                            contentDescription = "Vision capable",
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = asset.provider.displayName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                )
-                                Text(
-                                    text = "${asset.configurations.size} Preset(s)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+                    val subtitle =
+                        buildString {
+                            append(asset.provider.displayName)
+                            append(" • ")
+                            append("${asset.configurations.size} Preset(s)")
+                            if (asset.configurations.any { it.isMultimodal }) {
+                                append(" • Vision")
                             }
-
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "View configurations",
-                                modifier = Modifier.padding(start = 4.dp),
-                            )
                         }
-                    }
+                    SettingsProviderCard(
+                        title = asset.displayName,
+                        subtitle = subtitle,
+                        onClick = { onSelectAsset(asset) },
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        NeoPrimaryButton(
+            text = "Add API Provider",
+            icon = Icons.Default.Add,
             onClick = onAddAsset,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Add new API Provider")
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Add API Provider", fontWeight = FontWeight.SemiBold)
-        }
+        )
     }
 }
 
 @Composable
 private fun ByokConfigListView(
     asset: ApiModelAssetUi,
+    onDismiss: () -> Unit,
     onBack: () -> Unit,
     onEditAsset: () -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
@@ -377,38 +314,22 @@ private fun ByokConfigListView(
     onRequestDeleteConfig: (ApiModelConfigUi) -> Unit,
     onAddConfig: () -> Unit,
 ) {
-    Column {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp),
-        ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = asset.displayName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    if (asset.configurations.any { it.isMultimodal }) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "Vision capable",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Text(
-                    text = "Presets",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Box {
+    val presetSubtitle =
+        if (asset.configurations.any { it.isMultimodal }) {
+            "Presets • Vision"
+        } else {
+            "Presets"
+        }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            NeoSheetHeader(
+                title = asset.displayName,
+                subtitle = presetSubtitle,
+                onDismiss = onDismiss,
+                onBackClick = onBack,
+            )
+            Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                 var menuExpanded by remember { mutableStateOf(false) }
 
                 IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
@@ -445,7 +366,7 @@ private fun ByokConfigListView(
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
                 val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
@@ -463,7 +384,7 @@ private fun ByokConfigListView(
 
                 SwipeToDismissBox(
                     state = dismissState,
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.clip(EnclaveNeoTokens.shape),
                     enableDismissFromStartToEnd = false,
                     gesturesEnabled = isSwipeEnabled,
                     backgroundContent = {
@@ -483,69 +404,28 @@ private fun ByokConfigListView(
                         }
                     },
                 ) {
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onEditConfig(config) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                    ) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = config.displayName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text =
-                                        if (config.modelId.isNotBlank()) {
-                                            "${config.displayName} • ${config.modelId}"
-                                        } else {
-                                            config.displayName
-                                        },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                    val configSubtitle =
+                        if (config.modelId.isNotBlank()) {
+                            config.modelId
+                        } else {
+                            config.displayName
                         }
-                    }
+                    SettingsProviderCard(
+                        title = config.displayName,
+                        subtitle = configSubtitle,
+                        onClick = { onEditConfig(config) },
+                    )
                 }
             }
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
+                NeoPrimaryButton(
+                    text = "Add Preset",
+                    icon = Icons.Default.Add,
                     onClick = onAddConfig,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add Preset",
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+                )
             }
         }
     }
