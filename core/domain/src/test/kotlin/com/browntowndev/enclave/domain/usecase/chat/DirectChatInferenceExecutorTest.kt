@@ -73,7 +73,7 @@ class DirectChatInferenceExecutorTest {
         memoriesRepository =
             mockk<com.browntowndev.enclave.domain.port.repository.MemoriesRepository>(relaxed = true) {
                 coEvery { getCoreMemories() } returns emptyList()
-                coEvery { searchMemories(any()) } returns emptyList()
+                coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
             }
         embeddingEnginePort =
             mockk<com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort>(relaxed = true) {

@@ -106,7 +106,7 @@ class ChatInferenceRequestPreparerXSearchTest {
             memoriesRepository =
                 mockk {
                     coEvery { getCoreMemories() } returns emptyList()
-                    coEvery { searchMemories(any(), any()) } returns emptyList()
+                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
                 },
             embeddingEnginePort =
                 mockk {

@@ -11,6 +11,9 @@ interface EmbeddingDao {
     suspend fun searchSimilarMessages(query: SupportSQLiteQuery): List<String>
 
     @RawQuery
+    suspend fun searchMemoryEmbeddingMatches(query: SupportSQLiteQuery): List<MemoryEmbeddingMatch>
+
+    @RawQuery
     suspend fun insertEmbedding(query: SupportSQLiteQuery): Long
 
     @Transaction

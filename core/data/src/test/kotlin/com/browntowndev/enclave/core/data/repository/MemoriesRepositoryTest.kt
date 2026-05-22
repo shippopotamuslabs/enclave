@@ -4,9 +4,11 @@ import androidx.sqlite.db.SupportSQLiteQuery
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MemoriesEntity
+import com.browntowndev.enclave.core.data.local.MemoryEmbeddingMatch
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
+import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import io.mockk.coEvery
@@ -228,28 +230,114 @@ class MemoriesRepositoryTest {
         }
 
     @Test
-    fun `searchMemories performs raw query on dao`() =
+    fun `searchMemories queries embedding matches and loads memories`() =
         runTest {
             val queryVector = floatArrayOf(0.5f, 0.6f)
             val limit = 3
-            val expectedEntities =
-                listOf(
-                    MemoriesEntity(category = MemoryCategory.FACTS, content = "Result"),
+            val fact =
+                MemoriesEntity(
+                    id = "fact-1",
+                    category = MemoryCategory.FACTS,
+                    content = "Result",
                 )
 
-            coEvery { memoriesDao.searchMemoriesRaw(any()) } returns expectedEntities
+            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
+                listOf(MemoryEmbeddingMatch(id = "fact-1", distance = 0.2f))
+            coEvery { memoriesDao.getMemoryById("fact-1") } returns fact
 
             val result = repository.searchMemories(queryVector, limit)
 
-            assertEquals(expectedEntities.size, result.size)
-            assertEquals(expectedEntities[0].content, result[0].content)
+            assertEquals(1, result.size)
+            assertEquals(fact.content, result[0].content)
 
             val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { memoriesDao.searchMemoriesRaw(capture(querySlot)) }
+            coVerify { embeddingDao.searchMemoryEmbeddingMatches(capture(querySlot)) }
             val sql = querySlot.captured.sql
-            assert(sql.contains("SELECT m.* FROM memories m"))
-            assert(sql.contains("JOIN memory_embeddings me ON m.id = me.id"))
-            assert(sql.contains("WHERE me.vector MATCH '[0.5,0.6]' AND k = 3"))
+            assert(sql.contains("SELECT id, distance"))
+            assert(sql.contains("FROM memory_embeddings"))
+            assert(sql.contains("WHERE vector MATCH '[0.5,0.6]' AND k = 3"))
+        }
+
+    @Test
+    fun `searchMemories excludes categories and filters by distance`() =
+        runTest {
+            val queryVector = floatArrayOf(0.5f, 0.6f)
+            val relevantFact =
+                MemoriesEntity(
+                    id = "fact-1",
+                    category = MemoryCategory.FACTS,
+                    content = "User owns a cat",
+                )
+            val irrelevantFact =
+                MemoriesEntity(
+                    id = "fact-2",
+                    category = MemoryCategory.FACTS,
+                    content = "Unrelated fact",
+                )
+            val coreIdentity =
+                MemoriesEntity(
+                    id = "core-1",
+                    category = MemoryCategory.CORE_IDENTITY,
+                    content = "User is a developer",
+                )
+
+            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
+                listOf(
+                    MemoryEmbeddingMatch(id = "core-1", distance = 0.1f),
+                    MemoryEmbeddingMatch(id = "fact-2", distance = 0.9f),
+                    MemoryEmbeddingMatch(id = "fact-1", distance = 0.4f),
+                )
+            coEvery { memoriesDao.getMemoryById("core-1") } returns coreIdentity
+            coEvery { memoriesDao.getMemoryById("fact-2") } returns irrelevantFact
+            coEvery { memoriesDao.getMemoryById("fact-1") } returns relevantFact
+
+            val result =
+                repository.searchMemories(
+                    queryVector = queryVector,
+                    limit = 5,
+                    maxDistance = MemoryRetrievalPolicy.MAX_L2_DISTANCE,
+                    excludeCategories = MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
+                )
+
+            assertEquals(1, result.size)
+            assertEquals(relevantFact.content, result[0].content)
+
+            val querySlot = slot<SupportSQLiteQuery>()
+            coVerify { embeddingDao.searchMemoryEmbeddingMatches(capture(querySlot)) }
+            val sql = querySlot.captured.sql
+            assert(sql.contains("AND k = ${MemoryRetrievalPolicy.SEARCH_CANDIDATE_POOL}"))
+        }
+
+    @Test
+    fun `searchMemories skips deleted memories`() =
+        runTest {
+            val queryVector = floatArrayOf(0.5f, 0.6f)
+            val deletedFact =
+                MemoriesEntity(
+                    id = "fact-1",
+                    category = MemoryCategory.FACTS,
+                    content = "Deleted",
+                    deleted = true,
+                )
+            val activeFact =
+                MemoriesEntity(
+                    id = "fact-2",
+                    category = MemoryCategory.FACTS,
+                    content = "Active",
+                )
+
+            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
+                listOf(
+                    MemoryEmbeddingMatch(id = "fact-1", distance = 0.1f),
+                    MemoryEmbeddingMatch(id = "fact-2", distance = 0.2f),
+                )
+            coEvery { memoriesDao.getMemoryById("fact-1") } returns deletedFact
+            coEvery { memoriesDao.getMemoryById("fact-2") } returns activeFact
+
+            val result = repository.searchMemories(queryVector, limit = 5)
+
+            assertEquals(1, result.size)
+            assertEquals(activeFact.content, result[0].content)
         }
 
     @Test

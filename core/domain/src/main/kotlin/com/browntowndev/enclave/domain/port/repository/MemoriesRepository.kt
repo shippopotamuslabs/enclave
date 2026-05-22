@@ -29,5 +29,7 @@ interface MemoriesRepository {
     suspend fun searchMemories(
         queryVector: FloatArray,
         limit: Int = 5,
+        maxDistance: Float? = null,
+        excludeCategories: Set<MemoryCategory> = emptySet(),
     ): List<Memory>
 }
