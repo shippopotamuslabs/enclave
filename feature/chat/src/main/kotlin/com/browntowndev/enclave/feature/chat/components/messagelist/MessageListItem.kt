@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import com.browntowndev.enclave.feature.chat.IndicatorState
@@ -53,7 +54,7 @@ internal fun MessageListItem(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
     ) {
         MessageListItemIndicators(
             modelDisplayName = message.modelDisplayName,

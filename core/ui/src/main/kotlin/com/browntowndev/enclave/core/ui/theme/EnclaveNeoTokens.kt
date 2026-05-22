@@ -19,7 +19,27 @@ object EnclaveNeoTokens {
 
     val shape = RoundedCornerShape(cornerRadius)
 
+    /** User chat bubble with a sharp bottom-end corner. */
+    val userBubbleShape =
+        RoundedCornerShape(
+            topStart = cornerRadius,
+            topEnd = cornerRadius,
+            bottomStart = cornerRadius,
+            bottomEnd = 0.dp,
+        )
+
+    /** Bottom-docked input bar (rounded top edge only). */
+    val inputBarShape =
+        RoundedCornerShape(
+            topStart = cornerRadius,
+            topEnd = cornerRadius,
+            bottomStart = 0.dp,
+            bottomEnd = 0.dp,
+        )
+
     val borderWidth: Dp = 2.dp
+
+    val trailingActionSize: Dp = 48.dp
 
     /** Hard shadow offset for elevated controls on light backgrounds. */
     val buttonShadowOffsetLight: Dp = 2.dp

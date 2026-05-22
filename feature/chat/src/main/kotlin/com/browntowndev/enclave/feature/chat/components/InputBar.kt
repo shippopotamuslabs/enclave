@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -59,12 +57,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.browntowndev.enclave.core.ui.component.CircularIconButton
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
@@ -186,10 +186,13 @@ fun InputBar(
                     modifier =
                         Modifier
                             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                RoundedCornerShape(8.dp),
-                            ).padding(horizontal = 12.dp, vertical = 6.dp),
+                            .neoSurface(
+                                backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                                borderColor = neoBorderColor(),
+                                withShadow = false,
+                                shape = EnclaveNeoTokens.shape,
+                            )
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -265,16 +268,11 @@ fun InputBar(
                 null
             } else {
                 {
-                    // Plus Button
-                    CircularIconButton(
+                    NeoIconButton(
                         onClick = { showAttachmentSheet = true },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Show attachment options",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                        icon = Icons.Default.Add,
+                        contentDescription = "Show attachment options",
+                    )
                 }
             },
         trailingAction = {
@@ -406,33 +404,3 @@ private fun AttachmentMenuItem(
     }
 }
 
-@Preview(showSystemUi = true)
-@Composable
-fun PreviewChatInputBar() {
-    EnclaveTheme {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            InputBar(
-                inputText = "Hello World",
-                speechState = SpeechState.Idle,
-                selectedImageUris = emptyList<String>(),
-                selectedFileName = "test_file.txt",
-                isPhotoAttachmentEnabled = true,
-                photoAttachmentMaxItems = 1,
-                photoAttachmentDisabledReason = null,
-                selectedMode = ChatModeUi.FAST,
-                isGenerating = false,
-                canStop = true,
-                isGlobalInferenceBlocked = false,
-                onInputChange = {},
-                onModeChange = {},
-                onSend = {},
-                onStopGenerating = {},
-                onImageAttach = {},
-                onFileAttach = {},
-                onClearImage = {},
-                onClearFile = {},
-                onMicClick = {},
-            )
-        }
-    }
-}

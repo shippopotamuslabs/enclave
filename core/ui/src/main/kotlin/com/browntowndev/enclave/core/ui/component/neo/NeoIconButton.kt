@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -29,9 +30,49 @@ fun NeoIconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    NeoIconButtonSurface(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+fun NeoIconButton(
+    onClick: () -> Unit,
+    icon: Painter,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    NeoIconButtonSurface(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun NeoIconButtonSurface(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    enabled: Boolean,
+    icon: @Composable () -> Unit,
+) {
     val borderColor = neoBorderColor()
     val backgroundColor = MaterialTheme.colorScheme.surface
-    val iconTint = MaterialTheme.colorScheme.primary
     val shadowColor = neoShadowColor()
     val shadowOffset = neoButtonShadowOffset()
     val interactionSource = remember { MutableInteractionSource() }
@@ -59,11 +100,7 @@ fun NeoIconButton(
                     ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = iconTint,
-            )
+            icon()
         }
     }
 }

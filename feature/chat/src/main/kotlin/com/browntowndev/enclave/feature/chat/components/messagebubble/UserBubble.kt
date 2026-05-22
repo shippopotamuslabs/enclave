@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -24,7 +26,6 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -91,22 +92,20 @@ internal fun UserBubble(
                 onImageClick = { fullscreenImageUri = it },
             )
 
-            Surface(
+            Box(
                 modifier =
                     Modifier
                         .fillMaxWidth(fraction = USER_BUBBLE_WIDTH_FRACTION)
                         .zIndex(1f)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
+                            shape = EnclaveNeoTokens.userBubbleShape,
+                        )
                         .clickable(
                             onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
                         ) { showActions = !showActions },
-                shape =
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        topEnd = 20.dp,
-                        bottomStart = 20.dp,
-                        bottomEnd = 4.dp,
-                    ),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     UserBubbleFileAttachments(attachments = message.content.fileAttachments)
@@ -167,7 +166,7 @@ private fun UserBubbleImagePreviews(
                     Modifier
                         .widthIn(max = 120.dp)
                         .heightIn(max = 120.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(EnclaveNeoTokens.shape)
                         .clickable { onImageClick(imageUri) },
             )
         }

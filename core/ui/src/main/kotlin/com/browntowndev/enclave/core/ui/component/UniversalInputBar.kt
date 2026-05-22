@@ -75,6 +75,11 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.ShimmerText
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -88,8 +93,8 @@ import dev.chrisbanes.haze.hazeEffect
 @Composable
 fun UniversalInputBar(
     modifier: Modifier = Modifier,
-    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainer,
-    shape: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    shape: Shape = EnclaveNeoTokens.inputBarShape,
     attachmentContent: (@Composable ColumnScope.() -> Unit)? = null,
     inputContent: @Composable ColumnScope.() -> Unit,
     actionContent: (@Composable RowScope.() -> Unit)? = null,
@@ -101,10 +106,12 @@ fun UniversalInputBar(
     hazeAlpha: Float = 0.4f,
 ) {
     val focusManager = LocalFocusManager.current
+    val borderColor = neoBorderColor()
 
+    // Surface matches the bar face so the dock reads full-bleed edge-to-edge.
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
+        color = backgroundColor,
     ) {
         Box(
             modifier =
@@ -119,11 +126,21 @@ fun UniversalInputBar(
                                 noiseFactor = 0.15f
                             }
                         } else {
-                            Modifier.background(backgroundColor)
+                            Modifier.neoSurface(
+                                backgroundColor = backgroundColor,
+                                borderColor = borderColor,
+                                withShadow = false,
+                                shape = shape,
+                            )
                         },
-                    ).navigationBarsPadding(),
+                    ),
         ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+            ) {
                 val contentMaxH = maxHeight
                 val density = LocalDensity.current
                 var attachmentHeight by remember { mutableStateOf(0.dp) }
@@ -293,8 +310,9 @@ fun StandardTrailingAction(
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     disabledContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-    shape: Shape = CircleShape,
+    shape: Shape = EnclaveNeoTokens.shape,
     description: String? = null,
+    withShadow: Boolean = false,
 ) {
     CircularTrailingAction(
         onClick = onClick,
@@ -302,6 +320,8 @@ fun StandardTrailingAction(
         enabled = enabled,
         shape = shape,
         containerColor = if (enabled) containerColor else disabledContainerColor,
+        borderColor = neoBorderColor(),
+        withShadow = withShadow && enabled,
         content = {
             Icon(
                 imageVector = icon,
@@ -325,8 +345,9 @@ fun StandardTrailingAction(
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     disabledContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-    shape: Shape = CircleShape,
+    shape: Shape = EnclaveNeoTokens.shape,
     description: String? = null,
+    withShadow: Boolean = false,
 ) {
     CircularTrailingAction(
         onClick = onClick,
@@ -334,6 +355,8 @@ fun StandardTrailingAction(
         enabled = enabled,
         shape = shape,
         containerColor = if (enabled) containerColor else disabledContainerColor,
+        borderColor = neoBorderColor(),
+        withShadow = withShadow && enabled,
         content = {
             Icon(
                 painter = painter,
@@ -351,20 +374,28 @@ private fun CircularTrailingAction(
     enabled: Boolean,
     shape: Shape,
     containerColor: Color,
+    borderColor: Color,
+    withShadow: Boolean,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier =
             modifier
-                .size(48.dp)
-                .clip(shape)
-                .background(containerColor, shape = shape)
+                .size(EnclaveNeoTokens.trailingActionSize)
+                .neoSurface(
+                    backgroundColor = containerColor,
+                    borderColor = borderColor,
+                    withShadow = withShadow,
+                    shadowColor = neoShadowColor(),
+                    shadowOffset = neoButtonShadowOffset(),
+                    shape = shape,
+                )
                 .then(
                     if (enabled) {
                         Modifier.clickable(
                             interactionSource = interactionSource,
-                            indication = ripple(bounded = true, radius = 24.dp),
+                            indication = null,
                             onClick = onClick,
                         )
                     } else {
@@ -464,7 +495,7 @@ fun UniversalVoiceTrailingAction(
 
     if (speechState is SpeechState.Transcribing) {
         Box(
-            modifier = modifier.size(48.dp),
+            modifier = modifier.size(EnclaveNeoTokens.trailingActionSize),
             contentAlignment = Alignment.Center,
         ) {
             CircularProgressIndicator(
@@ -524,6 +555,7 @@ fun UniversalVoiceTrailingAction(
                 enabled = enabled,
                 containerColor = containerColor,
                 contentColor = contentColor,
+                withShadow = isSending && enabled,
             )
         }
     }
