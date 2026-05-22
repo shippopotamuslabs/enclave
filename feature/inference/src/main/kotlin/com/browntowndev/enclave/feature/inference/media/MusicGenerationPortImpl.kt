@@ -23,13 +23,18 @@ class MusicGenerationPortImpl
                     ?: return Result.failure(IllegalStateException("API key not found for alias: ${provider.credentialAlias}"))
 
             return when (provider.provider) {
-                ApiProvider.GOOGLE ->
+                ApiProvider.GOOGLE -> {
+                    val modelId =
+                        provider.modelName
+                            ?: return Result.failure(IllegalStateException("No model configured for provider: ${provider.id}"))
                     googleAdapter.generateMusic(
                         prompt,
                         apiKey,
-                        provider.modelName ?: "lyria-3-clip-preview",
+                        modelId,
                         provider.baseUrl,
+                        settings,
                     )
+                }
                 else -> Result.failure(UnsupportedOperationException("Music generation not supported for provider: ${provider.provider}"))
             }
         }

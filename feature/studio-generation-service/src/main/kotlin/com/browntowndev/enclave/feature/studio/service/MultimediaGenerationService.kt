@@ -80,6 +80,13 @@ class MultimediaGenerationService : Service() {
                     return START_NOT_STICKY
                 }
                 val mediaType = MediaCapability.valueOf(intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: MediaCapability.IMAGE.name)
+                val settings =
+                    StudioGenerationIntentCodec.readSettings(intent)
+                        ?: when (mediaType) {
+                            MediaCapability.IMAGE -> ImageGenerationSettings()
+                            MediaCapability.VIDEO -> VideoGenerationSettings()
+                            MediaCapability.MUSIC -> MusicGenerationSettings()
+                        }
 
                 updateNotification("Generating...")
 
@@ -93,13 +100,20 @@ class MultimediaGenerationService : Service() {
                             return@launch
                         }
 
-                        val settings = ImageGenerationSettings()
-
                         val result =
                             when (mediaType) {
-                                MediaCapability.IMAGE -> imageGenerationPort.generateImage(prompt, provider, settings)
-                                MediaCapability.VIDEO -> generateVideoUseCase(prompt, VideoGenerationSettings()).map { listOf(it) }
-                                MediaCapability.MUSIC -> generateMusicUseCase(prompt, MusicGenerationSettings()).map { listOf(it) }
+                                MediaCapability.IMAGE -> {
+                                    val imageSettings = settings as? ImageGenerationSettings ?: ImageGenerationSettings()
+                                    imageGenerationPort.generateImage(prompt, provider, imageSettings)
+                                }
+                                MediaCapability.VIDEO -> {
+                                    val videoSettings = settings as? VideoGenerationSettings ?: VideoGenerationSettings()
+                                    generateVideoUseCase(prompt, videoSettings).map { listOf(it) }
+                                }
+                                MediaCapability.MUSIC -> {
+                                    val musicSettings = settings as? MusicGenerationSettings ?: MusicGenerationSettings()
+                                    generateMusicUseCase(prompt, musicSettings).map { listOf(it) }
+                                }
                             }
 
                         result

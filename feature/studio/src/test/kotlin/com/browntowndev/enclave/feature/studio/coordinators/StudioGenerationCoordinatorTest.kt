@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import io.mockk.every
@@ -33,15 +34,16 @@ class StudioGenerationCoordinatorTest {
             submittedPrompt = "prompt",
             mediaType = MediaCapability.IMAGE,
             continualMode = false,
+            settings = ImageGenerationSettings(),
         )
 
         assertTrue(coordinator.isGenerating.value)
-        verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE) }
+        verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings()) }
     }
 
     @Test
     fun stopGeneration_resetsContinualGenerationActive() {
-        coordinator.beginGenerationAttempt("prompt", MediaCapability.IMAGE, continualMode = true)
+        coordinator.beginGenerationAttempt("prompt", MediaCapability.IMAGE, continualMode = true, settings = ImageGenerationSettings())
         coordinator.stopGeneration()
 
         assertFalse(coordinator.isContinualGenerationActive.value)
