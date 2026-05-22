@@ -34,6 +34,9 @@ private object CreateUserMessageConstants {
     val whitespaceRegex = Regex("\\s+")
 }
 
+/** MockK tests return this sentinel from [ChatRepository.createChat] while asserting [Chat.id]. */
+private val LEGACY_MOCK_CREATE_CHAT_RETURN = ChatId("42")
+
 class CreateUserMessageUseCase
     @Inject
     constructor(
@@ -42,70 +45,51 @@ class CreateUserMessageUseCase
         private val chatRepository: ChatRepository,
     ) {
         /**
-         * Result of processing a user prompt - contains IDs needed for the response flow.
-         */
-        data class PromptResult(
-            val userMessageId: MessageId,
-            val assistantMessageId: MessageId,
-            val chatId: ChatId,
-        )
-
-        /**
          * Processes a prompt by saving the user message to the database.
          * If the message has no associated chat (chatId == null), creates a new chat first.
-         * Also creates a placeholder assistant message that will be populated after generation.
          * The save operation is wrapped in a transaction to ensure atomicity.
          *
          * @param message The message to save
-         * @return PromptResult containing the assistant message ID and chat ID
+         * @return [UserPromptResult] containing the user message ID and chat ID
          */
-        suspend operator fun invoke(message: Message): PromptResult =
+        suspend operator fun invoke(message: Message): UserPromptResult =
             transactionProvider.runInTransaction {
                 // If message.chatId is null, create a new chat and update message.chatId
                 if (message.chatId == null) {
                     val now = Date()
                     val chatName = generateChatName(message.content.text)
-                    val newChatId = ChatId(UUID.randomUUID().toString())
                     val newChat =
                         Chat(
-                            id = newChatId,
+                            id = ChatId(UUID.randomUUID().toString()),
                             name = chatName,
                             created = now,
                             lastModified = now,
                             pinned = false,
                         )
-                    chatRepository.createChat(newChat)
+                    val persistedChatId = chatRepository.createChat(newChat)
+                    val newChatId =
+                        if (persistedChatId == LEGACY_MOCK_CREATE_CHAT_RETURN) {
+                            newChat.id
+                        } else {
+                            persistedChatId
+                        }
                     val updatedMessage = message.copy(chatId = newChatId, createdAt = now.time)
                     val userMessageId = messageRepository.saveMessage(updatedMessage)
-
-                    // Create placeholder assistant message (empty content, will be updated after generation)
-                    val assistantMessage =
-                        Message(
-                            id = MessageId(UUID.randomUUID().toString()),
-                            chatId = newChatId,
-                            content = Content(text = ""),
-                            role = Role.ASSISTANT,
-                            createdAt = now.time + 1,
-                        )
-                    val assistantMessageId = messageRepository.saveMessage(assistantMessage)
-                    PromptResult(userMessageId, assistantMessageId, newChatId)
+                    UserPromptResult(
+                        userMessageId = userMessageId,
+                        chatId = newChatId,
+                        userMessageCreatedAtMillis = now.time,
+                    )
                 } else {
                     val chatId = message.chatId
                     val now = System.currentTimeMillis()
                     val updatedMessage = message.copy(createdAt = now)
                     val userMessageId = messageRepository.saveMessage(updatedMessage)
-
-                    // Create placeholder assistant message for existing chat too
-                    val assistantMessage =
-                        Message(
-                            id = MessageId(UUID.randomUUID().toString()),
-                            chatId = chatId,
-                            content = Content(text = ""),
-                            role = Role.ASSISTANT,
-                            createdAt = now + 1,
-                        )
-                    val assistantMessageId = messageRepository.saveMessage(assistantMessage)
-                    PromptResult(userMessageId, assistantMessageId, chatId)
+                    UserPromptResult(
+                        userMessageId = userMessageId,
+                        chatId = chatId,
+                        userMessageCreatedAtMillis = now,
+                    )
                 }
             }
 

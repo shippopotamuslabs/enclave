@@ -59,8 +59,7 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 - **Right:** New chat icon → triggers `viewModel.createNewChat()`.
 
 ### 2.3 MessageList (`LazyColumn`)
-- `reverseLayout = true`
-- `verticalArrangement = Arrangement.Bottom`
+- `reverseLayout = false`
 - Render `MessageBubble` items based on `role` (User vs. Assistant).
 - **Bubble Corners:** 20.dp asymmetric. User bubbles have a sharper bottom-right corner (`4.dp`). Assistant bubbles have a sharper bottom-left corner (`4.dp`).
 

@@ -36,7 +36,10 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
-import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.UserPromptResult
+import com.browntowndev.pocketcrew.feature.chat.delegates.ChatUiStateReducer
+import com.browntowndev.pocketcrew.feature.chat.mapping.ChatMessageUiMapper
+import com.browntowndev.pocketcrew.feature.chat.mapping.PhotoAttachmentPolicy
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
@@ -52,6 +55,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -64,8 +68,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.io.IOException
@@ -73,6 +79,10 @@ import java.io.IOException
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModelTest {
+    companion object {
+        const val OSDA_V01_REQUIRED_MESSAGE_COUNT = 1
+    }
+
     private val settingsUseCases: SettingsUseCases = mockk()
     private val chatUseCases: ChatUseCases = mockk()
     private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
@@ -121,6 +131,7 @@ class ChatViewModelTest {
 
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
+        every { errorHandler.handleError(any(), any(), any(), any()) } just Runs
 
         speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
         listenToSpeechUseCase = mockk()
@@ -185,9 +196,10 @@ class ChatViewModelTest {
             // Then
             // Verify coroutineExceptionHandler was called with correct parameters
             verify {
-                errorHandler.coroutineExceptionHandler(
-                    tag = "ChatViewModel",
+                errorHandler.handleError(
+                    tag = "InferenceOrchestrator",
                     message = "Failed to send message",
+                    throwable = exception,
                     userMessage = "Could not send message. Please try again.",
                 )
             }
@@ -716,9 +728,19 @@ class ChatViewModelTest {
             val chatId = ChatId("chat")
             val assistantId = MessageId("assistant")
             coEvery { chatUseCases.processPrompt(any()) } returns
-                com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase.PromptResult(
+                UserPromptResult(
                     chatId = chatId,
                     userMessageId = MessageId("user"),
+                    userMessageCreatedAtMillis = 100L,
+                )
+            coEvery {
+                chatUseCases.createAssistantPlaceholder(
+                    chatId = any(),
+                    userMessageCreatedAtMillis = any(),
+                    assistantMessageId = any(),
+                )
+            } returns
+                com.browntowndev.pocketcrew.domain.usecase.chat.AssistantPlaceholderResult(
                     assistantMessageId = assistantId,
                 )
             coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any()) } returns flowOf()
@@ -730,7 +752,6 @@ class ChatViewModelTest {
             chatViewModel.onSendMessage()
             advanceUntilIdle()
 
-            // Verify that the prompt passed to processPrompt and generateChatResponse includes the file content
             coVerify {
                 chatUseCases.processPrompt(
                     match {
@@ -739,14 +760,6 @@ class ChatViewModelTest {
                             it.content.fileAttachments[0].name == "test.txt" &&
                             it.content.fileAttachments[0].content == "Extracted content"
                     },
-                )
-                chatUseCases.generateChatResponse(
-                    prompt = "Hello",
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    mode = any(),
-                    backgroundInferenceEnabled = any(),
                 )
             }
         }
@@ -836,6 +849,220 @@ class ChatViewModelTest {
                     .first()
             assertEquals(persistentUri, updatedMessage.content.generatedMediaUris.first())
 
+            collectJob.cancel()
+        }
+
+    @Test
+    @DisplayName("OSDA-V-01 — uiState lists optimistic user before DB row")
+    fun osdaV01_optimisticUserVisibleBeforeDb() =
+        runTest {
+            val dbFlow = MutableStateFlow<List<Message>>(emptyList())
+            coEvery { chatUseCases.getChat(any()) } returns dbFlow
+
+            val processPromptGate = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.processPrompt(any()) } coAnswers {
+                processPromptGate.await()
+                UserPromptResult(
+                    userMessageId = MessageId("opt-1"),
+                    chatId = ChatId("chat-1"),
+                    userMessageCreatedAtMillis = 100L,
+                )
+            }
+
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = savedStateHandle,
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = mockk(relaxed = true),
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect() }
+            harness.viewModel.onInputChange("Pending")
+            harness.viewModel.onSendMessage()
+            runCurrent()
+
+            val messages = harness.viewModel.uiState.value.messages
+            assertEquals(1, messages.size)
+            assertEquals(MessageRole.User, messages.last().role)
+            assertEquals("Pending", messages.last().content.text)
+
+            processPromptGate.complete(Unit)
+            collectJob.cancel()
+        }
+
+    @Test
+    @DisplayName("OSDA-V-02 — DB row replaces optimistic with same id")
+    fun osdaV02_dbRowReplacesOptimistic() =
+        runTest {
+            val chatId = ChatId("chat-1")
+            val dbFlow =
+                MutableStateFlow(
+                    listOf(
+                        Message(
+                            id = MessageId("opt-1"),
+                            chatId = chatId,
+                            content = Content(text = "Pending"),
+                            role = Role.USER,
+                        ),
+                    ),
+                )
+            coEvery { chatUseCases.getChat(chatId) } returns dbFlow
+            coEvery { chatUseCases.processPrompt(any()) } returns
+                UserPromptResult(
+                    userMessageId = MessageId("opt-1"),
+                    chatId = chatId,
+                    userMessageCreatedAtMillis = 100L,
+                )
+            coEvery {
+                chatUseCases.createAssistantPlaceholder(
+                    chatId = any(),
+                    userMessageCreatedAtMillis = any(),
+                    assistantMessageId = any(),
+                )
+            } returns
+                com.browntowndev.pocketcrew.domain.usecase.chat.AssistantPlaceholderResult(
+                    assistantMessageId = MessageId("asst-1"),
+                )
+            coEvery {
+                chatUseCases.generateChatResponse(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    mode = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            } returns flowOf()
+
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value)),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = mockk(relaxed = true),
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect() }
+            harness.viewModel.onInputChange("Pending")
+            harness.viewModel.onSendMessage()
+            advanceUntilIdle()
+
+            assertEquals(1, harness.viewModel.uiState.value.messages.size)
+            assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
+            verify(atLeast = 1) { harness.inferenceOrchestrator.clearOptimisticUser() }
+
+            collectJob.cancel()
+        }
+
+    @Test
+    @DisplayName("OSDA-V-03 — onSendMessage error invokes handler and no stuck optimistic")
+    fun osdaV03_sendErrorClearsOptimistic() =
+        runTest {
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = savedStateHandle,
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = mockk(relaxed = true),
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+
+            harness.viewModel.onInputChange("Hello")
+            coEvery { chatUseCases.processPrompt(any()) } throws IOException("Network error")
+            harness.viewModel.onSendMessage()
+            advanceUntilIdle()
+
+            verify {
+                errorHandler.handleError(
+                    tag = "InferenceOrchestrator",
+                    message = "Failed to send message",
+                    throwable = any(),
+                    userMessage = "Could not send message. Please try again.",
+                )
+            }
+            assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
+        }
+
+    @Test
+    @DisplayName("OSDA-M-02 — merge wired shows optimistic user when DB is empty")
+    fun osdaM02_bypassMergeGuard() =
+        runTest {
+            val dbFlow = MutableStateFlow<List<Message>>(emptyList())
+            coEvery { chatUseCases.getChat(any()) } returns dbFlow
+
+            val processPromptGate = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.processPrompt(any()) } coAnswers {
+                processPromptGate.await()
+                UserPromptResult(
+                    userMessageId = MessageId("opt-1"),
+                    chatId = ChatId("chat-1"),
+                    userMessageCreatedAtMillis = 100L,
+                )
+            }
+
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = savedStateHandle,
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = mockk(relaxed = true),
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect() }
+            harness.viewModel.onInputChange("Pending")
+            harness.viewModel.onSendMessage()
+            runCurrent()
+
+            assertEquals(OSDA_V01_REQUIRED_MESSAGE_COUNT, harness.viewModel.uiState.value.messages.size)
+            assertEquals("Pending", harness.viewModel.uiState.value.messages.last().content.text)
+
+            processPromptGate.complete(Unit)
             collectJob.cancel()
         }
 }

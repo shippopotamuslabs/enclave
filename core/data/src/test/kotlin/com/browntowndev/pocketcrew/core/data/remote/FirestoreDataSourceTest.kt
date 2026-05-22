@@ -995,6 +995,60 @@ class FirestoreDataSourceTest {
             }
 
         @Test
+        fun `SCN-LIVE-004 live snapshot applies out of order events in sequence order`() =
+            runTest {
+                val dispatcher = ContiguousProbeDispatcher(lastAppliedSequence = 761)
+                val harness =
+                    EventFeedHarness(
+                        userId = "alice",
+                        vaultUnlocked = true,
+                        lastAppliedSequence = 761,
+                        eventDispatcher = dispatcher,
+                    )
+
+                harness.dataSource.startListening()
+                advanceUntilIdle()
+                harness.feedGateway.emit(
+                    listOf(
+                        syncEvent(sequence = 763, collectionPath = "chats", entityId = "chat-763"),
+                        syncEvent(sequence = 762, collectionPath = "chats", entityId = "chat-762"),
+                    ),
+                )
+                advanceUntilIdle()
+
+                assertEquals(listOf(762L, 763L), dispatcher.appliedSequences)
+            }
+
+        @Test
+        fun `SCN-LIVE-005 live listener buffers future event until missing sequence arrives`() =
+            runTest {
+                val dispatcher = ContiguousProbeDispatcher(lastAppliedSequence = 761)
+                val harness =
+                    EventFeedHarness(
+                        userId = "alice",
+                        vaultUnlocked = true,
+                        lastAppliedSequence = 761,
+                        eventDispatcher = dispatcher,
+                    )
+
+                harness.dataSource.startListening()
+                advanceUntilIdle()
+                harness.feedGateway.emit(
+                    listOf(syncEvent(sequence = 763, collectionPath = "chats", entityId = "chat-763")),
+                )
+                advanceUntilIdle()
+
+                assertEquals(emptyList<Long>(), dispatcher.appliedSequences)
+
+                harness.feedGateway.emit(
+                    listOf(syncEvent(sequence = 762, collectionPath = "chats", entityId = "chat-762")),
+                )
+                advanceUntilIdle()
+
+                assertEquals(listOf(762L, 763L), dispatcher.appliedSequences)
+            }
+
+        @Test
         fun `SCN-DATASOURCE-001 replay fails when signed out`() =
             runTest {
                 val dataSource = eventFeedDataSource(userId = null, vaultUnlocked = true)
@@ -1224,6 +1278,28 @@ class FirestoreDataSourceTest {
                 } else if (!releaseFirst.isCompleted) {
                     secondStartedBeforeFirstReleased = true
                 }
+                appliedSequences += event.sequence
+                return com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventApplier.ApplyResult(
+                    appliedCount = 1,
+                    lastAppliedSequence = event.sequence,
+                )
+            }
+        }
+
+        private inner class ContiguousProbeDispatcher(
+            private var lastAppliedSequence: Long,
+        ) : com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventDispatcher {
+            val appliedSequences = mutableListOf<Long>()
+
+            override suspend fun apply(
+                userId: String,
+                event: com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEvent,
+            ): com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventApplier.ApplyResult {
+                val expectedSequence = lastAppliedSequence + 1
+                check(event.sequence == expectedSequence) {
+                    "sync event sequence gap: expected $expectedSequence but received ${event.sequence}"
+                }
+                lastAppliedSequence = event.sequence
                 appliedSequences += event.sequence
                 return com.browntowndev.pocketcrew.core.data.remote.firestore.FirestoreSyncEventApplier.ApplyResult(
                     appliedCount = 1,

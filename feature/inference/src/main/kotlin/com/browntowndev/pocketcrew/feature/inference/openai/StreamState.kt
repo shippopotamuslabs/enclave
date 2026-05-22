@@ -53,6 +53,7 @@ data class StreamedOpenAiResponse(
     val providerToolItemIds: List<String>,
     val assistantMessageText: String,
     val finishReason: String? = null,
+    val providerReasoningContent: String? = null,
 ) {
     /** Single-call convenience: the first function call, or null if none. */
     val functionCall: ToolCallRequest? get() = functionCalls.firstOrNull()

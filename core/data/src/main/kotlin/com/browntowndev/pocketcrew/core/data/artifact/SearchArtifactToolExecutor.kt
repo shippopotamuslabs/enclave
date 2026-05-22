@@ -9,6 +9,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import androidx.sqlite.db.SimpleSQLiteQuery
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -30,18 +33,28 @@ class SearchArtifactToolExecutor
         override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             val params = request.parameters as SearchArtifactParams
 
-            val queryEmbedding = embeddingEngine.getEmbedding(params.query)
-            val vectorString = queryEmbedding.joinToString(",", prefix = "[", postfix = "]")
+            if (!isSafeArtifactId(params.artifactId)) {
+                return ToolExecutionResult(
+                    toolName = ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                    resultJson = """{"status":"error","message":"Invalid artifactId"}""",
+                )
+            }
 
-            // Search top 5 similar blocks
+            val queryEmbedding = embeddingEngine.getEmbedding(params.query)
+            val queryBlob = floatArrayToByteArray(queryEmbedding)
+            val idPrefix = "${params.artifactId}_%"
+
             val sql =
                 """
-                SELECT id FROM artifact_block_embeddings 
-                WHERE id LIKE '${params.artifactId}_%' AND vector MATCH '$vectorString' AND k = 5
+                SELECT id FROM artifact_block_embeddings
+                WHERE id LIKE ? AND vector MATCH ? AND k = 5
                 ORDER BY distance
                 """.trimIndent()
 
-            val matchingIds = documentDao.searchSimilarBlocks(androidx.sqlite.db.SimpleSQLiteQuery(sql))
+            val matchingIds =
+                documentDao.searchSimilarBlocks(
+                    SimpleSQLiteQuery(sql, arrayOf(idPrefix, queryBlob)),
+                )
 
             if (matchingIds.isEmpty()) {
                 return ToolExecutionResult(
@@ -94,5 +107,21 @@ class SearchArtifactToolExecutor
                         put("message", JsonPrimitive("Found ${results.size} relevant blocks."))
                     }.toString(),
             )
+        }
+
+        private fun isSafeArtifactId(artifactId: String): Boolean =
+            artifactId.isNotEmpty() &&
+                artifactId.length <= MAX_ARTIFACT_ID_LENGTH &&
+                SAFE_ARTIFACT_ID_PATTERN.matches(artifactId)
+
+        private fun floatArrayToByteArray(floatArray: FloatArray): ByteArray {
+            val buffer = ByteBuffer.allocate(floatArray.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+            for (f in floatArray) buffer.putFloat(f)
+            return buffer.array()
+        }
+
+        private companion object {
+            private const val MAX_ARTIFACT_ID_LENGTH = 128
+            private val SAFE_ARTIFACT_ID_PATTERN = Regex("""^[A-Za-z0-9][A-Za-z0-9._-]*$""")
         }
     }

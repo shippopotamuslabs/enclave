@@ -27,7 +27,7 @@ class FakeInferenceLockManager : InferenceLockManager {
             false
         }
 
-    override fun releaseLock() {
+    override fun releaseLock(inferenceType: InferenceType) {
         isLocked = false
         releaseCount++
         _isInferenceBlocked.value = false

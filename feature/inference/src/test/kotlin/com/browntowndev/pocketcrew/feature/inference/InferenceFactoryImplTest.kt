@@ -74,7 +74,7 @@ class InferenceFactoryImplTest {
         every { context.getExternalFilesDir(null) } returns File("/tmp")
         every { applicationInfo.loadLabel(any()) } returns "Pocket Crew"
         every { inferenceLockManager.acquireLock(any()) } returns true
-        every { inferenceLockManager.releaseLock() } returns Unit
+        every { inferenceLockManager.releaseLock(any()) } returns Unit
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         every { openAiClientProvider.getClient(any(), any(), any(), any(), any()) } returns openAiClient
         every { anthropicClientProvider.getClient(any(), any()) } returns anthropicClient

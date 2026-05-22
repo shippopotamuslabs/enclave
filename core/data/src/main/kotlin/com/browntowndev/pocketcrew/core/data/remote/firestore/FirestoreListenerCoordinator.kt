@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.TreeMap
 
 /**
  * Owns the single live `users/{uid}/sync_events` listener. Entity collection listeners were
@@ -19,6 +20,7 @@ internal class FirestoreListenerCoordinator(
     private val externalScope: CoroutineScope,
 ) {
     private val listenerMutex = Mutex()
+    private val pendingLiveEvents = TreeMap<Long, FirestoreSyncEvent>()
     private var eventListenerRegistration: FirestoreSyncEventListenerRegistration? = null
 
     fun startListening() {
@@ -48,11 +50,7 @@ internal class FirestoreListenerCoordinator(
                     val lastApplied = syncStateStore.lastAppliedSequence(userId)
                     eventListenerRegistration =
                         syncEventFeedClient.attachLiveListener(userId, lastApplied) { events ->
-                            eventApplyMutex.withLock {
-                                for (event in events) {
-                                    syncEventApplier.apply(userId, event)
-                                }
-                            }
+                            applyLiveEvents(userId, events)
                         }
                 }
             } catch (cancellation: CancellationException) {
@@ -78,5 +76,74 @@ internal class FirestoreListenerCoordinator(
             eventListenerRegistration?.remove()
             eventListenerRegistration = null
         }
+        eventApplyMutex.withLock {
+            pendingLiveEvents.clear()
+        }
     }
+
+    private suspend fun applyLiveEvents(
+        userId: String,
+        events: List<FirestoreSyncEvent>,
+    ) {
+        eventApplyMutex.withLock {
+            bufferFutureEvents(userId, events)
+            drainContiguousEvents(userId)
+        }
+    }
+
+    private suspend fun bufferFutureEvents(
+        userId: String,
+        events: List<FirestoreSyncEvent>,
+    ) {
+        val lastApplied = syncStateStore.lastAppliedSequence(userId)
+        for (event in events) {
+            if (event.sequence > lastApplied) {
+                pendingLiveEvents[event.sequence] = event
+            }
+        }
+    }
+
+    private suspend fun drainContiguousEvents(userId: String) {
+        var lastApplied = syncStateStore.lastAppliedSequence(userId)
+        pruneAppliedEvents(lastApplied)
+        while (true) {
+            val nextSequence = lastApplied + 1
+            val event = pendingLiveEvents.remove(nextSequence) ?: break
+            val result =
+                runCatching {
+                    syncEventApplier.apply(userId, event)
+                }.getOrElse { failure ->
+                    pendingLiveEvents[nextSequence] = event
+                    if (failure is CancellationException) throw failure
+                    ctx.loggingPort.error(
+                        FirestoreSyncContext.TAG,
+                        "sync_events listener apply failed at sequence $nextSequence",
+                        failure,
+                    )
+                    return
+                }
+            if (result.lastAppliedSequence > lastApplied) {
+                lastApplied = result.lastAppliedSequence
+                syncStateStore.setLastAppliedSequence(userId, lastApplied)
+                pruneAppliedEvents(lastApplied)
+            }
+        }
+        val nextPending = pendingLiveEvents.firstKeyOrNull()
+        if (nextPending != null && nextPending > lastApplied + 1) {
+            ctx.loggingPort.warning(
+                FirestoreSyncContext.TAG,
+                "sync_events listener waiting for sequence ${lastApplied + 1} before applying $nextPending",
+            )
+        }
+    }
+
+    private fun pruneAppliedEvents(lastApplied: Long) {
+        while (true) {
+            val firstKey = pendingLiveEvents.firstKeyOrNull() ?: return
+            if (firstKey > lastApplied) return
+            pendingLiveEvents.remove(firstKey)
+        }
+    }
+
+    private fun TreeMap<Long, FirestoreSyncEvent>.firstKeyOrNull(): Long? = if (isEmpty()) null else firstKey()
 }

@@ -15,7 +15,9 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 /**
@@ -35,6 +37,10 @@ import org.junit.jupiter.api.Test
  * | Numbers only | Allowed as chat name |
  */
 class CreateUserMessageUseCaseTest {
+    companion object {
+        const val OSDA_D01_REQUIRED_SAVE_MESSAGE_COUNT = 1
+    }
+
     private lateinit var transactionProvider: TransactionProvider
     private lateinit var messageRepository: MessageRepository
     private lateinit var chatRepository: ChatRepository
@@ -88,7 +94,6 @@ class CreateUserMessageUseCaseTest {
             // Then
             coVerify { chatRepository.createChat(any()) }
             assertEquals(MessageId("msg-1"), result.userMessageId)
-            assertEquals(MessageId("msg-2"), result.assistantMessageId)
         }
 
     // ========================================================================
@@ -133,7 +138,6 @@ class CreateUserMessageUseCaseTest {
             // Then
             assertEquals("New Chat", chatSlot.captured.name)
             assertEquals(MessageId("msg-1"), result.userMessageId)
-            assertEquals(MessageId("msg-2"), result.assistantMessageId)
             assertEquals(chatSlot.captured.id, result.chatId)
         }
 
@@ -409,50 +413,9 @@ class CreateUserMessageUseCaseTest {
 
             // Then
             assertEquals(MessageId("msg-10"), result.userMessageId)
-            assertEquals(MessageId("msg-11"), result.assistantMessageId)
             assertEquals(existingChatId, result.chatId)
             // Should NOT create a new chat
             coVerify(exactly = 0) { chatRepository.createChat(any()) }
-        }
-
-    // ========================================================================
-    // Test: Assistant Placeholder Created
-    // Evidence: Assistant message should be created with empty content
-    // ========================================================================
-
-    @Test
-    fun `assistant placeholder message is created with empty content`() =
-        runTest {
-            // Given
-            val assistantMessageSlot = slot<Message>()
-            var callCount = 0
-
-            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
-                val lambda = firstArg<suspend () -> Any>()
-                lambda()
-            }
-
-            coEvery { chatRepository.createChat(any()) } coAnswers { ChatId("chat-1") }
-            coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
-                callCount++
-                if (callCount == 1) MessageId("msg-1") else MessageId("msg-2")
-            }
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } coAnswers { MessageId("msg-2") }
-
-            val message =
-                Message(
-                    id = MessageId("user-msg-id"),
-                    chatId = null,
-                    content = Content(text = "Hello"),
-                    role = Role.USER,
-                )
-
-            // When
-            createUserMessageUseCase(message)
-
-            // Then
-            assertEquals(Role.ASSISTANT, assistantMessageSlot.captured.role)
-            assertEquals("", assistantMessageSlot.captured.content.text)
         }
 
     // ========================================================================
@@ -492,5 +455,128 @@ class CreateUserMessageUseCaseTest {
             coVerify {
                 transactionProvider.runInTransaction<Any>(any())
             }
+        }
+
+    @Test
+    @DisplayName("OSDA-D-01 — null chatId saves chat and user without assistant")
+    fun osdaD01_newChatPersistsUserOnly() =
+        runTest {
+            val userMessageSlot = slot<Message>()
+            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+                firstArg<suspend () -> Any>()()
+            }
+            coEvery { chatRepository.createChat(any()) } returns ChatId("chat-new-1")
+            coEvery { messageRepository.saveMessage(capture(userMessageSlot)) } returns MessageId("user-msg-id")
+
+            val message =
+                Message(
+                    id = MessageId("user-msg-id"),
+                    chatId = null,
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                )
+
+            val result = createUserMessageUseCase(message)
+
+            coVerify(exactly = 1) { messageRepository.saveMessage(any()) }
+            coVerify(exactly = 1) { chatRepository.createChat(any()) }
+            assertEquals(Role.USER, userMessageSlot.captured.role)
+            assertEquals(ChatId("chat-new-1"), result.chatId)
+            assertEquals(MessageId("user-msg-id"), result.userMessageId)
+        }
+
+    @Test
+    @DisplayName("OSDA-D-02 — existing chatId saves single user row")
+    fun osdaD02_existingChatPersistsUserOnly() =
+        runTest {
+            val existingChatId = ChatId("existing-chat-99")
+            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+                firstArg<suspend () -> Any>()()
+            }
+            coEvery { messageRepository.saveMessage(any()) } returns MessageId("user-msg-id")
+
+            val message =
+                Message(
+                    id = MessageId("user-msg-id"),
+                    chatId = existingChatId,
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                )
+
+            val result = createUserMessageUseCase(message)
+
+            coVerify(exactly = 1) { messageRepository.saveMessage(any()) }
+            coVerify(exactly = 0) { chatRepository.createChat(any()) }
+            assertEquals(existingChatId, result.chatId)
+        }
+
+    @Test
+    @DisplayName("OSDA-D-03 — five-word cap name generation still applies")
+    fun osdaD03_chatNameGenerationUnchanged() =
+        runTest {
+            val chatSlot = slot<Chat>()
+            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+                firstArg<suspend () -> Any>()()
+            }
+            coEvery { chatRepository.createChat(capture(chatSlot)) } returns ChatId("chat-1")
+            coEvery { messageRepository.saveMessage(any()) } returns MessageId("user-msg-id")
+
+            val message =
+                Message(
+                    id = MessageId("user-msg-id"),
+                    chatId = null,
+                    content = Content(text = "one two three four five six"),
+                    role = Role.USER,
+                )
+
+            createUserMessageUseCase(message)
+
+            assertEquals("one two three four five", chatSlot.captured.name)
+        }
+
+    @Test
+    @DisplayName("OSDA-D-04 — repository returns same id as input message")
+    fun osdaD04_clientMessageIdPreserved() =
+        runTest {
+            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+                firstArg<suspend () -> Any>()()
+            }
+            coEvery { chatRepository.createChat(any()) } returns ChatId("chat-1")
+            coEvery { messageRepository.saveMessage(any()) } returns MessageId("client-uuid-7a2b")
+
+            val message =
+                Message(
+                    id = MessageId("client-uuid-7a2b"),
+                    chatId = null,
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                )
+
+            val result = createUserMessageUseCase(message)
+
+            assertEquals(MessageId("client-uuid-7a2b"), result.userMessageId)
+        }
+
+    @Test
+    @DisplayName("OSDA-M-01 — assistant save in user use case fails single-save assertion")
+    fun osdaM01_combinedTransactionGuard() =
+        runTest {
+            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+                firstArg<suspend () -> Any>()()
+            }
+            coEvery { chatRepository.createChat(any()) } returns ChatId("chat-new-1")
+            coEvery { messageRepository.saveMessage(any()) } returns MessageId("user-msg-id")
+
+            val message =
+                Message(
+                    id = MessageId("user-msg-id"),
+                    chatId = null,
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                )
+
+            createUserMessageUseCase(message)
+
+            coVerify(exactly = 1) { messageRepository.saveMessage(any()) }
         }
 }
