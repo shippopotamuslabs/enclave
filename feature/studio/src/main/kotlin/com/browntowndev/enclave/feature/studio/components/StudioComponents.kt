@@ -24,6 +24,7 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.MediaModeToggle
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.*
@@ -93,11 +100,11 @@ fun TemplateChip(
             modifier =
                 Modifier
                     .size(64.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(EnclaveNeoTokens.shape)
                     .border(
-                        width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(16.dp),
+                        width = EnclaveNeoTokens.borderWidth,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else neoBorderColor(),
+                        shape = EnclaveNeoTokens.shape,
                     ),
         ) {
             AsyncImage(
@@ -239,15 +246,14 @@ fun StudioOptionsBottomSheet(
     onTemplateSelected: (StudioTemplate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ModalBottomSheet(
+    NeoModalBottomSheet(
         modifier = modifier,
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
         StudioOptionsSheetContent(
             state = state,
+            onDismiss = onDismiss,
             onUpdateSettings = onUpdateSettings,
             onContinualModeChange = onContinualModeChange,
             onMediaTypeChange = onMediaTypeChange,
@@ -355,6 +361,7 @@ fun PillSelector(
 @Composable
 fun StudioOptionsSheetContent(
     state: StudioUiState,
+    onDismiss: () -> Unit,
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
     onMediaTypeChange: (MediaCapability) -> Unit,
@@ -365,16 +372,24 @@ fun StudioOptionsSheetContent(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 8.dp)
                 .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        StudioOptionsHeader(
-            selectedType = state.mediaType,
-            onMediaTypeChange = onMediaTypeChange,
+        NeoSheetHeader(
+            title = "Studio Settings",
+            onDismiss = onDismiss,
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        MediaModeToggle(
+            selectedType = state.mediaType,
+            onTypeChange = onMediaTypeChange,
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.75f)
+                    .padding(bottom = EnclaveNeoTokens.sectionSpacing),
+        )
+
+        Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
 
         when (state.mediaType) {
             MediaCapability.IMAGE,
@@ -400,25 +415,6 @@ fun StudioOptionsSheetContent(
 }
 
 @Composable
-private fun StudioOptionsHeader(
-    selectedType: MediaCapability,
-    onMediaTypeChange: (MediaCapability) -> Unit,
-) {
-    Text(
-        text = "Studio Settings",
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
-    )
-
-    MediaModeToggle(
-        selectedType = selectedType,
-        onTypeChange = onMediaTypeChange,
-        modifier = Modifier.fillMaxWidth(0.75f),
-    )
-}
-
-@Composable
 private fun VisualSettingsSection(
     state: StudioUiState,
     onUpdateSettings: (GenerationSettings) -> Unit,
@@ -431,8 +427,8 @@ private fun VisualSettingsSection(
         onTemplateSelected = onTemplateSelected,
     )
 
-    SectionHeader(text = "General")
-    Spacer(modifier = Modifier.height(8.dp))
+    NeoSectionHeader(text = "General")
+    Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     AspectRatioSettingsCard(
         settings = state.settings,
@@ -469,7 +465,7 @@ private fun VisualStylePresetsSection(
     selectedTemplateId: String?,
     onTemplateSelected: (StudioTemplate) -> Unit,
 ) {
-    SectionHeader(text = "Visual Style Presets")
+    NeoSectionHeader(text = "Visual Style Presets")
     Spacer(modifier = Modifier.height(8.dp))
     StudioTemplateRow(
         templates = templates,
@@ -485,14 +481,7 @@ private fun AspectRatioSettingsCard(
     capabilities: ProviderCapabilities?,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    Card(
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    SettingsCard {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Aspect Ratio",
@@ -568,21 +557,13 @@ private fun VideoSettingsSection(
     capabilities: ProviderCapabilities?,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    SectionHeader(text = "Video")
-    Spacer(modifier = Modifier.height(8.dp))
+    NeoSectionHeader(text = "Video")
+    Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     capabilities?.let { caps ->
-        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
             if (caps.supportedVideoDurations.isNotEmpty()) {
-                SettingsCard(
-                    shape =
-                        RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = 0.dp,
-                            bottomEnd = 0.dp,
-                        ),
-                ) {
+                SettingsCard {
                     SettingRow(
                         label = "Duration",
                         stacked = caps.supportedVideoDurations.size > 2,
@@ -600,20 +581,8 @@ private fun VideoSettingsSection(
                 }
             }
 
-            if (caps.supportedVideoDurations.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(5.dp))
-            }
-
             if (caps.supportedVideoResolutions.isNotEmpty()) {
-                SettingsCard(
-                    shape =
-                        RoundedCornerShape(
-                            topStart = 0.dp,
-                            topEnd = 0.dp,
-                            bottomStart = 16.dp,
-                            bottomEnd = 16.dp,
-                        ),
-                ) {
+                SettingsCard {
                     SettingRow(
                         label = "Resolution",
                         stacked = caps.supportedVideoResolutions.size > 2,
@@ -641,8 +610,8 @@ private fun ImageSettingsSection(
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
 ) {
-    SectionHeader(text = "Image")
-    Spacer(modifier = Modifier.height(8.dp))
+    NeoSectionHeader(text = "Image")
+    Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     capabilities?.let { caps ->
         ImageQualityCard(
@@ -651,14 +620,14 @@ private fun ImageSettingsSection(
             onUpdateSettings = onUpdateSettings,
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
         GenerationCountCard(
             settings = settings,
             onUpdateSettings = onUpdateSettings,
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
         ContinualModeCard(
             continualMode = continualMode,
@@ -673,15 +642,7 @@ private fun ImageQualityCard(
     capabilities: ProviderCapabilities,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    SettingsCard(
-        shape =
-            RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = 0.dp,
-                bottomEnd = 0.dp,
-            ),
-    ) {
+    SettingsCard {
         val options = capabilities.supportedImageQualities.map { it.displayName }
         SettingRow(
             label = "Image Gen Mode",
@@ -712,7 +673,7 @@ private fun GenerationCountCard(
     settings: ImageGenerationSettings,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    SettingsCard(shape = RoundedCornerShape(0.dp)) {
+    SettingsCard {
         SettingRow(label = "Generation Count") {
             GenerationCountPicker(
                 count = settings.generationCount,
@@ -729,15 +690,7 @@ private fun ContinualModeCard(
     continualMode: Boolean,
     onContinualModeChange: (Boolean) -> Unit,
 ) {
-    SettingsCard(
-        shape =
-            RoundedCornerShape(
-                topStart = 0.dp,
-                topEnd = 0.dp,
-                bottomStart = 16.dp,
-                bottomEnd = 16.dp,
-            ),
-    ) {
+    SettingsCard {
         SettingRow(label = "Generative Scrolling", subLabel = "Generate new images as you scroll.") {
             Switch(
                 checked = continualMode,
@@ -752,14 +705,10 @@ private fun MusicSettingsSection(
     settings: MusicGenerationSettings,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    SectionHeader(text = "Music Configuration")
-    Spacer(modifier = Modifier.height(16.dp))
+    NeoSectionHeader(text = "Music Configuration")
+    Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    SettingsCard {
         Column(modifier = Modifier.padding(16.dp)) {
             MusicSliderSetting(
                 label = "Duration",
@@ -807,30 +756,24 @@ private fun MusicSliderSetting(
 
 @Composable
 private fun SettingsCard(
-    shape: RoundedCornerShape,
+    shape: Shape = EnclaveNeoTokens.shape,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = shape,
-        modifier = modifier.fillMaxWidth(),
+    val borderColor = neoBorderColor()
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = borderColor,
+                    withShadow = false,
+                    shape = shape,
+                ),
     ) {
         content()
     }
-}
-
-@Composable
-private fun SectionHeader(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        modifier = modifier.padding(start = 16.dp).fillMaxWidth(),
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 @Composable
@@ -874,7 +817,7 @@ fun AspectRatioSelector(
                         Modifier
                             .height(40.dp)
                             .width(40.dp * ratioValue.coerceAtLeast(0.5f).coerceAtMost(2f))
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(EnclaveNeoTokens.shape)
                             .background(
                                 color =
                                     if (isSelected) {
@@ -1029,6 +972,7 @@ fun PreviewStudioOptionsMusic() {
         Surface {
             StudioOptionsSheetContent(
                 state = state,
+                onDismiss = {},
                 onUpdateSettings = {},
                 onContinualModeChange = {},
                 onMediaTypeChange = {},
