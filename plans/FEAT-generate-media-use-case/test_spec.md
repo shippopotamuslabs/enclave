@@ -24,6 +24,14 @@
 ./gradlew :feature:studio-generation-service:testDebugUnitTest \
   --tests "com.browntowndev.enclave.feature.studio.service.MultimediaGenerationServiceTest" \
   --no-daemon --stacktrace
+
+./gradlew :core:data:testDebugUnitTest \
+  --tests "com.browntowndev.enclave.core.data.repository.MediaGenerationDeadCodeGuardTest" \
+  --no-daemon --stacktrace
+
+./gradlew :feature:studio-generation-service:testDebugUnitTest \
+  --tests "com.browntowndev.enclave.feature.studio.service.MultimediaGenerationDeadCodeGuardTest" \
+  --no-daemon --stacktrace
 ```
 
 **Completion gate for implementation executor:**
@@ -32,7 +40,14 @@
 ./gradlew :core:domain:assembleDebug :core:data:assembleDebug \
   :core:domain:testDebugUnitTest :core:data:testDebugUnitTest \
   :feature:studio-generation-service:testDebugUnitTest \
+  :feature:studio-generation-service:testDebugUnitTest \
   ktlintCheck detekt --no-daemon --stacktrace
+
+# Dead-code grep gate (must exit 0 — zero matches)
+! rg "ImageGenerationPort|VideoGenerationPort|MediaProviderRepositoryPort|getMediaProviders\\(\\)\\.first" \
+  feature/studio-generation-service/src/main/kotlin
+! rg "cacheEphemeralMedia|addEphemeralMedia|executeImage\\(|executeVideo\\(|executeMusic\\(" \
+  core/data/src/main/kotlin/com/browntowndev/enclave/core/data/repository/MediaToolExecutor.kt
 ```
 
 ---
@@ -84,6 +99,17 @@
 
 - M-GM-01 — `GenerateMediaUseCase` IMAGE path never calls `ImageGenerationPort`
 - M-STU-01 — Studio IMAGE uses `GenerateImageUseCase` via `GenerateMediaUseCase`, not `ImageGenerationPort`
+- M-CLEAN-01 — Guard tests fail if legacy `executeImage` private method reappears in `MediaToolExecutor`
+
+### Dead code cleanup (`MediaGenerationDeadCodeGuardTest`, `MultimediaGenerationDeadCodeGuardTest`)
+
+- CLEAN-01 — `MediaToolExecutor.kt` source contains zero occurrences of `cacheEphemeralMedia`
+- CLEAN-02 — `MediaToolExecutor.kt` source contains zero occurrences of `addEphemeralMedia`
+- CLEAN-03 — `MediaToolExecutor.kt` source contains zero occurrences of `executeImage(`
+- CLEAN-04 — `MediaToolExecutor.kt` source contains zero occurrences of `GenerateImageUseCase`
+- CLEAN-05 — `MultimediaGenerationService.kt` source contains zero occurrences of `ImageGenerationPort`
+- CLEAN-06 — `MultimediaGenerationService.kt` source contains zero occurrences of `VideoGenerationPort`
+- CLEAN-07 — `MultimediaGenerationService.kt` source contains zero occurrences of `MediaProviderRepositoryPort`
 
 ---
 
@@ -315,6 +341,60 @@ Studio could keep `ImageGenerationPort.generateImage` in `MultimediaGenerationSe
 
 ---
 
+## Dead Code Cleanup Scenarios
+
+Guard tests read production source from the module source set (e.g. `src/main/kotlin/.../MediaToolExecutor.kt` resolved via test resources or relative path from project dir). Each test asserts substring absence unless noted.
+
+### CLEAN-01: `MediaToolExecutor.kt` source contains zero occurrences of `cacheEphemeralMedia`
+
+- **Given:** post-refactor `MediaToolExecutor.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `cacheEphemeralMedia` equals `0`
+
+### CLEAN-02: `MediaToolExecutor.kt` source contains zero occurrences of `addEphemeralMedia`
+
+- **Given:** post-refactor `MediaToolExecutor.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `addEphemeralMedia` equals `0`
+
+### CLEAN-03: `MediaToolExecutor.kt` source contains zero occurrences of `executeImage(`
+
+- **Given:** post-refactor `MediaToolExecutor.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `executeImage(` equals `0`
+
+### CLEAN-04: `MediaToolExecutor.kt` source contains zero occurrences of `GenerateImageUseCase`
+
+- **Given:** post-refactor `MediaToolExecutor.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `GenerateImageUseCase` equals `0`
+
+### CLEAN-05: `MultimediaGenerationService.kt` source contains zero occurrences of `ImageGenerationPort`
+
+- **Given:** post-refactor `MultimediaGenerationService.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `ImageGenerationPort` equals `0`
+
+### CLEAN-06: `MultimediaGenerationService.kt` source contains zero occurrences of `VideoGenerationPort`
+
+- **Given:** post-refactor `MultimediaGenerationService.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `VideoGenerationPort` equals `0`
+
+### CLEAN-07: `MultimediaGenerationService.kt` source contains zero occurrences of `MediaProviderRepositoryPort`
+
+- **Given:** post-refactor `MultimediaGenerationService.kt` production source file on disk
+- **When:** guard test reads file text
+- **Then:** occurrence count of `MediaProviderRepositoryPort` equals `0`
+
+### M-CLEAN-01: Guard tests fail if legacy `executeImage` private method reappears in `MediaToolExecutor`
+
+- **Given:** hypothetical `MediaToolExecutor.kt` source containing the substring `private suspend fun executeImage(`
+- **When:** guard test logic checks for `executeImage(` (same assertion as CLEAN-03)
+- **Then:** test fails with assertion message containing `executeImage(`
+
+---
+
 ## Scenario → Implementation Task Mapping
 
 | Scenario ID | Spec task |
@@ -323,3 +403,5 @@ Studio could keep `ImageGenerationPort.generateImage` in `MultimediaGenerationSe
 | S-GM-01 … S-GM-08, E-GM-01, M-GM-01 | Task 3 |
 | S-CHAT-01 … S-CHAT-04, E-CHAT-01 | Task 4 |
 | S-STU-01 … S-STU-06, E-STU-01, M-STU-01 | Task 5 |
+| CLEAN-01 … CLEAN-07, M-CLEAN-01 | Task 6 |
+| All scenario IDs | Task 7 |

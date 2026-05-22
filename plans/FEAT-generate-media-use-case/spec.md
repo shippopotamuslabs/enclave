@@ -33,6 +33,7 @@ This causes Studio bugs (wrong provider selection, settings not applied on image
 | 8 | Service must **not** start another service |
 | 9 | Keep `*GenerationPort` adapters unchanged; no dynamic model switching beyond settings on the request |
 | 10 | No Room schema or new persistence tables |
+| 11 | Remove superseded orchestration code from refactored entry points; no duplicate cache/register paths, unused injections, or orphaned private helpers may remain after merge |
 
 ### Non-goals
 
@@ -90,6 +91,8 @@ Studio: MultimediaGenerationService (shell)
 | Modify | `core/data/src/test/kotlin/com/browntowndev/enclave/core/data/repository/MediaToolExecutorTest.kt` | Mock `GenerateMediaUseCase`; assert JSON contracts and no direct `Generate*` calls |
 | Modify | `feature/studio-generation-service/src/main/kotlin/com/browntowndev/enclave/feature/studio/service/MultimediaGenerationService.kt` | Foreground shell + `GenerateMediaUseCase`; remove port/provider duplication |
 | Modify | `feature/studio-generation-service/src/test/kotlin/com/browntowndev/enclave/feature/studio/service/MultimediaGenerationServiceTest.kt` | Robolectric service tests for Intent → use case wiring and error reporting |
+| Create | `core/data/src/test/kotlin/com/browntowndev/enclave/core/data/repository/MediaGenerationDeadCodeGuardTest.kt` | Compile-time/source assertions that refactored adapters shed legacy dependencies |
+| Create | `feature/studio-generation-service/src/test/kotlin/com/browntowndev/enclave/feature/studio/service/MultimediaGenerationDeadCodeGuardTest.kt` | Source assertions that service shed legacy port/use-case/provider injections |
 
 **No changes (verified consumers / boundaries):**
 
@@ -257,6 +260,66 @@ class MediaToolExecutor @Inject constructor(
 
 ---
 
+## 3.8 Dead Code Cleanup Inventory
+
+After Tasks 4–5 land, the following **must not remain** in production sources. Implementation must delete — not comment out — superseded code.
+
+### 3.8.1 `MediaToolExecutor` removals
+
+| Artifact | Action |
+|----------|--------|
+| Constructor dependencies `GenerateImageUseCase`, `GenerateVideoUseCase`, `GenerateMusicUseCase`, `StudioRepositoryPort` | **Delete** from constructor and fields |
+| Private methods `executeImage`, `executeVideo`, `executeMusic` | **Delete** entirely |
+| Inline `ImageGenerationSettings` / `VideoGenerationSettings` / `MusicGenerationSettings` construction from tool params | **Delete** (replaced by `MediaGenerationRequestMapper.fromToolCall`) |
+| Inline `studioRepository.cacheEphemeralMedia` / `addEphemeralMedia` loops | **Delete** (replaced by `GenerateMediaUseCase`) |
+| Inline `StudioMediaAsset` construction in executor | **Delete** |
+| Imports for `AspectRatio`, `GenerationQuality`, `*GenerationSettings`, `Generate*UseCase`, `StudioRepositoryPort` when no longer referenced | **Delete** |
+
+**Must remain:** `execute` routing, `buildResultJson`, `buildErrorJson`, `LoggingPort` debug lines, `GenerateMediaUseCase` + `MediaGenerationRequestMapper` usage.
+
+### 3.8.2 `MultimediaGenerationService` removals
+
+| Artifact | Action |
+|----------|--------|
+| `@Inject lateinit var imageGenerationPort: ImageGenerationPort` | **Delete** |
+| `@Inject lateinit var videoGenerationPort: VideoGenerationPort` | **Delete** |
+| `@Inject lateinit var generateVideoUseCase: GenerateVideoUseCase` | **Delete** |
+| `@Inject lateinit var generateMusicUseCase: GenerateMusicUseCase` | **Delete** |
+| `@Inject lateinit var mediaProviderRepository: MediaProviderRepositoryPort` | **Delete** |
+| `mediaProviderRepository.getMediaProviders().first()` provider selection | **Delete** |
+| Per-capability `when` branches calling ports or individual `Generate*UseCase` directly | **Delete** |
+| Inline `studioRepository.cacheEphemeralMedia` / `addEphemeralMedia` / `StudioMediaAsset` construction loop | **Delete** |
+| `kotlinx.coroutines.flow.first` import when only used for provider lookup | **Delete** |
+| Unused imports for removed types | **Delete** |
+
+**Must remain:** `GenerateMediaUseCase`, `StudioRepositoryPort` (error reporting only), `LoggingPort`, notification helpers, `StudioGenerationIntentCodec.readSettings`, `MediaGenerationRequestMapper.fromStudio`, `serviceScope` lifecycle.
+
+### 3.8.3 Repository-wide forbidden patterns (post-refactor)
+
+These string patterns must have **zero** production matches under the listed paths:
+
+| Pattern | Path scope |
+|---------|------------|
+| `ImageGenerationPort` | `feature/studio-generation-service/src/main/` |
+| `VideoGenerationPort` | `feature/studio-generation-service/src/main/` |
+| `MediaProviderRepositoryPort` | `feature/studio-generation-service/src/main/` |
+| `getMediaProviders().first` | `feature/studio-generation-service/src/main/` |
+| `cacheEphemeralMedia` | `core/data/.../MediaToolExecutor.kt` |
+| `addEphemeralMedia` | `core/data/.../MediaToolExecutor.kt` |
+| `executeImage(` / `executeVideo(` / `executeMusic(` | `core/data/.../MediaToolExecutor.kt` |
+
+### 3.8.4 Explicit non-removals (do not delete)
+
+| Artifact | Reason |
+|----------|--------|
+| `GenerateImageUseCase`, `GenerateVideoUseCase`, `GenerateMusicUseCase` | Still invoked by `GenerateMediaUseCase` |
+| `*GenerationPort` interfaces and adapters | Still used by individual use cases |
+| `StudioGenerationIntentCodec` | Android IPC boundary for Studio settings |
+| `AndroidStudioGenerationDispatcher` | Starts foreground service only |
+| `CompositeToolExecutor` media routing lines | Unchanged delegation to `MediaToolExecutor` |
+
+---
+
 ## 4. Data Model or Schema Changes
 
 None.
@@ -322,7 +385,20 @@ None.
 
 **Verifies scenarios:** S-STU-01, S-STU-02, S-STU-03, S-STU-04, S-STU-05, S-STU-06, E-STU-01, M-STU-01.
 
-### Task 6: Regression gate
+### Task 6: Dead code removal and guard tests
+
+**Files:** Modify `MediaToolExecutor.kt`, `MultimediaGenerationService.kt`; create `MediaGenerationDeadCodeGuardTest.kt` (data module), `MultimediaGenerationDeadCodeGuardTest.kt` (studio-generation-service module).
+
+**Outcome:**
+
+1. All artifacts listed in Section 3.8.1 and 3.8.2 are removed from production sources.
+2. Guard tests read production source files from classpath/resources and assert forbidden symbols and legacy private method names are absent (see test spec `CLEAN-*` scenarios).
+3. No commented-out legacy blocks left behind.
+4. `./gradlew :core:data:compileDebugKotlin :feature:studio-generation-service:compileDebugKotlin` succeeds with reduced dependency graphs on refactored classes.
+
+**Verifies scenarios:** CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05, CLEAN-06, CLEAN-07, M-CLEAN-01.
+
+### Task 7: Regression gate
 
 **Commands:**
 
@@ -341,9 +417,15 @@ None.
   --no-daemon --stacktrace
 
 ./gradlew :core:domain:assembleDebug :core:data:assembleDebug ktlintCheck detekt --no-daemon --stacktrace
+
+# Dead-code grep gate (must exit 0 — zero matches)
+! rg "ImageGenerationPort|VideoGenerationPort|MediaProviderRepositoryPort|getMediaProviders\\(\\)\\.first" \
+  feature/studio-generation-service/src/main/kotlin
+! rg "cacheEphemeralMedia|addEphemeralMedia|executeImage\\(|executeVideo\\(|executeMusic\\(" \
+  core/data/src/main/kotlin/com/browntowndev/enclave/core/data/repository/MediaToolExecutor.kt
 ```
 
-**Outcome:** All tests green; detekt `maxIssues: 0`.
+**Outcome:** All tests green; detekt `maxIssues: 0`; grep gate passes.
 
 **Verifies scenarios:** All scenario IDs (full suite).
 
@@ -359,14 +441,20 @@ None.
 | Tool JSON schema change | Requires explicit product approval and synchronized updates to `MediaToolExecutor.buildResultJson` tests |
 | Need to change provider selection | Edit `GenerateImageUseCase` / `GenerateVideoUseCase` / `GenerateMusicUseCase` only, not `MultimediaGenerationService` |
 | Foreground work exceeds service scope | Use WorkManager per `ARCHITECTURE_RULES.md`; do not grow service logic — extract domain use case instead |
+| Dead code reintroduced during follow-up PRs | Run Section 3.8 grep gate and `CLEAN-*` guard tests in CI; reject PRs that restore port/provider orchestration in Studio service or cache loops in `MediaToolExecutor` |
 | Contract waiver needed (domain Android import, schema change) | Stop and request **Contract Waiver** from user before coding |
 
 **Review checklist before merge:**
 
-1. `grep -r "ImageGenerationPort" feature/studio-generation-service` returns zero production usages.
-2. `grep -r "getMediaProviders().first" feature/studio-generation-service` returns zero matches.
-3. `MediaToolExecutor` has zero imports of `GenerateImageUseCase`, `GenerateVideoUseCase`, `GenerateMusicUseCase`, `StudioRepositoryPort`.
-4. `MultimediaGenerationService` does not call `startForegroundService` except as today via dispatcher (service itself does not spawn services).
+1. `rg "ImageGenerationPort" feature/studio-generation-service/src/main` returns zero matches.
+2. `rg "VideoGenerationPort" feature/studio-generation-service/src/main` returns zero matches.
+3. `rg "MediaProviderRepositoryPort" feature/studio-generation-service/src/main` returns zero matches.
+4. `rg "getMediaProviders\\(\\)\\.first" feature/studio-generation-service/src/main` returns zero matches.
+5. `rg "cacheEphemeralMedia|addEphemeralMedia" core/data/src/main/kotlin/com/browntowndev/enclave/core/data/repository/MediaToolExecutor.kt` returns zero matches.
+6. `rg "executeImage\\(|executeVideo\\(|executeMusic\\(" core/data/src/main/kotlin/com/browntowndev/enclave/core/data/repository/MediaToolExecutor.kt` returns zero matches.
+7. `MediaToolExecutor` has zero imports of `GenerateImageUseCase`, `GenerateVideoUseCase`, `GenerateMusicUseCase`, `StudioRepositoryPort`.
+8. `MultimediaGenerationService` does not call `startForegroundService` except as today via dispatcher (service itself does not spawn services).
+9. `MediaGenerationDeadCodeGuardTest` and `MultimediaGenerationDeadCodeGuardTest` pass.
 
 ---
 
@@ -383,3 +471,5 @@ None.
 | E-CHAT-01 | Task 4 |
 | S-STU-01 … S-STU-06 | Task 5 |
 | E-STU-01, M-STU-01 | Task 5 |
+| CLEAN-01 … CLEAN-07, M-CLEAN-01 | Task 6 |
+| All scenario IDs | Task 7 |
