@@ -18,10 +18,19 @@ val DarkOnBackground = Color(0xFFE4E4E7) // Muted off-white (Zinc 200) to elimin
 val DarkOnSurfaceVariant = Color(0xFFA1A1AA) // Secondary text / Metadata (Zinc 400)
 val DarkOutline = Color(0xFF52525B) // Borders / Dividers (Zinc 600)
 
+/** Neo surfaces: softer edge than [DarkOutline] so cards do not halo on charcoal. */
+val DarkNeoBorder = Color(0xFF35353B)
+
+/** Hard offset shadow fill on dark backgrounds (pure black reads on #18181B). */
+val DarkNeoShadow = Color(0xFF000000)
+
 // --- LIGHT PALETTE (Original) ---
 val LightBackground = Color(0xFFFFFFFF)
 val LightSurface = Color(0xFFF3F4F6)
 val LightOnBackground = Color(0xFF111827)
+val LightOutline = Color(0xFFCBD5E1)
+val LightNeoBorder = Color(0xFF94A3B8)
+val LightNeoShadow = Color(0xFF0F172A)
 
 // --- ERROR & SEMANTIC ---
 val ErrorRed = Color(0xFFDC2626) // High-vibrancy Tailwind-inspired red
