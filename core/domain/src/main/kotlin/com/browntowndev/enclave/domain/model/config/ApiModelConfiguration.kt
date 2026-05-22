@@ -5,6 +5,8 @@ import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 data class ApiModelConfiguration(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
     val apiCredentialsId: ApiCredentialsId,
+    val modelId: String,
+    val isMultimodal: Boolean = false,
     override val displayName: String,
     override val maxTokens: Int = 4096,
     override val contextWindow: Int = 4096,

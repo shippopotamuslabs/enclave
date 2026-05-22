@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -23,9 +24,68 @@ class FirestoreSyncDependencyGraphTest {
                 .toSet()
         val graphPaths = FirestoreSyncDependencyGraph.collectionPaths()
 
-        assertEquals(19, registryPaths.size)
+        assertEquals(20, registryPaths.size)
         assertEquals(0, registryPaths.minus(graphPaths).size)
         assertEquals(0, graphPaths.minus(registryPaths).size)
+    }
+
+    @Test
+    fun `default_models parents use DefaultModelSyncHandler Firestore field names`() {
+        val parents =
+            FirestoreSyncDependencyGraph.requiredParents(
+                collectionPath = "default_models",
+                sourceData =
+                    mapOf(
+                        "local_config_id" to "local-preset-1",
+                        "api_config_id" to "api-preset-1",
+                        "tts_provider_id" to "tts-1",
+                        "media_provider_id" to "media-1",
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                FirestoreSyncDependencyGraph.ParentRef("local_model_configs", "local-preset-1"),
+                FirestoreSyncDependencyGraph.ParentRef("api_model_configs", "api-preset-1"),
+                FirestoreSyncDependencyGraph.ParentRef("tts_providers", "tts-1"),
+                FirestoreSyncDependencyGraph.ParentRef("media_providers", "media-1"),
+            ),
+            parents,
+        )
+    }
+
+    @Test
+    fun `default_models parents accept legacy config id field aliases`() {
+        val parents =
+            FirestoreSyncDependencyGraph.requiredParents(
+                collectionPath = "default_models",
+                sourceData =
+                    mapOf(
+                        "local_model_config_id" to "legacy-local",
+                        "api_model_config_id" to "legacy-api",
+                    ),
+            )
+
+        assertEquals(
+            listOf(
+                FirestoreSyncDependencyGraph.ParentRef("local_model_configs", "legacy-local"),
+                FirestoreSyncDependencyGraph.ParentRef("api_model_configs", "legacy-api"),
+            ),
+            parents,
+        )
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-SYNC-004")
+    fun scnSync004_dependencyGraphListsUtilityModelsWithNoParents() {
+        val parents =
+            FirestoreSyncDependencyGraph.requiredParents(
+                collectionPath = "utility_models",
+                sourceData = emptyMap(),
+            )
+
+        assertEquals(emptyList<FirestoreSyncDependencyGraph.ParentRef>(), parents)
+        assertTrue("utility_models" in FirestoreSyncDependencyGraph.collectionPaths())
     }
 
     private fun createMinimalContext(): FirestoreSyncContext {

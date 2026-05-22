@@ -140,6 +140,7 @@ internal fun buildTestSyncContext(
                         apiCredentialsDao = mockk(relaxed = true),
                         localModelConfigurationsDao = mockk(relaxed = true),
                         defaultModelsDao = mockk(relaxed = true),
+                        utilityModelsDao = mockk(relaxed = true),
                     ),
                 studioSyncDaos =
                     StudioSyncDaos(

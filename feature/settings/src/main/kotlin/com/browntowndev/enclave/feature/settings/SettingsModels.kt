@@ -232,6 +232,7 @@ data class ApiProviderEditorUiState(
     val presetDraft: ApiModelConfigUi? = null,
     val parameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
     val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
+    val connectionTestStatus: ApiConnectionTestStatus = ApiConnectionTestStatus.IDLE,
 )
 
 @Immutable
@@ -335,9 +336,7 @@ data class ApiModelAssetUi(
     val credentialsId: ApiCredentialsId,
     val displayName: String,
     val provider: ApiProvider,
-    val modelId: String,
     val baseUrl: String?,
-    val isMultimodal: Boolean,
     val credentialAlias: String,
     val configurations: List<ApiModelConfigUi>,
 )
@@ -346,9 +345,15 @@ data class ApiModelAssetUi(
 data class ReusableApiCredentialUi(
     val credentialsId: ApiCredentialsId,
     val displayName: String,
-    val modelId: String,
+    val providerLabel: String,
     val credentialAlias: String,
 )
+
+enum class ApiConnectionTestStatus {
+    IDLE,
+    TESTING,
+    SUCCESS,
+}
 
 @Immutable
 data class CustomHeaderUi(
@@ -366,6 +371,8 @@ enum class ModelSortOption {
 data class ApiModelConfigUi(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
     val credentialsId: ApiCredentialsId = ApiCredentialsId(""),
+    val modelId: String = "",
+    val isMultimodal: Boolean = false,
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",
@@ -446,8 +453,20 @@ data class DefaultModelAssignmentUi(
     val displayLabel: String,
     val providerName: String? = null,
     val presetName: String? = null,
+    val modelId: String? = null,
     val isMultimodal: Boolean = false,
 )
+
+/** Primary assignment label in model configuration lists. API slots use the configured model id. */
+internal val DefaultModelAssignmentUi.assignmentHeadlineName: String
+    get() =
+        when (source) {
+            ModelSource.API ->
+                modelId?.takeIf { it.isNotBlank() }
+                    ?: presetName
+                    ?: currentModelName
+            else -> currentModelName
+        }
 
 internal val ModelType.displayLabel: String
     get() =
@@ -546,21 +565,23 @@ object MockSettingsData {
                 credentialsId = ApiCredentialsId("1"),
                 displayName = "GPT-4o",
                 provider = ApiProvider.OPENAI,
-                modelId = "gpt-4o",
                 baseUrl = null,
-                isMultimodal = true,
                 credentialAlias = "OpenAI Primary",
                 configurations =
                     listOf(
                         ApiModelConfigUi(
                             id = ApiModelConfigurationId("cfg-1"),
                             credentialsId = ApiCredentialsId("1"),
+                            modelId = "gpt-4o",
+                            isMultimodal = true,
                             displayName = "Balanced",
                             temperature = 0.7,
                         ),
                         ApiModelConfigUi(
                             id = ApiModelConfigurationId("cfg-2"),
                             credentialsId = ApiCredentialsId("1"),
+                            modelId = "gpt-4o",
+                            isMultimodal = true,
                             displayName = "Creative",
                             temperature = 1.0,
                         ),
@@ -570,15 +591,15 @@ object MockSettingsData {
                 credentialsId = ApiCredentialsId("2"),
                 displayName = "Claude 3.5 Sonnet",
                 provider = ApiProvider.ANTHROPIC,
-                modelId = "claude-3-5-sonnet-20240620",
                 baseUrl = null,
-                isMultimodal = true,
                 credentialAlias = "Anthropic Work",
                 configurations =
                     listOf(
                         ApiModelConfigUi(
                             id = ApiModelConfigurationId("cfg-3"),
                             credentialsId = ApiCredentialsId("2"),
+                            modelId = "claude-3-5-sonnet-20240620",
+                            isMultimodal = true,
                             displayName = "Standard",
                             temperature = 0.7,
                         ),
@@ -588,15 +609,15 @@ object MockSettingsData {
                 credentialsId = ApiCredentialsId("3"),
                 displayName = "OpenRouter GPT-5.2",
                 provider = ApiProvider.OPENROUTER,
-                modelId = "openai/gpt-5.2",
                 baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
-                isMultimodal = true,
                 credentialAlias = "OpenRouter",
                 configurations =
                     listOf(
                         ApiModelConfigUi(
                             id = ApiModelConfigurationId("cfg-4"),
                             credentialsId = ApiCredentialsId("3"),
+                            modelId = "openai/gpt-5.2",
+                            isMultimodal = true,
                             displayName = "Reliability",
                             temperature = 0.3,
                             openRouterRouting = OpenRouterRoutingConfiguration(),

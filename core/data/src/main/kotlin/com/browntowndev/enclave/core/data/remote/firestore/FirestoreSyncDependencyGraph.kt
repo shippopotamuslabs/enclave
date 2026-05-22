@@ -60,8 +60,11 @@ internal object FirestoreSyncDependencyGraph {
     }
 
     private val DEFAULT_MODEL_PARENTS: (Map<String, Any?>) -> List<ParentRef> = { source ->
-        val localModelConfigId = source["local_model_config_id"] as? String
-        val apiModelConfigId = source["api_model_config_id"] as? String
+        // Must match [DefaultModelSyncHandler] Firestore field names (`local_config_id`, etc.).
+        val localModelConfigId =
+            firstNonBlankString(source, "local_config_id", "local_model_config_id")
+        val apiModelConfigId =
+            firstNonBlankString(source, "api_config_id", "api_model_config_id")
         val ttsProviderId = source["tts_provider_id"] as? String
         val mediaProviderId = source["media_provider_id"] as? String
         buildList {
@@ -97,6 +100,7 @@ internal object FirestoreSyncDependencyGraph {
         "api_keys" to NO_PARENTS,
         "api_model_configs" to API_MODEL_CONFIG_PARENTS,
         "local_models" to NO_PARENTS,
+        "utility_models" to NO_PARENTS,
         "local_model_configs" to LOCAL_MODEL_CONFIG_PARENTS,
         "default_models" to DEFAULT_MODEL_PARENTS,
         "tts_providers" to NO_PARENTS,
@@ -111,4 +115,15 @@ internal object FirestoreSyncDependencyGraph {
         collectionPath: String,
         sourceData: Map<String, Any?>,
     ): List<ParentRef> = GRAPH[collectionPath]?.invoke(sourceData) ?: emptyList()
+
+    private fun firstNonBlankString(
+        source: Map<String, Any?>,
+        vararg keys: String,
+    ): String? {
+        for (key in keys) {
+            val value = source[key] as? String
+            if (!value.isNullOrBlank()) return value
+        }
+        return null
+    }
 }

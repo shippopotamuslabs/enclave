@@ -32,6 +32,43 @@ class SettingsUiStateFactoryTest {
             )
     }
 
+    @Test
+    fun `SCN-UI-002 settings ui state factory exposes friendly asset name`() {
+        val localAsset =
+            LocalModelAsset(
+                metadata =
+                    LocalModelMetadata(
+                        id = LocalModelId("gemma"),
+                        displayName = "Gemma 4 E4B",
+                        huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
+                        remoteFileName = "gemma-4-E4B-it.litertlm",
+                        localFileName = "gemma-4-E4B-it.litertlm",
+                        sha256 = "gemma-sha",
+                        sizeInBytes = 100L,
+                        modelFileFormat = ModelFileFormat.LITERTLM,
+                    ),
+                configurations =
+                    listOf(
+                        LocalModelConfiguration(
+                            id = LocalModelConfigurationId("cfg-fast"),
+                            localModelId = LocalModelId("gemma"),
+                            displayName = "Fast",
+                            maxTokens = 2048,
+                            contextWindow = 8192,
+                            temperature = 0.7,
+                            topP = 0.9,
+                            topK = 40,
+                            repetitionPenalty = 1.0,
+                            systemPrompt = "",
+                        ),
+                    ),
+            )
+
+        val state = factory.create(localAssets = listOf(localAsset), defaults = defaultFactoryArgs())
+
+        assertEquals("Gemma 4 E4B", state.localModelsSheet.models[0].friendlyName)
+    }
+
     // region availableDownloads filtering
 
     @Test

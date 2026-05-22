@@ -151,7 +151,6 @@ class UnlockVaultUseCaseTest {
         id = ApiCredentialsId(alias),
         displayName = alias,
         provider = ApiProvider.ANTHROPIC,
-        modelId = "claude-opus-4-7",
         credentialAlias = alias,
         encryptedApiKey = encryptedKey,
     )
@@ -264,7 +263,6 @@ class UnlockVaultUseCaseTest {
 
         override suspend fun findMatchingCredentials(
             provider: ApiProvider,
-            modelId: String,
             baseUrl: String?,
             apiKey: String,
             sourceCredentialAlias: String?,

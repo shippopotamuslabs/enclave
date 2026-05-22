@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
@@ -71,7 +72,12 @@ class ChatInferenceRequestPreparer(
         val retrievedMemories =
             if (prompt.isNotBlank()) {
                 val embedding = embeddingEnginePort.getEmbedding(prompt)
-                memoriesRepository.searchMemories(embedding)
+                memoriesRepository.searchMemories(
+                    queryVector = embedding,
+                    limit = MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
+                    maxDistance = MemoryRetrievalPolicy.MAX_L2_DISTANCE,
+                    excludeCategories = MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
+                )
             } else {
                 emptyList()
             }

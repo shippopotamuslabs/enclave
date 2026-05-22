@@ -71,7 +71,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
             memoriesRepository =
                 mockk(relaxed = true) {
                     coEvery { getCoreMemories() } returns emptyList()
-                    coEvery { searchMemories(any(), any()) } returns emptyList()
+                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
                 },
             embeddingEnginePort =
                 mockk(relaxed = true) {

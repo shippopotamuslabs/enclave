@@ -39,6 +39,8 @@ internal class ApiModelConfigSyncHandler(
         mapOf(
             "api_credentials_id" to local.apiCredentialsId.value,
             "display_name" to local.displayName.encryptedForFirestore(ctx, collectionPath, local.id.value, "display_name"),
+            "model_id" to local.modelId,
+            "is_multimodal" to local.isMultimodal,
             "custom_headers" to
                 local.customHeaders.encryptedForFirestore(
                     ctx,
@@ -77,6 +79,8 @@ internal class ApiModelConfigSyncHandler(
             id = ApiModelConfigurationId(doc.id),
             apiCredentialsId = ApiCredentialsId(doc.getString("api_credentials_id") ?: ""),
             displayName = doc.getEncryptedField(ctx, "display_name") ?: "",
+            modelId = doc.getString("model_id") ?: "",
+            isMultimodal = doc.getBoolean("is_multimodal") ?: false,
             customHeaders = doc.getEncryptedField(ctx, "custom_headers") ?: "{}",
             maxTokens = doc.getLong("max_tokens")?.toInt() ?: 4096,
             contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,

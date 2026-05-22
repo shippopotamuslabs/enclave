@@ -192,4 +192,17 @@ internal class SettingsApiProvidersDelegate
             apiState: MutableStateFlow<ApiProvidersTransientState>,
             onSuccess: () -> Unit,
         ) = byokCoordinator.onSaveApiModelConfig(scope, tag, apiState, onSuccess)
+
+        fun onTestApiProviderConnection(
+            scope: CoroutineScope,
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            onShowSnackbar: (String) -> Unit,
+        ) = byokCoordinator.onTestApiProviderConnection(scope, apiState, currentApiKey, onShowSnackbar)
+
+        fun onApiKeyChange(
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            apiKey: String,
+        ) = byokCoordinator.onApiKeyChanged(apiState, currentApiKey, apiKey)
     }

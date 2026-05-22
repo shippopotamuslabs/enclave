@@ -19,6 +19,7 @@ interface CleanupDao {
         deleteApiModelConfigurations()
         deleteLocalModelConfigurations()
         deleteLocalModels()
+        deleteUtilityModels()
         deleteTtsProviders()
         deleteMediaProviders()
     }
@@ -41,9 +42,15 @@ interface CleanupDao {
         deleteStudioMedia()
         deleteStudioAlbums()
         deleteEmbeddings()
-        deleteMemoryEmbeddings(SimpleSQLiteQuery("DELETE FROM memory_embeddings"))
-        deleteDocumentEmbeddings(SimpleSQLiteQuery("DELETE FROM document_embeddings"))
-        deleteArtifactBlockEmbeddings(SimpleSQLiteQuery("DELETE FROM artifact_block_embeddings"))
+        runCatching {
+            deleteMemoryEmbeddings(SimpleSQLiteQuery("DELETE FROM memory_embeddings"))
+        }
+        runCatching {
+            deleteDocumentEmbeddings(SimpleSQLiteQuery("DELETE FROM document_embeddings"))
+        }
+        runCatching {
+            deleteArtifactBlockEmbeddings(SimpleSQLiteQuery("DELETE FROM artifact_block_embeddings"))
+        }
         deleteWebSearchSources()
     }
 
@@ -91,6 +98,9 @@ interface CleanupDao {
 
     @Query("DELETE FROM local_models")
     suspend fun deleteLocalModels()
+
+    @Query("DELETE FROM utility_models")
+    suspend fun deleteUtilityModels()
 
     @Query("DELETE FROM tts_providers")
     suspend fun deleteTtsProviders()

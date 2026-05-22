@@ -55,6 +55,8 @@ internal data class ApiProvidersTransientState(
     val modelSearchQuery: String = "",
     val modelProviderFilters: Set<String> = emptySet(),
     val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+    val connectionTestStatus: ApiConnectionTestStatus = ApiConnectionTestStatus.IDLE,
+    val connectionTestFingerprint: String? = null,
 )
 
 internal data class MemoriesTransientState(
@@ -278,11 +280,12 @@ class SettingsUiStateFactory
                 }
 
             val activeApiAsset = apiState.assetDraft ?: refreshedSelectedApiAsset
+            val activePresetDraft = apiState.presetDraft
             val parameterSupport =
                 activeApiAsset?.let {
                     applyApiModelMetadataDefaultsUseCase.parameterSupport(
                         provider = it.provider,
-                        modelId = it.modelId,
+                        modelId = activePresetDraft?.modelId.orEmpty(),
                     )
                 } ?: ApiModelParameterSupport.DEFAULT
             val selectedReusableCredential =
@@ -294,7 +297,7 @@ class SettingsUiStateFactory
                             ReusableApiCredentialUi(
                                 credentialsId = ApiCredentialsId(""),
                                 displayName = displayName,
-                                modelId = "",
+                                providerLabel = "",
                                 credentialAlias = alias,
                             )
                         }
@@ -309,7 +312,7 @@ class SettingsUiStateFactory
                             ReusableApiCredentialUi(
                                 credentialsId = ApiCredentialsId(""),
                                 displayName = displayName,
-                                modelId = "",
+                                providerLabel = "",
                                 credentialAlias = alias,
                             )
                         }
@@ -324,13 +327,14 @@ class SettingsUiStateFactory
                             ReusableApiCredentialUi(
                                 credentialsId = ApiCredentialsId(""),
                                 displayName = displayName,
-                                modelId = "",
+                                providerLabel = "",
                                 credentialAlias = alias,
                             )
                         }
                 }
 
-            val selectedDiscoveredModel = apiState.discoveredApiModels.find { it.id == activeApiAsset?.modelId }
+            val selectedDiscoveredModel =
+                apiState.discoveredApiModels.find { it.id == activePresetDraft?.modelId }
             val normalizedPresetDraft =
                 apiState.presetDraft?.let { draft ->
                     val parentCredentialsId =
@@ -342,7 +346,7 @@ class SettingsUiStateFactory
                     val normalized =
                         applyApiModelMetadataDefaultsUseCase(
                             provider = activeApiAsset?.provider,
-                            modelId = activeApiAsset?.modelId.orEmpty(),
+                            modelId = draft.modelId,
                             currentReasoningEffort = draft.reasoningEffort,
                             currentMaxTokens = draft.maxTokens.toIntOrNull(),
                             currentContextWindow = draft.contextWindow.toIntOrNull(),
@@ -459,6 +463,7 @@ class SettingsUiStateFactory
                         assetDraft = apiState.assetDraft,
                         selectedReusableCredential = selectedReusableCredential,
                         presetDraft = normalizedPresetDraft,
+                        connectionTestStatus = apiState.connectionTestStatus,
                         parameterSupport = parameterSupport,
                         discovery =
                             ApiModelDiscoveryUiState(
@@ -567,7 +572,7 @@ class SettingsUiStateFactory
             when {
                 assignment.apiConfigId != null -> {
                     apiModels.any { asset ->
-                        asset.isMultimodal && asset.configurations.any { it.id == assignment.apiConfigId }
+                        asset.configurations.any { it.id == assignment.apiConfigId && it.isMultimodal }
                     }
                 }
                 assignment.localConfigId != null -> {

@@ -44,7 +44,9 @@ internal class ByokProvidersCoordinator
                     presetDraft = null,
                     selectedReusableApiCredentialAlias = null,
                     selectedReusableApiCredentialName = null,
-                    discoveredApiModels = emptyList<DiscoveredApiModel>().mergeSelectedModel(asset),
+                    discoveredApiModels = emptyList<DiscoveredApiModel>().mergeSelectedModel(it.presetDraft),
+                    connectionTestStatus = ApiConnectionTestStatus.IDLE,
+                    connectionTestFingerprint = null,
                 )
             }
             currentApiKey.value = ""
@@ -60,6 +62,29 @@ internal class ByokProvidersCoordinator
             onSelectApiProviderAsset(scope, apiState, currentApiKey, apiModelAssetUiMapper.map(domainAsset))
         }
 
+        fun onApiKeyChanged(
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            apiKey: String,
+        ) {
+            currentApiKey.value = apiKey
+            val assetDraft = apiState.value.assetDraft ?: return
+            val fingerprint =
+                connectionFingerprint(
+                    asset = assetDraft,
+                    apiKey = apiKey,
+                    credentialAlias = resolveApiCredentialAlias(apiState.value, assetDraft),
+                )
+            apiState.update { state ->
+                val nextStatus = state.connectionTestStatusForFingerprint(fingerprint)
+                state.copy(
+                    connectionTestStatus = nextStatus,
+                    connectionTestFingerprint =
+                        if (nextStatus == ApiConnectionTestStatus.SUCCESS) fingerprint else null,
+                )
+            }
+        }
+
         fun onApiProviderAssetDraftChange(
             scope: CoroutineScope,
             apiState: MutableStateFlow<ApiProvidersTransientState>,
@@ -69,26 +94,37 @@ internal class ByokProvidersCoordinator
             val previousDraft = apiState.value.assetDraft
             val discoveryScopeChanged = !previousDraft.matchesDiscoveryScope(asset)
 
-            apiState.update {
-                val existingDraft = it.assetDraft
-                val existingModels = if (discoveryScopeChanged) emptyList() else it.discoveredApiModels
-                val normalizedAsset = it.normalizeVisionCapability(asset, existingModels)
-                it.copy(
-                    assetDraft = normalizedAsset,
+            apiState.update { state ->
+                val existingModels = if (discoveryScopeChanged) emptyList() else state.discoveredApiModels
+                val fingerprint =
+                    connectionFingerprint(
+                        asset = asset,
+                        apiKey = currentApiKey.value,
+                        credentialAlias = resolveApiCredentialAlias(state, asset),
+                    )
+                state.copy(
+                    assetDraft = asset,
                     selectedReusableApiCredentialAlias =
-                        if (existingDraft?.provider != asset.provider) {
+                        if (previousDraft?.provider != asset.provider) {
                             null
                         } else {
-                            it.selectedReusableApiCredentialAlias
+                            state.selectedReusableApiCredentialAlias
                         },
                     selectedReusableApiCredentialName =
-                        if (existingDraft?.provider != asset.provider) {
+                        if (previousDraft?.provider != asset.provider) {
                             null
                         } else {
-                            it.selectedReusableApiCredentialName
+                            state.selectedReusableApiCredentialName
                         },
-                    discoveredApiModels = existingModels.mergeSelectedModel(normalizedAsset),
-                    discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope,
+                    discoveredApiModels = existingModels.mergeSelectedModel(state.presetDraft),
+                    discoveredApiModelScope = if (discoveryScopeChanged) null else state.discoveredApiModelScope,
+                    connectionTestStatus = state.connectionTestStatusForFingerprint(fingerprint),
+                    connectionTestFingerprint =
+                        if (state.connectionTestStatusForFingerprint(fingerprint) == ApiConnectionTestStatus.SUCCESS) {
+                            fingerprint
+                        } else {
+                            null
+                        },
                 )
             }
             maybeFetchSelectedXaiModelMetadata(scope, apiState, currentApiKey, asset)
@@ -98,14 +134,25 @@ internal class ByokProvidersCoordinator
             apiState: MutableStateFlow<ApiProvidersTransientState>,
             config: ApiModelConfigUi,
         ) {
-            apiState.update { it.copy(presetDraft = config) }
+            apiState.update { state ->
+                val normalized = state.normalizeVisionCapability(config)
+                state.copy(
+                    presetDraft = normalized,
+                    discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(normalized),
+                )
+            }
         }
 
         fun onSelectApiModelConfig(
             apiState: MutableStateFlow<ApiProvidersTransientState>,
             config: ApiModelConfigUi?,
         ) {
-            apiState.update { it.copy(presetDraft = config) }
+            apiState.update {
+                it.copy(
+                    presetDraft = config,
+                    discoveredApiModels = it.discoveredApiModels.mergeSelectedModel(config),
+                )
+            }
         }
 
         fun onFetchApiModels(
@@ -115,6 +162,7 @@ internal class ByokProvidersCoordinator
             currentApiKey: MutableStateFlow<String>,
         ) {
             val assetDraft = apiState.value.assetDraft ?: apiState.value.selectedAsset ?: return
+            val presetDraft = apiState.value.presetDraft ?: return
             val credentialAlias = resolveApiCredentialAlias(apiState.value, assetDraft)
             if (currentApiKey.value.isBlank() && credentialAlias == null) return
 
@@ -128,14 +176,14 @@ internal class ByokProvidersCoordinator
                                 currentApiKey = currentApiKey.value,
                                 credentialAlias = credentialAlias,
                                 baseUrl = assetDraft.baseUrl,
-                                selectedModelId = assetDraft.modelId.takeIf(String::isNotBlank),
+                                selectedModelId = presetDraft.modelId.takeIf(String::isNotBlank),
                             ),
                         )
                     apiState.update { state ->
                         state.copy(
                             discoveredApiModels = result.models.filterChatModels(),
                             discoveredApiModelScope = result.scope,
-                            assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
+                            presetDraft = state.normalizeVisionCapability(state.presetDraft, result.models),
                         )
                     }
                 } finally {
@@ -168,17 +216,10 @@ internal class ByokProvidersCoordinator
                                 id = assetDraft.credentialsId,
                                 displayName = assetDraft.displayName,
                                 provider = assetDraft.provider,
-                                modelId = assetDraft.modelId,
                                 baseUrl = assetDraft.baseUrl,
-                                isMultimodal = assetDraft.isMultimodal,
                                 credentialAlias = assetDraft.credentialAlias,
                                 apiKey = currentApiKey.value,
                                 sourceCredentialAlias = sourceCredentialAlias,
-                                defaultReasoningEffort =
-                                    apiProviderUseCases.applyApiModelMetadataDefaults.defaultReasoningEffort(
-                                        provider = assetDraft.provider,
-                                        modelId = assetDraft.modelId,
-                                    ),
                             ),
                         ).getOrNull() ?: throw IllegalStateException("Operation failed")
 
@@ -193,8 +234,10 @@ internal class ByokProvidersCoordinator
                         presetDraft = createdPreset,
                         selectedReusableApiCredentialAlias = null,
                         selectedReusableApiCredentialName = null,
-                        discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(updatedAsset),
+                        discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(createdPreset),
                         discoveredApiModelScope = updatedAsset.toDiscoveryScope(),
+                        connectionTestStatus = ApiConnectionTestStatus.IDLE,
+                        connectionTestFingerprint = null,
                     )
                 }
                 result.linkedExistingAssetDisplayName?.let { displayName ->
@@ -213,15 +256,15 @@ internal class ByokProvidersCoordinator
                             credentialsId = ApiCredentialsId(""),
                             displayName = "",
                             provider = ApiProvider.OPENAI,
-                            modelId = "",
                             baseUrl = null,
-                            isMultimodal = false,
                             credentialAlias = "",
                             configurations = emptyList(),
                         ),
                     discoveredApiModels = emptyList(),
                     discoveredApiModelScope = null,
                     presetDraft = null,
+                    connectionTestStatus = ApiConnectionTestStatus.IDLE,
+                    connectionTestFingerprint = null,
                 )
             }
         }
@@ -283,11 +326,65 @@ internal class ByokProvidersCoordinator
                         defaultReasoningEffort =
                             apiProviderUseCases.applyApiModelMetadataDefaults.defaultReasoningEffort(
                                 provider = assetDraft.provider,
-                                modelId = assetDraft.modelId,
+                                modelId = presetDraft.modelId,
                             ),
                         draft = presetDraft.toDomain(),
                     ).getOrThrow()
                 onSuccess()
+            }
+        }
+
+        fun onTestApiProviderConnection(
+            scope: CoroutineScope,
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            onShowSnackbar: (String) -> Unit,
+        ) {
+            val assetDraft = apiState.value.assetDraft ?: return
+            val credentialAlias = resolveApiCredentialAlias(apiState.value, assetDraft)
+            val canTest =
+                currentApiKey.value.isNotBlank() ||
+                    credentialAlias != null ||
+                    assetDraft.credentialsId.value.isNotEmpty()
+            if (!canTest) return
+
+            apiState.update { it.copy(connectionTestStatus = ApiConnectionTestStatus.TESTING) }
+            scope.launch(
+                errorHandler.coroutineExceptionHandler(
+                    COORDINATOR_TAG,
+                    "Failed to test API provider connection",
+                    "Connection test failed",
+                ),
+            ) {
+                val result =
+                    apiProviderUseCases.testApiProviderConnection(
+                        provider = assetDraft.provider,
+                        currentApiKey = currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = assetDraft.baseUrl,
+                    )
+                val fingerprint =
+                    connectionFingerprint(
+                        asset = assetDraft,
+                        apiKey = currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                    )
+                apiState.update { state ->
+                    if (result.isSuccess) {
+                        state.copy(
+                            connectionTestStatus = ApiConnectionTestStatus.SUCCESS,
+                            connectionTestFingerprint = fingerprint,
+                        )
+                    } else {
+                        state.copy(
+                            connectionTestStatus = ApiConnectionTestStatus.IDLE,
+                            connectionTestFingerprint = null,
+                        )
+                    }
+                }
+                result.onFailure { error ->
+                    onShowSnackbar(error.message ?: "Connection test failed")
+                }
             }
         }
 
@@ -297,9 +394,10 @@ internal class ByokProvidersCoordinator
             currentApiKey: MutableStateFlow<String>,
             asset: ApiModelAssetUi?,
         ) {
-            if (asset?.provider != ApiProvider.XAI || asset.modelId.isBlank()) return
+            val preset = apiState.value.presetDraft
+            if (asset?.provider != ApiProvider.XAI || preset == null || preset.modelId.isBlank()) return
             if (apiState.value.discoveredApiModels.isEmpty()) return
-            if (apiState.value.discoveredModelFor(asset)?.contextWindowTokens != null) return
+            if (apiState.value.discoveredModelFor(preset)?.contextWindowTokens != null) return
 
             val credentialAlias = resolveApiCredentialAlias(apiState.value, asset)
             if (currentApiKey.value.isBlank() && credentialAlias == null) return
@@ -318,14 +416,14 @@ internal class ByokProvidersCoordinator
                             currentApiKey = currentApiKey.value,
                             credentialAlias = credentialAlias,
                             baseUrl = asset.baseUrl,
-                            selectedModelId = asset.modelId,
+                            selectedModelId = preset.modelId,
                         ),
                     )
                 apiState.update { state ->
                     state.copy(
                         discoveredApiModels = result.models,
                         discoveredApiModelScope = result.scope,
-                        assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
+                        presetDraft = state.normalizeVisionCapability(state.presetDraft, result.models),
                     )
                 }
             }
@@ -338,6 +436,7 @@ internal class ByokProvidersCoordinator
             asset: ApiModelAssetUi?,
         ) {
             if (asset == null) return
+            val preset = apiState.value.presetDraft ?: return
             val state = apiState.value
             if (state.discoveredApiModels.isNotEmpty()) return
             if (state.isDiscoveringApiModels) return
@@ -361,14 +460,14 @@ internal class ByokProvidersCoordinator
                                 currentApiKey = currentApiKey.value,
                                 credentialAlias = credentialAlias,
                                 baseUrl = asset.baseUrl,
-                                selectedModelId = asset.modelId.takeIf(String::isNotBlank),
+                                selectedModelId = preset.modelId.takeIf(String::isNotBlank),
                             ),
                         )
                     apiState.update { current ->
                         current.copy(
                             discoveredApiModels = result.models,
                             discoveredApiModelScope = result.scope,
-                            assetDraft = current.normalizeVisionCapability(current.assetDraft, result.models),
+                            presetDraft = current.normalizeVisionCapability(current.presetDraft, result.models),
                         )
                     }
                 } finally {
@@ -381,6 +480,8 @@ internal class ByokProvidersCoordinator
             ApiPresetDraft(
                 id = id,
                 credentialsId = credentialsId,
+                modelId = modelId,
+                isMultimodal = isMultimodal,
                 displayName = displayName,
                 maxTokens = maxTokens,
                 contextWindow = contextWindow,
@@ -402,6 +503,27 @@ internal class ByokProvidersCoordinator
                 customHeaders = customHeaders.map { it.key to it.value },
                 openRouterRouting = openRouterRouting,
             )
+
+        private fun connectionFingerprint(
+            asset: ApiModelAssetUi,
+            apiKey: String,
+            credentialAlias: String?,
+        ): String =
+            apiConnectionFingerprint(
+                provider = asset.provider,
+                baseUrl = asset.baseUrl,
+                apiKey = apiKey,
+                credentialAlias = credentialAlias,
+            )
+
+        private fun ApiProvidersTransientState.connectionTestStatusForFingerprint(
+            fingerprint: String,
+        ): ApiConnectionTestStatus =
+            if (connectionTestStatus == ApiConnectionTestStatus.SUCCESS && connectionTestFingerprint != fingerprint) {
+                ApiConnectionTestStatus.IDLE
+            } else {
+                connectionTestStatus
+            }
 
         private companion object {
             const val COORDINATOR_TAG = "ByokProvidersCoordinator"

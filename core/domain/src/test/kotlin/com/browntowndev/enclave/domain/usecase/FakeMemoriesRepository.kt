@@ -52,6 +52,8 @@ class FakeMemoriesRepository : MemoriesRepository {
     override suspend fun searchMemories(
         queryVector: FloatArray,
         limit: Int,
+        maxDistance: Float?,
+        excludeCategories: Set<MemoryCategory>,
     ): List<Memory> = unsupported()
 
     private fun unsupported(): Nothing = throw UnsupportedOperationException("FakeMemoriesRepository: not implemented")

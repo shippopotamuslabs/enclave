@@ -99,7 +99,6 @@ class ApiModelRepositoryImpl
                 sourceApiKey?.let {
                     buildApiCredentialsIdentitySignature(
                         provider = credentials.provider,
-                        modelId = credentials.modelId,
                         baseUrl = storedBaseUrl,
                         apiKey = it,
                     )
@@ -122,9 +121,7 @@ class ApiModelRepositoryImpl
                                 id = ApiCredentialsId(UUID.randomUUID().toString()),
                                 displayName = credentials.displayName,
                                 provider = credentials.provider,
-                                modelId = credentials.modelId,
                                 baseUrl = storedBaseUrl,
-                                isMultimodal = credentials.isMultimodal,
                                 credentialAlias = credentials.credentialAlias,
                                 encryptedApiKey = encryptedKeyPayload,
                                 apiKeySignature = apiKeySignature,
@@ -143,9 +140,7 @@ class ApiModelRepositoryImpl
                                 id = credentials.id,
                                 displayName = credentials.displayName,
                                 provider = credentials.provider,
-                                modelId = credentials.modelId,
                                 baseUrl = storedBaseUrl,
-                                isMultimodal = credentials.isMultimodal,
                                 credentialAlias = credentials.credentialAlias,
                                 encryptedApiKey = encryptedKeyPayload,
                                 apiKeySignature = apiKeySignature,
@@ -178,7 +173,6 @@ class ApiModelRepositoryImpl
 
         override suspend fun findMatchingCredentials(
             provider: ApiProvider,
-            modelId: String,
             baseUrl: String?,
             apiKey: String,
             sourceCredentialAlias: String?,
@@ -193,7 +187,6 @@ class ApiModelRepositoryImpl
             val signature =
                 buildApiCredentialsIdentitySignature(
                     provider = provider,
-                    modelId = modelId,
                     baseUrl = normalizedBaseUrl,
                     apiKey = resolvedApiKey,
                 )
@@ -241,6 +234,8 @@ class ApiModelRepositoryImpl
                         id = entityId,
                         apiCredentialsId = config.apiCredentialsId,
                         displayName = config.displayName,
+                        modelId = config.modelId,
+                        isMultimodal = config.isMultimodal,
                         maxTokens = config.maxTokens,
                         contextWindow = config.contextWindow,
                         temperature = config.temperature,
@@ -289,9 +284,7 @@ class ApiModelRepositoryImpl
                 id = e.id,
                 displayName = e.displayName,
                 provider = e.provider,
-                modelId = e.modelId,
                 baseUrl = e.baseUrl,
-                isMultimodal = e.isMultimodal,
                 credentialAlias = e.credentialAlias,
                 encryptedApiKey = e.encryptedApiKey,
             )
@@ -302,6 +295,8 @@ class ApiModelRepositoryImpl
             return ApiModelConfiguration(
                 id = e.id,
                 apiCredentialsId = e.apiCredentialsId,
+                modelId = e.modelId,
+                isMultimodal = e.isMultimodal,
                 displayName = e.displayName,
                 maxTokens = e.maxTokens,
                 contextWindow = e.contextWindow,

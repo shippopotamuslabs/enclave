@@ -64,6 +64,28 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
+    fun `SCN-REPO-001 local model repository preserves displayName`() =
+        runTest {
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId(""),
+                    displayName = "MiniCPM-V-4.6 1.3B",
+                    huggingFaceModelName = "openbmb/MiniCPM-V-4.6-Thinking-gguf",
+                    remoteFileName = "minicpm.gguf",
+                    localFileName = "minicpm.gguf",
+                    sha256 = "minicpm-sha",
+                    sizeInBytes = 1000,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                )
+            val asset = LocalModelAsset(metadata = metadata, configurations = emptyList())
+
+            val assetId = repository.upsertLocalAsset(asset)
+            val loaded = repository.getAssetById(assetId)
+
+            assertEquals("MiniCPM-V-4.6 1.3B", loaded?.metadata?.displayName)
+        }
+
+    @Test
     fun `upsertLocalAsset stores and retrieves asset with isMultimodal`() =
         runTest {
             val metadata =

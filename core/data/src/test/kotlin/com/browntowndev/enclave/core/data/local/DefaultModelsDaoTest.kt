@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
@@ -51,6 +52,85 @@ class DefaultModelsDaoTest {
     private fun nextCredId() = ApiCredentialsId(UUID.randomUUID().toString())
 
     @Test
+    fun `SCN-DAO-002 observeAllWithDetails returns asset display name`() =
+        runTest {
+            val encryption = FakeLocalDataEncryptionService()
+            val modelId = nextModelId()
+            val configId = LocalModelConfigurationId("cfg-fast")
+            database.localModelsDao().upsert(
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.LITERTLM,
+                    displayName = "Gemma 4 E4B",
+                    huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
+                    remoteFilename = "gemma-4-E4B-it.litertlm",
+                    localFilename = "gemma-4-E4B-it.litertlm",
+                    sha256 = "gemma-sha",
+                    sizeInBytes = 100L,
+                    isMultimodal = true,
+                ),
+            )
+            database.localModelConfigurationsDao().upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = encryption.encryptString("Fast"),
+                ),
+            )
+            dao.upsert(
+                DefaultModelEntity(
+                    modelType = ModelType.FAST,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                ),
+            )
+
+            val view = dao.observeAllWithDetails().first().single { it.modelType == ModelType.FAST }
+
+            assertEquals("Gemma 4 E4B", view.localAssetName)
+            assertEquals("Fast", encryption.decryptString(view.localPresetName!!))
+        }
+
+    @Test
+    fun `observeAllWithDetails falls back to hugging face name when display name is blank`() =
+        runTest {
+            val encryption = FakeLocalDataEncryptionService()
+            val modelId = nextModelId()
+            val configId = LocalModelConfigurationId("cfg-draft")
+            val huggingFaceName = "openbmb/MiniCPM-V-4.6-Thinking-gguf"
+            database.localModelsDao().upsert(
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "",
+                    huggingFaceModelName = huggingFaceName,
+                    remoteFilename = "minicpm.gguf",
+                    localFilename = "minicpm.gguf",
+                    sha256 = "minicpm-sha",
+                    sizeInBytes = 100L,
+                ),
+            )
+            database.localModelConfigurationsDao().upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = encryption.encryptString("Analytic Draft"),
+                ),
+            )
+            dao.upsert(
+                DefaultModelEntity(
+                    modelType = ModelType.DRAFT_ONE,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                ),
+            )
+
+            val view = dao.observeAllWithDetails().first().single { it.modelType == ModelType.DRAFT_ONE }
+
+            assertEquals(huggingFaceName, view.localAssetName)
+        }
+
+    @Test
     fun `assign a local config as default for a ModelType`() =
         runTest {
             val modelId = nextModelId()
@@ -89,7 +169,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -99,6 +178,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )
@@ -139,7 +219,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -148,6 +227,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = apiId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )
@@ -190,7 +270,6 @@ class DefaultModelsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt",
                     credentialAlias = "key",
                     displayName = "gpt",
                 ),
@@ -199,6 +278,7 @@ class DefaultModelsDaoTest {
                 ApiModelConfigurationEntity(
                     id = apiId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "def",
                 ),
             )

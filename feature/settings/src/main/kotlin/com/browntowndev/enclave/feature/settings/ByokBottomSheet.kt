@@ -315,7 +315,7 @@ private fun ByokAssetListView(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (asset.isMultimodal) {
+                                    if (asset.configurations.any { it.isMultimodal }) {
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Icon(
                                             imageVector = Icons.Default.Visibility,
@@ -326,7 +326,7 @@ private fun ByokAssetListView(
                                     }
                                 }
                                 Text(
-                                    text = "${asset.provider.displayName} • ${asset.modelId}",
+                                    text = asset.provider.displayName,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 2.dp),
@@ -392,7 +392,7 @@ private fun ByokConfigListView(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
-                    if (asset.isMultimodal) {
+                    if (asset.configurations.any { it.isMultimodal }) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Visibility,
@@ -508,7 +508,12 @@ private fun ByokConfigListView(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
+                                    text =
+                                        if (config.modelId.isNotBlank()) {
+                                            "${config.displayName} • ${config.modelId}"
+                                        } else {
+                                            config.displayName
+                                        },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

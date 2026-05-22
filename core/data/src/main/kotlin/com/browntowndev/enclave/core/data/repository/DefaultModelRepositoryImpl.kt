@@ -81,12 +81,15 @@ class DefaultModelRepositoryImpl
             var displayName: String? = null
             var providerName: String? = null
             var presetName: String? = null
+            var modelId: String? = null
 
             if (entity.localConfigId != null) {
                 val config = localModelConfigurationsDao.getById(entity.localConfigId)
                 if (config != null) {
                     val model = localModelsDao.getById(config.localModelId)
-                    displayName = model?.huggingFaceModelName
+                    displayName =
+                        model?.displayName?.takeIf { it.isNotBlank() }
+                            ?: model?.huggingFaceModelName
                     providerName = "Local"
                     presetName =
                         decryptFieldOrNull(
@@ -116,6 +119,7 @@ class DefaultModelRepositoryImpl
                                 field = "displayName",
                                 entityId = config.id.value,
                             )
+                        modelId = config.modelId.takeIf { it.isNotBlank() }
                     }
                 }
             } else if (entity.ttsProviderId != null) {
@@ -161,6 +165,7 @@ class DefaultModelRepositoryImpl
                 displayName = displayName,
                 providerName = providerName,
                 presetName = presetName,
+                modelId = modelId,
             )
         }
 
@@ -245,6 +250,7 @@ class DefaultModelRepositoryImpl
                         mediaProviderId != null -> mediaProviderName?.displayName
                         else -> null
                     },
+                modelId = apiModelId?.takeIf { it.isNotBlank() },
             )
 
         private fun decryptField(

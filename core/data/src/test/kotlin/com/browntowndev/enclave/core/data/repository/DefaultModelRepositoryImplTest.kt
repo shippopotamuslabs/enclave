@@ -70,7 +70,7 @@ class DefaultModelRepositoryImplTest {
     }
 
     @Test
-    fun `get default with resolved display data for local model`() =
+    fun `SCN-REPO-DEFAULT-001 getDefault uses asset displayName for local assignment`() =
         runTest {
             val configId = LocalModelConfigurationId("test-local-config-1")
             val modelId = LocalModelId("10")
@@ -88,13 +88,14 @@ class DefaultModelRepositoryImplTest {
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = modelId,
-                    displayName = localEncryption.encryptString("Precise"),
+                    displayName = localEncryption.encryptString("Synthesis"),
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
                     id = modelId,
                     modelFileFormat = ModelFileFormat.GGUF,
-                    huggingFaceModelName = "qwen",
+                    displayName = "Jamba Reasoning 3B",
+                    huggingFaceModelName = "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
                     remoteFilename = "qwen.gguf",
                     localFilename = "qwen.gguf",
                     sha256 = "abc",
@@ -105,9 +106,44 @@ class DefaultModelRepositoryImplTest {
 
             assertEquals(configId, result?.localConfigId)
             assertNull(result?.apiConfigId)
-            assertEquals("qwen", result?.displayName)
+            assertEquals("Jamba Reasoning 3B", result?.displayName)
             assertEquals("Local", result?.providerName)
-            assertEquals("Precise", result?.presetName)
+            assertEquals("Synthesis", result?.presetName)
+        }
+
+    @Test
+    fun `getDefault falls back to hugging face name when asset display name is blank`() =
+        runTest {
+            val configId = LocalModelConfigurationId("test-local-config-1")
+            val modelId = LocalModelId("10")
+            val huggingFaceName = "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
+            coEvery { defaultModelsDao.getDefault(ModelType.DRAFT_TWO) } returns
+                DefaultModelEntity(
+                    modelType = ModelType.DRAFT_TWO,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                )
+            coEvery { localConfigsDao.getById(configId) } returns
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = localEncryption.encryptString("Qwen 3.5 2B"),
+                )
+            coEvery { localModelsDao.getById(modelId) } returns
+                LocalModelEntity(
+                    id = modelId,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "",
+                    huggingFaceModelName = huggingFaceName,
+                    remoteFilename = "qwen.gguf",
+                    localFilename = "qwen.gguf",
+                    sha256 = "abc",
+                    sizeInBytes = 100,
+                )
+
+            val result = repo.getDefault(ModelType.DRAFT_TWO)
+
+            assertEquals(huggingFaceName, result?.displayName)
         }
 
     @Test
@@ -129,6 +165,7 @@ class DefaultModelRepositoryImplTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
+                    modelId = "gpt-4o",
                     displayName = localEncryption.encryptString("Default"),
                 )
             coEvery { apiCredentialsDao.getById(credId) } returns
@@ -136,9 +173,7 @@ class DefaultModelRepositoryImplTest {
                     id = credId,
                     displayName = localEncryption.encryptString("OpenAI Primary"),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
-                    isMultimodal = false,
                 )
 
             val result = repo.getDefault(ModelType.VISION)
@@ -148,6 +183,7 @@ class DefaultModelRepositoryImplTest {
             assertEquals("OpenAI Primary", result?.displayName)
             assertEquals("OpenAI", result?.providerName)
             assertEquals("Default", result?.presetName)
+            assertEquals("gpt-4o", result?.modelId)
         }
 
     @Test
@@ -215,6 +251,43 @@ class DefaultModelRepositoryImplTest {
         }
 
     @Test
+    fun `SCN-REPO-DEFAULT-002 observeDefaults uses asset displayName from SQL view`() =
+        runTest {
+            every { defaultModelsDao.observeAllWithDetails() } returns
+                flowOf(
+                    listOf(
+                        DefaultModelAssignmentView(
+                            modelType = ModelType.THINKING,
+                            localConfigId = LocalModelConfigurationId("cfg-thinking"),
+                            apiConfigId = null,
+                            localPresetName = localEncryption.encryptString("Thinking"),
+                            apiPresetName = null,
+                            apiModelId = null,
+                            localAssetName = "Gemma 4 E4B",
+                            apiAssetName = null,
+                            apiCredentialsId = null,
+                            apiProviderName = null,
+                            ttsProviderId = null,
+                            ttsAssetName = null,
+                            ttsProviderName = null,
+                            ttsVoiceName = null,
+                            mediaProviderId = null,
+                            mediaAssetName = null,
+                            mediaProviderName = null,
+                            mediaCapability = null,
+                        ),
+                    ),
+                )
+
+            repo.observeDefaults().test {
+                val thinking = awaitItem().single { it.modelType == ModelType.THINKING }
+                assertEquals("Gemma 4 E4B", thinking.displayName)
+                assertEquals("Thinking", thinking.presetName)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `observeDefaults decrypts assignment view labels from Room`() =
         runTest {
             every { defaultModelsDao.observeAllWithDetails() } returns
@@ -226,7 +299,8 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = localEncryption.encryptString("Precise"),
                             apiPresetName = null,
-                            localAssetName = "qwen",
+                            apiModelId = null,
+                            localAssetName = "Gemma 4 E4B",
                             apiAssetName = null,
                             apiCredentialsId = null,
                             apiProviderName = null,
@@ -245,6 +319,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = ApiModelConfigurationId("api-cfg"),
                             localPresetName = null,
                             apiPresetName = localEncryption.encryptString("Default"),
+                            apiModelId = "grok-4-3",
                             localAssetName = null,
                             apiAssetName = localEncryption.encryptString("OpenAI Primary"),
                             apiCredentialsId = ApiCredentialsId("12"),
@@ -264,6 +339,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = null,
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -283,6 +359,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = null,
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -303,13 +380,14 @@ class DefaultModelRepositoryImplTest {
                 val assignments = awaitItem().associateBy { it.modelType }
 
                 val main = requireNotNull(assignments[ModelType.MAIN])
-                assertEquals("qwen", main.displayName)
+                assertEquals("Gemma 4 E4B", main.displayName)
                 assertEquals("Precise", main.presetName)
                 assertEquals("Local", main.providerName)
 
                 val vision = requireNotNull(assignments[ModelType.VISION])
                 assertEquals("OpenAI Primary", vision.displayName)
                 assertEquals("Default", vision.presetName)
+                assertEquals("grok-4-3", vision.modelId)
                 assertEquals("OpenAI", vision.providerName)
 
                 val tts = requireNotNull(assignments[ModelType.TTS])
@@ -355,6 +433,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = ApiModelConfigurationId("api-cfg"),
                             localPresetName = null,
                             apiPresetName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
+                            apiModelId = "grok-vision",
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = ApiCredentialsId("12"),

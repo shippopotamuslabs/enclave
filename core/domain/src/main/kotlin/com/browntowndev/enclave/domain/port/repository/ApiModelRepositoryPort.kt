@@ -24,7 +24,6 @@ interface ApiModelRepositoryPort {
 
     suspend fun findMatchingCredentials(
         provider: ApiProvider,
-        modelId: String,
         baseUrl: String?,
         apiKey: String,
         sourceCredentialAlias: String? = null,

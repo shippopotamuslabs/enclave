@@ -74,6 +74,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.kotlin.reflect)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
     testImplementation(libs.robolectric)

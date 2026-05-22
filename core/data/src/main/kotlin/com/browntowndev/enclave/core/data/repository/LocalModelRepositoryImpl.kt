@@ -72,6 +72,7 @@ class LocalModelRepositoryImpl
                 LocalModelEntity(
                     id = existingModel?.id ?: generateModelGuid(),
                     modelFileFormat = asset.metadata.modelFileFormat,
+                    displayName = asset.metadata.displayName,
                     huggingFaceModelName = asset.metadata.huggingFaceModelName,
                     remoteFilename = asset.metadata.remoteFileName,
                     localFilename = asset.metadata.localFileName,
@@ -140,6 +141,7 @@ class LocalModelRepositoryImpl
                 LocalModelEntity(
                     id = assignedId,
                     modelFileFormat = metadata.modelFileFormat,
+                    displayName = metadata.displayName,
                     huggingFaceModelName = metadata.huggingFaceModelName,
                     remoteFilename = metadata.remoteFileName,
                     localFilename = metadata.localFileName,
@@ -225,6 +227,7 @@ class LocalModelRepositoryImpl
         private fun entityToMetadata(entity: LocalModelEntity) =
             LocalModelMetadata(
                 id = entity.id,
+                displayName = entity.displayName,
                 modelFileFormat = entity.modelFileFormat,
                 huggingFaceModelName = entity.huggingFaceModelName,
                 remoteFileName = entity.remoteFilename,

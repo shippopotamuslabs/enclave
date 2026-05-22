@@ -210,7 +210,6 @@ fun ProviderSelectionField(
                             asset.copy(
                                 provider = provider,
                                 baseUrl = nextBaseUrl,
-                                modelId = "",
                             ),
                         )
                         providerDropdownExpanded = false
@@ -224,7 +223,7 @@ fun ProviderSelectionField(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelSelectionField(
-    asset: ApiModelAssetUi,
+    config: ApiModelConfigUi,
     availableModels: List<DiscoveredApiModelUi>,
     filteredModels: List<DiscoveredApiModelUi>,
     isFetchingModels: Boolean,
@@ -232,7 +231,7 @@ fun ModelSelectionField(
     searchQuery: String,
     providerFilters: Set<String>,
     sortOption: ModelSortOption,
-    onAssetChange: (ApiModelAssetUi) -> Unit,
+    onConfigChange: (ApiModelConfigUi) -> Unit,
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
     onToggleProviderFilter: (String) -> Unit,
@@ -250,8 +249,8 @@ fun ModelSelectionField(
                     .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
         ) {
             OutlinedTextField(
-                value = asset.modelId,
-                onValueChange = { onAssetChange(asset.copy(modelId = it)) },
+                value = config.modelId,
+                onValueChange = { onConfigChange(config.copy(modelId = it)) },
                 readOnly = true,
                 enabled = false,
                 label = {
@@ -358,18 +357,55 @@ fun ModelSelectionField(
             onClearProviderFilters = onClearProviderFilters,
             onUpdateSortOption = onUpdateSortOption,
             onModelSelected = { selectedModelId ->
-                onAssetChange(asset.copy(modelId = selectedModelId))
+                onConfigChange(config.copy(modelId = selectedModelId))
             },
             onDismissRequest = { showModelSelectionSheet = false },
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProviderModelSelectionField(
+    modelId: String,
+    availableModels: List<DiscoveredApiModelUi>,
+    filteredModels: List<DiscoveredApiModelUi>,
+    isFetchingModels: Boolean,
+    canFetchModels: Boolean,
+    searchQuery: String,
+    providerFilters: Set<String>,
+    sortOption: ModelSortOption,
+    onModelIdChange: (String) -> Unit,
+    onFetchModels: () -> Unit,
+    onUpdateSearchQuery: (String) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
+    onUpdateSortOption: (ModelSortOption) -> Unit,
+) {
+    val presetConfig = ApiModelConfigUi(modelId = modelId)
+    ModelSelectionField(
+        config = presetConfig,
+        availableModels = availableModels,
+        filteredModels = filteredModels,
+        isFetchingModels = isFetchingModels,
+        canFetchModels = canFetchModels,
+        searchQuery = searchQuery,
+        providerFilters = providerFilters,
+        sortOption = sortOption,
+        onConfigChange = { onModelIdChange(it.modelId) },
+        onFetchModels = onFetchModels,
+        onUpdateSearchQuery = onUpdateSearchQuery,
+        onToggleProviderFilter = onToggleProviderFilter,
+        onClearProviderFilters = onClearProviderFilters,
+        onUpdateSortOption = onUpdateSortOption,
+    )
+}
+
 @Composable
 fun VisionCapabilitySwitch(
     discoveredVisionCapability: Boolean?,
-    asset: ApiModelAssetUi,
-    onAssetChange: (ApiModelAssetUi) -> Unit,
+    config: ApiModelConfigUi,
+    onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -395,8 +431,8 @@ fun VisionCapabilitySwitch(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
-            checked = discoveredVisionCapability ?: asset.isMultimodal,
-            onCheckedChange = { onAssetChange(asset.copy(isMultimodal = it)) },
+            checked = discoveredVisionCapability ?: config.isMultimodal,
+            onCheckedChange = { onConfigChange(config.copy(isMultimodal = it)) },
             enabled = discoveredVisionCapability == null,
         )
     }
@@ -443,7 +479,7 @@ fun ReusableCredentialDropdown(
                         Column {
                             Text(credential.displayName)
                             Text(
-                                text = credential.modelId,
+                                text = credential.providerLabel,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -467,24 +503,13 @@ fun CredentialsConfigurationForm(
     reusableCredentials: List<ReusableApiCredentialUi>,
     selectedReusableCredential: ReusableApiCredentialUi?,
     apiKey: String,
-    availableModels: List<DiscoveredApiModelUi>,
-    filteredModels: List<DiscoveredApiModelUi>,
-    selectedModelMetadata: DiscoveredApiModelUi?,
-    isFetchingModels: Boolean,
-    searchQuery: String,
-    providerFilters: Set<String>,
-    sortOption: ModelSortOption,
+    connectionTestStatus: ApiConnectionTestStatus,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
-    onFetchModels: () -> Unit,
-    onUpdateSearchQuery: (String) -> Unit,
-    onToggleProviderFilter: (String) -> Unit,
-    onClearProviderFilters: () -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
+    onTestConnection: () -> Unit,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
-    val discoveredVisionCapability = selectedModelMetadata?.isMultimodal
     val isKeySaved = selectedReusableCredential != null || asset.credentialsId.value.isNotEmpty()
     val showSavedIndicator = isKeySaved && apiKey.isEmpty()
 
@@ -558,38 +583,52 @@ fun CredentialsConfigurationForm(
             },
         )
 
+        val canTestConnection =
+            apiKey.isNotBlank() ||
+                selectedReusableCredential != null ||
+                asset.credentialsId.value.isNotEmpty()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = onTestConnection,
+                enabled = canTestConnection && connectionTestStatus != ApiConnectionTestStatus.TESTING,
+            ) {
+                when (connectionTestStatus) {
+                    ApiConnectionTestStatus.TESTING -> {
+                        CircularProgressIndicator(
+                            modifier =
+                                Modifier
+                                    .padding(end = 8.dp)
+                                    .size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Text("Testing…")
+                    }
+                    ApiConnectionTestStatus.SUCCESS -> {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .padding(end = 4.dp)
+                                    .size(16.dp),
+                        )
+                        Text("Success")
+                    }
+                    ApiConnectionTestStatus.IDLE -> Text("Test")
+                }
+            }
+        }
+
         OutlinedTextField(
             value = asset.displayName,
             onValueChange = { onAssetChange(asset.copy(displayName = it)) },
             label = { Text("Display Name (e.g. My OpenAI)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-        )
-
-        val canFetchModels =
-            !isFetchingModels &&
-                (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
-        ModelSelectionField(
-            asset = asset,
-            availableModels = availableModels,
-            filteredModels = filteredModels,
-            isFetchingModels = isFetchingModels,
-            canFetchModels = canFetchModels,
-            searchQuery = searchQuery,
-            providerFilters = providerFilters,
-            sortOption = sortOption,
-            onAssetChange = onAssetChange,
-            onFetchModels = onFetchModels,
-            onUpdateSearchQuery = onUpdateSearchQuery,
-            onToggleProviderFilter = onToggleProviderFilter,
-            onClearProviderFilters = onClearProviderFilters,
-            onUpdateSortOption = onUpdateSortOption,
-        )
-
-        VisionCapabilitySwitch(
-            discoveredVisionCapability = discoveredVisionCapability,
-            asset = asset,
-            onAssetChange = onAssetChange,
         )
     }
 }
@@ -987,14 +1026,27 @@ fun TuningConfiguration(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun PresetConfigurationForm(
     provider: ApiProvider,
     parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
+    availableModels: List<DiscoveredApiModelUi>,
+    filteredModels: List<DiscoveredApiModelUi>,
+    isFetchingModels: Boolean,
+    canFetchModels: Boolean,
+    searchQuery: String,
+    providerFilters: Set<String>,
+    sortOption: ModelSortOption,
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
+    onFetchModels: () -> Unit,
+    onUpdateSearchQuery: (String) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
+    onUpdateSortOption: (ModelSortOption) -> Unit,
 ) {
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
@@ -1006,6 +1058,24 @@ fun PresetConfigurationForm(
             modifier = Modifier.padding(top = 16.dp).fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+        )
+
+        PresetModelAndVisionSection(
+            config = config,
+            selectedModelMetadata = selectedModelMetadata,
+            availableModels = availableModels,
+            filteredModels = filteredModels,
+            isFetchingModels = isFetchingModels,
+            canFetchModels = canFetchModels,
+            searchQuery = searchQuery,
+            providerFilters = providerFilters,
+            sortOption = sortOption,
+            onConfigChange = onConfigChange,
+            onFetchModels = onFetchModels,
+            onUpdateSearchQuery = onUpdateSearchQuery,
+            onToggleProviderFilter = onToggleProviderFilter,
+            onClearProviderFilters = onClearProviderFilters,
+            onUpdateSortOption = onUpdateSortOption,
         )
 
         SystemPromptConfiguration(
@@ -1076,6 +1146,7 @@ fun PreviewByokConfigureCredentials() {
             onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
+            onTestApiProviderConnection = {},
             onUpdateModelSearchQuery = {},
             onToggleModelProviderFilter = {},
             onClearModelProviderFilters = {},
@@ -1112,6 +1183,7 @@ fun PreviewByokConfigurePreset() {
             onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
+            onTestApiProviderConnection = {},
             onUpdateModelSearchQuery = {},
             onToggleModelProviderFilter = {},
             onClearModelProviderFilters = {},
@@ -1160,6 +1232,7 @@ fun PreviewByokConfigurePresetWithHeaders() {
             onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
+            onTestApiProviderConnection = {},
             onUpdateModelSearchQuery = {},
             onToggleModelProviderFilter = {},
             onClearModelProviderFilters = {},
@@ -1196,6 +1269,7 @@ fun PreviewByokConfigureOpenRouterPreset() {
             onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
+            onTestApiProviderConnection = {},
             onUpdateModelSearchQuery = {},
             onToggleModelProviderFilter = {},
             onClearModelProviderFilters = {},

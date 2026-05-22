@@ -1,6 +1,7 @@
 {
   "assets": [
     {
+      "displayName": "MiniCPM-V-4.6 1.3B",
       "huggingFaceModelName": "openbmb/MiniCPM-V-4.6-Thinking-gguf",
       "fileName": "MiniCPM-V-4_6-Thinking-Q8_0.gguf",
       "sha256": "1cfadbb76a841c6a448870dda3f2f46209ae6d552a848ee4ab3205de76b5adfb",
@@ -10,7 +11,7 @@
       "configurations": [
         {
           "configId": "550e8400-e29b-41d4-a716-446655440002",
-          "displayName": "MiniCPM-V-4.6 1.3B (Analytic Draft)",
+          "displayName": "Analytic Drafter",
           "systemPrompt": "You are the primary analytical drafter in a multi-model pipeline. You are logical, precise, and thorough. Handle messages containing TASK: COMPLEX_DRAFT_ANALYTICAL by drafting a response to the USER_PROMPT.",
           "temperature": 0.05,
           "topK": 50,
@@ -25,6 +26,7 @@
       ]
     },
     {
+      "displayName": "Qwen 3.5 2B",
       "huggingFaceModelName": "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
       "fileName": "Qwen3.5-2B.Q8_0.gguf",
       "sha256": "fd6cad5e60993df99704e693e7006658e54e49289cfe02e519f93cf741f27136",
@@ -34,7 +36,7 @@
       "configurations": [
         {
           "configId": "550e8400-e29b-41d4-a716-446655440003",
-          "displayName": "Qwen 3.5 2B",
+          "displayName": "Draft Two",
           "systemPrompt": "You are the secondary creative-analytical drafter. You explore diverse, imaginative yet logically grounded drafts, exploring novel framings while maintaining strong reasoning structure. Reply to USER_PROMPT when you see TASK: COMPLEX_DRAFT_CREATIVE.",
           "temperature": 0.38,
           "topK": 25,
@@ -49,6 +51,7 @@
       ]
     },
     {
+      "displayName": "Jamba Reasoning 3B",
       "huggingFaceModelName": "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
       "fileName": "ai21labs_AI21-Jamba-Reasoning-3B-Q8_0.gguf",
       "sha256": "a6ce2452d5b1ddd4279607a44ff1b580bfae57695bdcb09b394a7b5e089bb8ff",
@@ -58,7 +61,7 @@
       "configurations": [
         {
           "configId": "550e8400-e29b-41d4-a716-446655440004",
-          "displayName": "Jamba Reasoning 3B",
+          "displayName": "Synthesis",
           "systemPrompt": "You are the core synthesizer. TASK: COMPLEX_SYNTHESIZE. First, read ORIGINAL_USER_PROMPT and draft your own reply. Second, read DRAFT_1 and DRAFT_2. Synthesize a final, polished response combining the best elements. Include no meta-commentary.",
           "temperature": 0.7,
           "topK": 40,
@@ -73,6 +76,7 @@
       ]
     },
     {
+      "displayName": "Gemma 4 E4B",
       "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
       "fileName": "gemma-4-E4B-it.litertlm",
       "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
@@ -82,7 +86,7 @@
       "configurations": [
         {
           "configId": "550e8400-e29b-41d4-a716-446655440006",
-          "displayName": "Gemma 4 E4B (Fast)",
+          "displayName": "Fast",
           "systemPrompt": "You are a helpful, direct, and concise AI assistant. Provide accurate answers quickly.",
           "temperature": 0.8,
           "topK": 50,
@@ -96,7 +100,7 @@
         },
         {
           "configId": "550e8400-e29b-41d4-a716-446655440007",
-          "displayName": "Gemma 4 E4B (Thinking)",
+          "displayName": "Thinking",
           "systemPrompt": "You are a highly analytical reasoning engine. Break down problems logically and identify root causes with precision. Excel at structural analysis and delivering elegant solutions to complex queries.",
           "temperature": 0.05,
           "topK": 50,
@@ -110,7 +114,7 @@
         },
         {
           "configId": "550e8400-e29b-41d4-a716-446655440005",
-          "displayName": "Gemma 4 E4B (Final Synthesis)",
+          "displayName": "Final Synthesis",
           "systemPrompt": "You are the final reviewer who improves draft answers. TASK: FINAL_REVIEW_AND_REPLY\n\n1. Evaluate CANDIDATE_ANSWER for correctness.\n2. Provide a BETTER answer or refine the candidate.\n3. Follow USER_SYSTEM_PROMPT instructions.\n\nBe direct without meta-commentary.",
           "temperature": 0.7,
           "topK": 40,
