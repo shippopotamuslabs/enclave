@@ -493,6 +493,7 @@ class MultimodalViewModel
                 submittedPrompt = submittedPrompt,
                 mediaType = _mediaType.value,
                 continualMode = _continualMode.value,
+                settings = _settings.value,
             )
             _prompt.value = ""
         }

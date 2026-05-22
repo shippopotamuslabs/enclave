@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
@@ -28,6 +30,8 @@ class StudioGenerationCoordinator
 
         private val _lastSubmittedPrompt = MutableStateFlow<String?>(null)
         val lastSubmittedPrompt: StateFlow<String?> = _lastSubmittedPrompt.asStateFlow()
+
+        private val _lastSubmittedSettings = MutableStateFlow<GenerationSettings?>(null)
 
         private val _error = MutableStateFlow<String?>(null)
         val error: StateFlow<String?> = _error.asStateFlow()
@@ -67,8 +71,9 @@ class StudioGenerationCoordinator
         fun startGeneration(
             prompt: String,
             mediaType: MediaCapability,
+            settings: GenerationSettings,
         ) {
-            dispatcher.startGeneration(prompt, mediaType)
+            dispatcher.startGeneration(prompt, mediaType, settings)
             _isGenerating.value = true
         }
 
@@ -77,21 +82,23 @@ class StudioGenerationCoordinator
             customPrompt: String? = null,
         ) {
             val prompt = customPrompt ?: asset.prompt ?: ""
-            startGeneration(prompt, MediaCapability.VIDEO)
+            startGeneration(prompt, MediaCapability.VIDEO, VideoGenerationSettings())
         }
 
         fun beginGenerationAttempt(
             submittedPrompt: String,
             mediaType: MediaCapability,
             continualMode: Boolean,
+            settings: GenerationSettings,
         ) {
             lastProcessedEditAssetId = null
             lastProcessedAnimateAssetId = null
             _lastSubmittedPrompt.value = submittedPrompt
+            _lastSubmittedSettings.value = settings
             if (continualMode && mediaType == MediaCapability.IMAGE) {
                 _isContinualGenerationActive.value = true
             }
-            startGeneration(submittedPrompt, mediaType)
+            startGeneration(submittedPrompt, mediaType, settings)
         }
 
         fun onContinualModeDisabled() {
@@ -115,11 +122,16 @@ class StudioGenerationCoordinator
                 mediaType != MediaCapability.IMAGE ||
                     !_isContinualGenerationActive.value ||
                     _lastSubmittedPrompt.value.isNullOrBlank() ||
+                    _lastSubmittedSettings.value == null ||
                     _isGenerating.value
             if (cannotContinueGeneration || !consumedScrollAnchors.add(anchorAssetId)) {
                 return
             }
-            startGeneration(requireNotNull(_lastSubmittedPrompt.value), mediaType)
+            startGeneration(
+                requireNotNull(_lastSubmittedPrompt.value),
+                mediaType,
+                requireNotNull(_lastSubmittedSettings.value),
+            )
         }
 
         fun clearError(scope: CoroutineScope) {

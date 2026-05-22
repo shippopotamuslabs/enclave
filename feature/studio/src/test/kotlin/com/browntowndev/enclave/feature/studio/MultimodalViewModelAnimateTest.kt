@@ -155,7 +155,7 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            verify { dispatcher.startGeneration("Original Prompt", MediaCapability.VIDEO) }
+            verify { dispatcher.startGeneration("Original Prompt", MediaCapability.VIDEO, any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
             assertEquals("", viewModel.uiState.value.prompt)
             job.cancel()
@@ -218,7 +218,7 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO) }
+            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO, any()) }
             assertEquals("", viewModel.uiState.value.prompt)
             job.cancel()
         }
