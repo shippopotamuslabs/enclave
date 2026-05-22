@@ -32,6 +32,7 @@ import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
@@ -63,6 +64,7 @@ import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
 import com.browntowndev.enclave.core.data.repository.LocalModelRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MessageRepositoryImpl
@@ -104,6 +106,7 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -216,6 +219,9 @@ object DataModule {
 
     @Provides
     fun provideLocalModelsDao(database: EnclaveDatabase): LocalModelsDao = database.localModelsDao()
+
+    @Provides
+    fun provideUtilityModelsDao(database: EnclaveDatabase): UtilityModelsDao = database.utilityModelsDao()
 
     @Provides
     fun provideLocalModelConfigurationsDao(database: EnclaveDatabase): LocalModelConfigurationsDao =
@@ -430,6 +436,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelRegistry(impl: LocalModelRepositoryImpl): LocalModelRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindUtilityModelRepository(impl: UtilityModelRepositoryImpl): UtilityModelRepositoryPort
 
     @Binds
     @Singleton

@@ -26,6 +26,7 @@ service cloud.firestore {
         || collection == 'api_keys'
         || collection == 'api_model_configs'
         || collection == 'local_models'
+        || collection == 'utility_models'
         || collection == 'local_model_configs'
         || collection == 'default_models'
         || collection == 'tts_providers'

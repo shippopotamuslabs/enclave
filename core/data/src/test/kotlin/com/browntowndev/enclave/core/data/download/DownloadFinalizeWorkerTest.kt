@@ -16,7 +16,10 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -30,6 +33,7 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 /**
@@ -80,6 +84,10 @@ class DownloadFinalizeWorkerTest {
     @MockK
     private lateinit var mockSyncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase
 
+    private lateinit var syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase
+
+    private lateinit var fakeUtilityModelRepository: FakeUtilityModelRepository
+
     @MockK
     private lateinit var mockEmbeddingCoordinator: EmbeddingRegenerationCoordinator
 
@@ -107,6 +115,9 @@ class DownloadFinalizeWorkerTest {
         coEvery { mockLocalModelRepository.getAssetById(any()) } returns null
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
         every { mockEmbeddingCoordinator.enqueueFullRegeneration() } returns Unit
+        fakeUtilityModelRepository = FakeUtilityModelRepository()
+        syncUtilityModelRegistryUseCase =
+            SyncUtilityModelRegistryUseCase(fakeUtilityModelRepository, mockLoggingPort)
 
         // Setup logging port mock with all logging methods
         every { mockLoggingPort.debug(any(), any()) } returns Unit
@@ -123,6 +134,7 @@ class DownloadFinalizeWorkerTest {
                 localModelRepository = mockLocalModelRepository,
                 modelConfigFetcher = mockModelConfigFetcher,
                 syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
+                syncUtilityModelRegistryUseCase = syncUtilityModelRegistryUseCase,
                 embeddingCoordinator = mockEmbeddingCoordinator,
                 logger = mockLoggingPort,
             )
@@ -888,6 +900,91 @@ class DownloadFinalizeWorkerTest {
             assertEquals(SESSION_ID, outputData.getString(KEY_SESSION_ID))
             assertEquals(REQUEST_RESTORE, outputData.getString(KEY_REQUEST_KIND))
             assertEquals(STAGE_FINALIZE, outputData.getString(KEY_WORKER_STAGE))
+        }
+
+    @Test
+    @DisplayName("SCN-FINALIZE-001")
+    fun scnFinalize001_persistsDownloadedUtilityAsset() =
+        runTest {
+            val onnxAsset =
+                createTestAsset("model.onnx", "onnx-sha").let { asset ->
+                    asset.copy(
+                        metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL),
+                        configurations = emptyList(),
+                    )
+                }
+            val downloadedShas = Json.encodeToString(listOf("onnx-sha"))
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to downloadedShas,
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+
+            worker.doWork()
+
+            assertEquals(
+                "onnx-sha",
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.ONNX_MODEL)?.sha256,
+            )
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+        }
+
+    @Test
+    @DisplayName("SCN-FINALIZE-002")
+    fun scnFinalize002_enqueuesEmbeddingRegenForOnnxModel() =
+        runTest {
+            val onnxAsset =
+                createTestAsset("model.onnx", SHA_ONNX).let { asset ->
+                    asset.copy(
+                        metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL),
+                        configurations = emptyList(),
+                    )
+                }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(SHA_ONNX)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+            worker.doWork()
+
+            coVerify(exactly = 1) { mockEmbeddingCoordinator.enqueueFullRegeneration() }
+        }
+
+    @Test
+    @DisplayName("SCN-MUT-002")
+    fun scnMut002_utilityFinalizeUsesUtilityRegistryNotSlotSync() =
+        runTest {
+            val whisperAsset =
+                createTestAsset("ggml-base.en.bin", "whisper-sha").let { asset ->
+                    asset.copy(
+                        metadata = asset.metadata.copy(utilityType = UtilityType.WHISPER),
+                        configurations = emptyList(),
+                    )
+                }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf("whisper-sha")),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(whisperAsset))
+
+            worker.doWork()
+
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            assertEquals(
+                "whisper-sha",
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.WHISPER)?.sha256,
+            )
         }
 
     // ===== Helper method =====

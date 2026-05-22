@@ -97,6 +97,7 @@ internal object FirestoreSyncDependencyGraph {
         "api_keys" to NO_PARENTS,
         "api_model_configs" to API_MODEL_CONFIG_PARENTS,
         "local_models" to NO_PARENTS,
+        "utility_models" to NO_PARENTS,
         "local_model_configs" to LOCAL_MODEL_CONFIG_PARENTS,
         "default_models" to DEFAULT_MODEL_PARENTS,
         "tts_providers" to NO_PARENTS,

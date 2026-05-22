@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -23,9 +24,22 @@ class FirestoreSyncDependencyGraphTest {
                 .toSet()
         val graphPaths = FirestoreSyncDependencyGraph.collectionPaths()
 
-        assertEquals(19, registryPaths.size)
+        assertEquals(20, registryPaths.size)
         assertEquals(0, registryPaths.minus(graphPaths).size)
         assertEquals(0, graphPaths.minus(registryPaths).size)
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-SYNC-004")
+    fun scnSync004_dependencyGraphListsUtilityModelsWithNoParents() {
+        val parents =
+            FirestoreSyncDependencyGraph.requiredParents(
+                collectionPath = "utility_models",
+                sourceData = emptyMap(),
+            )
+
+        assertEquals(emptyList<FirestoreSyncDependencyGraph.ParentRef>(), parents)
+        assertTrue("utility_models" in FirestoreSyncDependencyGraph.collectionPaths())
     }
 
     private fun createMinimalContext(): FirestoreSyncContext {

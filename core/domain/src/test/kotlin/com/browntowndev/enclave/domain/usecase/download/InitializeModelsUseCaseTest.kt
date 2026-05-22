@@ -16,13 +16,18 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class InitializeModelsUseCaseTest {
@@ -32,6 +37,8 @@ class InitializeModelsUseCaseTest {
     private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var modelDownloadOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var checkModelsUseCase: CheckModelsUseCase
+    private lateinit var syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase
+    private lateinit var utilityModelRepository: UtilityModelRepositoryPort
     private lateinit var logPort: LoggingPort
     private lateinit var useCase: InitializeModelsUseCase
 
@@ -43,7 +50,10 @@ class InitializeModelsUseCaseTest {
         localModelRepository = mockk()
         modelDownloadOrchestrator = mockk(relaxed = true)
         checkModelsUseCase = mockk()
+        utilityModelRepository = FakeUtilityModelRepository()
         logPort = mockk(relaxed = true)
+        syncUtilityModelRegistryUseCase =
+            SyncUtilityModelRegistryUseCase(utilityModelRepository, logPort)
 
         useCase =
             InitializeModelsUseCase(
@@ -53,6 +63,7 @@ class InitializeModelsUseCaseTest {
                 localModelRepository,
                 modelDownloadOrchestrator,
                 checkModelsUseCase,
+                syncUtilityModelRegistryUseCase,
                 logPort,
             )
     }
@@ -144,6 +155,98 @@ class InitializeModelsUseCaseTest {
             coVerify(exactly = 0) {
                 syncLocalModelRegistryUseCase(any(), utilityAsset)
             }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-001")
+    fun scnInit001_persistsValidOnDiskUtility() =
+        runTest {
+            val utilityAsset =
+                createMockAsset(
+                    sha = "whisper-sha",
+                    fileName = "ggml-base.en.bin",
+                    source = DownloadSource.HUGGING_FACE,
+                ).copy(
+                    metadata =
+                        LocalModelMetadata(
+                            id = LocalModelId("utility"),
+                            huggingFaceModelName = "ggerganov/whisper.cpp",
+                            remoteFileName = "ggml-base.en.bin",
+                            localFileName = "ggml-base.en.bin",
+                            sha256 = "whisper-sha",
+                            sizeInBytes = 4L,
+                            modelFileFormat = ModelFileFormat.BIN,
+                            source = DownloadSource.HUGGING_FACE,
+                            utilityType = UtilityType.WHISPER,
+                        ),
+                    configurations = emptyList(),
+                )
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(utilityAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(utilityAsset),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = listOf(utilityAsset),
+                    modelsToDownload = emptyList(),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), true),
+                )
+
+            useCase()
+
+            assertEquals(
+                "whisper-sha",
+                utilityModelRepository.getByUtilityType(UtilityType.WHISPER)?.sha256,
+            )
+            coVerify(exactly = 0) { syncLocalModelRegistryUseCase(any(), any()) }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-002")
+    fun scnInit002_skipsUtilityStillInModelsToDownload() =
+        runTest {
+            val utilityAsset =
+                createMockAsset(
+                    sha = "missing-sha",
+                    fileName = "ggml-base.en.bin",
+                    source = DownloadSource.HUGGING_FACE,
+                ).copy(
+                    metadata =
+                        LocalModelMetadata(
+                            id = LocalModelId("utility"),
+                            huggingFaceModelName = "ggerganov/whisper.cpp",
+                            remoteFileName = "ggml-base.en.bin",
+                            localFileName = "ggml-base.en.bin",
+                            sha256 = "missing-sha",
+                            sizeInBytes = 4L,
+                            modelFileFormat = ModelFileFormat.BIN,
+                            source = DownloadSource.HUGGING_FACE,
+                            utilityType = UtilityType.WHISPER,
+                        ),
+                    configurations = emptyList(),
+                )
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(utilityAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(utilityAsset),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = listOf(utilityAsset),
+                    modelsToDownload = listOf(utilityAsset),
+                    scanResult = ModelScanResult(listOf(utilityAsset), emptyMap(), false),
+                )
+
+            useCase()
+
+            assertNull(utilityModelRepository.getByUtilityType(UtilityType.WHISPER))
         }
 
     private fun createMockAsset(

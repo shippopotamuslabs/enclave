@@ -74,6 +74,27 @@ describe('sync event feed (security rules)', () => {
         );
     });
 
+    it('allows owner writes to utility_models', async () => {
+        const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
+
+        await assertSucceeds(
+            ownerFirestore.doc('users/alice/utility_models/util-1').set({
+                utility_type: 'onnx_model',
+                model_file_format: 'ONNX',
+                huggingface_model_name: 'test',
+                remote_filename: 'model.onnx',
+                local_filename: 'model.onnx',
+                sha256: 'abc123',
+                size_in_bytes: 100,
+                updated_at: 1700000001000,
+                deleted: false,
+                _sync_device_id: 'device-a',
+                _sync_client_mutation_id: 'mutation-a',
+                _sync_written_at: 1700000001000,
+            }),
+        );
+    });
+
     it('denies invalid sync metadata field types on entity writes', async () => {
         const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
 

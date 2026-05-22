@@ -79,6 +79,7 @@ class StaticSensitiveFieldCatalog : SensitiveFieldCatalog {
                 setOf(
                     "DefaultModelEntity",
                     "LocalModelEntity",
+                    "UtilityModelEntity",
                     "EmbeddingEntity",
                     "ApiKeyManager.pending_alias_sets",
                     "LocalVaultMetadataStore",

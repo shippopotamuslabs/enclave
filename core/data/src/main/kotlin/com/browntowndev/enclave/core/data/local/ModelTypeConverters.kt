@@ -8,6 +8,8 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.config.UtilityModelId
+import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
@@ -82,4 +84,18 @@ class ModelTypeConverters {
 
     @TypeConverter
     fun toDate(value: Long?): Date? = value?.let { Date(it) }
+
+    @TypeConverter
+    fun fromUtilityType(utilityType: UtilityType): String = utilityType.apiValue
+
+    @TypeConverter
+    fun toUtilityType(value: String): UtilityType =
+        UtilityType.fromApiValue(value)
+            ?: error("Unknown utility type: $value")
+
+    @TypeConverter
+    fun fromUtilityModelId(id: UtilityModelId): String = id.value
+
+    @TypeConverter
+    fun toUtilityModelId(value: String): UtilityModelId = UtilityModelId(value)
 }

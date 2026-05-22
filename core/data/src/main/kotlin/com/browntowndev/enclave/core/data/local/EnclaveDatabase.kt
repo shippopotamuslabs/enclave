@@ -25,8 +25,9 @@ import androidx.room.TypeConverters
         StudioAlbumEntity::class,
         MessageFileEntity::class,
         DocumentEntity::class,
+        UtilityModelEntity::class,
     ],
-    version = 6,
+    version = 7,
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class EnclaveDatabase : RoomDatabase() {
@@ -73,6 +74,8 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun cleanupDao(): CleanupDao
 
     abstract fun documentDao(): DocumentDao
+
+    abstract fun utilityModelsDao(): UtilityModelsDao
 
     abstract fun firestoreSyncPlaceholderDao(): FirestoreSyncPlaceholderDao
 }

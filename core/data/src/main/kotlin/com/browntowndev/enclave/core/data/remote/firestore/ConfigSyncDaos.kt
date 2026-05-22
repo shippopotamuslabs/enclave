@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
@@ -23,4 +24,5 @@ class ConfigSyncDaos
         val apiCredentialsDao: ApiCredentialsDao,
         val localModelConfigurationsDao: LocalModelConfigurationsDao,
         val defaultModelsDao: DefaultModelsDao,
+        val utilityModelsDao: UtilityModelsDao,
     )

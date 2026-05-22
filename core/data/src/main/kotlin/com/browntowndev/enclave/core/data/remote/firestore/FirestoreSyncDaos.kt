@@ -17,6 +17,7 @@ internal class FirestoreSyncDaos private constructor(
     val apiCredentialsDao = configSyncDaos.apiCredentialsDao
     val localModelConfigurationsDao = configSyncDaos.localModelConfigurationsDao
     val defaultModelsDao = configSyncDaos.defaultModelsDao
+    val utilityModelsDao = configSyncDaos.utilityModelsDao
     val studioMediaDao = studioSyncDaos.studioMediaDao
     val studioAlbumDao = studioSyncDaos.studioAlbumDao
     val messageFileDao = chatSyncDaos.messageFileDao
