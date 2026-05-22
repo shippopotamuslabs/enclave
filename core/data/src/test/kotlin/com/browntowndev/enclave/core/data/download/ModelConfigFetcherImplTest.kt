@@ -649,19 +649,55 @@ class ModelConfigFetcherImplTest {
         }
 
     @Test
-    fun `SCN-FETCH-002 non-utility asset without displayName fails validation`() =
+    fun `toLocalModelAssets parses shipped model_config json`() =
+        runTest {
+            val configFile =
+                listOf(
+                    java.io.File("model_config.json"),
+                    java.io.File("../model_config.json"),
+                    java.io.File("../../model_config.json"),
+                ).first { it.exists() }
+            val body = configFile.readText()
+
+            val mockCall = mockk<okhttp3.Call>()
+            val response =
+                Response
+                    .Builder()
+                    .request(mockk())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody())
+                    .build()
+
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } returns response
+
+            val result = fetcher.fetchRemoteConfig()
+
+            assertTrue(result.isSuccess)
+            val miniCpm =
+                result.getOrNull()!!.single {
+                    it.metadata.localFileName == "MiniCPM-V-4_6-Thinking-Q8_0.gguf"
+                }
+            assertEquals("MiniCPM-V-4.6 1.3B", miniCpm.metadata.displayName)
+        }
+
+    @Test
+    fun `SCN-FETCH-002 non-utility asset without any label fails validation`() =
         runTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
                         displayName = "",
+                        huggingFaceModelName = "",
                         fileName = "model.gguf",
                         sha256 = "abc123",
                         configurations =
                             listOf(
                                 RemoteModelConfiguration(
                                     configId = LocalModelConfigurationId("cfg-main"),
-                                    displayName = "Preset",
+                                    displayName = "",
                                     systemPrompt = "Hi",
                                     temperature = 0.7,
                                     topK = 40,
@@ -679,6 +715,38 @@ class ModelConfigFetcherImplTest {
                     fetcher.toLocalModelAssets(remoteAssets)
                 }
             assertEquals("Non-utility asset model.gguf must declare displayName.", thrown.message)
+        }
+
+    @Test
+    fun `non-utility asset accepts preset displayName when asset label is blank`() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        displayName = "",
+                        huggingFaceModelName = "openbmb/MiniCPM-V-4.6-Thinking-gguf",
+                        fileName = "MiniCPM-V-4_6-Thinking-Q8_0.gguf",
+                        sha256 = "abc123",
+                        configurations =
+                            listOf(
+                                RemoteModelConfiguration(
+                                    configId = LocalModelConfigurationId("cfg-main"),
+                                    displayName = "Analytic Drafter",
+                                    systemPrompt = "Hi",
+                                    temperature = 0.7,
+                                    topK = 40,
+                                    topP = 0.95,
+                                    repetitionPenalty = 1.1,
+                                    maxTokens = 2048,
+                                    contextWindow = 4096,
+                                ),
+                            ),
+                    ),
+                )
+
+            val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+            assertEquals("Analytic Drafter", modelAssets[0].metadata.displayName)
         }
 
     @Test
