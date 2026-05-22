@@ -12,5 +12,6 @@ class EnclaveNeoTokensTest {
         assertEquals(2.dp, EnclaveNeoTokens.buttonShadowOffsetLight)
         assertEquals(5.dp, EnclaveNeoTokens.buttonShadowOffsetDark)
         assertEquals(4.dp, EnclaveNeoTokens.rowSpacing)
+        assertEquals(48.dp, EnclaveNeoTokens.trailingActionSize)
     }
 }
