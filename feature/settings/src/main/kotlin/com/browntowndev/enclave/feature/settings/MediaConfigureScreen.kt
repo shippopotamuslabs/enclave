@@ -53,6 +53,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -132,37 +135,23 @@ fun MediaConfigureScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Media Generation Models", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = "Media Generation Models",
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            Row(
+            NeoPrimaryButton(
+                text = "Save Media Provider",
+                onClick = onSaveMediaProvider,
+                enabled = isSaveEnabled,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                         .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Button(
-                    onClick = onSaveMediaProvider,
-                    enabled = isSaveEnabled,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text("Save Media Provider", fontWeight = FontWeight.Bold)
-                }
-            }
+            )
         },
     ) { padding ->
         Column(

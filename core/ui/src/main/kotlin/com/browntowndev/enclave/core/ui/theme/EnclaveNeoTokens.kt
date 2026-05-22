@@ -37,6 +37,15 @@ object EnclaveNeoTokens {
             bottomEnd = 0.dp,
         )
 
+    /** Modal bottom sheets (rounded top edge only). */
+    val bottomSheetShape =
+        RoundedCornerShape(
+            topStart = cornerRadius,
+            topEnd = cornerRadius,
+            bottomStart = 0.dp,
+            bottomEnd = 0.dp,
+        )
+
     val borderWidth: Dp = 2.dp
 
     val trailingActionSize: Dp = 48.dp

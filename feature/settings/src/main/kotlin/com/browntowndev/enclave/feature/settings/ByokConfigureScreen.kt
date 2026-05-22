@@ -33,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
@@ -216,50 +219,33 @@ fun ByokConfigureScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = title,
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            Row(
+            NeoPrimaryButton(
+                text =
+                    when {
+                        isSearchMode -> "Save Search Settings"
+                        isPresetMode -> "Save Preset"
+                        else -> "Save Credentials"
+                    },
+                onClick =
+                    when {
+                        isSearchMode -> onSaveSearchSettings
+                        isPresetMode -> onSaveApiModelConfig
+                        else -> onSaveApiCredentials
+                    },
+                enabled = isSaveEnabled,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                         .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Button(
-                    onClick =
-                        when {
-                            isSearchMode -> onSaveSearchSettings
-                            isPresetMode -> onSaveApiModelConfig
-                            else -> onSaveApiCredentials
-                        },
-                    enabled = isSaveEnabled,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(
-                        text =
-                            when {
-                                isSearchMode -> "Save Search Settings"
-                                isPresetMode -> "Save Preset"
-                                else -> "Save Credentials"
-                            },
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
+            )
         },
     ) { padding ->
         Column(

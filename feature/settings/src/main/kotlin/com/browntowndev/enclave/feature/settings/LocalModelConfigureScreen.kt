@@ -42,6 +42,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -106,42 +109,25 @@ fun LocalModelConfigureScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Configure Local Preset", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = "Configure Local Preset",
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
             if (!config.isSystemPreset) {
-                Row(
+                NeoPrimaryButton(
+                    text = "Save Preset",
+                    onClick = onSave,
+                    enabled = isSaveEnabled,
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 20.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Button(
-                        onClick = onSave,
-                        enabled = isSaveEnabled,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .testTag("SaveButton"),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text(
-                            text = "Save Preset",
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
+                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                            .padding(bottom = 20.dp)
+                            .testTag("SaveButton"),
+                )
             }
         },
     ) { padding ->

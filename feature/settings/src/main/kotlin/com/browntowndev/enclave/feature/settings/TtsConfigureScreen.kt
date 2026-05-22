@@ -58,6 +58,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.TtsVoices
 
@@ -97,37 +100,23 @@ fun TtsConfigureScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("TTS Provider", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = "TTS Provider",
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            Row(
+            NeoPrimaryButton(
+                text = "Save TTS Provider",
+                onClick = onSaveTtsProvider,
+                enabled = isSaveEnabled,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                         .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Button(
-                    onClick = onSaveTtsProvider,
-                    enabled = isSaveEnabled,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text("Save TTS Provider", fontWeight = FontWeight.Bold)
-                }
-            }
+            )
         },
     ) { padding ->
         Column(
