@@ -88,6 +88,7 @@ fun NeoDestructiveRow(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoDestructiveRowPreview() {

@@ -70,6 +70,7 @@ fun NeoSheetHeader(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoSheetHeaderPreview() {

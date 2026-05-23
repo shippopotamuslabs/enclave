@@ -60,6 +60,7 @@ fun NeoThemeChip(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoThemeChipPreview() {

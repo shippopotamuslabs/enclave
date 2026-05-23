@@ -74,6 +74,7 @@ fun NeoNavRow(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoNavRowPreview() {

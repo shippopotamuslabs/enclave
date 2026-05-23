@@ -105,6 +105,7 @@ private fun NeoIconButtonSurface(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoIconButtonPreview() {

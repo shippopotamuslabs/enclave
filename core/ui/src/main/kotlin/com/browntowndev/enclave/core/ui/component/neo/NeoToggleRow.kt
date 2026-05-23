@@ -71,6 +71,7 @@ fun NeoToggleRow(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoToggleRowPreview() {
