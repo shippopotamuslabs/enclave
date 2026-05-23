@@ -43,6 +43,7 @@ fun NeoScreenHeader(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoScreenHeaderPreview() {

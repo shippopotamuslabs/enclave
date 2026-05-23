@@ -61,6 +61,7 @@ fun NeoGroupDivider(modifier: Modifier = Modifier) {
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoPanelPreview() {

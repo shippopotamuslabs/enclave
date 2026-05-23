@@ -67,6 +67,7 @@ fun NeoPrimaryButton(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoPrimaryButtonPreview() {

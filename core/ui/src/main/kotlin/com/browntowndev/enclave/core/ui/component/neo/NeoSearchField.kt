@@ -82,6 +82,7 @@ fun NeoSearchField(
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun NeoSearchFieldPreview() {

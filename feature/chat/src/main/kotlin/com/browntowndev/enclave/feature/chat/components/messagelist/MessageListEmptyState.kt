@@ -32,12 +32,8 @@ internal fun MessageListEmptyState(modifier: Modifier = Modifier) {
                 .height(160.dp),
         )
         Text(
-            text = "Enclave is ready",
+            text = "Welcome to your Enclave",
             style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            text = "Ask us anything",
-            style = MaterialTheme.typography.bodyLarge,
         )
     }
 }
