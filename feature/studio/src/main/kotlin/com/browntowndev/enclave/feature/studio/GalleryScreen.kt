@@ -44,12 +44,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
@@ -95,6 +93,7 @@ import com.browntowndev.enclave.core.ui.component.VideoThumbnail
 import com.browntowndev.enclave.core.ui.component.dialog.AddAlbumDialog
 import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionMark
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.component.dialog.RenameAlbumDialog
@@ -571,34 +570,13 @@ private fun AlbumCard(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (selectionModeActive) {
-                Box(
+                NeoSelectionMark(
+                    selected = isSelected,
                     modifier =
                         Modifier
-                            .padding(8.dp)
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    Color.Black.copy(alpha = 0.4f)
-                                },
-                            ).border(
-                                width = 2.dp,
-                                color = Color.White,
-                                shape = CircleShape,
-                            ).align(Alignment.TopStart),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                )
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -882,34 +860,13 @@ private fun AlbumMediaItem(
         }
 
         if (selectionModeActive) {
-            Box(
+            NeoSelectionMark(
+                selected = isSelected,
                 modifier =
                     Modifier
-                        .padding(16.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                Color.Black.copy(alpha = 0.4f)
-                            },
-                        ).border(
-                            width = 2.dp,
-                            color = Color.White,
-                            shape = CircleShape,
-                        ).align(Alignment.TopStart),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+            )
         }
     }
 }
