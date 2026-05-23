@@ -12,17 +12,13 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
-import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
-import com.browntowndev.enclave.domain.usecase.media.GenerateVideoUseCase
+import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaGenerationRequestMapper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -40,17 +36,9 @@ class MultimediaGenerationService : Service() {
         private const val CHANNEL_ID = "generation_channel"
     }
 
-    @Inject lateinit var imageGenerationPort: ImageGenerationPort
-
-    @Inject lateinit var videoGenerationPort: VideoGenerationPort
-
-    @Inject lateinit var generateVideoUseCase: GenerateVideoUseCase
-
-    @Inject lateinit var generateMusicUseCase: GenerateMusicUseCase
+    @Inject lateinit var generateMediaUseCase: GenerateMediaUseCase
 
     @Inject lateinit var studioRepository: StudioRepositoryPort
-
-    @Inject lateinit var mediaProviderRepository: MediaProviderRepositoryPort
 
     @Inject lateinit var logger: LoggingPort
 
@@ -79,51 +67,32 @@ class MultimediaGenerationService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                val mediaType = MediaCapability.valueOf(intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: MediaCapability.IMAGE.name)
+                val mediaType =
+                    MediaCapability.valueOf(
+                        intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: MediaCapability.IMAGE.name,
+                    )
+                val settings =
+                    StudioGenerationIntentCodec.readSettings(intent)
+                        ?: when (mediaType) {
+                            MediaCapability.IMAGE -> ImageGenerationSettings()
+                            MediaCapability.VIDEO -> VideoGenerationSettings()
+                            MediaCapability.MUSIC -> MusicGenerationSettings()
+                        }
 
                 updateNotification("Generating...")
 
                 serviceScope.launch {
                     try {
-                        val providers = mediaProviderRepository.getMediaProviders().first()
-                        val provider = providers.firstOrNull()
-
-                        if (provider == null) {
-                            logger.error(TAG, "No provider configured")
-                            return@launch
+                        val mediaRequest =
+                            MediaGenerationRequestMapper.fromStudio(
+                                prompt = prompt,
+                                capability = mediaType,
+                                settings = settings,
+                            )
+                        generateMediaUseCase(mediaRequest).onFailure { error ->
+                            logger.error(TAG, "Generation failed", error)
+                            studioRepository.reportGenerationError(error.message ?: "Generation failed")
                         }
-
-                        val settings = ImageGenerationSettings()
-
-                        val result =
-                            when (mediaType) {
-                                MediaCapability.IMAGE -> imageGenerationPort.generateImage(prompt, provider, settings)
-                                MediaCapability.VIDEO -> generateVideoUseCase(prompt, VideoGenerationSettings()).map { listOf(it) }
-                                MediaCapability.MUSIC -> generateMusicUseCase(prompt, MusicGenerationSettings()).map { listOf(it) }
-                            }
-
-                        result
-                            .onSuccess { bytesList ->
-                                val baseTime = System.currentTimeMillis()
-                                bytesList.forEachIndexed { i, bytes ->
-                                    val localUri = studioRepository.cacheEphemeralMedia(bytes, mediaType.name)
-                                    val asset =
-                                        com.browntowndev.enclave.domain.port.repository.StudioMediaAsset(
-                                            id =
-                                                java.util.UUID
-                                                    .randomUUID()
-                                                    .toString(),
-                                            localUri = localUri,
-                                            prompt = prompt,
-                                            mediaType = mediaType.name,
-                                            createdAt = baseTime + i,
-                                        )
-                                    studioRepository.addEphemeralMedia(asset)
-                                }
-                            }.onFailure { e ->
-                                logger.error(TAG, "Generation failed", e)
-                                studioRepository.reportGenerationError(e.message ?: "Generation failed")
-                            }
                     } catch (e: Exception) {
                         logger.error(TAG, "Unexpected error in service", e)
                         studioRepository.reportGenerationError(e.message ?: "Unexpected error during generation")

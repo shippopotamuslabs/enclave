@@ -10,6 +10,7 @@ import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
@@ -103,6 +104,7 @@ internal fun createTestFirestoreDataSource(
                     apiCredentialsDao = apiCredentialsDao,
                     localModelConfigurationsDao = localModelConfigurationsDao,
                     defaultModelsDao = defaultModelsDao,
+                    utilityModelsDao = mockk(relaxed = true),
                 ),
             studioSyncDaos =
                 StudioSyncDaos(
@@ -196,6 +198,7 @@ internal fun testFirestoreSyncDaos(
     documentDao: DocumentDao = mockk(relaxed = true),
     embeddingDao: EmbeddingDao = mockk(relaxed = true),
     firestoreSyncPlaceholderDao: FirestoreSyncPlaceholderDao = mockk(relaxed = true),
+    utilityModelsDao: UtilityModelsDao = mockk(relaxed = true),
 ): FirestoreSyncDaos =
     FirestoreSyncDaos.from(
         chatSyncDaos =
@@ -221,6 +224,7 @@ internal fun testFirestoreSyncDaos(
                 apiCredentialsDao = apiCredentialsDao,
                 localModelConfigurationsDao = localModelConfigurationsDao,
                 defaultModelsDao = defaultModelsDao,
+                utilityModelsDao = utilityModelsDao,
             ),
         studioSyncDaos = StudioSyncDaos(studioMediaDao = studioMediaDao, studioAlbumDao = studioAlbumDao),
     )

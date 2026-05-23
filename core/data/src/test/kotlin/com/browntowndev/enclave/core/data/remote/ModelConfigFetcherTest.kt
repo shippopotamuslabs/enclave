@@ -93,6 +93,7 @@ class ModelConfigFetcherTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Main Model",
                         huggingFaceModelName = "model/main",
                         fileName = "main.bin",
                         sha256 = "abc123",
@@ -116,6 +117,7 @@ class ModelConfigFetcherTest {
                             ),
                     ),
                     RemoteModelAsset(
+                        displayName = "Vision Model",
                         huggingFaceModelName = "model/vision",
                         fileName = "vision.bin",
                         sha256 = "def456",

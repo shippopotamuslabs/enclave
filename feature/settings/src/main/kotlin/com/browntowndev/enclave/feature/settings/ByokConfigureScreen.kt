@@ -115,6 +115,7 @@ internal fun ByokConfigureRoute(
         onClearSearchApiKey = viewModel::onClearTavilyApiKey,
         onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
         onFetchApiModels = viewModel::onFetchApiModels,
+        onTestApiProviderConnection = viewModel::onTestApiProviderConnection,
         onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
         onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
         onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
@@ -144,7 +145,7 @@ internal fun ByokConfigureRoute(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "CyclomaticComplexMethod")
 @Composable
 fun ByokConfigureScreen(
     uiState: SettingsUiState,
@@ -160,6 +161,7 @@ fun ByokConfigureScreen(
     onClearSearchApiKey: () -> Unit,
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onFetchApiModels: () -> Unit,
+    onTestApiProviderConnection: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
     onToggleModelProviderFilter: (String) -> Unit,
     onClearModelProviderFilters: () -> Unit,
@@ -183,9 +185,7 @@ fun ByokConfigureScreen(
             credentialsId = ApiCredentialsId(""),
             displayName = "",
             provider = ApiProvider.ANTHROPIC,
-            modelId = "",
             baseUrl = ApiProvider.ANTHROPIC.defaultBaseUrl(),
-            isMultimodal = false,
             credentialAlias = "",
             configurations = emptyList(),
         )
@@ -200,18 +200,17 @@ fun ByokConfigureScreen(
             val maxTokensValid = !parameterSupport.supportsMaxTokens || selectedConfig.maxTokens.isNotBlank()
             val topKValid = !parameterSupport.supportsTopK || selectedConfig.topK.isNotBlank()
             selectedConfig.displayName.isNotBlank() &&
+                selectedConfig.modelId.isNotBlank() &&
                 maxTokensValid &&
                 selectedConfig.contextWindow.isNotBlank() &&
                 topKValid
         } else {
-            if (draftAsset.credentialsId.value.isEmpty()) {
-                draftAsset.displayName.isNotBlank() &&
-                    draftAsset.modelId.isNotBlank() &&
-                    (apiKey.isNotBlank() || uiState.apiProviderEditor.selectedReusableCredential != null)
-            } else {
-                draftAsset.displayName.isNotBlank() &&
-                    draftAsset.modelId.isNotBlank()
-            }
+            draftAsset.displayName.isNotBlank() &&
+                (
+                    apiKey.isNotBlank() ||
+                        uiState.apiProviderEditor.selectedReusableCredential != null ||
+                        draftAsset.credentialsId.value.isNotEmpty()
+                )
         }
 
     Scaffold(
@@ -287,10 +286,28 @@ fun ByokConfigureScreen(
                     config = selectedConfig,
                     selectedModelMetadata =
                         uiState.apiProviderEditor.discovery.models.find {
-                            it.modelId == draftAsset.modelId
+                            it.modelId == selectedConfig.modelId
                         },
+                    availableModels = uiState.apiProviderEditor.discovery.models,
+                    filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
+                    isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
+                    canFetchModels =
+                        !uiState.apiProviderEditor.discovery.isLoading &&
+                            (
+                                apiKey.isNotBlank() ||
+                                    draftAsset.credentialsId.value.isNotEmpty() ||
+                                    uiState.apiProviderEditor.selectedReusableCredential != null
+                            ),
+                    searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
+                    providerFilters = uiState.apiProviderEditor.discovery.providerFilters,
+                    sortOption = uiState.apiProviderEditor.discovery.sortOption,
                     onConfigChange = onApiModelConfigFieldChange,
                     onNavigateToCustomHeaders = onNavigateToCustomHeaders,
+                    onFetchModels = onFetchApiModels,
+                    onUpdateSearchQuery = onUpdateModelSearchQuery,
+                    onToggleProviderFilter = onToggleModelProviderFilter,
+                    onClearProviderFilters = onClearModelProviderFilters,
+                    onUpdateSortOption = onUpdateModelSortOption,
                 )
             } else {
                 CredentialsConfigurationForm(
@@ -304,30 +321,17 @@ fun ByokConfigureScreen(
                                 ReusableApiCredentialUi(
                                     credentialsId = existing.credentialsId,
                                     displayName = existing.displayName,
-                                    modelId = existing.modelId,
+                                    providerLabel = existing.provider.displayName,
                                     credentialAlias = existing.credentialAlias,
                                 )
                             },
                     selectedReusableCredential = uiState.apiProviderEditor.selectedReusableCredential,
                     apiKey = apiKey,
-                    availableModels = uiState.apiProviderEditor.discovery.models,
-                    filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
-                    selectedModelMetadata =
-                        uiState.apiProviderEditor.discovery.models.find {
-                            it.modelId == draftAsset.modelId
-                        },
-                    isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
-                    searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
-                    providerFilters = uiState.apiProviderEditor.discovery.providerFilters,
-                    sortOption = uiState.apiProviderEditor.discovery.sortOption,
+                    connectionTestStatus = uiState.apiProviderEditor.connectionTestStatus,
                     onAssetChange = onApiModelAssetFieldChange,
                     onApiKeyChange = onApiKeyChange,
                     onSelectReusableCredential = onSelectReusableApiCredential,
-                    onFetchModels = onFetchApiModels,
-                    onUpdateSearchQuery = onUpdateModelSearchQuery,
-                    onToggleProviderFilter = onToggleModelProviderFilter,
-                    onClearProviderFilters = onClearModelProviderFilters,
-                    onUpdateSortOption = onUpdateModelSortOption,
+                    onTestConnection = onTestApiProviderConnection,
                 )
             }
 

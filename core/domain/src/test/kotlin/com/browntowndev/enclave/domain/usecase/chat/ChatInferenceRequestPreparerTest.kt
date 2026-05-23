@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
+import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
@@ -368,7 +369,14 @@ class ChatInferenceRequestPreparerTest {
                     memoriesRepository =
                         mockk {
                             coEvery { getCoreMemories() } returns coreMemories
-                            coEvery { searchMemories(any(), any()) } returns retrievedMemories
+                            coEvery {
+                                searchMemories(
+                                    any(),
+                                    MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
+                                    MemoryRetrievalPolicy.MAX_L2_DISTANCE,
+                                    MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
+                                )
+                            } returns retrievedMemories
                         },
                     embeddingEnginePort = mockEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
@@ -431,7 +439,7 @@ class ChatInferenceRequestPreparerTest {
     private fun mockMemoriesRepository(): MemoriesRepository =
         mockk {
             coEvery { getCoreMemories() } returns emptyList()
-            coEvery { searchMemories(any(), any()) } returns emptyList()
+            coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
         }
 
     private fun mockEmbeddingEngine(): EmbeddingEnginePort =

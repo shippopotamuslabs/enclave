@@ -29,7 +29,6 @@ class SaveApiCredentialsUseCaseTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test Provider",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4",
                     credentialAlias = "test_alias",
                 )
             val apiKey = "test_key"
@@ -50,7 +49,6 @@ class SaveApiCredentialsUseCaseTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test Provider",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
                     credentialAlias = "new_alias",
                 )
             val expectedId = ApiCredentialsId("7")

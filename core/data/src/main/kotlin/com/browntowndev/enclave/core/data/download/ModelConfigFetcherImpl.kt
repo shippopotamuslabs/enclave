@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
+import com.browntowndev.enclave.domain.model.config.effectiveDisplayName
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +51,7 @@ class ModelConfigFetcherImpl
                         Request
                             .Builder()
                             .url(configUrl)
+                            .header("Cache-Control", "no-cache")
                             .build()
 
                     okHttpClient.newCall(request).execute().use { response ->
@@ -85,9 +87,14 @@ class ModelConfigFetcherImpl
             assets.map { asset ->
                 Log.d(TAG, "Model Asset File: ${asset.fileName}, configs: ${asset.configurations.size}")
 
+                validateAsset(asset)
+
+                val assetDisplayName = asset.effectiveDisplayName()
+
                 val metadata =
                     LocalModelMetadata(
                         id = LocalModelId(""),
+                        displayName = assetDisplayName,
                         huggingFaceModelName = asset.huggingFaceModelName,
                         huggingFacePath = asset.huggingFacePath,
                         remoteFileName = asset.fileName,
@@ -103,8 +110,6 @@ class ModelConfigFetcherImpl
                         mmprojSha256 = asset.mmprojSha256,
                         mmprojSizeInBytes = asset.mmprojSizeInBytes,
                     )
-
-                validateAsset(asset)
 
                 val configurations =
                     asset.configurations.map { config ->
@@ -142,6 +147,9 @@ class ModelConfigFetcherImpl
 
             require(asset.configurations.isNotEmpty()) {
                 "Non-utility asset ${asset.fileName} must declare at least one configuration."
+            }
+            require(asset.effectiveDisplayName().isNotBlank()) {
+                "Non-utility asset ${asset.fileName} must declare displayName."
             }
         }
     }

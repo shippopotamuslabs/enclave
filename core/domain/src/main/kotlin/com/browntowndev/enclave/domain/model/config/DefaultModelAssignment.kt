@@ -15,4 +15,6 @@ data class DefaultModelAssignment(
     val displayName: String? = null,
     val presetName: String? = null,
     val providerName: String? = null,
+    /** API preset model id (provider catalog id), e.g. grok-4-3. */
+    val modelId: String? = null,
 )

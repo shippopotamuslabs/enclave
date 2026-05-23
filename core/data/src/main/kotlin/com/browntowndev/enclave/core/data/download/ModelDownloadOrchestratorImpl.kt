@@ -177,7 +177,10 @@ class ModelDownloadOrchestratorImpl
                 TAG,
                 "Enqueuing ${assetsToEnqueue.size} assets for ${fileSpecs.size} physical downloads: ${
                     assetsToEnqueue.joinToString { asset ->
-                        val label = asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName
+                        val label =
+                            asset.metadata.displayName.ifBlank {
+                                asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName
+                            }
                         asset.metadata.utilityType?.let { "${it.name} -> $label" } ?: label
                     }
                 }",

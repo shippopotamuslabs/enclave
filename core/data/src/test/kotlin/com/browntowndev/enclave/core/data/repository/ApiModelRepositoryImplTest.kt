@@ -2,6 +2,7 @@ package com.browntowndev.enclave.core.data.repository
 
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiCredentialsEntity
+import com.browntowndev.enclave.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
@@ -62,16 +63,93 @@ class ApiModelRepositoryImplTest {
     }
 
     @Test
-    fun `save credentials with API key stores key via credentialAlias and maps all fields`() =
+    fun `SCN-REPO-003 Two Presets One Credential Same Key`() =
+        runTest {
+            val storedCredentials = mutableListOf<ApiCredentialsEntity>()
+            val storedConfigs = mutableListOf<ApiModelConfigurationEntity>()
+            val baseUrl = "https://api.deepseek.com"
+            val sharedSignature =
+                buildApiCredentialsIdentitySignature(
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = baseUrl,
+                    apiKey = "shared",
+                )
+
+            coEvery { credentialsDao.insert(any()) } answers {
+                val entity = firstArg<ApiCredentialsEntity>()
+                storedCredentials.add(entity)
+                1L
+            }
+            coEvery { credentialsDao.getById(any()) } answers {
+                val requestedId =
+                    when (val idArg = invocation.args[0]) {
+                        is ApiCredentialsId -> idArg
+                        is String -> ApiCredentialsId(idArg)
+                        else -> error("Unexpected getById arg: $idArg")
+                    }
+                storedCredentials.find { it.id == requestedId }
+            }
+            coEvery { credentialsDao.getByApiKeySignature(any()) } answers {
+                storedCredentials.find { it.apiKeySignature == firstArg<String>() }
+            }
+            coEvery { configurationsDao.upsert(any()) } answers {
+                val entity = firstArg<ApiModelConfigurationEntity>()
+                storedConfigs.removeAll { it.id == entity.id }
+                storedConfigs.add(entity)
+            }
+
+            val credId =
+                repo.saveCredentials(
+                    ApiCredentials(
+                        id = ApiCredentialsId(""),
+                        displayName = "DeepSeek Shared",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = baseUrl,
+                        credentialAlias = "deepseek-main",
+                    ),
+                    apiKey = "shared",
+                )
+
+            repo.saveConfiguration(
+                ApiModelConfiguration(
+                    apiCredentialsId = credId,
+                    modelId = "deepseek-chat",
+                    displayName = "Chat",
+                ),
+            )
+
+            val matched =
+                repo.findMatchingCredentials(
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = baseUrl,
+                    apiKey = "shared",
+                )
+            assertEquals(credId, matched?.id)
+
+            repo.saveConfiguration(
+                ApiModelConfiguration(
+                    apiCredentialsId = requireNotNull(matched).id,
+                    modelId = "kimi-k2",
+                    displayName = "Kimi",
+                ),
+            )
+
+            assertEquals(1, storedCredentials.size)
+            assertEquals(sharedSignature, storedCredentials.single().apiKeySignature)
+            assertEquals(2, storedConfigs.size)
+            assertTrue(storedConfigs.all { it.apiCredentialsId == credId })
+            assertEquals(setOf("deepseek-chat", "kimi-k2"), storedConfigs.map { it.modelId }.toSet())
+        }
+
+    @Test
+    fun `SCN-REPO-001 saveCredentials Without Model Fields`() =
         runTest {
             val creds =
                 ApiCredentials(
                     id = ApiCredentialsId(""),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     baseUrl = "https://api.openai.com/v1",
-                    isMultimodal = true,
                     credentialAlias = "my_key",
                 )
 
@@ -82,9 +160,7 @@ class ApiModelRepositoryImplTest {
                     id = generatedId,
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     baseUrl = "https://api.openai.com/v1",
-                    isMultimodal = true,
                     credentialAlias = "my_key",
                 )
 
@@ -93,9 +169,7 @@ class ApiModelRepositoryImplTest {
             assertTrue(id.value.isNotEmpty())
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
-                    baseUrl = "https://api.openai.com/v1",
+                    provider = ApiProvider.OPENAI,baseUrl = "https://api.openai.com/v1",
                     apiKey = "sk-test",
                 )
             coVerify {
@@ -104,9 +178,7 @@ class ApiModelRepositoryImplTest {
                         it.credentialAlias == "my_key" &&
                             it.displayName == "PCENC:v1:aes-gcm:Test" &&
                             it.provider == ApiProvider.OPENAI &&
-                            it.modelId == "gpt-4o" &&
                             it.baseUrl == "PCENC:v1:aes-gcm:https://api.openai.com/v1" &&
-                            it.isMultimodal == true &&
                             it.apiKeySignature == expectedSignature
                     },
                 )
@@ -132,7 +204,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "my_key",
                 )
 
@@ -153,9 +224,7 @@ class ApiModelRepositoryImplTest {
                     id = credId,
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "my_key",
-                    isMultimodal = false,
                 )
 
             repo.deleteCredentials(credId)
@@ -175,7 +244,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "my_key",
                 )
 
@@ -186,9 +254,7 @@ class ApiModelRepositoryImplTest {
                     id = generatedId,
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "my_key",
-                    isMultimodal = false,
                 )
 
             val id = repo.saveCredentials(creds, "", null)
@@ -206,7 +272,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId(""),
                     displayName = "Cloned",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
                     credentialAlias = "new_alias",
                 )
 
@@ -217,9 +282,7 @@ class ApiModelRepositoryImplTest {
                     id = generatedId,
                     displayName = "Cloned",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
                     credentialAlias = "new_alias",
-                    isMultimodal = false,
                 )
             io.mockk.every { apiKeyManager.get("existing_alias") } returns "stored-key"
 
@@ -236,9 +299,7 @@ class ApiModelRepositoryImplTest {
             val credId = ApiCredentialsId("11")
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
-                    baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                    provider = ApiProvider.XAI,baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -246,7 +307,6 @@ class ApiModelRepositoryImplTest {
                     id = credId,
                     displayName = "Existing xAI",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
                     baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                     credentialAlias = "existing-xai",
                     apiKeySignature = expectedSignature,
@@ -254,9 +314,7 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = ApiProvider.XAI,
-                    modelId = "grok-4.20",
-                    baseUrl = null,
+                    provider = ApiProvider.XAI,baseUrl = null,
                     apiKey = "xai-key",
                 )
 
@@ -273,9 +331,7 @@ class ApiModelRepositoryImplTest {
             val defaultBaseUrl = provider.defaultBaseUrl()
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = provider,
-                    modelId = "grok-4.20",
-                    baseUrl = defaultBaseUrl,
+                    provider = provider,baseUrl = defaultBaseUrl,
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -283,7 +339,6 @@ class ApiModelRepositoryImplTest {
                     id = credId,
                     displayName = "Existing xAI blank baseUrl",
                     provider = provider,
-                    modelId = "grok-4.20",
                     baseUrl = defaultBaseUrl,
                     credentialAlias = "existing-xai-blank",
                     apiKeySignature = expectedSignature,
@@ -291,9 +346,7 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = provider,
-                    modelId = "grok-4.20",
-                    baseUrl = "  ",
+                    provider = provider,baseUrl = "  ",
                     apiKey = "xai-key",
                 )
 
@@ -309,7 +362,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId(""),
                     displayName = "xAI Existing",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4-fast-reasoning",
                     baseUrl = "https://api.x.ai/v1",
                     credentialAlias = "xai-existing-2",
                 )
@@ -321,7 +373,6 @@ class ApiModelRepositoryImplTest {
                     id = generatedId,
                     displayName = "xAI Existing",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4-fast-reasoning",
                     baseUrl = "https://api.x.ai/v1",
                     credentialAlias = "xai-existing-2",
                 )
@@ -343,7 +394,6 @@ class ApiModelRepositoryImplTest {
                     id = credId,
                     displayName = "Edited",
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4-fast-reasoning",
                     baseUrl = "https://api.x.ai/v1",
                     credentialAlias = "xai-edited",
                 )
@@ -364,6 +414,7 @@ class ApiModelRepositoryImplTest {
             val config =
                 ApiModelConfiguration(
                     apiCredentialsId = ApiCredentialsId("9"),
+                    modelId = "openai/gpt-5.2",
                     displayName = "Router preset",
                     openRouterRouting =
                         OpenRouterRoutingConfiguration(
@@ -402,7 +453,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                 )
             coEvery { credentialsDao.insert(any()) } returns 1L
@@ -411,7 +461,6 @@ class ApiModelRepositoryImplTest {
                     id = ApiCredentialsId("1"),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                 )
 
@@ -426,6 +475,7 @@ class ApiModelRepositoryImplTest {
             val config =
                 ApiModelConfiguration(
                     apiCredentialsId = ApiCredentialsId("9"),
+                    modelId = "gpt-4o",
                     displayName = "Fast",
                 )
             coEvery { configurationsDao.upsert(any()) } returns Unit
@@ -444,7 +494,6 @@ class ApiModelRepositoryImplTest {
                     id = credId,
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "my_key",
                 )
 
@@ -466,19 +515,64 @@ class ApiModelRepositoryImplTest {
         }
 
     @Test
-    fun `saveConfiguration upserts entity with pendingSync true`() =
+    fun `SCN-REPO-002 saveConfiguration With Model Fields`() =
         runTest {
             val config =
                 ApiModelConfiguration(
                     apiCredentialsId = ApiCredentialsId("9"),
+                    modelId = "gpt-4o",
+                    isMultimodal = true,
                     displayName = "Fast",
+                    maxTokens = 4096,
+                    contextWindow = 128000,
                 )
             coEvery { configurationsDao.upsert(any()) } returns Unit
 
             repo.saveConfiguration(config)
 
             coVerify {
-                configurationsDao.upsert(match { it.pendingSync == 1 })
+                configurationsDao.upsert(
+                    match {
+                        it.modelId == "gpt-4o" &&
+                            it.isMultimodal &&
+                            it.pendingSync == 1
+                    },
+                )
+            }
+        }
+
+    @Test
+    fun `SCN-REPO-004 apiKeySignature Excludes ModelId`() =
+        runTest {
+            val creds =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = "https://api.openai.com/v1",
+                    credentialAlias = "my_key",
+                )
+            val generatedId = ApiCredentialsId("1")
+            coEvery { credentialsDao.insert(any()) } returns 1L
+            coEvery { credentialsDao.getById(any()) } returns
+                ApiCredentialsEntity(
+                    id = generatedId,
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = "https://api.openai.com/v1",
+                    credentialAlias = "my_key",
+                )
+
+            repo.saveCredentials(creds, "sk-test")
+
+            val expectedSignature =
+                buildApiCredentialsIdentitySignature(
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = "https://api.openai.com/v1",
+                    apiKey = "sk-test",
+                )
+            coVerify {
+                credentialsDao.insert(match { it.apiKeySignature == expectedSignature })
             }
         }
 

@@ -57,6 +57,7 @@ export const SYNC_FEED_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
     'api_keys',
     'api_model_configs',
     'local_models',
+    'utility_models',
     'local_model_configs',
     'default_models',
     'tts_providers',

@@ -21,6 +21,8 @@ data class DefaultModelAssignmentView(
     val localPresetName: String?,
     @ColumnInfo(name = "apiPresetName")
     val apiPresetName: String?,
+    @ColumnInfo(name = "apiModelId")
+    val apiModelId: String?,
     @ColumnInfo(name = "localAssetName")
     val localAssetName: String?,
     @ColumnInfo(name = "apiAssetName")

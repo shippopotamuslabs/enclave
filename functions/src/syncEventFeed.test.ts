@@ -1,9 +1,13 @@
 import { expect } from 'chai';
 import 'mocha';
-import { handleSyncEntityWrite, InMemorySyncFeedFirestore } from './syncEventFeed';
+import { handleSyncEntityWrite, InMemorySyncFeedFirestore, SYNC_FEED_ALLOWLIST } from './syncEventFeed';
 
 describe('sync event feed (pure handlers)', () => {
-    it('SCN-FUNC-001 upsert trigger writes a monotonic sync event', async () => {
+    it('SCN-FUNC-001 allowlist contains utility_models', () => {
+        expect(SYNC_FEED_ALLOWLIST).to.include('utility_models');
+    });
+
+    it('upsert trigger writes a monotonic sync event', async () => {
         const store = new InMemorySyncFeedFirestore();
         store.syncMeta.nextSequence = 0;
         store.documents.set('users/alice/chats/chat-1', {

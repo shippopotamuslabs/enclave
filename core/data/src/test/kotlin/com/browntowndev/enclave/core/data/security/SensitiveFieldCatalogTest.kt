@@ -35,6 +35,13 @@ class SensitiveFieldCatalogTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("SCN-SEC-001")
+    fun scnSec001_utilityModelEntityHasNoSensitiveEncryptedFields() {
+        assertEquals(0, catalog.sensitiveFields("UtilityModelEntity").size)
+        assertEquals(0, catalog.firestoreFields("utility_models").size)
+    }
+
+    @Test
     fun firestoreFields_returnsOnlySensitiveRemoteFields() {
         assertEquals(setOf("json", "title", "author"), catalog.firestoreFields("documents"))
         assertTrue(catalog.firestoreFields("messages").contains("content"))

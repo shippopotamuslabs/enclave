@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -26,6 +27,7 @@ class InitializeModelsUseCase
         private val localModelRepository: com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort,
         private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
         private val checkModelsUseCase: CheckModelsUseCase,
+        private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
         private val logPort: LoggingPort,
     ) {
         companion object {
@@ -155,10 +157,29 @@ class InitializeModelsUseCase
                 }
             }
 
+            filteredUtilityAssets.forEach { utilityAsset ->
+                if (utilityAsset.metadata.sha256 !in modelsToDownloadShaSet) {
+                    persistUtilityAsset(utilityAsset)
+                    logPort.debug(
+                        TAG,
+                        "Persisted utility ${utilityAsset.metadata.utilityType} at init",
+                    )
+                } else {
+                    logPort.debug(
+                        TAG,
+                        "Deferring utility ${utilityAsset.metadata.utilityType} until download success",
+                    )
+                }
+            }
+
             // Initialize the orchestrator with the startup result
             modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)
 
             // Return result with soft-deleted models included in availableToRedownload
             return modelsResult.copy(availableToRedownload = availableToRedownload)
+        }
+
+        private suspend fun persistUtilityAsset(asset: LocalModelAsset) {
+            syncUtilityModelRegistryUseCase(asset)
         }
     }

@@ -30,12 +30,15 @@ class MusicGenerationIntegrationTest {
                     displayName = "Google",
                     provider = ApiProvider.GOOGLE,
                     capability = MediaCapability.MUSIC,
+                    modelName = "lyria-3-clip-preview",
                     credentialAlias = "google-alias",
                 )
             val expectedBytes = "music bytes".toByteArray()
 
             coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
-            coEvery { googleAdapter.generateMusic(prompt, "test-key", any(), any()) } returns Result.success(expectedBytes)
+            coEvery {
+                googleAdapter.generateMusic(prompt, "test-key", "lyria-3-clip-preview", any(), settings)
+            } returns Result.success(expectedBytes)
 
             // When
             val result = musicPort.generateMusic(prompt, provider, settings)
@@ -46,9 +49,33 @@ class MusicGenerationIntegrationTest {
         }
 
     @Test
+    fun `generateMusic returns failure when Google provider has no model configured`() =
+        runTest {
+            val prompt = "test music"
+            val settings = MusicGenerationSettings()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("google"),
+                    displayName = "Google",
+                    provider = ApiProvider.GOOGLE,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "google-alias",
+                )
+
+            coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
+
+            val result = musicPort.generateMusic(prompt, provider, settings)
+
+            assertTrue(result.isFailure)
+            assertEquals(
+                "No model configured for provider: MediaProviderId(value=google)",
+                result.exceptionOrNull()?.message,
+            )
+        }
+
+    @Test
     fun `generateMusic returns failure for unsupported provider`() =
         runTest {
-            // Given
             val prompt = "test music"
             val settings = MusicGenerationSettings()
             val provider =
@@ -62,10 +89,8 @@ class MusicGenerationIntegrationTest {
 
             coEvery { apiKeyProvider.getApiKey("openai-alias") } returns "test-key"
 
-            // When
             val result = musicPort.generateMusic(prompt, provider, settings)
 
-            // Then
             assertTrue(result.isFailure)
             assertEquals("Music generation not supported for provider: OPENAI", result.exceptionOrNull()?.message)
         }

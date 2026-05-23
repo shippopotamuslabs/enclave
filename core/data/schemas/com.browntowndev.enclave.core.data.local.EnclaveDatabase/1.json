@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 6,
-    "identityHash": "03c43980fe0655998ea55698312c05eb",
+    "version": 1,
+    "identityHash": "41b87e91d62cbdb0cb383bfb2133f09d",
     "entities": [
       {
         "tableName": "chat",
@@ -455,7 +455,7 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `is_multimodal` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `display_name` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `is_multimodal` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -466,6 +466,12 @@
           {
             "fieldPath": "modelFileFormat",
             "columnName": "model_file_format",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -696,7 +702,7 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `api_credentials_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `max_tokens_disabled` INTEGER NOT NULL, `temperature_disabled` INTEGER NOT NULL, `top_p_disabled` INTEGER NOT NULL, `top_k_disabled` INTEGER NOT NULL, `min_p_disabled` INTEGER NOT NULL, `frequency_penalty_disabled` INTEGER NOT NULL, `presence_penalty_disabled` INTEGER NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `api_credentials_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_id` TEXT NOT NULL, `is_multimodal` INTEGER NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `max_tokens_disabled` INTEGER NOT NULL, `temperature_disabled` INTEGER NOT NULL, `top_p_disabled` INTEGER NOT NULL, `top_k_disabled` INTEGER NOT NULL, `min_p_disabled` INTEGER NOT NULL, `frequency_penalty_disabled` INTEGER NOT NULL, `presence_penalty_disabled` INTEGER NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -714,6 +720,18 @@
             "fieldPath": "displayName",
             "columnName": "display_name",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelId",
+            "columnName": "model_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isMultimodal",
+            "columnName": "is_multimodal",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -900,7 +918,7 @@
       },
       {
         "tableName": "api_credentials",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_multimodal` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `encrypted_api_key` BLOB, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `credential_alias` TEXT NOT NULL, `encrypted_api_key` BLOB, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -924,18 +942,6 @@
             "fieldPath": "baseUrl",
             "columnName": "base_url",
             "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "modelId",
-            "columnName": "model_id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "isMultimodal",
-            "columnName": "is_multimodal",
-            "affinity": "INTEGER",
-            "notNull": true
           },
           {
             "fieldPath": "credentialAlias",
@@ -1918,11 +1924,109 @@
             ]
           }
         ]
+      },
+      {
+        "tableName": "utility_models",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `utility_type` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "utilityType",
+            "columnName": "utility_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelFileFormat",
+            "columnName": "model_file_format",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "huggingFaceModelName",
+            "columnName": "huggingface_model_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteFilename",
+            "columnName": "remote_filename",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localFilename",
+            "columnName": "local_filename",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sha256",
+            "columnName": "sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeInBytes",
+            "columnName": "size_in_bytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pendingSync",
+            "columnName": "pending_sync",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deleted",
+            "columnName": "deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_utility_models_sha256",
+            "unique": false,
+            "columnNames": [
+              "sha256"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_utility_models_sha256` ON `${TABLE_NAME}` (`sha256`)"
+          },
+          {
+            "name": "index_utility_models_utility_type",
+            "unique": true,
+            "columnNames": [
+              "utility_type"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_utility_models_utility_type` ON `${TABLE_NAME}` (`utility_type`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '03c43980fe0655998ea55698312c05eb')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '41b87e91d62cbdb0cb383bfb2133f09d')"
     ]
   }
 }

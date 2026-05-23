@@ -26,7 +26,65 @@ class SaveApiProviderDraftUseCaseTest {
     private val apiModelRepository = mockk<ApiModelRepositoryPort>()
 
     @Test
-    fun `creates unique alias and initial preset for new provider draft`() =
+    fun `SCN-USECASE-SAVE-ASSET-003 Initial Preset Empty Model`() =
+        runTest {
+            val credId99 = ApiCredentialsId("99")
+            val persistedAssets = MutableStateFlow<List<ApiModelAsset>>(emptyList())
+            every { getApiModelAssetsUseCase() } returns persistedAssets
+            coEvery { saveApiCredentialsUseCase(any(), any(), any()) } coAnswers {
+                val credentials = invocation.args[0] as ApiCredentials
+                persistedAssets.value =
+                    listOf(
+                        ApiModelAsset(
+                            credentials = credentials.copy(id = credId99),
+                            configurations = emptyList(),
+                        ),
+                    )
+                credId99
+            }
+            coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
+                val configuration = invocation.args[0] as ApiModelConfiguration
+                val expectedId = ApiModelConfigurationId("123")
+                persistedAssets.value =
+                    listOf(
+                        ApiModelAsset(
+                            credentials = persistedAssets.value.single().credentials,
+                            configurations = listOf(configuration.copy(id = expectedId)),
+                        ),
+                    )
+                Result.success(expectedId)
+            }
+            coEvery {
+                apiModelRepository.findMatchingCredentials(
+                    provider = any(),
+                    baseUrl = any(),
+                    apiKey = any(),
+                    sourceCredentialAlias = any(),
+                )
+            } returns null
+
+            val result =
+                SaveApiProviderDraftUseCase(
+                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
+                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
+                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
+                    apiModelRepository = apiModelRepository,
+                ).invoke(
+                    ApiProviderDraft(
+                        displayName = "Work OpenAI",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = "https://api.openai.com/v1",
+                        credentialAlias = "",
+                        apiKey = "sk-1",
+                    ),
+                ).getOrThrow()
+
+            assertEquals("", result.createdPreset?.modelId)
+            assertEquals(false, result.createdPreset?.isMultimodal)
+        }
+
+    @Test
+    fun `SCN-USECASE-SAVE-ASSET-001 New Asset Alias From Provider Only`() =
         runTest {
             val credId1 = ApiCredentialsId("1")
             val credId99 = ApiCredentialsId("99")
@@ -39,7 +97,6 @@ class SaveApiProviderDraftUseCaseTest {
                                     id = credId1,
                                     displayName = "Existing xAI",
                                     provider = ApiProvider.XAI,
-                                    modelId = "grok-4-fast-reasoning",
                                     baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                                     credentialAlias = "xai-grok-4-fast-reasoning",
                                 ),
@@ -74,7 +131,6 @@ class SaveApiProviderDraftUseCaseTest {
             coEvery {
                 apiModelRepository.findMatchingCredentials(
                     provider = any(),
-                    modelId = any(),
                     baseUrl = any(),
                     apiKey = any(),
                     sourceCredentialAlias = any(),
@@ -91,21 +147,19 @@ class SaveApiProviderDraftUseCaseTest {
                     ApiProviderDraft(
                         displayName = "New xAI",
                         provider = ApiProvider.XAI,
-                        modelId = "grok-4-fast-reasoning",
                         baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                        isMultimodal = false,
                         credentialAlias = "",
                         apiKey = "xai-key",
                     ),
                 ).getOrThrow()
 
-            assertEquals("xai-grok-4-fast-reasoning-2", result.persistedAsset.credentials.credentialAlias)
+            assertEquals("xai", result.persistedAsset.credentials.credentialAlias)
             assertEquals("Default Preset", result.createdPreset?.displayName)
             assertEquals(credId99, result.createdPreset?.apiCredentialsId)
         }
 
     @Test
-    fun `links to existing asset when api identity already exists`() =
+    fun `SCN-USECASE-SAVE-ASSET-002 Link Existing Credential Without Model Match`() =
         runTest {
             val credId42 = ApiCredentialsId("42")
             val existingAsset =
@@ -115,7 +169,6 @@ class SaveApiProviderDraftUseCaseTest {
                             id = credId42,
                             displayName = "Existing xAI",
                             provider = ApiProvider.XAI,
-                            modelId = "grok-4-fast-reasoning",
                             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                             credentialAlias = "existing-xai",
                         ),
@@ -124,6 +177,7 @@ class SaveApiProviderDraftUseCaseTest {
                             ApiModelConfiguration(
                                 id = ApiModelConfigurationId("8"),
                                 apiCredentialsId = credId42,
+                                modelId = "",
                                 displayName = "Default Preset",
                             ),
                         ),
@@ -133,7 +187,6 @@ class SaveApiProviderDraftUseCaseTest {
             coEvery {
                 apiModelRepository.findMatchingCredentials(
                     provider = ApiProvider.XAI,
-                    modelId = "grok-4-fast-reasoning",
                     baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                     apiKey = "xai-key",
                     sourceCredentialAlias = null,
@@ -165,9 +218,7 @@ class SaveApiProviderDraftUseCaseTest {
                     ApiProviderDraft(
                         displayName = "New xAI",
                         provider = ApiProvider.XAI,
-                        modelId = "grok-4-fast-reasoning",
                         baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                        isMultimodal = false,
                         credentialAlias = "",
                         apiKey = "xai-key",
                     ),

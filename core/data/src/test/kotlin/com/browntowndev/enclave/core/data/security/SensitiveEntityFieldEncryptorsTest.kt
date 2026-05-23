@@ -93,7 +93,6 @@ class SensitiveEntityFieldEncryptorsTest {
                 displayName = "OpenAI Main",
                 provider = ApiProvider.OPENAI,
                 baseUrl = "https://api.openai.com",
-                modelId = "gpt",
                 credentialAlias = "openai-main",
                 encryptedApiKey = byteArrayOf(1, 2, 3),
             )

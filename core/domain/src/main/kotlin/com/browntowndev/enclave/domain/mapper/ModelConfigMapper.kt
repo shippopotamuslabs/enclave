@@ -34,7 +34,7 @@ class ModelConfigMapper
                     sha256 = asset.sha256,
                     modelTypes = allModelTypes,
                     originalFileName = asset.fileName,
-                    displayName = primaryConfig?.displayName ?: asset.fileName,
+                    displayName = asset.displayName.ifBlank { asset.fileName },
                     modelFileFormat = asset.modelFileFormat,
                     temperature = primaryConfig?.temperature ?: 0.7,
                     topK = primaryConfig?.topK ?: 40,

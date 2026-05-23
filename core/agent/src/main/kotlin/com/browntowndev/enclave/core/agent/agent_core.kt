@@ -830,16 +830,16 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 
 
 // For large crates we prevent `MethodTooLargeException` (see #2340)
-// N.B. the name of the extension is very misleading, since it is
-// rather `InterfaceTooLargeException`, caused by too many methods
+// N.B. the name of the extension is very misleading, since it is 
+// rather `InterfaceTooLargeException`, caused by too many methods 
 // in the interface for large crates.
 //
 // By splitting the otherwise huge interface into two parts
-// * UniffiLib
+// * UniffiLib 
 // * IntegrityCheckingUniffiLib (this)
 // we allow for ~2x as many methods in the UniffiLib interface.
-//
-// The `ffi_uniffi_contract_version` method and all checksum methods are put
+// 
+// The `ffi_uniffi_contract_version` method and all checksum methods are put 
 // into `IntegrityCheckingUniffiLib` and these methods are called only once,
 // when the library is loaded.
 internal interface IntegrityCheckingUniffiLib : Library {
@@ -910,8 +910,8 @@ internal interface UniffiLib : Library {
         internal val INSTANCE: UniffiLib by lazy {
             val componentName = "agent_core"
             // For large crates we prevent `MethodTooLargeException` (see #2340)
-            // N.B. the name of the extension is very misleading, since it is
-            // rather `InterfaceTooLargeException`, caused by too many methods
+            // N.B. the name of the extension is very misleading, since it is 
+            // rather `InterfaceTooLargeException`, caused by too many methods 
             // in the interface for large crates.
             //
             // By splitting the otherwise huge interface into two parts
@@ -919,7 +919,7 @@ internal interface UniffiLib : Library {
             // * IntegrityCheckingUniffiLib
             // And all checksum methods are put into `IntegrityCheckingUniffiLib`
             // we allow for ~2x as many methods in the UniffiLib interface.
-            //
+            // 
             // Thus we first load the library with `loadIndirect` as `IntegrityCheckingUniffiLib`
             // so that we can (optionally!) call `uniffiCheckApiChecksums`...
             loadIndirect<IntegrityCheckingUniffiLib>(componentName)
@@ -934,7 +934,7 @@ internal interface UniffiLib : Library {
             // to trigger this issue, the performance impact is negligible, running on
             // a macOS M1 machine the `loadIndirect` call takes ~50ms.
             val lib = loadIndirect<UniffiLib>(componentName)
-            // No need to check the contract version and checksums, since
+            // No need to check the contract version and checksums, since 
             // we already did that with `IntegrityCheckingUniffiLib` above.
             uniffiCallbackInterfaceAgentSummarizerCallback.register(lib)
             uniffiCallbackInterfaceAgentToolExecutorCallback.register(lib)
@@ -942,7 +942,7 @@ internal interface UniffiLib : Library {
             // Loading of library with integrity check done.
             lib
         }
-
+        
         // The Cleaner for the whole library
         internal val CLEANER: UniffiCleaner by lazy {
             UniffiCleaner.create()
@@ -950,47 +950,47 @@ internal interface UniffiLib : Library {
     }
 
     // FFI functions
-    fun uniffi_agent_core_fn_clone_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+    fun uniffi_agent_core_fn_clone_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_free_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_free_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_method_ffiagentengine_cancel(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_cancel(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_method_ffiagentengine_create_session(`ptr`: Pointer,`initialMessages`: RustBuffer.ByValue,`config`: RustBuffer.ByValue,`capabilities`: RustBuffer.ByValue,`sessionContextJson`: RustBuffer.ByValue,`io`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_create_session(`ptr`: Pointer,`initialMessages`: RustBuffer.ByValue,`config`: RustBuffer.ByValue,`capabilities`: RustBuffer.ByValue,`sessionContextJson`: RustBuffer.ByValue,`io`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_method_ffiagentengine_drain_events(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_drain_events(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(`ptr`: Pointer,`session`: Pointer,`id`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(`ptr`: Pointer,`session`: Pointer,`id`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_next_action(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_next_action(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(`ptr`: Pointer,`session`: Pointer,`referenceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(`ptr`: Pointer,`session`: Pointer,`referenceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(`ptr`: Pointer,`session`: Pointer,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(`ptr`: Pointer,`session`: Pointer,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(`ptr`: Pointer,`session`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(`ptr`: Pointer,`session`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(`ptr`: Pointer,`session`: Pointer,`response`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(`ptr`: Pointer,`session`: Pointer,`response`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_method_ffiagentengine_submit_summary(`ptr`: Pointer,`session`: Pointer,`summary`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_summary(`ptr`: Pointer,`session`: Pointer,`summary`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(`ptr`: Pointer,`session`: Pointer,`results`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(`ptr`: Pointer,`session`: Pointer,`results`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_clone_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_clone_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_free_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_free_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_clone_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_clone_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_free_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_free_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(`ptr`: Pointer,`hasNativeToolCalls`: Byte,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(`ptr`: Pointer,`hasNativeToolCalls`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(`ptr`: Pointer,`chunk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(`ptr`: Pointer,`chunk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agentsummarizercallback(`vtable`: UniffiVTableCallbackInterfaceAgentSummarizerCallback,
 ): Unit
@@ -998,31 +998,31 @@ fun uniffi_agent_core_fn_init_callback_vtable_agenttoolexecutorcallback(`vtable`
 ): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agenttransportcallback(`vtable`: UniffiVTableCallbackInterfaceAgentTransportCallback,
 ): Unit
-fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_func_create_agent_engine(`transport`: Long,`executor`: Long,`summarizer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_create_agent_engine(`transport`: Long,`executor`: Long,`summarizer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_func_create_tool_stream_gate(`allowToolCall`: Byte,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_create_tool_stream_gate(`allowToolCall`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
-fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
-fun uniffi_agent_core_fn_func_should_allow_tool(`softFailureStreak`: Int,`maxStreak`: Int,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_should_allow_tool(`softFailureStreak`: Int,`maxStreak`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
-fun uniffi_agent_core_fn_func_truncate_result(`json`: RustBuffer.ByValue,`budgetBytes`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun uniffi_agent_core_fn_func_truncate_result(`json`: RustBuffer.ByValue,`budgetBytes`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun ffi_agent_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun ffi_agent_core_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun ffi_agent_core_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun ffi_agent_core_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun ffi_agent_core_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1030,7 +1030,7 @@ fun ffi_agent_core_rust_future_cancel_u8(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_u8(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun ffi_agent_core_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1038,7 +1038,7 @@ fun ffi_agent_core_rust_future_cancel_i8(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_i8(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun ffi_agent_core_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1046,7 +1046,7 @@ fun ffi_agent_core_rust_future_cancel_u16(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_u16(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Short
 fun ffi_agent_core_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1054,7 +1054,7 @@ fun ffi_agent_core_rust_future_cancel_i16(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_i16(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Short
 fun ffi_agent_core_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1062,7 +1062,7 @@ fun ffi_agent_core_rust_future_cancel_u32(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_u32(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun ffi_agent_core_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1070,7 +1070,7 @@ fun ffi_agent_core_rust_future_cancel_i32(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_i32(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Int
 fun ffi_agent_core_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1078,7 +1078,7 @@ fun ffi_agent_core_rust_future_cancel_u64(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_u64(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
 fun ffi_agent_core_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1086,7 +1086,7 @@ fun ffi_agent_core_rust_future_cancel_i64(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_i64(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
 fun ffi_agent_core_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1094,7 +1094,7 @@ fun ffi_agent_core_rust_future_cancel_f32(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_f32(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Float
 fun ffi_agent_core_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1102,7 +1102,7 @@ fun ffi_agent_core_rust_future_cancel_f64(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_f64(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Double
 fun ffi_agent_core_rust_future_poll_pointer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1110,7 +1110,7 @@ fun ffi_agent_core_rust_future_cancel_pointer(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_pointer(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_pointer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_pointer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
 fun ffi_agent_core_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1118,7 +1118,7 @@ fun ffi_agent_core_rust_future_cancel_rust_buffer(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_rust_buffer(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun ffi_agent_core_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
 ): Unit
@@ -1126,7 +1126,7 @@ fun ffi_agent_core_rust_future_cancel_void(`handle`: Long,
 ): Unit
 fun ffi_agent_core_rust_future_free_void(`handle`: Long,
 ): Unit
-fun ffi_agent_core_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
+fun ffi_agent_core_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 
 }
@@ -1295,7 +1295,7 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
         }
     }
 
-/**
+/** 
  * Used to instantiate an interface without an actual pointer, for fakes in tests, mostly.
  *
  * @suppress
@@ -1646,29 +1646,29 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 
 
 public interface FfiAgentEngineInterface {
-
+    
     fun `cancel`(`session`: FfiSession)
-
+    
     fun `createSession`(`initialMessages`: List<FfiAgentMessage>, `config`: FfiAgentConfig, `capabilities`: FfiSessionCapabilities, `sessionContextJson`: kotlin.String, `io`: FfiSessionIoParams): FfiSession
-
+    
     fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent>
-
+    
     fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference
-
+    
     fun `nextAction`(`session`: FfiSession): FfiAgentAction
-
+    
     fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String
-
+    
     fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction
-
+    
     fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference>
-
+    
     fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
-
+    
     fun `submitSummary`(`session`: FfiSession, `summary`: FfiSummaryResult)
-
+    
     fun `submitToolResults`(`session`: FfiSession, `results`: List<FfiToolResultRecord>)
-
+    
     companion object
 }
 
@@ -1755,15 +1755,15 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
 
     override fun `cancel`(`session`: FfiSession)
-        =
+        = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_cancel(
         it, FfiConverterTypeFfiSession.lower(`session`),_status)
 }
     }
-
-
+    
+    
 
     override fun `createSession`(`initialMessages`: List<FfiAgentMessage>, `config`: FfiAgentConfig, `capabilities`: FfiSessionCapabilities, `sessionContextJson`: kotlin.String, `io`: FfiSessionIoParams): FfiSession {
             return FfiConverterTypeFfiSession.lift(
@@ -1775,7 +1775,7 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent> {
             return FfiConverterSequenceTypeFfiAgentEvent.lift(
@@ -1787,7 +1787,7 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference {
             return FfiConverterTypeFfiContextReference.lift(
@@ -1799,7 +1799,7 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `nextAction`(`session`: FfiSession): FfiAgentAction {
             return FfiConverterTypeFfiAgentAction.lift(
@@ -1811,9 +1811,9 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
+    
 
-
-
+    
     @Throws(AgentException::class)override fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(
     callWithPointer {
@@ -1824,7 +1824,7 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction {
             return FfiConverterTypeFfiAgentAction.lift(
@@ -1836,7 +1836,7 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference> {
             return FfiConverterSequenceTypeFfiContextReference.lift(
@@ -1848,47 +1848,47 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     }
     )
     }
-
+    
 
     override fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
-        =
+        = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(
         it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiModelResponse.lower(`response`),_status)
 }
     }
-
-
+    
+    
 
     override fun `submitSummary`(`session`: FfiSession, `summary`: FfiSummaryResult)
-        =
+        = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_summary(
         it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiSummaryResult.lower(`summary`),_status)
 }
     }
-
-
+    
+    
 
     override fun `submitToolResults`(`session`: FfiSession, `results`: List<FfiToolResultRecord>)
-        =
+        = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(
         it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterSequenceTypeFfiToolResultRecord.lower(`results`),_status)
 }
     }
+    
+    
 
+    
 
-
-
-
-
-
+    
+    
     companion object
-
+    
 }
 
 /**
@@ -2019,7 +2019,7 @@ public object FfiConverterTypeFfiAgentEngine: FfiConverter<FfiAgentEngine, Point
 
 
 public interface FfiSessionInterface {
-
+    
     companion object
 }
 
@@ -2105,12 +2105,12 @@ open class FfiSession: Disposable, AutoCloseable, FfiSessionInterface
         }
     }
 
+    
 
-
-
-
+    
+    
     companion object
-
+    
 }
 
 /**
@@ -2241,15 +2241,15 @@ public object FfiConverterTypeFfiSession: FfiConverter<FfiSession, Pointer> {
 
 
 public interface FfiToolStreamGateInterface {
-
+    
     fun `bufferedText`(): kotlin.String
-
+    
     fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish
-
+    
     fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult
-
+    
     fun `reset`()
-
+    
     companion object
 }
 
@@ -2345,7 +2345,7 @@ open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterf
     }
     )
     }
-
+    
 
     override fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish {
             return FfiConverterTypeFfiStreamGateFinish.lift(
@@ -2357,7 +2357,7 @@ open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterf
     }
     )
     }
-
+    
 
     override fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult {
             return FfiConverterTypeFfiStreamGatePushResult.lift(
@@ -2369,25 +2369,25 @@ open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterf
     }
     )
     }
-
+    
 
     override fun `reset`()
-        =
+        = 
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_reset(
         it, _status)
 }
     }
+    
+    
 
+    
 
-
-
-
-
-
+    
+    
     companion object
-
+    
 }
 
 /**
@@ -2421,34 +2421,34 @@ public object FfiConverterTypeFfiToolStreamGate: FfiConverter<FfiToolStreamGate,
 
 
 data class FfiAgentConfig (
-    var `maxTurns`: kotlin.UInt,
-    var `thresholdRatio`: kotlin.Float,
-    var `microKeepRecent`: kotlin.UInt,
-    var `toolRetryLimit`: kotlin.UInt,
-    var `greedyAppendBlocks`: kotlin.Boolean,
-    var `toolResultBudgetCloudBytes`: kotlin.ULong,
-    var `midTurnThresholdRatio`: kotlin.Float,
-    var `postToolResultThresholdRatio`: kotlin.Float,
-    var `manualCompactThresholdRatio`: kotlin.Float,
-    var `allowFifoOnPreflight`: kotlin.Boolean,
-    var `allowFifoOnMidTurn`: kotlin.Boolean,
-    var `allowFifoOnPostToolResult`: kotlin.Boolean,
-    var `requireSnapshotBeforeFifo`: kotlin.Boolean,
-    var `enableContextStore`: kotlin.Boolean,
-    var `enableStateLedger`: kotlin.Boolean,
-    var `enableToolSchemaDeferral`: kotlin.Boolean,
-    var `enableFileCondensation`: kotlin.Boolean,
-    var `enableManualCompact`: kotlin.Boolean,
-    var `toolSpillThresholdBytes`: kotlin.ULong,
-    var `terminalSpillThresholdBytes`: kotlin.ULong,
-    var `historySnapshotThresholdTokens`: kotlin.UInt,
-    var `fileOutlineThresholdTokens`: kotlin.UInt,
-    var `promptCacheAnchorThresholdTokens`: kotlin.UInt,
-    var `maxModelRequestsPerTurn`: kotlin.UInt,
-    var `enableLoopHooks`: kotlin.Boolean,
+    var `maxTurns`: kotlin.UInt, 
+    var `thresholdRatio`: kotlin.Float, 
+    var `microKeepRecent`: kotlin.UInt, 
+    var `toolRetryLimit`: kotlin.UInt, 
+    var `greedyAppendBlocks`: kotlin.Boolean, 
+    var `toolResultBudgetCloudBytes`: kotlin.ULong, 
+    var `midTurnThresholdRatio`: kotlin.Float, 
+    var `postToolResultThresholdRatio`: kotlin.Float, 
+    var `manualCompactThresholdRatio`: kotlin.Float, 
+    var `allowFifoOnPreflight`: kotlin.Boolean, 
+    var `allowFifoOnMidTurn`: kotlin.Boolean, 
+    var `allowFifoOnPostToolResult`: kotlin.Boolean, 
+    var `requireSnapshotBeforeFifo`: kotlin.Boolean, 
+    var `enableContextStore`: kotlin.Boolean, 
+    var `enableStateLedger`: kotlin.Boolean, 
+    var `enableToolSchemaDeferral`: kotlin.Boolean, 
+    var `enableFileCondensation`: kotlin.Boolean, 
+    var `enableManualCompact`: kotlin.Boolean, 
+    var `toolSpillThresholdBytes`: kotlin.ULong, 
+    var `terminalSpillThresholdBytes`: kotlin.ULong, 
+    var `historySnapshotThresholdTokens`: kotlin.UInt, 
+    var `fileOutlineThresholdTokens`: kotlin.UInt, 
+    var `promptCacheAnchorThresholdTokens`: kotlin.UInt, 
+    var `maxModelRequestsPerTurn`: kotlin.UInt, 
+    var `enableLoopHooks`: kotlin.Boolean, 
     var `enablePendingWorkGuard`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -2549,15 +2549,15 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
 
 
 data class FfiAgentMessage (
-    var `id`: kotlin.String,
-    var `role`: FfiAgentRole,
-    var `content`: kotlin.String,
+    var `id`: kotlin.String, 
+    var `role`: FfiAgentRole, 
+    var `content`: kotlin.String, 
     /**
      * JSON object or array as a string (e.g. `"{}"` or `"null"`).
      */
     var `metadataJson`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -2592,12 +2592,12 @@ public object FfiConverterTypeFfiAgentMessage: FfiConverterRustBuffer<FfiAgentMe
 
 
 data class FfiCompactionEvent (
-    var `tier`: FfiCompactionTier,
-    var `tokensBefore`: kotlin.UInt,
-    var `tokensAfter`: kotlin.UInt,
+    var `tier`: FfiCompactionTier, 
+    var `tokensBefore`: kotlin.UInt, 
+    var `tokensAfter`: kotlin.UInt, 
     var `trigger`: FfiCompactionTrigger
 ) {
-
+    
     companion object
 }
 
@@ -2632,15 +2632,15 @@ public object FfiConverterTypeFfiCompactionEvent: FfiConverterRustBuffer<FfiComp
 
 
 data class FfiContextReference (
-    var `id`: kotlin.String,
-    var `kind`: FfiContextReferenceKind,
-    var `title`: kotlin.String,
-    var `byteLen`: kotlin.ULong,
-    var `tokenEstimate`: kotlin.UInt,
-    var `preview`: kotlin.String,
+    var `id`: kotlin.String, 
+    var `kind`: FfiContextReferenceKind, 
+    var `title`: kotlin.String, 
+    var `byteLen`: kotlin.ULong, 
+    var `tokenEstimate`: kotlin.UInt, 
+    var `preview`: kotlin.String, 
     var `retrievalHint`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -2684,10 +2684,10 @@ public object FfiConverterTypeFfiContextReference: FfiConverterRustBuffer<FfiCon
 
 
 data class FfiManualCompactRequest (
-    var `focusInstruction`: kotlin.String?,
+    var `focusInstruction`: kotlin.String?, 
     var `forceSummary`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -2716,12 +2716,12 @@ public object FfiConverterTypeFfiManualCompactRequest: FfiConverterRustBuffer<Ff
 
 
 data class FfiManualCompactResult (
-    var `summaryRef`: kotlin.String?,
-    var `historyRef`: kotlin.String?,
-    var `tokensBefore`: kotlin.UInt,
+    var `summaryRef`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
+    var `tokensBefore`: kotlin.UInt, 
     var `tokensAfter`: kotlin.UInt
 ) {
-
+    
     companion object
 }
 
@@ -2756,17 +2756,17 @@ public object FfiConverterTypeFfiManualCompactResult: FfiConverterRustBuffer<Ffi
 
 
 data class FfiModelRequest (
-    var `sessionMessages`: List<FfiAgentMessage>,
-    var `systemPrompt`: kotlin.String,
-    var `toolsSchemaJson`: kotlin.String,
-    var `allowToolCall`: kotlin.Boolean,
-    var `contextReferences`: List<FfiContextReference>,
-    var `stateLedgerJson`: kotlin.String?,
-    var `toolContextIndexJson`: kotlin.String?,
-    var `fileContextIndexJson`: kotlin.String?,
+    var `sessionMessages`: List<FfiAgentMessage>, 
+    var `systemPrompt`: kotlin.String, 
+    var `toolsSchemaJson`: kotlin.String, 
+    var `allowToolCall`: kotlin.Boolean, 
+    var `contextReferences`: List<FfiContextReference>, 
+    var `stateLedgerJson`: kotlin.String?, 
+    var `toolContextIndexJson`: kotlin.String?, 
+    var `fileContextIndexJson`: kotlin.String?, 
     var `cacheHints`: List<kotlin.String>
 ) {
-
+    
     companion object
 }
 
@@ -2816,12 +2816,12 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
 
 
 data class FfiModelResponse (
-    var `assistantText`: kotlin.String?,
-    var `toolCalls`: List<FfiRawToolCall>,
-    var `finishReason`: FfiFinishReason,
+    var `assistantText`: kotlin.String?, 
+    var `toolCalls`: List<FfiRawToolCall>, 
+    var `finishReason`: FfiFinishReason, 
     var `providerReasoningContent`: kotlin.String?
 ) {
-
+    
     companion object
 }
 
@@ -2856,11 +2856,11 @@ public object FfiConverterTypeFfiModelResponse: FfiConverterRustBuffer<FfiModelR
 
 
 data class FfiRawToolCall (
-    var `id`: kotlin.String?,
-    var `name`: kotlin.String,
+    var `id`: kotlin.String?, 
+    var `name`: kotlin.String, 
     var `argumentsJson`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -2892,11 +2892,11 @@ public object FfiConverterTypeFfiRawToolCall: FfiConverterRustBuffer<FfiRawToolC
 
 
 data class FfiRepairRecord (
-    var `originalName`: kotlin.String,
-    var `appliedAliases`: List<kotlin.String>,
+    var `originalName`: kotlin.String, 
+    var `appliedAliases`: List<kotlin.String>, 
     var `confidence`: kotlin.Float
 ) {
-
+    
     companion object
 }
 
@@ -2928,17 +2928,17 @@ public object FfiConverterTypeFfiRepairRecord: FfiConverterRustBuffer<FfiRepairR
 
 
 data class FfiSessionCapabilities (
-    var `summarizationAllowed`: kotlin.Boolean,
-    var `kvFixed`: kotlin.Boolean,
-    var `toolResultBudgetTokens`: kotlin.UInt?,
-    var `contextPolicyTier`: FfiContextPolicyTier,
-    var `toolSchemaDeferralSupported`: kotlin.Boolean,
-    var `fileBackedContextSupported`: kotlin.Boolean,
-    var `promptCacheSupported`: kotlin.Boolean,
-    var `historyRewriteSupported`: kotlin.Boolean,
+    var `summarizationAllowed`: kotlin.Boolean, 
+    var `kvFixed`: kotlin.Boolean, 
+    var `toolResultBudgetTokens`: kotlin.UInt?, 
+    var `contextPolicyTier`: FfiContextPolicyTier, 
+    var `toolSchemaDeferralSupported`: kotlin.Boolean, 
+    var `fileBackedContextSupported`: kotlin.Boolean, 
+    var `promptCacheSupported`: kotlin.Boolean, 
+    var `historyRewriteSupported`: kotlin.Boolean, 
     var `lifecycleHooksSupported`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -2988,12 +2988,12 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
 
 
 data class FfiSessionIoParams (
-    var `provider`: kotlin.String,
-    var `contextWindowTokens`: kotlin.UInt,
-    var `toolsSchemaJson`: kotlin.String,
+    var `provider`: kotlin.String, 
+    var `contextWindowTokens`: kotlin.UInt, 
+    var `toolsSchemaJson`: kotlin.String, 
     var `systemPrompt`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -3028,10 +3028,10 @@ public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSess
 
 
 data class FfiStreamGateFinish (
-    var `trailingFlush`: kotlin.String,
+    var `trailingFlush`: kotlin.String, 
     var `hasToolMarker`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -3062,7 +3062,7 @@ public object FfiConverterTypeFfiStreamGateFinish: FfiConverterRustBuffer<FfiStr
 data class FfiStreamGatePushResult (
     var `emittedPrefix`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -3088,15 +3088,15 @@ public object FfiConverterTypeFfiStreamGatePushResult: FfiConverterRustBuffer<Ff
 
 
 data class FfiSummaryRequest (
-    var `messagesToSummarize`: List<FfiAgentMessage>,
-    var `instruction`: kotlin.String,
-    var `lastMessageId`: kotlin.String,
-    var `trigger`: FfiCompactionTrigger,
-    var `focusInstruction`: kotlin.String?,
-    var `historyRef`: kotlin.String?,
+    var `messagesToSummarize`: List<FfiAgentMessage>, 
+    var `instruction`: kotlin.String, 
+    var `lastMessageId`: kotlin.String, 
+    var `trigger`: FfiCompactionTrigger, 
+    var `focusInstruction`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
     var `stateLedgerSnapshotJson`: kotlin.String?
 ) {
-
+    
     companion object
 }
 
@@ -3140,10 +3140,10 @@ public object FfiConverterTypeFfiSummaryRequest: FfiConverterRustBuffer<FfiSumma
 
 
 data class FfiSummaryResult (
-    var `summaryText`: kotlin.String,
+    var `summaryText`: kotlin.String, 
     var `lastMessageId`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -3172,12 +3172,12 @@ public object FfiConverterTypeFfiSummaryResult: FfiConverterRustBuffer<FfiSummar
 
 
 data class FfiToolCallRecord (
-    var `callId`: kotlin.String,
-    var `name`: kotlin.String,
-    var `argumentsJson`: kotlin.String,
+    var `callId`: kotlin.String, 
+    var `name`: kotlin.String, 
+    var `argumentsJson`: kotlin.String, 
     var `repairMetadata`: FfiRepairRecord?
 ) {
-
+    
     companion object
 }
 
@@ -3212,12 +3212,12 @@ public object FfiConverterTypeFfiToolCallRecord: FfiConverterRustBuffer<FfiToolC
 
 
 data class FfiToolParseBatch (
-    var `successes`: List<FfiToolParseField>,
-    var `failures`: List<FfiToolParseFailure>,
-    var `visiblePrefix`: kotlin.String,
+    var `successes`: List<FfiToolParseField>, 
+    var `failures`: List<FfiToolParseFailure>, 
+    var `visiblePrefix`: kotlin.String, 
     var `visibleSuffix`: kotlin.String
 ) {
-
+    
     companion object
 }
 
@@ -3252,11 +3252,11 @@ public object FfiConverterTypeFfiToolParseBatch: FfiConverterRustBuffer<FfiToolP
 
 
 data class FfiToolParseFailure (
-    var `reason`: FfiToolParseFailureReason,
-    var `original`: kotlin.String,
+    var `reason`: FfiToolParseFailureReason, 
+    var `original`: kotlin.String, 
     var `formatHint`: kotlin.String?
 ) {
-
+    
     companion object
 }
 
@@ -3288,12 +3288,12 @@ public object FfiConverterTypeFfiToolParseFailure: FfiConverterRustBuffer<FfiToo
 
 
 data class FfiToolParseField (
-    var `toolName`: kotlin.String,
-    var `argumentsJson`: kotlin.String,
-    var `repaired`: kotlin.Boolean,
+    var `toolName`: kotlin.String, 
+    var `argumentsJson`: kotlin.String, 
+    var `repaired`: kotlin.Boolean, 
     var `repairs`: List<kotlin.String>
 ) {
-
+    
     companion object
 }
 
@@ -3328,12 +3328,12 @@ public object FfiConverterTypeFfiToolParseField: FfiConverterRustBuffer<FfiToolP
 
 
 data class FfiToolResultRecord (
-    var `callId`: kotlin.String,
-    var `resultJson`: kotlin.String,
-    var `truncated`: kotlin.Boolean,
+    var `callId`: kotlin.String, 
+    var `resultJson`: kotlin.String, 
+    var `truncated`: kotlin.Boolean, 
     var `softFailure`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -3371,17 +3371,17 @@ data class RepairResult (
     /**
      * Resolved tool name after catalog + fuzzy repair.
      */
-    var `resolvedName`: kotlin.String,
+    var `resolvedName`: kotlin.String, 
     /**
      * Possibly coerced JSON arguments.
      */
-    var `argumentsJson`: kotlin.String,
+    var `argumentsJson`: kotlin.String, 
     /**
      * True when the name or arguments were changed by repair.
      */
     var `repaired`: kotlin.Boolean
 ) {
-
+    
     companion object
 }
 
@@ -3415,75 +3415,75 @@ public object FfiConverterTypeRepairResult: FfiConverterRustBuffer<RepairResult>
 
 
 sealed class AgentException: kotlin.Exception() {
-
+    
     class RepairFailed(
-
-        val `name`: kotlin.String,
-
+        
+        val `name`: kotlin.String, 
+        
         val `reason`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "name=${ `name` }, reason=${ `reason` }"
     }
-
+    
     class GuardrailExceeded(
-
+        
         val `kind`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "kind=${ `kind` }"
     }
-
+    
     class ModelStopped(
-
+        
         val `reason`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "reason=${ `reason` }"
     }
-
+    
     class CompactionFailed(
-
-        val `tier`: kotlin.String,
-
+        
+        val `tier`: kotlin.String, 
+        
         val `reason`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "tier=${ `tier` }, reason=${ `reason` }"
     }
-
+    
     class InvalidTransition(
-
-        val `from`: kotlin.String,
-
+        
+        val `from`: kotlin.String, 
+        
         val `to`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "from=${ `from` }, to=${ `to` }"
     }
-
+    
     class Internal(
-
+        
         val `detail`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "detail=${ `detail` }"
     }
-
+    
     class ContextReferenceNotFound(
-
+        
         val `referenceId`: kotlin.String
         ) : AgentException() {
         override val message
             get() = "referenceId=${ `referenceId` }"
     }
-
+    
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AgentException> {
         override fun lift(error_buf: RustBuffer.ByValue): AgentException = FfiConverterTypeAgentException.lift(error_buf)
     }
 
-
+    
 }
 
 /**
@@ -3491,7 +3491,7 @@ sealed class AgentException: kotlin.Exception() {
  */
 public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentException> {
     override fun read(buf: ByteBuffer): AgentException {
-
+        
 
         return when(buf.getInt()) {
             1 -> AgentException.RepairFailed(
@@ -3613,37 +3613,37 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
 
 
 sealed class FfiAgentAction {
-
+    
     data class CallModel(
         val `request`: FfiModelRequest) : FfiAgentAction() {
         companion object
     }
-
+    
     data class ExecuteTools(
         val `calls`: List<FfiToolCallRecord>) : FfiAgentAction() {
         companion object
     }
-
+    
     data class RequestSummary(
         val `request`: FfiSummaryRequest) : FfiAgentAction() {
         companion object
     }
-
+    
     object Finished : FfiAgentAction()
-
-
+    
+    
     data class Failed(
         val `error`: AgentException) : FfiAgentAction() {
         companion object
     }
-
+    
     data class ManualCompactCompleted(
         val `result`: FfiManualCompactResult) : FfiAgentAction() {
         companion object
     }
+    
 
-
-
+    
     companion object
 }
 
@@ -3757,78 +3757,83 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
 
 
 sealed class FfiAgentEvent {
-
+    
     data class HookInvoked(
         val `checkpoint`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class TurnStarted(
-        val `turnIndex`: kotlin.UInt,
+        val `turnIndex`: kotlin.UInt, 
         val `allowToolCall`: kotlin.Boolean) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class TurnCompleted(
-        val `turnIndex`: kotlin.UInt,
-        val `toolCallCount`: kotlin.UInt,
+        val `turnIndex`: kotlin.UInt, 
+        val `toolCallCount`: kotlin.UInt, 
         val `terminal`: kotlin.Boolean) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class CompactionApplied(
         val `event`: FfiCompactionEvent) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ContextPressure(
         val `ratio`: kotlin.Float) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolRepaired(
-        val `originalName`: kotlin.String,
-        val `resolvedName`: kotlin.String,
+        val `originalName`: kotlin.String, 
+        val `resolvedName`: kotlin.String, 
         val `confidence`: kotlin.Float) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolSoftFailure(
-        val `toolName`: kotlin.String,
+        val `toolName`: kotlin.String, 
         val `turnIndex`: kotlin.UInt) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class KvCacheInvalidated(
         val `reason`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class PreCompact(
         val `trigger`: FfiCompactionTrigger) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class PostCompact(
-        val `trigger`: FfiCompactionTrigger,
-        val `summaryRef`: kotlin.String?,
+        val `trigger`: FfiCompactionTrigger, 
+        val `summaryRef`: kotlin.String?, 
         val `historyRef`: kotlin.String?) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolPolicyDenied(
         val `toolName`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolTimedOut(
-        val `toolName`: kotlin.String,
+        val `toolName`: kotlin.String, 
         val `timeoutMs`: kotlin.ULong) : FfiAgentEvent() {
         companion object
     }
+    
+    data class VisibleAssistantText(
+        val `text`: kotlin.String) : FfiAgentEvent() {
+        companion object
+    }
+    
 
-
-
+    
     companion object
 }
 
@@ -3882,6 +3887,9 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
             12 -> FfiAgentEvent.ToolTimedOut(
                 FfiConverterString.read(buf),
                 FfiConverterULong.read(buf),
+                )
+            13 -> FfiAgentEvent.VisibleAssistantText(
+                FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -3981,6 +3989,13 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 + FfiConverterULong.allocationSize(value.`timeoutMs`)
             )
         }
+        is FfiAgentEvent.VisibleAssistantText -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`text`)
+            )
+        }
     }
 
     override fun write(value: FfiAgentEvent, buf: ByteBuffer) {
@@ -4054,6 +4069,11 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 FfiConverterULong.write(value.`timeoutMs`, buf)
                 Unit
             }
+            is FfiAgentEvent.VisibleAssistantText -> {
+                buf.putInt(13)
+                FfiConverterString.write(value.`text`, buf)
+                Unit
+            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
@@ -4064,7 +4084,7 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
 
 
 enum class FfiAgentRole {
-
+    
     SYSTEM,
     USER,
     ASSISTANT,
@@ -4097,7 +4117,7 @@ public object FfiConverterTypeFfiAgentRole: FfiConverterRustBuffer<FfiAgentRole>
 
 
 enum class FfiCompactionTier {
-
+    
     MICRO,
     FIFO,
     ARTIFACT_SQUASH,
@@ -4131,7 +4151,7 @@ public object FfiConverterTypeFfiCompactionTier: FfiConverterRustBuffer<FfiCompa
 
 
 enum class FfiCompactionTrigger {
-
+    
     PREFLIGHT,
     MID_TURN,
     POST_TOOL_RESULT,
@@ -4163,7 +4183,7 @@ public object FfiConverterTypeFfiCompactionTrigger: FfiConverterRustBuffer<FfiCo
 
 
 enum class FfiContextPolicyTier {
-
+    
     HOSTED_MUTABLE,
     HOSTED_PROXY,
     LOCAL_MUTABLE,
@@ -4197,7 +4217,7 @@ public object FfiConverterTypeFfiContextPolicyTier: FfiConverterRustBuffer<FfiCo
 
 
 enum class FfiContextReferenceKind {
-
+    
     TOOL_OUTPUT,
     TERMINAL_OUTPUT,
     HISTORY_SNAPSHOT,
@@ -4232,23 +4252,23 @@ public object FfiConverterTypeFfiContextReferenceKind: FfiConverterRustBuffer<Ff
 
 
 sealed class FfiFinishReason {
-
+    
     object ToolUse : FfiFinishReason()
-
-
+    
+    
     object Stop : FfiFinishReason()
-
-
+    
+    
     object MaxTokens : FfiFinishReason()
-
-
+    
+    
     data class Other(
         val `reason`: kotlin.String) : FfiFinishReason() {
         companion object
     }
+    
 
-
-
+    
     companion object
 }
 
@@ -4324,47 +4344,47 @@ public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinish
 
 
 sealed class FfiToolParseFailureReason {
-
+    
     object MalformedEnvelope : FfiToolParseFailureReason()
-
-
+    
+    
     data class InvalidJson(
         val `detail`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class UnknownTool(
         val `name`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class UnknownParameter(
-        val `tool`: kotlin.String,
+        val `tool`: kotlin.String, 
         val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class DuplicateParameter(
-        val `tool`: kotlin.String,
+        val `tool`: kotlin.String, 
         val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class MissingRequiredParameter(
-        val `tool`: kotlin.String,
+        val `tool`: kotlin.String, 
         val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class SchemaCoercionFailed(
-        val `tool`: kotlin.String,
-        val `param`: kotlin.String,
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String, 
         val `expected`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
+    
 
-
-
+    
     companion object
 }
 
@@ -4510,9 +4530,9 @@ public object FfiConverterTypeFfiToolParseFailureReason : FfiConverterRustBuffer
 
 
 public interface AgentSummarizerCallback {
-
+    
     fun `summarize`(`request`: FfiSummaryRequest): FfiSummaryResult
-
+    
     companion object
 }
 
@@ -4563,9 +4583,9 @@ public object FfiConverterTypeAgentSummarizerCallback: FfiConverterCallbackInter
 
 
 public interface AgentToolExecutorCallback {
-
+    
     fun `executeTools`(`calls`: List<FfiToolCallRecord>): List<FfiToolResultRecord>
-
+    
     companion object
 }
 
@@ -4619,9 +4639,9 @@ public object FfiConverterTypeAgentToolExecutorCallback: FfiConverterCallbackInt
  * Kotlin / host transport — UniFFI callback (crate root required for UniFFI metadata).
  */
 public interface AgentTransportCallback {
-
+    
     fun `completeModelTurn`(`request`: FfiModelRequest): FfiModelResponse
-
+    
     companion object
 }
 
@@ -5053,7 +5073,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
 
         /**
          * Construct an [`AgentEngine`] wired to Kotlin callback implementations.
@@ -5068,7 +5088,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `createToolStreamGate`(`allowToolCall`: kotlin.Boolean): FfiToolStreamGate {
             return FfiConverterTypeFfiToolStreamGate.lift(
     uniffiRustCall() { _status ->
@@ -5077,7 +5097,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `hasLocalToolContract`(`systemPrompt`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     uniffiRustCall() { _status ->
@@ -5086,7 +5106,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `parseToolCalls`(`raw`: kotlin.String): FfiToolParseBatch {
             return FfiConverterTypeFfiToolParseBatch.lift(
     uniffiRustCall() { _status ->
@@ -5095,7 +5115,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `repairTool`(`name`: kotlin.String, `argsJson`: kotlin.String): RepairResult {
             return FfiConverterTypeRepairResult.lift(
     uniffiRustCall() { _status ->
@@ -5104,7 +5124,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `resultJsonLooksSoftFailure`(`json`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     uniffiRustCall() { _status ->
@@ -5113,7 +5133,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
 
         /**
          * Mirrors Kotlin soft-failure streak guard (`consecutiveSoftFailureTurns < tool_retry_limit`).
@@ -5125,7 +5145,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
-
+    
  fun `truncateResult`(`json`: kotlin.String, `budgetBytes`: kotlin.ULong): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCall() { _status ->
@@ -5134,3 +5154,6 @@ public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List
 }
     )
     }
+    
+
+

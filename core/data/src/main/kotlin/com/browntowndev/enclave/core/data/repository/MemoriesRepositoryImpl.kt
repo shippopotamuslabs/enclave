@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MemoriesEntity
+import com.browntowndev.enclave.core.data.local.MemoryEmbeddingMatch
 import com.browntowndev.enclave.core.data.security.SensitiveEntityFieldEncryptors
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepair
@@ -12,6 +13,7 @@ import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplie
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
+import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
@@ -129,20 +131,50 @@ class MemoriesRepositoryImpl
         override suspend fun searchMemories(
             queryVector: FloatArray,
             limit: Int,
+            maxDistance: Float?,
+            excludeCategories: Set<MemoryCategory>,
         ): List<Memory> {
+            val candidatePool =
+                if (excludeCategories.isEmpty() && maxDistance == null) {
+                    limit
+                } else {
+                    maxOf(limit, MemoryRetrievalPolicy.SEARCH_CANDIDATE_POOL)
+                }
             val vectorString = queryVector.joinToString(",", prefix = "[", postfix = "]")
             val sql =
                 """
-                SELECT m.* FROM memories m
-                JOIN memory_embeddings me ON m.id = me.id
-                WHERE me.vector MATCH '$vectorString' AND k = $limit
+                SELECT id, distance
+                FROM memory_embeddings
+                WHERE vector MATCH '$vectorString' AND k = $candidatePool
                 ORDER BY distance
                 """.trimIndent()
 
+            val matches = embeddingDao.searchMemoryEmbeddingMatches(SimpleSQLiteQuery(sql))
             val repairs = mutableListOf<SensitiveRoomReadRepair>()
-            val out = memoriesDao.searchMemoriesRaw(SimpleSQLiteQuery(sql)).map { toDomain(it, repairs) }
+            val results =
+                buildList {
+                    for (match in matches) {
+                        if (size >= limit) break
+                        resolveRelevantMemory(match, maxDistance, excludeCategories, repairs)?.let(::add)
+                    }
+                }
+
             readRepairApplier.apply(repairs)
-            return out
+            return results
+        }
+
+        private suspend fun resolveRelevantMemory(
+            match: MemoryEmbeddingMatch,
+            maxDistance: Float?,
+            excludeCategories: Set<MemoryCategory>,
+            repairs: MutableList<SensitiveRoomReadRepair>,
+        ): Memory? {
+            if (maxDistance != null && match.distance > maxDistance) return null
+
+            val entity = memoriesDao.getMemoryById(match.id) ?: return null
+            if (entity.deleted || entity.category in excludeCategories) return null
+
+            return toDomain(entity, repairs)
         }
 
         private fun toDomain(

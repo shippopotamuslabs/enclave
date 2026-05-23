@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
+import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -44,5 +45,21 @@ class DefaultModelAssignmentUiMapperTest {
         val ui = assignment.toUi()
 
         assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, ui.presetName)
+    }
+
+    @Test
+    fun `API assignment headline uses model id instead of provider credential label`() {
+        val ui =
+            DefaultModelAssignmentUi(
+                modelType = ModelType.FAST,
+                source = ModelSource.API,
+                currentModelName = "xAI",
+                displayLabel = "Fast",
+                providerName = "xAI",
+                presetName = "Grok 4.20 Non-Reasoning",
+                modelId = "grok-4-20-non-reasoning",
+            )
+
+        assertEquals("grok-4-20-non-reasoning", ui.assignmentHeadlineName)
     }
 }

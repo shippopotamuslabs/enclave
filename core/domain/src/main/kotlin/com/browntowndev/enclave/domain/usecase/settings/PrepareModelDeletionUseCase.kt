@@ -122,16 +122,22 @@ class PrepareModelDeletionUseCase
                 return PreparedModelDeletion.Ready(target = ModelDeletionTarget.ApiPreset(id))
             }
 
+            val apiAssets = getApiModelAssetsUseCase().first()
+            val deletedPreset = apiAssets.flatMap { it.configurations }.find { it.id == id }
+            val requiresApiVisionOnly = ModelType.VISION in needingReassignment
+            val requiresVisionCompatibility =
+                requiresApiVisionOnly || deletedPreset?.isMultimodal == true
+
             return PreparedModelDeletion.Ready(
                 target = ModelDeletionTarget.ApiPreset(id),
                 modelTypesNeedingReassignment = needingReassignment,
                 reassignmentCandidates =
                     buildReassignmentCandidates(
                         localAssets = getLocalModelAssetsUseCase().first(),
-                        apiAssets = getApiModelAssetsUseCase().first(),
+                        apiAssets = apiAssets,
                         excludeApiConfigId = id,
-                        requireVisionCompatibility = false,
-                        requireApiVisionOnly = false,
+                        requireVisionCompatibility = requiresVisionCompatibility,
+                        requireApiVisionOnly = requiresApiVisionOnly,
                     ),
             )
         }
@@ -159,7 +165,7 @@ class PrepareModelDeletionUseCase
                             ReassignmentCandidate(
                                 configId = config.id,
                                 source = ModelSource.ON_DEVICE,
-                                assetDisplayName = asset.metadata.huggingFaceModelName,
+                                assetDisplayName = asset.metadata.displayName,
                                 configDisplayName = config.displayName,
                                 localModelId = asset.metadata.id,
                             ),
@@ -170,10 +176,10 @@ class PrepareModelDeletionUseCase
 
             apiAssets.forEach { asset ->
                 if (asset.credentials.id == excludeApiCredentialsId) return@forEach
-                if (requireVisionCompatibility && !asset.credentials.isMultimodal) return@forEach
 
                 asset.configurations.forEach { config ->
                     if (config.id == excludeApiConfigId) return@forEach
+                    if (requireVisionCompatibility && !config.isMultimodal) return@forEach
                     candidates.add(
                         ReassignmentCandidate(
                             configId = config.id,

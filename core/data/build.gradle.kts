@@ -102,6 +102,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.kotlin.reflect)
     testImplementation(libs.turbine)
     testImplementation(libs.androidx.work.testing)
     testImplementation(testFixtures(project(":core:domain")))

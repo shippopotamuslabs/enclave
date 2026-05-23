@@ -163,7 +163,7 @@ fun ModelConfigurationScreen(
             val localAssets = if (isVisionSlot || isTtsSlot || isMediaSlot) emptyList() else uiState.localModelsSheet.models
             val apiAssets =
                 when {
-                    isVisionSlot -> uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
+                    isVisionSlot -> uiState.apiProvidersSheet.assets.filter { asset -> asset.configurations.any { it.isMultimodal } }
                     isTtsSlot || isMediaSlot -> emptyList()
                     else -> uiState.apiProvidersSheet.assets
                 }
@@ -249,7 +249,7 @@ fun DefaultAssignmentsCard(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = assignment.currentModelName,
+                                text = assignment.assignmentHeadlineName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -462,7 +462,7 @@ fun AssignmentSelectionContent(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            if (state.asset.isMultimodal) {
+                            if (state.asset.configurations.any { it.isMultimodal }) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
@@ -557,9 +557,9 @@ fun AssignmentSelectionContent(
                                         items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
                                             AssignmentAssetCard(
                                                 title = asset.displayName,
-                                                subtitle = "${asset.provider.displayName} • ${asset.modelId}",
+                                                subtitle = asset.provider.displayName,
                                                 presetCount = asset.configurations.size,
-                                                isMultimodal = asset.isMultimodal,
+                                                isMultimodal = asset.configurations.any { it.isMultimodal },
                                                 isSelected = asset.configurations.any { it.id == selectedApiId },
                                                 onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) },
                                             )
@@ -647,6 +647,7 @@ fun AssignmentSelectionContent(
                         items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
                                 label = config.displayName,
+                                subtitle = config.modelId.takeIf { it.isNotBlank() },
                                 isSelected = selectedApiId == config.id,
                                 onClick = {
                                     selectedApiId = config.id
@@ -795,6 +796,7 @@ private fun ModelCard(
 @Composable
 private fun ConfigSelectionCard(
     label: String,
+    subtitle: String? = null,
     isSelected: Boolean = false,
     onClick: () -> Unit,
 ) {
@@ -827,13 +829,21 @@ private fun ConfigSelectionCard(
                     .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

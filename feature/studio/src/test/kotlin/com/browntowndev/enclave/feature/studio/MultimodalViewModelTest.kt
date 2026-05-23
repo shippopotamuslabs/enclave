@@ -256,7 +256,7 @@ class MultimodalViewModelTest {
             assertEquals("", viewModel.uiState.value.prompt)
 
             advanceUntilIdle()
-            verify { dispatcher.startGeneration(any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any()) }
             job.cancel()
         }
 
@@ -273,11 +273,11 @@ class MultimodalViewModelTest {
 
             // Before generate, threshold hit is ignored
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0")
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
 
             // Initial generate
             viewModel.generate()
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate generation completion to reset _isGenerating
@@ -288,7 +288,7 @@ class MultimodalViewModelTest {
 
             // First threshold hit
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate second completion
@@ -299,11 +299,11 @@ class MultimodalViewModelTest {
 
             // Second threshold hit with same anchor should be ignored (internal consumedScrollAnchors)
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
 
             // Third threshold hit with new anchor should work
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2")
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
 
             job.cancel()
         }
@@ -330,7 +330,7 @@ class MultimodalViewModelTest {
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
 
             assertFalse(viewModel.uiState.value.isContinualGenerationActive)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
             job.cancel()
         }
 
@@ -420,7 +420,7 @@ class MultimodalViewModelTest {
             viewModel.onAnimateMedia(assetId, autoAnimate = true, customPrompt = "custom prompt")
             advanceUntilIdle()
 
-            verify { dispatcher.startGeneration(any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any()) }
             job.cancel()
         }
 

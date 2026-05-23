@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
  * Each asset corresponds to a single downloadable file, identified by SHA256.
  * An asset can have multiple configurations (tuning presets) that share the same file.
  *
+ * @property displayName Human-readable name for the downloadable file (asset level)
  * @property huggingFaceModelName HuggingFace model repo name (used for HF download URL)
  * @property huggingFacePath HuggingFace model repo path (used for HF download URL)
  * @property fileName The filename on the remote server
@@ -26,6 +27,8 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class RemoteModelAsset(
+    @kotlinx.serialization.json.JsonNames("displayName", "display_name")
+    val displayName: String = "",
     val huggingFaceModelName: String = "",
     val huggingFacePath: String? = null,
     val fileName: String,
@@ -40,6 +43,20 @@ data class RemoteModelAsset(
     val mmprojSizeInBytes: Long? = null,
     val configurations: List<RemoteModelConfiguration> = emptyList(),
 )
+
+/**
+ * Resolves the human-readable asset label from catalog JSON.
+ * Prefers asset-level [displayName], then the first preset label, then a short name from [huggingFaceModelName].
+ */
+fun RemoteModelAsset.effectiveDisplayName(): String {
+    displayName.takeIf { it.isNotBlank() }?.let { return it }
+    configurations.firstOrNull()?.displayName?.takeIf { it.isNotBlank() }?.let { return it }
+    if (huggingFaceModelName.isBlank()) return ""
+    return huggingFaceModelName
+        .substringAfterLast('/')
+        .replace(Regex("""[-_]"""), " ")
+        .trim()
+}
 
 /**
  * A tuning preset within a remote model asset.

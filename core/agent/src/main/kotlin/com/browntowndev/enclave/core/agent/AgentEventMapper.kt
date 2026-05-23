@@ -45,6 +45,8 @@ object AgentEventMapper {
             is FfiAgentEvent.ToolPolicyDenied,
             is FfiAgentEvent.ToolTimedOut,
             -> null
+            is FfiAgentEvent.VisibleAssistantText ->
+                AgentLoopEvent.TextToken(event.text)
         }
 
     fun log(
@@ -105,6 +107,7 @@ object AgentEventMapper {
                     TAG,
                     "tool_timed_out tool=${event.toolName} timeoutMs=${event.timeoutMs}",
                 )
+            is FfiAgentEvent.VisibleAssistantText -> Unit
             is FfiAgentEvent.TurnStarted,
             is FfiAgentEvent.TurnCompleted,
             -> Unit

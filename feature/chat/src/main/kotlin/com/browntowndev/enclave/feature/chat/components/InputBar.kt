@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -54,8 +53,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -112,8 +109,6 @@ fun InputBar(
     val sheetState = rememberModalBottomSheetState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
@@ -248,17 +243,7 @@ fun InputBar(
                 keyboardOptions =
                     KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Send,
-                    ),
-                keyboardActions =
-                    KeyboardActions(
-                        onSend = {
-                            if (inputText.isNotBlank() && !isGenerating && !isGlobalInferenceBlocked) {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onSend(inputText)
-                            }
-                        }
+                        imeAction = ImeAction.Default,
                     ),
                 decorationBox = { innerTextField ->
                     Box(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {

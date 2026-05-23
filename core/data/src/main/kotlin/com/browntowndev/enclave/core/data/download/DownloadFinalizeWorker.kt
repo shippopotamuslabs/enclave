@@ -7,12 +7,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.decodeFromString
@@ -44,6 +46,7 @@ class DownloadFinalizeWorker
         private val localModelRepository: LocalModelRepositoryPort,
         private val modelConfigFetcher: ModelConfigFetcherPort,
         private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
+        private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
         private val logger: LoggingPort,
     ) : CoroutineWorker(context, workerParams) {
@@ -126,20 +129,7 @@ class DownloadFinalizeWorker
 
                 logger.info(TAG, "Found ${matchingAssets.size} matching assets for ${downloadedShas.size} downloaded SHAs")
 
-                // Sync each matching asset's configurations to their assigned slots
-                for (asset in matchingAssets) {
-                    for (config in asset.configurations) {
-                        for (modelType in config.defaultAssignments) {
-                            try {
-                                syncLocalModelRegistryUseCase.invoke(modelType, asset)
-                                logger.debug(TAG, "Synced $modelType: ${asset.metadata.localFileName}")
-                            } catch (e: Exception) {
-                                logger.warning(TAG, "Failed to sync $modelType: ${e.message}")
-                                // Continue with other assets - idempotent behavior
-                            }
-                        }
-                    }
-                }
+                syncMatchingAssets(matchingAssets)
 
                 // Trigger embedding regeneration if any embedding models were finalized
                 val hasEmbeddingModel =
@@ -275,6 +265,46 @@ class DownloadFinalizeWorker
                 logger.error(TAG, "Restore failed: ${e.message}", e)
                 failWithError("Restore failed: ${e.message}", sessionId, requestKind)
             }
+        }
+
+        private suspend fun syncMatchingAssets(matchingAssets: List<LocalModelAsset>) {
+            for (asset in matchingAssets) {
+                if (asset.metadata.utilityType != null) {
+                    syncUtilityAsset(asset)
+                } else {
+                    syncSlotAsset(asset)
+                }
+            }
+        }
+
+        private suspend fun syncUtilityAsset(asset: LocalModelAsset) {
+            try {
+                persistUtilityAsset(asset)
+            } catch (e: Exception) {
+                logger.warning(
+                    TAG,
+                    "Failed to sync utility ${asset.metadata.utilityType}: ${e.message}",
+                )
+            }
+        }
+
+        private suspend fun syncSlotAsset(asset: LocalModelAsset) {
+            for (config in asset.configurations) {
+                for (modelType in config.defaultAssignments) {
+                    try {
+                        syncLocalModelRegistryUseCase.invoke(modelType, asset)
+                        logger.debug(TAG, "Synced $modelType: ${asset.metadata.localFileName}")
+                    } catch (e: Exception) {
+                        logger.warning(TAG, "Failed to sync $modelType: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        private suspend fun persistUtilityAsset(asset: LocalModelAsset) {
+            syncUtilityModelRegistryUseCase.invoke(asset)
+            val utilityType = asset.metadata.utilityType
+            logger.debug(TAG, "Synced utility $utilityType: ${asset.metadata.localFileName}")
         }
 
         /**

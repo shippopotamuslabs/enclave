@@ -16,6 +16,8 @@ data class LocalModelEntity(
     val id: LocalModelId,
     @ColumnInfo(name = "model_file_format")
     val modelFileFormat: ModelFileFormat,
+    @ColumnInfo(name = "display_name")
+    val displayName: String = "",
     @ColumnInfo(name = "huggingface_model_name")
     val huggingFaceModelName: String,
     @ColumnInfo(name = "remote_filename")

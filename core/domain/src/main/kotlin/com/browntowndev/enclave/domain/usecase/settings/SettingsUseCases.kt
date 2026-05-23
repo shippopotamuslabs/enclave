@@ -69,6 +69,7 @@ interface SettingsApiProviderUseCases {
     val saveApiPreset: SaveApiPresetUseCase
     val discoverApiModels: DiscoverApiModelsUseCase
     val applyApiModelMetadataDefaults: ApplyApiModelMetadataDefaultsUseCase
+    val testApiProviderConnection: TestApiProviderConnectionUseCase
 }
 
 interface SettingsAssignmentUseCases {

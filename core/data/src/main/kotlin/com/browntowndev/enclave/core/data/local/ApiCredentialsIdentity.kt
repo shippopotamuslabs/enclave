@@ -4,21 +4,7 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import java.security.MessageDigest
 
 internal fun buildApiCredentialsIdentitySignature(
-    provider: ApiProvider,
-    modelId: String,
-    baseUrl: String?,
-    apiKey: String,
-): String =
-    buildApiCredentialsIdentitySignature(
-        provider = provider.name,
-        modelId = modelId,
-        baseUrl = baseUrl,
-        apiKey = apiKey,
-    )
-
-internal fun buildApiCredentialsIdentitySignature(
     provider: String,
-    modelId: String,
     baseUrl: String?,
     apiKey: String,
 ): String {
@@ -27,8 +13,6 @@ internal fun buildApiCredentialsIdentitySignature(
         buildString {
             append(provider.trim())
             append('|')
-            append(modelId.trim())
-            append('|')
             append(normalizedBaseUrl)
             append('|')
             append(apiKey)
@@ -36,5 +20,16 @@ internal fun buildApiCredentialsIdentitySignature(
     val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
     return digest.joinToString(separator = "") { byte -> "%02x".format(byte) }
 }
+
+internal fun buildApiCredentialsIdentitySignature(
+    provider: ApiProvider,
+    baseUrl: String?,
+    apiKey: String,
+): String =
+    buildApiCredentialsIdentitySignature(
+        provider = provider.name,
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+    )
 
 internal fun String?.normalizedBaseUrl(): String = this?.trim().orEmpty()

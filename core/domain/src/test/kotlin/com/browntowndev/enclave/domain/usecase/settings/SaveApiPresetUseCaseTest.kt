@@ -21,6 +21,51 @@ class SaveApiPresetUseCaseTest {
     private val saveApiPresetUseCase = SaveApiPresetUseCase(saveApiModelConfigurationUseCase)
 
     @Test
+    fun `SCN-USECASE-SAVE-PRESET-001 Save Preset Model Id`() =
+        runTest {
+            val draft =
+                ApiPresetDraft(
+                    modelId = "gpt-4o",
+                    displayName = "Creative",
+                )
+
+            val configSlot = slot<ApiModelConfiguration>()
+            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
+
+            saveApiPresetUseCase(
+                provider = ApiProvider.OPENAI,
+                parentCredentialsId = ApiCredentialsId("parent-cred-1"),
+                defaultReasoningEffort = null,
+                draft = draft,
+            ).getOrThrow()
+
+            assertEquals("gpt-4o", configSlot.captured.modelId)
+        }
+
+    @Test
+    fun `SCN-USECASE-SAVE-PRESET-002 Save Preset Multimodal Flag`() =
+        runTest {
+            val draft =
+                ApiPresetDraft(
+                    modelId = "gpt-4o",
+                    isMultimodal = true,
+                    displayName = "Vision",
+                )
+
+            val configSlot = slot<ApiModelConfiguration>()
+            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
+
+            saveApiPresetUseCase(
+                provider = ApiProvider.OPENAI,
+                parentCredentialsId = ApiCredentialsId("parent-cred-1"),
+                defaultReasoningEffort = null,
+                draft = draft,
+            ).getOrThrow()
+
+            assertEquals(true, configSlot.captured.isMultimodal)
+        }
+
+    @Test
     fun `maps draft to configuration correctly with openrouter routing`() =
         runTest {
             val draft =

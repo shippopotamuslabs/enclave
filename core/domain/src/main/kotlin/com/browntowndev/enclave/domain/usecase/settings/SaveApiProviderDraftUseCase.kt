@@ -26,7 +26,6 @@ class SaveApiProviderDraftUseCase
                         apiModelRepository
                             .findMatchingCredentials(
                                 provider = draft.provider,
-                                modelId = draft.modelId,
                                 baseUrl = draft.baseUrl,
                                 apiKey = draft.apiKey,
                                 sourceCredentialAlias = draft.sourceCredentialAlias,
@@ -43,7 +42,6 @@ class SaveApiProviderDraftUseCase
                     if (isNewAsset && linkedExistingAsset == null) {
                         generateUniqueAlias(
                             provider = draft.provider.name,
-                            modelId = draft.modelId,
                             existingAliases = existingAssets.map { it.credentials.credentialAlias }.toSet(),
                         )
                     } else {
@@ -57,9 +55,7 @@ class SaveApiProviderDraftUseCase
                                 id = draft.id,
                                 displayName = draft.displayName,
                                 provider = draft.provider,
-                                modelId = draft.modelId,
                                 baseUrl = draft.baseUrl.takeIf { !it.isNullOrBlank() } ?: draft.provider.defaultBaseUrl(),
-                                isMultimodal = draft.isMultimodal,
                                 credentialAlias = finalAlias,
                             ),
                         apiKey = draft.apiKey,
@@ -78,6 +74,8 @@ class SaveApiProviderDraftUseCase
                             saveApiModelConfigurationUseCase(
                                 ApiModelConfiguration(
                                     apiCredentialsId = savedId,
+                                    modelId = "",
+                                    isMultimodal = false,
                                     displayName =
                                         generateUniquePresetName(
                                             persistedAsset.configurations.map(ApiModelConfiguration::displayName),
@@ -106,11 +104,10 @@ class SaveApiProviderDraftUseCase
 
         private fun generateUniqueAlias(
             provider: String,
-            modelId: String,
             existingAliases: Set<String>,
         ): String {
             val baseSlug =
-                "${provider.lowercase()}-${modelId.lowercase()}"
+                provider.lowercase()
                     .replace(Regex("[^a-z0-9]"), "-")
                     .replace(Regex("-+"), "-")
                     .trim('-')
