@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.luminance
@@ -76,3 +77,54 @@ fun Modifier.neoSurface(
         }
     return shadowed.background(backgroundColor, shape).neoBorder(color = borderColor, shape = shape)
 }
+
+/**
+ * Filled surface with selective edges drawn (e.g. omit top border when flush under an app bar).
+ */
+fun Modifier.neoSurfaceEdges(
+    backgroundColor: Color,
+    borderColor: Color,
+    shape: Shape = EnclaveNeoTokens.shape,
+    drawTop: Boolean = true,
+    drawBottom: Boolean = true,
+    drawStart: Boolean = true,
+    drawEnd: Boolean = true,
+    borderWidth: Dp = EnclaveNeoTokens.borderWidth,
+): Modifier =
+    background(backgroundColor, shape)
+        .drawBehind {
+            val stroke = borderWidth.toPx()
+            val half = stroke / 2f
+            if (drawTop) {
+                drawLine(
+                    borderColor,
+                    Offset(0f, half),
+                    Offset(size.width, half),
+                    strokeWidth = stroke,
+                )
+            }
+            if (drawBottom) {
+                drawLine(
+                    borderColor,
+                    Offset(0f, size.height - half),
+                    Offset(size.width, size.height - half),
+                    strokeWidth = stroke,
+                )
+            }
+            if (drawStart) {
+                drawLine(
+                    borderColor,
+                    Offset(half, 0f),
+                    Offset(half, size.height),
+                    strokeWidth = stroke,
+                )
+            }
+            if (drawEnd) {
+                drawLine(
+                    borderColor,
+                    Offset(size.width - half, 0f),
+                    Offset(size.width - half, size.height),
+                    strokeWidth = stroke,
+                )
+            }
+        }

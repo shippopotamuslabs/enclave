@@ -32,6 +32,7 @@ import androidx.compose.ui.zIndex
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.neo.neoSurfaceEdges
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 @Composable
@@ -39,6 +40,7 @@ fun PromptHeaderDivider(
     prompt: String,
     isExpanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
+    omitTopBorder: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var localIsExpanded by rememberSaveable { mutableStateOf(false) }
@@ -52,10 +54,20 @@ fun PromptHeaderDivider(
             modifier
                 .zIndex(1f)
                 .fillMaxWidth()
-                .neoSurface(
-                    backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = borderColor,
-                    withShadow = false,
+                .then(
+                    if (omitTopBorder) {
+                        Modifier.neoSurfaceEdges(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = borderColor,
+                            drawTop = false,
+                        )
+                    } else {
+                        Modifier.neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = borderColor,
+                            withShadow = false,
+                        )
+                    },
                 )
                 .animateContentSize()
                 .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier),

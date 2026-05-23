@@ -34,7 +34,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryTabRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoChevronCard
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -346,30 +349,11 @@ fun AssignmentSelectionContent(
                 is AssignmentSelectionView.AssetList -> {
                     Column {
                         if (tabs.size > 1) {
-                            SecondaryTabRow(
+                            NeoSheetTabRow(
                                 selectedTabIndex = selectedTabIndex,
-                                containerColor = BottomSheetDefaults.ContainerColor,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                tabs.forEachIndexed { index, title ->
-                                    Tab(
-                                        selected = selectedTabIndex == index,
-                                        onClick = { selectedTabIndex = index },
-                                        text = {
-                                            Text(
-                                                text = title,
-                                                color =
-                                                    if (selectedTabIndex == index) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        contentColorFor(BottomSheetDefaults.ContainerColor)
-                                                    },
-                                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                            )
-                                        },
-                                    )
-                                }
-                            }
+                                tabs = tabs,
+                                onTabSelected = { selectedTabIndex = it },
+                            )
                         }
 
                         AnimatedContent(
@@ -395,10 +379,10 @@ fun AssignmentSelectionContent(
                                 when (currentTabTitle) {
                                     "Local Models" -> {
                                         items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.friendlyName,
                                                 subtitle = "${asset.providerName} • ${asset.format}",
-                                                presetCount = asset.configurations.size,
+                                                footer = "${asset.configurations.size} Preset(s) available",
                                                 isMultimodal = asset.isMultimodal,
                                                 isSelected = asset.configurations.any { it.id == selectedLocalId },
                                                 onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) },
@@ -407,10 +391,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "API Models" -> {
                                         items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = asset.provider.displayName,
-                                                presetCount = asset.configurations.size,
+                                                footer = "${asset.configurations.size} Preset(s) available",
                                                 isMultimodal = asset.configurations.any { it.isMultimodal },
                                                 isSelected = asset.configurations.any { it.id == selectedApiId },
                                                 onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) },
@@ -419,10 +403,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "TTS Providers" -> {
                                         items(ttsAssets, key = { "tts_${it.id.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
-                                                presetCount = 1,
+                                                footer = "1 Preset(s) available",
                                                 isSelected = selectedTtsId == asset.id,
                                                 onClick = {
                                                     selectedTtsId = asset.id
@@ -435,10 +419,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "Media Providers" -> {
                                         items(mediaAssets, key = { "media_${it.id.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.modelName}",
-                                                presetCount = 1,
+                                                footer = "1 Preset(s) available",
                                                 isSelected = selectedMediaId == asset.id,
                                                 onClick = {
                                                     selectedMediaId = asset.id
@@ -519,21 +503,17 @@ fun AssignmentSelectionContent(
                     .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(
+            NeoSecondaryButton(
+                text = "Cancel",
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text("Cancel")
-            }
-            Button(
+            )
+            NeoPrimaryButton(
+                text = "Confirm",
                 onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId, selectedMediaId) },
                 enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null || selectedMediaId != null,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text("Confirm")
-            }
+            )
         }
     }
 }

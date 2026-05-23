@@ -19,9 +19,9 @@ ACCENT = "#FF8A00"
 VIEW_W = 183.0
 VIEW_H = 238.0
 
-# Launcher safe zone: scale mark to fit 108×108 with vertical centering.
-LAUNCHER_SCALE = 0.59
-LAUNCHER_TRANSLATE_Y = 15.0
+# Launcher: scale E to fit 108×108 safe zone and center in viewport.
+LAUNCHER_VIEWPORT = 108.0
+LAUNCHER_SAFE = 92.0
 
 
 def _parse_paths(svg_path: Path) -> list[tuple[str, str]]:
@@ -61,11 +61,16 @@ def _vector_xml(
         )
     body = "\n".join(path_lines)
     if group:
+        scale = LAUNCHER_SAFE / max(VIEW_W, VIEW_H)
+        scaled_w = VIEW_W * scale
+        scaled_h = VIEW_H * scale
+        tx = (LAUNCHER_VIEWPORT - scaled_w) / 2.0
+        ty = (LAUNCHER_VIEWPORT - scaled_h) / 2.0
         body = (
-            f'  <group\n      android:translateX="0"\n'
-            f'      android:translateY="{LAUNCHER_TRANSLATE_Y}"\n'
-            f'      android:scaleX="{LAUNCHER_SCALE}"\n'
-            f'      android:scaleY="{LAUNCHER_SCALE}">\n'
+            f'  <group\n      android:translateX="{tx:.2f}"\n'
+            f'      android:translateY="{ty:.2f}"\n'
+            f'      android:scaleX="{scale:.4f}"\n'
+            f'      android:scaleY="{scale:.4f}">\n'
             f"{body}\n  </group>"
         )
     return f"""<vector xmlns:android="http://schemas.android.com/apk/res/android"

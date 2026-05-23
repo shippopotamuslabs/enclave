@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
@@ -116,13 +118,16 @@ fun HistoryScreen(
         )
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            HistoryTopBar(
-                searchQuery = searchQuery,
-                onSearchQueryChange = onSearchQueryChange,
-                onBackClick = onBackClick,
-                onSettingsClick = onSettingsClick,
-            )
+            NeoAppBarChrome {
+                HistoryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onBackClick = onBackClick,
+                    onSettingsClick = onSettingsClick,
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(

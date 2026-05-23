@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,10 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoScreenHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
@@ -149,8 +150,22 @@ fun SettingsScreen(
 ) {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoScreenHeader(title = "Settings", onCloseClick = onCloseClick)
+            NeoAppBarChrome {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                NeoIconButton(
+                    onClick = onCloseClick,
+                    icon = Icons.Default.Close,
+                    contentDescription = "Close settings",
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(

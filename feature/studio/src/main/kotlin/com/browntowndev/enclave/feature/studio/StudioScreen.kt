@@ -70,6 +70,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
@@ -321,72 +322,49 @@ private fun StudioTopBar(
     onNavigateToGallery: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .statusBarsPadding(),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = EnclaveNeoTokens.screenHorizontalPadding,
-                            vertical = 8.dp,
-                        ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (selectedCount > 0) {
-                    NeoIconButton(
-                        onClick = onClearSelection,
-                        icon = Icons.Default.Close,
-                        contentDescription = "Clear selection",
-                    )
-                } else {
-                    NeoIconButton(
-                        onClick = onNavigateToHistory,
-                        icon = Icons.Default.Menu,
-                        contentDescription = "Open history",
-                    )
-                }
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                if (selectedCount > 0) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
-                        NeoIconButton(
-                            onClick = onShareClick,
-                            icon = Icons.Default.Share,
-                            contentDescription = "Share selected items",
-                        )
-                        NeoIconButton(
-                            onClick = onSaveClick,
-                            icon = Icons.AutoMirrored.Filled.DriveFileMove,
-                            contentDescription = "Save to album",
-                        )
-                    }
-                } else {
-                    NeoIconButton(
-                        onClick = onNavigateToGallery,
-                        icon = Icons.Default.PhotoLibrary,
-                        contentDescription = "Open gallery",
-                    )
-                }
+    NeoAppBarChrome(modifier = modifier) {
+        if (selectedCount > 0) {
+            NeoIconButton(
+                onClick = onClearSelection,
+                icon = Icons.Default.Close,
+                contentDescription = "Clear selection",
+            )
+        } else {
+            NeoIconButton(
+                onClick = onNavigateToHistory,
+                icon = Icons.Default.Menu,
+                contentDescription = "Open history",
+            )
+        }
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        if (selectedCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                NeoIconButton(
+                    onClick = onShareClick,
+                    icon = Icons.Default.Share,
+                    contentDescription = "Share selected items",
+                )
+                NeoIconButton(
+                    onClick = onSaveClick,
+                    icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                    contentDescription = "Save to album",
+                )
             }
-            HorizontalDivider(
-                thickness = EnclaveNeoTokens.borderWidth,
-                color = neoBorderColor(),
+        } else {
+            NeoIconButton(
+                onClick = onNavigateToGallery,
+                icon = Icons.Default.PhotoLibrary,
+                contentDescription = "Open gallery",
             )
         }
     }
@@ -514,7 +492,6 @@ private fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                             .padding(bottom = EnclaveNeoTokens.rowSpacing)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
@@ -565,7 +542,6 @@ private fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                             .padding(bottom = EnclaveNeoTokens.rowSpacing)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
@@ -595,10 +571,10 @@ private fun StudioGalleryList(
                         isExpanded = isExpanded,
                     )
             },
+            omitTopBorder = true,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                     .offset { IntOffset(x = 0, y = headerLayout.yOffset) }
                     .onSizeChanged { size -> stickyHeaderHeightPx = size.height },
         )

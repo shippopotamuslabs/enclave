@@ -25,9 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -91,49 +89,12 @@ fun SearchSkillBottomSheet(
                 onDismiss = onDismiss,
             )
 
-            TabRow(
+            NeoSheetTabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = BottomSheetDefaults.ContainerColor,
-                contentColor = MaterialTheme.colorScheme.primary,
-                divider = {},
-                indicator = { tabPositions ->
-                    SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onTabChange(0) },
-                    selectedContentColor = MaterialTheme.colorScheme.primary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = "Web",
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onTabChange(1) },
-                    selectedContentColor = MaterialTheme.colorScheme.primary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    icon = {
-                        Icon(
-                            imageVector = XIcon,
-                            contentDescription = "X",
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                )
-            }
+                tabs = listOf("Web", "X"),
+                onTabSelected = onTabChange,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
