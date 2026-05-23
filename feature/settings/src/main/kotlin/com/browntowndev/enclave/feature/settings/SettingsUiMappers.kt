@@ -102,10 +102,15 @@ class LocalModelAssetUiMapper
                     .replace(LocalModelAssetConstants.dotTxtRegex, "")
                     .replace("-", " ")
 
+            val friendlyName =
+                asset.metadata.displayName.ifBlank {
+                    cleanName.ifBlank { rawName }
+                }
+
             return LocalModelAssetUi(
                 metadataId = asset.metadata.id,
                 huggingFaceModelName = rawName,
-                friendlyName = cleanName.ifBlank { rawName },
+                friendlyName = friendlyName,
                 providerName = providerName,
                 format = format,
                 remoteFileName = asset.metadata.remoteFileName,

@@ -1,10 +1,6 @@
 package com.browntowndev.enclave.core.data.local
 
-import android.content.Context
 import androidx.room.Room
-import androidx.sqlite.db.SupportSQLiteDatabase
-import androidx.sqlite.db.SupportSQLiteOpenHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -74,6 +70,17 @@ class EnclaveDatabaseMigrationTest {
                 }
             }
         assertTrue(indexNames.contains("index_api_credentials_api_key_signature"))
+
+        val localModelsColumns = sqliteDb.query("PRAGMA table_info('local_models')")
+        val localModelColumnNames =
+            buildList {
+                localModelsColumns.use {
+                    while (it.moveToNext()) {
+                        add(it.getString(it.getColumnIndexOrThrow("name")))
+                    }
+                }
+            }
+        assertTrue(localModelColumnNames.contains("display_name"))
 
         db.close()
     }

@@ -25,6 +25,7 @@ internal class LocalModelSyncHandler(
     override suspend fun toFirestore(local: LocalModelEntity) =
         mapOf(
             "model_file_format" to local.modelFileFormat.name,
+            "display_name" to local.displayName,
             "huggingface_model_name" to local.huggingFaceModelName,
             "remote_filename" to local.remoteFilename,
             "local_filename" to local.localFilename,
@@ -43,6 +44,7 @@ internal class LocalModelSyncHandler(
         LocalModelEntity(
             id = LocalModelId(doc.id),
             modelFileFormat = ModelFileFormat.valueOf(doc.getString("model_file_format") ?: "GGUF"),
+            displayName = doc.getString("display_name") ?: "",
             huggingFaceModelName = doc.getString("huggingface_model_name") ?: "",
             remoteFilename = doc.getString("remote_filename") ?: "",
             localFilename = doc.getString("local_filename") ?: "",

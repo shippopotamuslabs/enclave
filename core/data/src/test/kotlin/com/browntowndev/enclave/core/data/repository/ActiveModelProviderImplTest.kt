@@ -52,42 +52,38 @@ class ActiveModelProviderImplTest {
     }
 
     @Test
-    fun `getActiveConfiguration decrypts local config fields`() =
+    fun `SCN-ACTIVE-001 active model provider uses asset displayName for local config`() =
         runTest {
-            val configId = LocalModelConfigurationId("local-config-1")
+            val configId = LocalModelConfigurationId("cfg-fast")
             val modelId = LocalModelId("model-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns
+            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns
                 DefaultModelAssignment(
-                    modelType = ModelType.MAIN,
+                    modelType = ModelType.FAST,
                     localConfigId = configId,
                 )
             coEvery { localConfigsDao.getById(configId) } returns
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = modelId,
-                    displayName = localEncryption.encryptString("Balanced"),
-                    systemPrompt = localEncryption.encryptString("Use brief answers"),
+                    displayName = localEncryption.encryptString("Fast"),
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
                     id = modelId,
-                    modelFileFormat = ModelFileFormat.GGUF,
-                    huggingFaceModelName = "qwen",
-                    remoteFilename = "qwen.gguf",
-                    localFilename = "qwen.gguf",
-                    sha256 = "abc123",
+                    modelFileFormat = ModelFileFormat.LITERTLM,
+                    displayName = "Gemma 4 E4B",
+                    huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
+                    remoteFilename = "gemma-4-E4B-it.litertlm",
+                    localFilename = "gemma-4-E4B-it.litertlm",
+                    sha256 = "gemma-sha",
                     sizeInBytes = 42L,
                     isMultimodal = true,
                 )
 
-            val result = repository.getActiveConfiguration(ModelType.MAIN)
+            val result = repository.getActiveConfiguration(ModelType.FAST)
 
-            assertTrue(result?.isLocal == true)
-            assertEquals("Balanced", result?.name)
-            assertEquals("Use brief answers", result?.systemPrompt)
-            assertEquals("qwen.gguf", result?.modelId)
-            assertEquals(ModelFileFormat.GGUF, result?.localModelFormat)
-            assertEquals(true, result?.isMultimodal)
+            assertEquals("Gemma 4 E4B", result?.name)
+            assertEquals("gemma-4-E4B-it.litertlm", result?.modelId)
         }
 
     @Test
@@ -139,7 +135,7 @@ class ActiveModelProviderImplTest {
         }
 
     @Test
-    fun `getActiveConfiguration throws when display name decrypt fails`() =
+    fun `getActiveConfiguration returns null system prompt when decrypt fails`() =
         runTest {
             localEncryption.forceDecryptFailure = true
             val configId = LocalModelConfigurationId("local-config-1")
@@ -153,12 +149,14 @@ class ActiveModelProviderImplTest {
                 LocalModelConfigurationEntity(
                     id = configId,
                     localModelId = modelId,
-                    displayName = "ciphertext",
+                    displayName = localEncryption.encryptString("Balanced"),
+                    systemPrompt = localEncryption.encryptString("Use brief answers"),
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
                     id = modelId,
                     modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "Gemma 4 E4B",
                     huggingFaceModelName = "qwen",
                     remoteFilename = "qwen.gguf",
                     localFilename = "qwen.gguf",
@@ -167,12 +165,9 @@ class ActiveModelProviderImplTest {
                     isMultimodal = false,
                 )
 
-            val thrown =
-                assertThrows<ActiveModelConfigurationDecryptException> {
-                    repository.getActiveConfiguration(ModelType.MAIN)
-                }
+            val result = repository.getActiveConfiguration(ModelType.MAIN)
 
-            assertEquals(ModelType.MAIN, thrown.modelType)
-            assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, thrown.message)
+            assertEquals("Gemma 4 E4B", result?.name)
+            assertNull(result?.systemPrompt)
         }
 }

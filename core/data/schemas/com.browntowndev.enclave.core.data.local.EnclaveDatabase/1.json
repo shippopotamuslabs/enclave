@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "99b92bf56690b69ec6a1c41be0f5f7c4",
+    "identityHash": "89942ead3d812f091d12b74c23b6a21d",
     "entities": [
       {
         "tableName": "chat",
@@ -455,7 +455,7 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `is_multimodal` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `display_name` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `is_multimodal` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -466,6 +466,12 @@
           {
             "fieldPath": "modelFileFormat",
             "columnName": "model_file_format",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -2020,7 +2026,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '99b92bf56690b69ec6a1c41be0f5f7c4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '89942ead3d812f091d12b74c23b6a21d')"
     ]
   }
 }

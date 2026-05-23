@@ -20,6 +20,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -58,6 +59,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Test Model",
                         huggingFaceModelName = "test/model",
                         fileName = "model.gguf",
                         sha256 = "abc123",
@@ -107,6 +109,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Vision Model",
                         huggingFaceModelName = "test/vision",
                         fileName = "vision.gguf",
                         sha256 = "def456",
@@ -145,6 +148,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Vision Model",
                         huggingFaceModelName = "test/vision",
                         fileName = "vision.gguf",
                         sha256 = "def456",
@@ -189,6 +193,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Gemma 4 E4B",
                         huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
                         fileName = "gemma-4-E4B-it.litertlm",
                         sha256 = "abc123",
@@ -199,7 +204,7 @@ class ModelConfigFetcherImplTest {
                             listOf(
                                 RemoteModelConfiguration(
                                     configId = LocalModelConfigurationId("config-fast-1"),
-                                    displayName = "Gemma 4 E4B (Fast)",
+                                    displayName = "Fast",
                                     systemPrompt = "Be quick.",
                                     temperature = 0.8,
                                     topK = 50,
@@ -213,7 +218,7 @@ class ModelConfigFetcherImplTest {
                                 ),
                                 RemoteModelConfiguration(
                                     configId = LocalModelConfigurationId("config-thinking-1"),
-                                    displayName = "Gemma 4 E4B (Thinking)",
+                                    displayName = "Thinking",
                                     systemPrompt = "Think deeply.",
                                     temperature = 0.05,
                                     topK = 50,
@@ -235,8 +240,9 @@ class ModelConfigFetcherImplTest {
             // Then
             assertEquals(1, modelAssets.size)
             assertEquals(2, modelAssets[0].configurations.size)
-            assertEquals("Gemma 4 E4B (Fast)", modelAssets[0].configurations[0].displayName)
-            assertEquals("Gemma 4 E4B (Thinking)", modelAssets[0].configurations[1].displayName)
+            assertEquals("Gemma 4 E4B", modelAssets[0].metadata.displayName)
+            assertEquals("Fast", modelAssets[0].configurations[0].displayName)
+            assertEquals("Thinking", modelAssets[0].configurations[1].displayName)
             assertFalse(modelAssets[0].configurations[0].thinkingEnabled)
             assertTrue(modelAssets[0].configurations[1].thinkingEnabled)
             assertEquals(listOf(ModelType.FAST), modelAssets[0].configurations[0].defaultAssignments)
@@ -250,6 +256,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Test Model",
                         huggingFaceModelName = "test/model",
                         fileName = "model.gguf",
                         sha256 = "abc123",
@@ -288,6 +295,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Test Model",
                         huggingFaceModelName = "ggerganov/whisper.cpp",
                         fileName = "ggml-base.en.bin",
                         sha256 = "whisper-sha",
@@ -313,6 +321,7 @@ class ModelConfigFetcherImplTest {
             val remoteAssets =
                 listOf(
                     RemoteModelAsset(
+                        displayName = "Test Model",
                         huggingFaceModelName = "ggerganov/whisper.cpp",
                         fileName = "ggml-base.en.bin",
                         sha256 = "whisper-sha",
@@ -350,6 +359,7 @@ class ModelConfigFetcherImplTest {
                 {
                   "assets": [
                     {
+                      "displayName": "Test Model",
                       "huggingFaceModelName": "test/model",
                       "fileName": "model.gguf",
                       "sha256": "abc123",
@@ -415,6 +425,7 @@ class ModelConfigFetcherImplTest {
                 {
                   "assets": [
                     {
+                      "displayName": "Test Model",
                       "fileName": "model.gguf",
                       "sha256": "abc123",
                       "sizeInBytes": 1000000,
@@ -514,6 +525,7 @@ class ModelConfigFetcherImplTest {
                 {
                   "assets": [
                     {
+                      "displayName": "Draft Model",
                       "huggingFaceModelName": "test/draft",
                       "fileName": "draft.gguf",
                       "sha256": "ghi789",
@@ -535,6 +547,7 @@ class ModelConfigFetcherImplTest {
                       ]
                     },
                     {
+                      "displayName": "Test Model",
                       "huggingFaceModelName": "test/model",
                       "fileName": "model.gguf",
                       "sha256": "abc123",
@@ -599,6 +612,93 @@ class ModelConfigFetcherImplTest {
             assertEquals(2, assets[1].configurations.size)
             assertTrue(assets[1].metadata.isMultimodal)
             assertFalse(assets[0].metadata.isMultimodal)
+        }
+
+    @Test
+    fun `SCN-FETCH-001 fetcher maps asset displayName into metadata`() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        displayName = "Gemma 4 E4B",
+                        huggingFaceModelName = "litert-community/gemma-4-E4B-it-litert-lm",
+                        fileName = "gemma-4-E4B-it.litertlm",
+                        sha256 = "abc123",
+                        configurations =
+                            listOf(
+                                RemoteModelConfiguration(
+                                    configId = LocalModelConfigurationId("cfg-fast"),
+                                    displayName = "Fast",
+                                    systemPrompt = "Be quick.",
+                                    temperature = 0.8,
+                                    topK = 50,
+                                    topP = 0.9,
+                                    repetitionPenalty = 1.05,
+                                    maxTokens = 2048,
+                                    contextWindow = 8192,
+                                    defaultAssignments = listOf(ModelType.FAST),
+                                ),
+                            ),
+                    ),
+                )
+
+            val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+            assertEquals("Gemma 4 E4B", modelAssets[0].metadata.displayName)
+            assertEquals("Fast", modelAssets[0].configurations[0].displayName)
+        }
+
+    @Test
+    fun `SCN-FETCH-002 non-utility asset without displayName fails validation`() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        displayName = "",
+                        fileName = "model.gguf",
+                        sha256 = "abc123",
+                        configurations =
+                            listOf(
+                                RemoteModelConfiguration(
+                                    configId = LocalModelConfigurationId("cfg-main"),
+                                    displayName = "Preset",
+                                    systemPrompt = "Hi",
+                                    temperature = 0.7,
+                                    topK = 40,
+                                    topP = 0.95,
+                                    repetitionPenalty = 1.1,
+                                    maxTokens = 2048,
+                                    contextWindow = 4096,
+                                ),
+                            ),
+                    ),
+                )
+
+            val thrown =
+                assertThrows(IllegalArgumentException::class.java) {
+                    fetcher.toLocalModelAssets(remoteAssets)
+                }
+            assertEquals("Non-utility asset model.gguf must declare displayName.", thrown.message)
+        }
+
+    @Test
+    fun `SCN-FETCH-003 utility asset maps without asset displayName`() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        utilityType = UtilityType.WHISPER,
+                        displayName = "",
+                        fileName = "ggml-base.en.bin",
+                        sha256 = "whisper-sha",
+                        configurations = emptyList(),
+                    ),
+                )
+
+            val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+            assertEquals(1, modelAssets.size)
+            assertEquals("", modelAssets[0].metadata.displayName)
         }
 }
 

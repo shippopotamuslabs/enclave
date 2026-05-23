@@ -88,6 +88,7 @@ class ModelConfigFetcherImpl
                 val metadata =
                     LocalModelMetadata(
                         id = LocalModelId(""),
+                        displayName = asset.displayName,
                         huggingFaceModelName = asset.huggingFaceModelName,
                         huggingFacePath = asset.huggingFacePath,
                         remoteFileName = asset.fileName,
@@ -142,6 +143,9 @@ class ModelConfigFetcherImpl
 
             require(asset.configurations.isNotEmpty()) {
                 "Non-utility asset ${asset.fileName} must declare at least one configuration."
+            }
+            require(asset.displayName.isNotBlank()) {
+                "Non-utility asset ${asset.fileName} must declare displayName."
             }
         }
     }

@@ -159,7 +159,7 @@ class PrepareModelDeletionUseCase
                             ReassignmentCandidate(
                                 configId = config.id,
                                 source = ModelSource.ON_DEVICE,
-                                assetDisplayName = asset.metadata.huggingFaceModelName,
+                                assetDisplayName = asset.metadata.displayName,
                                 configDisplayName = config.displayName,
                                 localModelId = asset.metadata.id,
                             ),

@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.map
 
 fun createFakeLocalModelAsset(
     id: LocalModelId = LocalModelId("0"),
+    displayName: String = "",
     huggingFaceModelName: String = "test/model",
     remoteFileName: String = "model.bin",
     localFileName: String = "model.bin",
@@ -63,6 +64,7 @@ fun createFakeLocalModelAsset(
     metadata =
         LocalModelMetadata(
             id = id,
+            displayName = displayName,
             huggingFaceModelName = huggingFaceModelName,
             remoteFileName = remoteFileName,
             localFileName = localFileName,
