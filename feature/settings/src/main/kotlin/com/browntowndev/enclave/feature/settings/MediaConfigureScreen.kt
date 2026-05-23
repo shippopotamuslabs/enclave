@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,7 +55,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
+import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -122,8 +127,6 @@ fun MediaConfigureScreen(
 ) {
     val draft = uiState.mediaProviderEditor.assetDraft ?: MediaProviderAssetUi()
     val isKeySaved = uiState.mediaProviderEditor.selectedReusableCredential != null || draft.id.value.isNotEmpty()
-    val showSavedIndicator = isKeySaved && apiKey.isEmpty()
-    var passwordVisible by remember { mutableStateOf(false) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -134,6 +137,8 @@ fun MediaConfigureScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             NeoBackScreenHeader(
                 title = "Media Generation Models",
@@ -159,10 +164,10 @@ fun MediaConfigureScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                     .imePadding()
                     .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             // Provider Selection
             ExposedDropdownMenuBox(
@@ -170,7 +175,7 @@ fun MediaConfigureScreen(
                 onExpandedChange = { providerDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                OutlinedTextField(
+                NeoOutlinedTextField(
                     value = draft.provider.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -181,7 +186,6 @@ fun MediaConfigureScreen(
                             .padding(top = 16.dp)
                             .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = providerDropdownExpanded,
@@ -205,7 +209,7 @@ fun MediaConfigureScreen(
                 onExpandedChange = { capabilityDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                OutlinedTextField(
+                NeoOutlinedTextField(
                     value = draft.capability.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -215,7 +219,6 @@ fun MediaConfigureScreen(
                         Modifier
                             .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
                 )
                 ExposedDropdownMenu(
                     expanded = capabilityDropdownExpanded,
@@ -254,61 +257,20 @@ fun MediaConfigureScreen(
                 )
             }
 
-            // API Key
-            OutlinedTextField(
+            NeoApiKeyField(
+                label = "API Key",
                 value = apiKey,
                 onValueChange = onApiKeyChange,
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("API Key")
-                        if (showSavedIndicator) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Key saved",
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                },
+                keyPresent = isKeySaved,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                placeholder = {
-                    if (showSavedIndicator) {
-                        Text("Saved securely")
-                    }
-                },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                supportingText = {
-                    if (isKeySaved) {
-                        Text(
-                            text =
-                                if (apiKey.isEmpty()) {
-                                    "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                                } else {
-                                    "You are entering a new key. The previously stored key will be replaced upon saving."
-                                },
-                        )
-                    }
-                },
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (passwordVisible) "Toggle password visibility" else "Toggle password visibility",
-                        )
-                    }
-                },
             )
 
             // Display Name
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = draft.displayName,
                 onValueChange = { onMediaAssetFieldChange(draft.copy(displayName = it)) },
                 label = { Text("Display Name (e.g. OpenAI Images 2)") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
             )
 
             // Model ID
@@ -333,12 +295,11 @@ fun MediaConfigureScreen(
             )
 
             // Base URL (for proxies)
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = draft.baseUrl ?: "",
                 onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
                 label = { Text("Base URL (Optional)") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
             )
 
             // Use as Default Toggle

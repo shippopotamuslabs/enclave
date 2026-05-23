@@ -62,7 +62,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -240,7 +240,7 @@ fun HistoryScreen(
     when (val state = optionsState) {
         is HistoryOptionsState.Hidden -> {}
         is HistoryOptionsState.Sheet -> {
-            JumpFreeModalBottomSheet(
+            NeoModalBottomSheet(
                 onDismissRequest = {
                     if (optionsState is HistoryOptionsState.Sheet) {
                         optionsState = HistoryOptionsState.Hidden

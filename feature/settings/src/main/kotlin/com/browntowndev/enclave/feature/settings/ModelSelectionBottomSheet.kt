@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -185,23 +185,23 @@ fun ModelSelectionContent(
                 val hasPrice = availableModels.any { it.promptPrice != null || it.completionPrice != null }
 
                 if (hasCreated || hasPrice) {
-                    FilterChip(
+                    NeoFilterChip(
+                        label = "A-Z",
                         selected = sortOption == ModelSortOption.A_TO_Z,
                         onClick = { onUpdateSortOption(ModelSortOption.A_TO_Z) },
-                        label = { Text("A-Z") },
                     )
                     if (hasCreated) {
-                        FilterChip(
+                        NeoFilterChip(
+                            label = "Newest",
                             selected = sortOption == ModelSortOption.NEWEST,
                             onClick = { onUpdateSortOption(ModelSortOption.NEWEST) },
-                            label = { Text("Newest") },
                         )
                     }
                     if (hasPrice) {
-                        FilterChip(
+                        NeoFilterChip(
+                            label = "Price",
                             selected = sortOption == ModelSortOption.PRICE_LOW_TO_HIGH,
                             onClick = { onUpdateSortOption(ModelSortOption.PRICE_LOW_TO_HIGH) },
-                            label = { Text("Price") },
                         )
                     }
                 }

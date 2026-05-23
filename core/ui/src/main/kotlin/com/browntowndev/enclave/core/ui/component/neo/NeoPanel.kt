@@ -14,6 +14,27 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
+/** Bordered neo-brutalist surface for grouped settings content. */
+@Composable
+fun NeoPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = neoBorderColor(),
+                    withShadow = true,
+                    shadowColor = neoShadowColor(),
+                    shadowOffset = neoButtonShadowOffset(),
+                ),
+        content = content,
+    )
+}
+
 /** Stacks standalone neo rows/cards with consistent vertical spacing between sections. */
 @Composable
 fun NeoSettingsSection(
@@ -23,31 +44,6 @@ fun NeoSettingsSection(
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
-        content = content,
-    )
-}
-
-@Composable
-fun NeoPanel(
-    modifier: Modifier = Modifier,
-    withShadow: Boolean = false,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val borderColor = neoBorderColor()
-    val backgroundColor = MaterialTheme.colorScheme.surface
-    val shadowColor = neoShadowColor()
-
-    Column(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .neoSurface(
-                    backgroundColor = backgroundColor,
-                    borderColor = borderColor,
-                    withShadow = withShadow,
-                    shadowColor = shadowColor,
-                )
-                .padding(vertical = 4.dp),
         content = content,
     )
 }
@@ -64,9 +60,9 @@ fun NeoGroupDivider(modifier: Modifier = Modifier) {
 @Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
-private fun NeoPanelPreview() {
+private fun NeoSettingsSectionPreview() {
     EnclaveTheme {
-        NeoPanel {
+        NeoSettingsSection {
             NeoGroupDivider()
         }
     }

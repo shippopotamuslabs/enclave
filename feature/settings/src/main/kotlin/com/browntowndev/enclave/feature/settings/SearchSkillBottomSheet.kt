@@ -23,7 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import androidx.compose.material3.Tab
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import androidx.compose.material3.Text
@@ -199,67 +199,14 @@ internal fun ApiKeyInput(
     keyPresent: Boolean,
     onClearKey: () -> Unit,
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    val showSavedIndicator = keyPresent && value.isEmpty()
-
-    Column {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label)
-                    if (showSavedIndicator) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Key saved",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true,
-            placeholder = {
-                if (showSavedIndicator) {
-                    Text("Saved securely")
-                } else if (keyPresent) {
-                    Text("••••••••••••••••")
-                }
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Toggle key visibility" else "Toggle key visibility",
-                    )
-                }
-            },
-            supportingText = {
-                if (keyPresent) {
-                    Text(
-                        if (value.isEmpty()) {
-                            "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                        } else {
-                            "You are entering a new key. The previously stored key will be replaced upon saving."
-                        },
-                    )
-                }
-            },
-        )
-        if (keyPresent) {
-            TextButton(
-                onClick = onClearKey,
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text("Clear Saved Key", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
+    NeoApiKeyField(
+        label = label,
+        value = value,
+        onValueChange = onValueChange,
+        keyPresent = keyPresent,
+        onClearKey = onClearKey,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
