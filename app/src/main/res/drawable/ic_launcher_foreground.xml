@@ -3,12 +3,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-  <!-- Logo art bounds ~14.7–170.3 × 9.2–221.3; ~0.30 scale fits 66dp adaptive-icon safe zone -->
+  <!-- Logo art bounds ~14.7–170.3 × 9.2–221.3; ~0.285 scale (5% inset vs splash) -->
   <group
       android:pivotX="92.524"
       android:pivotY="115.234"
-      android:scaleX="0.30"
-      android:scaleY="0.30"
+      android:scaleX="0.265"
+      android:scaleY="0.265"
       android:translateX="-38.524"
       android:translateY="-61.234">
     <path
