@@ -620,9 +620,8 @@ private fun AlbumCover(
                 columns = GridCells.Fixed(ALBUM_COVER_GRID_COLUMNS),
                 userScrollEnabled = false,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 items(
                     items = items,
@@ -659,10 +658,7 @@ private fun AlbumCoverItem(
     videoThumbnail: Bitmap?,
     modifier: Modifier = Modifier,
 ) {
-    val itemModifier =
-        modifier
-            .aspectRatio(1f)
-            .clip(EnclaveNeoTokens.shape)
+    val itemModifier = modifier.aspectRatio(1f)
 
     if (item.mediaType == MediaCapability.VIDEO) {
         VideoThumbnail(
@@ -760,6 +756,7 @@ private fun AlbumMediaItem(
         targetValue = if (isSelected) EnclaveNeoTokens.cornerRadius else 0.dp,
         label = "selection_corner_radius",
     )
+    val tileShape = RoundedCornerShape(cornerRadius)
 
     Box(
         modifier =
@@ -778,7 +775,19 @@ private fun AlbumMediaItem(
                     onLongClick = {
                         onSelectionToggled()
                     },
-                ).padding(padding),
+                )
+                .padding(padding)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(
+                            width = EnclaveNeoTokens.borderWidth,
+                            color = neoBorderColor(),
+                            shape = tileShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         if (item.mediaType == MediaCapability.VIDEO) {
             VideoThumbnail(
@@ -791,14 +800,14 @@ private fun AlbumMediaItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(tileShape),
             )
         } else if (item.mediaType == MediaCapability.MUSIC) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius))
+                        .clip(tileShape)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black),
@@ -820,7 +829,7 @@ private fun AlbumMediaItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(tileShape),
                 contentScale = ContentScale.Crop,
                 onState = { state ->
                     if (state is AsyncImagePainter.State.Success) {
@@ -832,31 +841,32 @@ private fun AlbumMediaItem(
                 },
             )
         }
-        Box(
-            modifier =
-                Modifier
-                    .padding(8.dp)
-                    .align(Alignment.BottomEnd)
-                    .neoSurface(
-                        backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = neoBorderColor(),
-                        withShadow = false,
-                    ),
-        ) {
-            Icon(
-                imageVector =
-                    when (item.mediaType) {
-                        MediaCapability.IMAGE -> Icons.Default.Image
-                        MediaCapability.VIDEO -> Icons.Default.Videocam
-                        else -> Icons.Default.MusicNote
-                    },
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
+        if (item.mediaType != MediaCapability.IMAGE) {
+            Box(
                 modifier =
                     Modifier
-                        .padding(4.dp)
-                        .size(16.dp),
-            )
+                        .padding(8.dp)
+                        .align(Alignment.BottomEnd)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
+                        ),
+            ) {
+                Icon(
+                    imageVector =
+                        when (item.mediaType) {
+                            MediaCapability.VIDEO -> Icons.Default.Videocam
+                            else -> Icons.Default.MusicNote
+                        },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier =
+                        Modifier
+                            .padding(4.dp)
+                            .size(16.dp),
+                )
+            }
         }
 
         if (selectionModeActive) {
