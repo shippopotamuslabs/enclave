@@ -222,7 +222,7 @@ internal fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(bottom = EnclaveNeoTokens.rowSpacing)
+                            .padding(top = if (index > 0) EnclaveNeoTokens.sectionSpacing else 0.dp)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },
@@ -272,7 +272,7 @@ internal fun StudioGalleryList(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(bottom = EnclaveNeoTokens.rowSpacing)
+                            .padding(top = if (groupedGallery.isNotEmpty()) EnclaveNeoTokens.sectionSpacing else 0.dp)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },
