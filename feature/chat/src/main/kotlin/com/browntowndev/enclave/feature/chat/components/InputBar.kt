@@ -39,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -244,6 +246,7 @@ fun InputBar(
                     StandardTrailingAction(
                         painter = painterResource(selectedMode.iconRes),
                         onClick = { modeExpanded = true },
+                        modifier = Modifier.focusProperties { canFocus = false },
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         description = selectedMode.getDisplayName(context),
@@ -251,6 +254,7 @@ fun InputBar(
                     DropdownMenu(
                         expanded = modeExpanded,
                         onDismissRequest = { modeExpanded = false },
+                        properties = PopupProperties(focusable = false),
                         modifier =
                             Modifier
                                 .width(200.dp)

@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -451,12 +452,8 @@ private fun GalleryGridRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
-                .padding(bottom = EnclaveNeoTokens.rowSpacing),
-        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         rowItems.forEach { asset ->
             Box(modifier = Modifier.weight(1f)) {
@@ -484,12 +481,8 @@ private fun PlaceholderGridRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
-                .padding(bottom = EnclaveNeoTokens.rowSpacing),
-        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         repeat(placeholderCount) {
             Box(modifier = Modifier.weight(1f)) {
@@ -524,9 +517,10 @@ private fun GalleryItem(
         label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
-        targetValue = EnclaveNeoTokens.cornerRadius,
+        targetValue = if (isSelected) EnclaveNeoTokens.cornerRadius else 0.dp,
         label = "selection_corner_radius",
     )
+    val tileShape = RoundedCornerShape(cornerRadius)
 
     Box(
         modifier =
@@ -536,7 +530,19 @@ private fun GalleryItem(
                 .combinedClickable(
                     onClick = { onMediaClick(asset.id) },
                     onLongClick = { onMediaLongClick(asset.id) },
-                ).padding(padding),
+                )
+                .padding(padding)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(
+                            width = EnclaveNeoTokens.borderWidth,
+                            color = neoBorderColor(),
+                            shape = tileShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         if (asset.mediaType == MediaCapability.VIDEO) {
             VideoPlayer(
@@ -548,19 +554,15 @@ private fun GalleryItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(tileShape),
             )
         } else if (asset.mediaType == MediaCapability.MUSIC) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(EnclaveNeoTokens.shape)
-                        .neoSurface(
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
-                            withShadow = false,
-                        ),
+                        .clip(tileShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -577,7 +579,7 @@ private fun GalleryItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(EnclaveNeoTokens.shape),
+                        .clip(tileShape),
                 contentScale = ContentScale.Crop,
             )
         }
@@ -619,11 +621,7 @@ private fun GalleryItem(
 
 @Composable
 private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val borderColor = neoBorderColor()
-    val shadowColor = neoShadowColor()
-    val shadowOffset = neoButtonShadowOffset()
-    val baseColor = surfaceColor
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
     val phaseOffsetMs = remember { Random.nextInt(0..GENERATING_SHIMMER_DURATION_MS) }
 
@@ -646,14 +644,6 @@ private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
             modifier
                 .aspectRatio(1f)
                 .fillMaxWidth()
-                .neoSurface(
-                    backgroundColor = surfaceColor,
-                    borderColor = borderColor,
-                    withShadow = true,
-                    shadowColor = shadowColor,
-                    shadowOffset = shadowOffset,
-                )
-                .clip(EnclaveNeoTokens.shape)
                 .shimmerEffect(
                     progressState = shimmerProgress,
                     baseColor = baseColor,
