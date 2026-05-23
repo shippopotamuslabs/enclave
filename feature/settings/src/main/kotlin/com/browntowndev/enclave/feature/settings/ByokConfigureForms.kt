@@ -59,16 +59,12 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
-import com.browntowndev.enclave.domain.model.inference.SystemPromptTemplates
 
 @Composable
 fun SearchSkillConfigurationForm(
@@ -564,65 +560,20 @@ fun SystemPromptConfiguration(
             enabled = false,
             readOnly = true,
             modifier = Modifier.fillMaxWidth(),
+            singleLine = false,
             minLines = 4,
             maxLines = 4,
             colors = neoOutlinedTextFieldColors(),
         )
     }
 
-    if (showSystemPromptSheet) {
-        NeoModalBottomSheet(
-            onDismissRequest = { showSystemPromptSheet = false },
-            sheetState = sheetState,
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                NeoSheetHeader(
-                    title = "Edit System Prompt",
-                    onDismiss = { showSystemPromptSheet = false },
-                )
-                var expanded by remember { mutableStateOf(false) }
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { expanded = true }) {
-                        Text("Import Template")
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                    ) {
-                        SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                            DropdownMenuItem(
-                                text = { Text(modelType.displayName()) },
-                                onClick = {
-                                    onConfigChange(config.copy(systemPrompt = prompt))
-                                    expanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NeoOutlinedTextField(
-                    value = config.systemPrompt,
-                    onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    placeholder = { Text("Enter system prompt...") },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NeoPrimaryButton(
-                    text = "Done",
-                    onClick = { showSystemPromptSheet = false },
-                )
-            }
-        }
-    }
+    SystemPromptEditSheet(
+        visible = showSystemPromptSheet,
+        prompt = config.systemPrompt,
+        onPromptChange = { onConfigChange(config.copy(systemPrompt = it)) },
+        onDismiss = { showSystemPromptSheet = false },
+        sheetState = sheetState,
+    )
 }
 
 @Composable

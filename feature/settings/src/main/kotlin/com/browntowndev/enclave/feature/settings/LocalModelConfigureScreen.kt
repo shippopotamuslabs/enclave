@@ -21,8 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
@@ -58,8 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.inference.SystemPromptTemplates
-
 /** Model format string constant for GGUF models handled by llama.cpp. */
 internal const val MODEL_FORMAT_GGUF = "GGUF"
 
@@ -195,76 +190,13 @@ fun LocalModelConfigureScreen(
                 )
             }
 
-            if (showSystemPromptSheet) {
-                NeoModalBottomSheet(
-                    onDismissRequest = { showSystemPromptSheet = false },
-                    sheetState = sheetState,
-                ) {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Edit System Prompt",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-
-                            var expanded by remember { mutableStateOf(false) }
-                            Row {
-                                TextButton(onClick = { expanded = true }) {
-                                    Text("Import Template")
-                                }
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                ) {
-                                    SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                        DropdownMenuItem(
-                                            text = { Text(modelType.displayName()) },
-                                            onClick = {
-                                                onConfigChange(config.copy(systemPrompt = prompt))
-                                                expanded = false
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        NeoOutlinedTextField(
-                            value = config.systemPrompt,
-                            onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                            placeholder = { Text("Enter system prompt...") },
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                            singleLine = false,
-                            minLines = 6,
-                            maxLines = 12,
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        NeoPrimaryButton(
-                            text = "Done",
-                            onClick = { showSystemPromptSheet = false },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
+            SystemPromptEditSheet(
+                visible = showSystemPromptSheet,
+                prompt = config.systemPrompt,
+                onPromptChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                onDismiss = { showSystemPromptSheet = false },
+                sheetState = sheetState,
+            )
 
             ConfigurationHeader("Context")
 
