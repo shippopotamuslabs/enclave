@@ -41,48 +41,65 @@ class EmbeddingRegenerationWorker
         }
 
         override suspend fun doWork(): Result {
-            val pending = coordinator.consumePending()
-            if (pending.isEmpty()) return Result.success()
-
             progressManager.setReindexing(true)
             return try {
-                val total =
-                    (if (pending.fullScanPending) 100 else 0) +
-                        pending.messageIds.size + pending.memoryIds.size + pending.documentIds.size
-                var processed = 0
+                drainPendingBatches()
+            } finally {
+                progressManager.setReindexing(coordinator.hasPendingWork())
+                coordinator.onWorkerFinished()
+            }
+        }
 
-                if (pending.fullScanPending) {
-                    performFullScan { current, subTotal ->
-                        progressManager.updateProgress(processed + (current * 100 / subTotal), total)
-                    }
-                    processed += 100
+        private suspend fun drainPendingBatches(): Result {
+            var pending = coordinator.consumePending()
+            while (!pending.isEmpty()) {
+                if (!runPendingBatch(pending)) {
+                    return Result.retry()
                 }
+                pending = coordinator.consumePending()
+            }
+            return Result.success()
+        }
 
-                pending.messageIds.forEach { id ->
-                    processMessage(id)
-                    processed++
-                    progressManager.updateProgress(processed, total)
-                }
-
-                pending.memoryIds.forEach { id ->
-                    processMemory(id)
-                    processed++
-                    progressManager.updateProgress(processed, total)
-                }
-
-                pending.documentIds.forEach { id ->
-                    processDocument(id)
-                    processed++
-                    progressManager.updateProgress(processed, total)
-                }
-
-                Result.success()
+        private suspend fun runPendingBatch(pending: PendingWork): Boolean =
+            try {
+                processPendingBatch(pending)
+                true
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Embedding regeneration failed", e)
                 coordinator.markFailed(pending)
-                Result.retry()
-            } finally {
-                progressManager.setReindexing(false)
+                false
+            }
+
+        private suspend fun processPendingBatch(pending: PendingWork) {
+            val total =
+                (if (pending.fullScanPending) 100 else 0) +
+                    pending.messageIds.size + pending.memoryIds.size + pending.documentIds.size
+            var processed = 0
+
+            if (pending.fullScanPending) {
+                performFullScan { current, subTotal ->
+                    progressManager.updateProgress(processed + (current * 100 / subTotal), total)
+                }
+                processed += 100
+            }
+
+            pending.messageIds.forEach { id ->
+                processMessage(id)
+                processed++
+                progressManager.updateProgress(processed, total)
+            }
+
+            pending.memoryIds.forEach { id ->
+                processMemory(id)
+                processed++
+                progressManager.updateProgress(processed, total)
+            }
+
+            pending.documentIds.forEach { id ->
+                processDocument(id)
+                processed++
+                progressManager.updateProgress(processed, total)
             }
         }
 

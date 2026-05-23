@@ -103,4 +103,47 @@ class EmbeddingRegenerationCoordinatorTest {
                 )
             }
         }
+
+    @Test
+    fun `burst enqueues schedule only one unique work request until worker finishes`() =
+        runTest {
+            coordinator.enqueueMessage("msg1")
+            coordinator.enqueueMessage("msg2")
+            coordinator.enqueueMemory("mem1")
+            runCurrent()
+
+            verify(exactly = 1) {
+                workManager.enqueueUniqueWork(
+                    "enclave_embedding_regen",
+                    ExistingWorkPolicy.KEEP,
+                    any<OneTimeWorkRequest>(),
+                )
+            }
+
+            coordinator.consumePending()
+            coordinator.onWorkerFinished()
+            runCurrent()
+
+            coordinator.enqueueDocument("doc1")
+            runCurrent()
+
+            verify(exactly = 2) {
+                workManager.enqueueUniqueWork(
+                    "enclave_embedding_regen",
+                    ExistingWorkPolicy.KEEP,
+                    any<OneTimeWorkRequest>(),
+                )
+            }
+        }
+
+    @Test
+    fun `hasPendingWork reflects in-memory queue`() =
+        runTest {
+            assertEquals(false, coordinator.hasPendingWork())
+            coordinator.enqueueMessage("msg1")
+            runCurrent()
+            assertEquals(true, coordinator.hasPendingWork())
+            coordinator.consumePending()
+            assertEquals(false, coordinator.hasPendingWork())
+        }
 }
