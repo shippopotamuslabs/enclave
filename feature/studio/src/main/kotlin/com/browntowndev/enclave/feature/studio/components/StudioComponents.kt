@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -139,19 +141,20 @@ fun SettingRow(
     label: String,
     subLabel: String = "",
     stacked: Boolean = false,
+    controlFullWidth: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val useStacked = stacked || controlFullWidth
     val layoutModifier =
         modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 64.dp)
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
 
-    if (stacked) {
+    if (useStacked) {
         Column(
-            modifier = layoutModifier.padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = layoutModifier,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column {
                 Text(text = label, style = MaterialTheme.typography.titleMedium)
@@ -290,12 +293,14 @@ fun StudioOptionsSheetContent(
     onTemplateSelected: (StudioTemplate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scrollState = rememberScrollState()
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
+                .verticalScroll(scrollState)
                 .navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
     ) {
         NeoSheetHeader(
             title = "Studio Settings",
@@ -326,11 +331,9 @@ fun StudioOptionsSheetContent(
             },
             modifier =
                 Modifier
-                    .fillMaxWidth(0.75f)
+                    .fillMaxWidth()
                     .padding(bottom = EnclaveNeoTokens.sectionSpacing),
         )
-
-        Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
 
         when (state.mediaType) {
             MediaCapability.IMAGE,
@@ -502,41 +505,49 @@ private fun VideoSettingsSection(
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     capabilities?.let { caps ->
-        Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+        GroupedSettingsCard {
             if (caps.supportedVideoDurations.isNotEmpty()) {
-                SettingsCard {
-                    SettingRow(
-                        label = "Duration",
-                        stacked = caps.supportedVideoDurations.size > 2,
-                    ) {
-                        PillSelector(
-                            selected = "${settings.videoDuration}s",
-                            options = caps.supportedVideoDurations.map { "${it}s" },
-                            onSelected = { durationStr ->
-                                val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
-                                onUpdateSettings(settings.copy(videoDuration = duration))
+                SettingRow(
+                    label = "Duration",
+                    controlFullWidth = caps.supportedVideoDurations.size > 2,
+                ) {
+                    PillSelector(
+                        selected = "${settings.videoDuration}s",
+                        options = caps.supportedVideoDurations.map { "${it}s" },
+                        onSelected = { durationStr ->
+                            val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
+                            onUpdateSettings(settings.copy(videoDuration = duration))
+                        },
+                        modifier =
+                            if (caps.supportedVideoDurations.size > 2) {
+                                Modifier.fillMaxWidth()
+                            } else {
+                                Modifier
                             },
-                            modifier = if (caps.supportedVideoDurations.size > 2) Modifier.fillMaxWidth() else Modifier,
-                        )
-                    }
+                    )
                 }
             }
-
+            if (caps.supportedVideoDurations.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
+                SettingsGroupDivider()
+            }
             if (caps.supportedVideoResolutions.isNotEmpty()) {
-                SettingsCard {
-                    SettingRow(
-                        label = "Resolution",
-                        stacked = caps.supportedVideoResolutions.size > 2,
-                    ) {
-                        PillSelector(
-                            selected = settings.videoResolution,
-                            options = caps.supportedVideoResolutions,
-                            onSelected = { res ->
-                                onUpdateSettings(settings.copy(videoResolution = res))
+                SettingRow(
+                    label = "Resolution",
+                    controlFullWidth = caps.supportedVideoResolutions.size > 2,
+                ) {
+                    PillSelector(
+                        selected = settings.videoResolution,
+                        options = caps.supportedVideoResolutions,
+                        onSelected = { res ->
+                            onUpdateSettings(settings.copy(videoResolution = res))
+                        },
+                        modifier =
+                            if (caps.supportedVideoResolutions.size > 2) {
+                                Modifier.fillMaxWidth()
+                            } else {
+                                Modifier
                             },
-                            modifier = if (caps.supportedVideoResolutions.size > 2) Modifier.fillMaxWidth() else Modifier,
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -555,88 +566,49 @@ private fun ImageSettingsSection(
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     capabilities?.let { caps ->
-        ImageQualityCard(
-            settings = settings,
-            capabilities = caps,
-            onUpdateSettings = onUpdateSettings,
-        )
-
-        Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
-
-        GenerationCountCard(
-            settings = settings,
-            onUpdateSettings = onUpdateSettings,
-        )
-
-        Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
-
-        ContinualModeCard(
-            continualMode = continualMode,
-            onContinualModeChange = onContinualModeChange,
-        )
-    }
-}
-
-@Composable
-private fun ImageQualityCard(
-    settings: ImageGenerationSettings,
-    capabilities: ProviderCapabilities,
-    onUpdateSettings: (GenerationSettings) -> Unit,
-) {
-    SettingsCard {
-        val options = capabilities.supportedImageQualities.map { it.displayName }
-        SettingRow(
-            label = "Image Gen Mode",
-            stacked = options.size > 2 || options.any { it.length > 8 },
-        ) {
-            if (options.isNotEmpty()) {
-                PillSelector(
-                    selected = settings.quality.displayName,
-                    options = options,
-                    onSelected = { qualityDisplayName ->
-                        val quality =
-                            capabilities.supportedImageQualities.first {
-                                it.displayName == qualityDisplayName
-                            }
-                        onUpdateSettings(settings.copy(quality = quality))
-                    },
-                    modifier = if (options.size > 2) Modifier.fillMaxWidth() else Modifier,
-                )
-            } else {
-                Text("Default", style = MaterialTheme.typography.bodySmall)
+        val qualityOptions = caps.supportedImageQualities.map { it.displayName }
+        GroupedSettingsCard {
+            SettingRow(
+                label = "Quality",
+                subLabel = "Speed for faster generations; Quality for higher fidelity.",
+                controlFullWidth = true,
+            ) {
+                if (qualityOptions.isNotEmpty()) {
+                    PillSelector(
+                        selected = settings.quality.displayName,
+                        options = qualityOptions,
+                        onSelected = { qualityDisplayName ->
+                            val quality =
+                                caps.supportedImageQualities.first {
+                                    it.displayName == qualityDisplayName
+                                }
+                            onUpdateSettings(settings.copy(quality = quality))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text("Default", style = MaterialTheme.typography.bodySmall)
+                }
             }
-        }
-    }
-}
-
-@Composable
-private fun GenerationCountCard(
-    settings: ImageGenerationSettings,
-    onUpdateSettings: (GenerationSettings) -> Unit,
-) {
-    SettingsCard {
-        SettingRow(label = "Generation Count") {
-            GenerationCountPicker(
-                count = settings.generationCount,
-                onCountChange = { newValue ->
-                    onUpdateSettings(settings.copy(generationCount = newValue))
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ContinualModeCard(
-    continualMode: Boolean,
-    onContinualModeChange: (Boolean) -> Unit,
-) {
-    SettingsCard {
-        SettingRow(label = "Generative Scrolling", subLabel = "Generate new images as you scroll.") {
-            Switch(
-                checked = continualMode,
-                onCheckedChange = onContinualModeChange,
-            )
+            SettingsGroupDivider()
+            SettingRow(label = "Generation Count") {
+                GenerationCountPicker(
+                    count = settings.generationCount,
+                    onCountChange = { newValue ->
+                        onUpdateSettings(settings.copy(generationCount = newValue))
+                    },
+                )
+            }
+            SettingsGroupDivider()
+            SettingRow(
+                label = "Generative Scrolling",
+                subLabel = "Generate new images as you scroll.",
+            ) {
+                Switch(
+                    checked = continualMode,
+                    onCheckedChange = onContinualModeChange,
+                )
+            }
         }
     }
 }
@@ -696,6 +668,27 @@ private fun MusicSliderSetting(
 }
 
 @Composable
+private fun GroupedSettingsCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    SettingsCard(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroupDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        thickness = EnclaveNeoTokens.borderWidth,
+        color = neoBorderColor(),
+    )
+}
+
+@Composable
 private fun SettingsCard(
     shape: Shape = EnclaveNeoTokens.shape,
     modifier: Modifier = Modifier,
@@ -711,7 +704,8 @@ private fun SettingsCard(
                     borderColor = borderColor,
                     withShadow = false,
                     shape = shape,
-                ),
+                )
+                .clip(shape),
     ) {
         content()
     }
@@ -756,8 +750,8 @@ fun AspectRatioSelector(
                 Box(
                     modifier =
                         Modifier
-                            .height(40.dp)
-                            .width(40.dp * ratioValue.coerceAtLeast(0.5f).coerceAtMost(2f))
+                            .height(48.dp)
+                            .width(48.dp * ratioValue.coerceAtLeast(0.5f).coerceAtMost(2f))
                             .clip(EnclaveNeoTokens.shape)
                             .background(
                                 color =
@@ -803,7 +797,61 @@ fun GenerationCountPicker(
     )
 }
 
-@Preview(showBackground = true, name = "Studio Options - Music")
+private val previewImageTemplates =
+    listOf(
+        StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, ", " 8k"),
+        StudioTemplate("2", "Oil Painting", "oil_painting", "Oil painting of ", " canvas"),
+        StudioTemplate("3", "Anime", "anime", "Anime style ", " vibrant"),
+        StudioTemplate("4", "Cinematic", "cinematic", "Cinematic shot ", " dramatic"),
+    )
+
+private val previewStudioCapabilities =
+    ProviderCapabilities(
+        supportedAspectRatios =
+            listOf(
+                AspectRatio.ONE_ONE,
+                AspectRatio.THREE_FOUR,
+                AspectRatio.FOUR_THREE,
+                AspectRatio.NINE_SIXTEEN,
+                AspectRatio.SIXTEEN_NINE,
+                AspectRatio.TWO_THREE,
+                AspectRatio.THREE_TWO,
+            ),
+        supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
+        supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
+        supportedVideoResolutions = listOf("720p", "1080p"),
+        supportedVideoDurations = listOf(5, 10),
+        supportsReferenceImage = true,
+        supportsVideo = true,
+    )
+
+@Preview(showBackground = true, name = "Studio Options - Image", heightDp = 920)
+@Composable
+fun PreviewStudioOptionsImage() {
+    val state =
+        StudioUiState(
+            mediaType = MediaCapability.IMAGE,
+            templates = previewImageTemplates,
+            selectedTemplateId = "1",
+            settings = ImageGenerationSettings(),
+            capabilities = previewStudioCapabilities,
+            continualMode = false,
+        )
+    EnclaveTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            StudioOptionsSheetContent(
+                state = state,
+                onDismiss = {},
+                onUpdateSettings = {},
+                onContinualModeChange = {},
+                onMediaTypeChange = {},
+                onTemplateSelected = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Studio Options - Music", heightDp = 520)
 @Composable
 fun PreviewStudioOptionsMusic() {
     val state =
@@ -811,7 +859,7 @@ fun PreviewStudioOptionsMusic() {
             mediaType = MediaCapability.MUSIC,
         )
     EnclaveTheme {
-        Surface {
+        Surface(color = MaterialTheme.colorScheme.surface) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -61,7 +63,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
+import com.browntowndev.enclave.core.ui.component.neo.NeoActionRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
 import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
@@ -71,7 +76,6 @@ import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.chat.ChatModeUi
@@ -127,30 +131,34 @@ fun InputBar(
     val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
 
     if (showAttachmentSheet) {
-        JumpFreeModalBottomSheet(
+        NeoModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
             sheetState = sheetState,
         ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                AttachmentMenuItem(
-                    icon = Icons.Default.InsertPhoto,
-                    label = "Attach Photo",
-                    onClick = {
-                        showAttachmentSheet = false
-                        onImageAttach()
-                    },
-                    enabled = isPhotoAttachmentEnabled,
-                    disabledReason = photoAttachmentDisabledReason,
-                )
-                AttachmentMenuItem(
-                    icon = Icons.Default.AttachFile,
-                    label = "Attach File",
-                    onClick = {
-                        showAttachmentSheet = false
-                        onFileAttach()
-                    },
-                )
-            }
+            NeoSheetHeader(
+                title = "Attach",
+                onDismiss = { showAttachmentSheet = false },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            AttachmentMenuItem(
+                icon = Icons.Default.InsertPhoto,
+                label = "Attach Photo",
+                onClick = {
+                    showAttachmentSheet = false
+                    onImageAttach()
+                },
+                enabled = isPhotoAttachmentEnabled,
+                disabledReason = photoAttachmentDisabledReason,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            AttachmentMenuItem(
+                icon = Icons.Default.AttachFile,
+                label = "Attach File",
+                onClick = {
+                    showAttachmentSheet = false
+                    onFileAttach()
+                },
+            )
         }
     }
 
@@ -359,41 +367,18 @@ private fun AttachmentMenuItem(
     val tooltipState = rememberTooltipState(isPersistent = true)
 
     val content = @Composable {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (enabled) {
-                            onClick()
-                        } else if (!disabledReason.isNullOrBlank()) {
-                            scope.launch { tooltipState.show() }
-                        }
-                    }.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint =
-                    if (enabled) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                    },
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color =
-                    if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    },
-            )
-        }
+        NeoActionRow(
+            title = label,
+            icon = icon,
+            enabled = enabled,
+            onClick = {
+                if (enabled) {
+                    onClick()
+                } else if (!disabledReason.isNullOrBlank()) {
+                    scope.launch { tooltipState.show() }
+                }
+            },
+        )
     }
 
     if (!enabled && !disabledReason.isNullOrBlank()) {

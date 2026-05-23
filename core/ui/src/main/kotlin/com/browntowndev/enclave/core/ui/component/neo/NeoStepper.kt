@@ -1,30 +1,33 @@
 package com.browntowndev.enclave.core.ui.component.neo
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Text
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 @Composable
 fun NeoStepper(
@@ -35,12 +38,11 @@ fun NeoStepper(
     max: Int = 99,
 ) {
     val borderColor = neoBorderColor()
-    var textValue by remember(value) { mutableStateOf(value.toString()) }
 
     Row(
         modifier =
             modifier
-                .width(120.dp)
+                .width(128.dp)
                 .height(44.dp)
                 .neoSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
@@ -49,33 +51,7 @@ fun NeoStepper(
                 ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicTextField(
-            value = textValue,
-            onValueChange = { raw ->
-                textValue = raw.filter { it.isDigit() }.take(2)
-                textValue.toIntOrNull()?.let { parsed ->
-                    onValueChange(parsed.coerceIn(min, max))
-                }
-            },
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-            textStyle =
-                TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                ),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        )
-        VerticalDivider(
-            thickness = EnclaveNeoTokens.borderWidth,
-            color = borderColor,
-        )
-        NeoIconButton(
+        NeoStepperSideButton(
             onClick = { onValueChange((value - 1).coerceAtLeast(min)) },
             icon = Icons.Default.Remove,
             contentDescription = "Decrease",
@@ -84,10 +60,65 @@ fun NeoStepper(
             thickness = EnclaveNeoTokens.borderWidth,
             color = borderColor,
         )
-        NeoIconButton(
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = value.toString(),
+                style =
+                    MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        VerticalDivider(
+            thickness = EnclaveNeoTokens.borderWidth,
+            color = borderColor,
+        )
+        NeoStepperSideButton(
             onClick = { onValueChange((value + 1).coerceAtMost(max)) },
             icon = Icons.Default.Add,
             contentDescription = "Increase",
         )
+    }
+}
+
+@Composable
+private fun NeoStepperSideButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(44.dp)
+                .semantics {
+                    role = Role.Button
+                    this.contentDescription = contentDescription
+                }
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Suppress("UnusedPrivateMember")
+@Preview(showBackground = true)
+@Composable
+private fun NeoStepperPreview() {
+    EnclaveTheme {
+        NeoStepper(value = 3, onValueChange = {})
     }
 }

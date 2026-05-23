@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.enclave.core.ui.theme.darkMarkdownTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
@@ -28,6 +30,14 @@ import org.robolectric.annotation.Config
 class StreamableMarkdownTextRecompositionTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun `darkMarkdownTheme applies custom body style when provided`() {
+        val custom = LlmBodyTextStyle.copy(fontSize = 18.sp, lineHeight = 29.sp)
+        val theme = darkMarkdownTheme(bodyStyle = custom)
+        assertEquals(18.sp, theme.bodyStyle.fontSize)
+        assertEquals(29.sp, theme.bodyStyle.lineHeight)
+    }
 
     @Test
     fun `darkMarkdownTheme creates a new MarkdownTheme instance on each invocation`() {

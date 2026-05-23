@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -165,10 +166,12 @@ private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> =
             ),
     )
 
-fun darkMarkdownTheme(): MarkdownTheme =
+fun darkMarkdownTheme(
+    bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
+): MarkdownTheme =
     MarkdownTheme(
         headingStyles = darkHeadingStyles(),
-        bodyStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
+        bodyStyle = bodyStyle,
         inlineCodeStyle = SpanStyle(color = DarkOnBackground),
         inlineCodeBackground = DarkSurfaceVariant,
         codeBlockStyle =
