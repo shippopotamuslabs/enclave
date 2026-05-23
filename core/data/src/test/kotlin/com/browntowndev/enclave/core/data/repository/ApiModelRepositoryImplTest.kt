@@ -187,6 +187,41 @@ class ApiModelRepositoryImplTest {
         }
 
     @Test
+    fun `saveCredentials generates credential alias when draft alias is blank`() =
+        runTest {
+            val storedCredentials = mutableListOf<ApiCredentialsEntity>()
+            coEvery { credentialsDao.insert(any()) } answers {
+                storedCredentials.add(firstArg())
+                1L
+            }
+            coEvery { credentialsDao.getById(any()) } answers {
+                val requestedId =
+                    when (val idArg = invocation.args[0]) {
+                        is ApiCredentialsId -> idArg
+                        is String -> ApiCredentialsId(idArg)
+                        else -> error("Unexpected getById arg: $idArg")
+                    }
+                storedCredentials.find { it.id == requestedId }
+            }
+
+            val id =
+                repo.saveCredentials(
+                    ApiCredentials(
+                        id = ApiCredentialsId(""),
+                        displayName = "Test",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = "https://api.openai.com/v1",
+                        credentialAlias = "",
+                    ),
+                    apiKey = "sk-test",
+                )
+
+            val expectedAlias = "api-${id.value}"
+            assertEquals(expectedAlias, storedCredentials.single().credentialAlias)
+            verify { apiKeyManager.save(expectedAlias, "sk-test") }
+        }
+
+    @Test
     fun `save credentials with API key fails closed when encryption is locked`() =
         runTest {
             val lockedRepository =

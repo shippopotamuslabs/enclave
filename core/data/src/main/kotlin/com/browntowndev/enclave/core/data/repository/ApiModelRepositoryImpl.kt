@@ -115,44 +115,48 @@ class ApiModelRepositoryImpl
             val now = System.currentTimeMillis()
             val persistedId =
                 if (credentials.id.value.isEmpty()) {
-                    val entity =
-                        SensitiveEntityFieldEncryptors.encrypt(
-                            ApiCredentialsEntity(
-                                id = ApiCredentialsId(UUID.randomUUID().toString()),
-                                displayName = credentials.displayName,
-                                provider = credentials.provider,
-                                baseUrl = storedBaseUrl,
-                                credentialAlias = credentials.credentialAlias,
-                                encryptedApiKey = encryptedKeyPayload,
-                                apiKeySignature = apiKeySignature,
-                                createdAt = now,
-                                updatedAt = now,
-                                pendingSync = 1,
-                            ),
-                            healer,
-                        )
-                    apiCredentialsDao.insert(entity)
-                    entity.id
+                    ApiCredentialsId(UUID.randomUUID().toString())
                 } else {
-                    val entity =
-                        SensitiveEntityFieldEncryptors.encrypt(
-                            ApiCredentialsEntity(
-                                id = credentials.id,
-                                displayName = credentials.displayName,
-                                provider = credentials.provider,
-                                baseUrl = storedBaseUrl,
-                                credentialAlias = credentials.credentialAlias,
-                                encryptedApiKey = encryptedKeyPayload,
-                                apiKeySignature = apiKeySignature,
-                                createdAt = existingEntity?.createdAt ?: now,
-                                updatedAt = now,
-                                pendingSync = 1,
-                            ),
-                            healer,
-                        )
-                    apiCredentialsDao.update(entity)
                     credentials.id
                 }
+            val credentialAlias = credentials.credentialAlias.trim().ifBlank { "api-${persistedId.value}" }
+            if (credentials.id.value.isEmpty()) {
+                val entity =
+                    SensitiveEntityFieldEncryptors.encrypt(
+                        ApiCredentialsEntity(
+                            id = persistedId,
+                            displayName = credentials.displayName,
+                            provider = credentials.provider,
+                            baseUrl = storedBaseUrl,
+                            credentialAlias = credentialAlias,
+                            encryptedApiKey = encryptedKeyPayload,
+                            apiKeySignature = apiKeySignature,
+                            createdAt = now,
+                            updatedAt = now,
+                            pendingSync = 1,
+                        ),
+                        healer,
+                    )
+                apiCredentialsDao.insert(entity)
+            } else {
+                val entity =
+                    SensitiveEntityFieldEncryptors.encrypt(
+                        ApiCredentialsEntity(
+                            id = credentials.id,
+                            displayName = credentials.displayName,
+                            provider = credentials.provider,
+                            baseUrl = storedBaseUrl,
+                            credentialAlias = credentialAlias,
+                            encryptedApiKey = encryptedKeyPayload,
+                            apiKeySignature = apiKeySignature,
+                            createdAt = existingEntity?.createdAt ?: now,
+                            updatedAt = now,
+                            pendingSync = 1,
+                        ),
+                        healer,
+                    )
+                apiCredentialsDao.update(entity)
+            }
             val persistedCredentials =
                 requireNotNull(apiCredentialsDao.getById(persistedId)) {
                     "Failed to resolve persisted API credentials for id $persistedId"
@@ -160,10 +164,10 @@ class ApiModelRepositoryImpl
 
             when {
                 apiKey.isNotBlank() -> {
-                    apiKeyManager.save(credentials.credentialAlias, apiKey)
+                    apiKeyManager.save(credentialAlias, apiKey)
                 }
                 sourceApiKey != null -> {
-                    apiKeyManager.save(credentials.credentialAlias, sourceApiKey)
+                    apiKeyManager.save(credentialAlias, sourceApiKey)
                 }
             }
 

@@ -27,6 +27,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -92,6 +94,12 @@ class ChatInferenceService : Service() {
     lateinit var loggingPort: LoggingPort
 
     @Inject
+    lateinit var searchIntentClassifier: SearchIntentClassifierPort
+
+    @Inject
+    lateinit var toolExecutor: ToolExecutorPort
+
+    @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
 
     @Inject
@@ -139,6 +147,8 @@ class ChatInferenceService : Service() {
                 mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase,
                 loggingPort,
+                searchIntentClassifier = searchIntentClassifier,
+                toolExecutor = toolExecutor,
             )
     }
 
@@ -313,6 +323,19 @@ class ChatInferenceService : Service() {
                 assistantMessageId = assistantMessageId,
                 modelType = modelType,
             )
+
+        if (preparedRequest.preRetrievalSources.isNotEmpty()) {
+            publishState(
+                chatId = chatId,
+                assistantMessageId = assistantMessageId,
+                state = MessageGenerationState.WebSearchSourcesAttached(
+                    preparedRequest.preRetrievalSources,
+                    modelType
+                ),
+                persistenceSession = persistenceSession,
+            )
+        }
+
         loggingPort.debug(
             TAG,
             "request prepared chat=${chatId.value} " +

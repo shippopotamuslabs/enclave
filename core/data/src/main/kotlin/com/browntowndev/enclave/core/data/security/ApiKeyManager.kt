@@ -61,23 +61,27 @@ class ApiKeyManager
             credentialAlias: String,
             apiKey: String,
         ) {
+            val normalizedAlias = normalizedAlias(credentialAlias) ?: return
             val normalizedKey = apiKey.trim()
             if (normalizedKey.isEmpty()) {
-                delete(credentialAlias)
+                delete(normalizedAlias)
                 return
             }
-            prefs.edit().putString(credentialAlias, normalizedKey).commit()
-            markPendingSync(credentialAlias)
+            prefs.edit().putString(normalizedAlias, normalizedKey).commit()
+            markPendingSync(normalizedAlias)
         }
 
-        fun get(credentialAlias: String): String? = prefs.getString(credentialAlias, null)
+        fun get(credentialAlias: String): String? = normalizedAlias(credentialAlias)?.let { prefs.getString(it, null) }
 
         fun has(credentialAlias: String): Boolean = !get(credentialAlias).isNullOrBlank()
 
         fun delete(credentialAlias: String) {
-            prefs.edit().remove(credentialAlias).commit()
-            markPendingDelete(credentialAlias)
+            val normalizedAlias = normalizedAlias(credentialAlias) ?: return
+            prefs.edit().remove(normalizedAlias).commit()
+            markPendingDelete(normalizedAlias)
         }
+
+        private fun normalizedAlias(alias: String): String? = alias.trim().takeIf { it.isNotEmpty() }
 
         private fun markPendingSync(alias: String) {
             syncScope.launch {
@@ -163,10 +167,12 @@ class ApiKeyManager
             credentialAlias: String,
             apiKey: String,
         ) {
-            prefs.edit().putString(credentialAlias, apiKey).commit()
+            val normalizedAlias = normalizedAlias(credentialAlias) ?: return
+            prefs.edit().putString(normalizedAlias, apiKey.trim()).commit()
         }
 
         internal fun deleteFromRemote(credentialAlias: String) {
-            prefs.edit().remove(credentialAlias).commit()
+            val normalizedAlias = normalizedAlias(credentialAlias) ?: return
+            prefs.edit().remove(normalizedAlias).commit()
         }
     }

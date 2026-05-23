@@ -74,6 +74,29 @@ class MediaProviderRepositoryImplTest {
         }
 
     @Test
+    fun `saveMediaProvider generates credential alias when draft alias is blank`() =
+        runTest {
+            val asset =
+                MediaProviderAsset(
+                    MediaProviderId("42"),
+                    "Imagen",
+                    ApiProvider.GOOGLE,
+                    MediaCapability.IMAGE,
+                    "imagen-3",
+                    null,
+                    "",
+                )
+            coEvery { mediaProviderDao.upsert(any()) } returns Unit
+
+            repository.saveMediaProvider(asset, "api-key")
+
+            coVerify {
+                mediaProviderDao.upsert(match { it.credentialAlias == "media-42" })
+            }
+            verify { apiKeyManager.save("media-42", "api-key") }
+        }
+
+    @Test
     fun `saveMediaProvider stores sensitive fields encrypted and reads them decrypted`() =
         runTest {
             val encryptedRepository =

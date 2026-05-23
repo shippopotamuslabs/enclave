@@ -13,6 +13,8 @@ import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -608,5 +610,53 @@ class ChatInferenceRequestPreparerTest {
                 )
 
             assertEquals(0, request.options.reasoningBudget)
+        }
+
+    @Test
+    fun `when search classifier returns true then pre-retrieval search is executed and injected`() =
+        runTest {
+            val mockClassifier = mockk<SearchIntentClassifierPort>()
+            val mockExecutor = mockk<ToolExecutorPort>()
+
+            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
+            every { mockClassifier.requiresSearch(any(), any()) } returns true
+            coEvery { mockExecutor.execute(any()) } returns com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
+                toolName = ToolDefinition.WEB_SEARCH.name,
+                resultJson = """{"results":[{"title":"Search Title","content":"Search result content"}]}"""
+            )
+
+            val preparer =
+                ChatInferenceRequestPreparer(
+                    activeModelProvider =
+                        mockActiveModelProvider(
+                            fastConfig = fastTextConfig(),
+                            visionConfig = null,
+                        ),
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = mockMemoriesRepository(),
+                    embeddingEnginePort = mockEmbeddingEngine(),
+                    promptComposer = SearchToolPromptComposer(),
+                    defaultModelRepository = mockk(relaxed = true),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    mediaToolDefinitionFactory = mockk(relaxed = true),
+                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
+                    loggingPort = mockk(relaxed = true),
+                    searchIntentClassifier = mockClassifier,
+                    toolExecutor = mockExecutor,
+                )
+
+            val request =
+                preparer(
+                    prompt = "Tell me the news",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            val systemPrompt = request.options.systemPrompt
+            assertTrue(systemPrompt != null && systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
+            assertTrue(systemPrompt != null && systemPrompt.contains("Search result content"))
         }
 }

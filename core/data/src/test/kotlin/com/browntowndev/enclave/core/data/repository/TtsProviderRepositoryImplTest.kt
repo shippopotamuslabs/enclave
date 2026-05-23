@@ -82,6 +82,20 @@ class TtsProviderRepositoryImplTest {
         }
 
     @Test
+    fun `saveTtsProvider generates credential alias when draft alias is blank`() =
+        runTest {
+            val asset = TtsProviderAsset(TtsProviderId("42"), "xAI TTS", ApiProvider.XAI, "eve", null, null, "")
+            coEvery { ttsProviderDao.upsertTtsProvider(any()) } returns Unit
+
+            repository.saveTtsProvider(asset, "sk-test")
+
+            coVerify {
+                ttsProviderDao.upsertTtsProvider(match { it.credentialAlias == "tts-42" })
+            }
+            verify { apiKeyManager.save("tts-42", "sk-test") }
+        }
+
+    @Test
     fun `saveTtsProvider stores sensitive fields encrypted and reads them decrypted`() =
         runTest {
             val encryptedRepository =
