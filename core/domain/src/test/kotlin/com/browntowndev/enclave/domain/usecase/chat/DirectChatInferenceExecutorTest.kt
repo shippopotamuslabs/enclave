@@ -13,6 +13,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
@@ -96,6 +98,7 @@ class DirectChatInferenceExecutorTest {
                         any(),
                         any(),
                         any(),
+                        any(),
                     )
                 } returns ""
             }
@@ -123,6 +126,8 @@ class DirectChatInferenceExecutorTest {
                 mediaToolDefinitionFactory = mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
                 loggingPort = loggingPort,
+                searchIntentClassifier = mockk(relaxed = true),
+                toolExecutor = mockk(relaxed = true),
             )
     }
 
@@ -145,7 +150,58 @@ class DirectChatInferenceExecutorTest {
             mediaToolDefinitionFactory = mediaToolDefinitionFactory,
             getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             loggingPort = loggingPort,
+            searchIntentClassifier = mockk(relaxed = true),
+            toolExecutor = mockk(relaxed = true),
         )
+
+    @Test
+    fun `execute delegates search intent classification to injected classifier when search enabled`() =
+        runTest {
+            val mockClassifier = mockk<SearchIntentClassifierPort>()
+            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
+            every { mockClassifier.requiresSearch(any(), any()) } returns false
+
+            val factory = FakeInferenceFactory()
+            factory.serviceMap[ModelType.FAST] =
+                FakeInferenceService(ModelType.FAST).apply {
+                    setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
+                }
+
+            val executor =
+                DirectChatInferenceExecutor(
+                    inferenceFactory = factory,
+                    activeModelProvider = activeModelProvider,
+                    messageRepository = messageRepository,
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    memoriesRepository = memoriesRepository,
+                    embeddingEnginePort =
+                        mockk {
+                            coEvery { getEmbedding(any()) } returns FloatArray(384) { 0.1f }
+                        },
+                    promptComposer = promptComposer,
+                    defaultModelRepository = defaultModelRepository,
+                    mediaProviderRepository = mediaProviderRepository,
+                    mediaToolDefinitionFactory = mediaToolDefinitionFactory,
+                    getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+                    loggingPort = loggingPort,
+                    searchIntentClassifier = mockClassifier,
+                    toolExecutor = mockk(relaxed = true),
+                )
+
+            executor
+                .execute(
+                    prompt = "What are future proof sectors for software engineers?",
+                    userMessageId = MessageId("u1"),
+                    assistantMessageId = MessageId("a1"),
+                    chatId = ChatId("c1"),
+                    userHasImage = false,
+                    modelType = ModelType.FAST,
+                    backgroundInferenceEnabled = false,
+                ).toList()
+
+            verify { mockClassifier.getSearchIntentProbability(any()) }
+            verify { mockClassifier.requiresSearch(any(), any()) }
+        }
 
     @Test
     fun `execute emits EngineLoading for InferenceEvent EngineLoading`() =

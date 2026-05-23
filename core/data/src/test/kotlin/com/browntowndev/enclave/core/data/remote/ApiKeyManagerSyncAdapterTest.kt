@@ -111,6 +111,20 @@ class ApiKeyManagerSyncAdapterTest {
         }
 
     @Test
+    fun `syncPendingChanges clears blank claimed aliases without Firestore write`() =
+        runTest {
+            coEvery { apiKeyManager.getClaimedSyncAliases() } returns setOf("")
+            coEvery { apiKeyManager.getClaimedDeleteAliases() } returns setOf(" ")
+
+            val result = dataSource.syncPendingChanges()
+
+            assertTrue(result.isSuccess)
+            verify(exactly = 0) { firestore.runBatch(any()) }
+            coVerify { apiKeyManager.clearClaimedSync(listOf("")) }
+            coVerify { apiKeyManager.clearClaimedDelete(listOf(" ")) }
+        }
+
+    @Test
     fun `sync aborts when vault is locked`() =
         runTest {
             every { cryptoManager.hasCachedKey() } returns false

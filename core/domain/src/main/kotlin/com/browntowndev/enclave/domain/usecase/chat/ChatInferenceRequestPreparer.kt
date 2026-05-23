@@ -2,6 +2,8 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.WebSearchSource
+import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -19,6 +21,15 @@ import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.flow.first
+import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -35,6 +46,8 @@ class ChatInferenceRequestPreparer(
     private val mediaToolDefinitionFactory: MediaToolDefinitionFactory,
     private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
     private val loggingPort: LoggingPort,
+    private val searchIntentClassifier: SearchIntentClassifierPort = DummySearchIntentClassifier,
+    private val toolExecutor: ToolExecutorPort = DummyToolExecutor,
 ) {
     private val dateTimeFormatter =
         DateTimeFormatter
@@ -69,9 +82,9 @@ class ChatInferenceRequestPreparer(
         val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
 
         val coreMemories = memoriesRepository.getCoreMemories()
+        val embedding = if (prompt.isNotBlank()) embeddingEnginePort.getEmbedding(prompt) else null
         val retrievedMemories =
-            if (prompt.isNotBlank()) {
-                val embedding = embeddingEnginePort.getEmbedding(prompt)
+            if (embedding != null) {
                 memoriesRepository.searchMemories(
                     queryVector = embedding,
                     limit = MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
@@ -80,6 +93,50 @@ class ChatInferenceRequestPreparer(
                 )
             } else {
                 emptyList()
+            }
+
+        var preRetrievalSources = emptyList<WebSearchSource>()
+
+        val retrievedSearchResults =
+            if (embedding != null && searchEnabled) {
+                val probability = searchIntentClassifier.getSearchIntentProbability(embedding)
+                val needsSearch = searchIntentClassifier.requiresSearch(embedding, threshold = 0.5f)
+                loggingPort.info(
+                    TAG,
+                    "Search intent classification decision: requiresSearch=$needsSearch (probability=$probability) for prompt: \"$prompt\""
+                )
+                if (needsSearch) {
+                    loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
+                    try {
+                        val argumentsJson = Json.encodeToString(buildJsonObject {
+                            put("query", prompt)
+                        })
+                        val searchRequest = ToolCallRequest(
+                            toolName = ToolDefinition.WEB_SEARCH.name,
+                            argumentsJson = argumentsJson,
+                            provider = config?.apiProvider?.name ?: "local",
+                            modelType = modelType,
+                            chatId = chatId,
+                            userMessageId = userMessageId,
+                            assistantMessageId = assistantMessageId,
+                        )
+                        val searchResult = toolExecutor.execute(searchRequest)
+                        preRetrievalSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
+                        loggingPort.info(TAG, "Retrieved ${preRetrievalSources.size} results from search tool for query: \"$prompt\"")
+                        searchResult.resultJson
+                    } catch (e: Exception) {
+                        loggingPort.error(TAG, "Pre-retrieval search execution failed: ${e.message}", e)
+                        null
+                    }
+                } else {
+                    null
+                }
+            } else {
+                loggingPort.info(
+                    TAG,
+                    "Skipping search intent classification: embeddingIsNull=${embedding == null}, searchEnabled=$searchEnabled"
+                )
+                null
             }
 
         loggingPort.debug(
@@ -157,6 +214,7 @@ class ChatInferenceRequestPreparer(
                     strategy = strategy,
                     coreMemories = coreMemories,
                     retrievedMemories = retrievedMemories,
+                    retrievedSearchResults = retrievedSearchResults,
                 )
             } else {
                 config?.systemPrompt
@@ -195,6 +253,7 @@ class ChatInferenceRequestPreparer(
                     imageHandling = imageHandling,
                     fileAttachments = userMessage?.content?.fileAttachments ?: emptyList(),
                 ),
+            preRetrievalSources = preRetrievalSources,
             options =
                 GenerationOptions(
                     reasoningBudget = reasoningBudget,
@@ -260,6 +319,7 @@ class ChatInferenceRequestPreparer(
 data class PreparedChatInferenceRequest(
     val prompt: String,
     val options: GenerationOptions,
+    val preRetrievalSources: List<WebSearchSource> = emptyList(),
 )
 
 internal enum class ChatImageHandling {
@@ -317,5 +377,16 @@ internal fun prepareChatPrompt(
         User request:
         ${prompt.trim()}
         """.trimIndent()
+    }
+}
+
+private object DummySearchIntentClassifier : SearchIntentClassifierPort {
+    override fun requiresSearch(embedding: FloatArray, threshold: Float): Boolean = false
+    override fun getSearchIntentProbability(embedding: FloatArray): Float = 0.0f
+}
+
+private object DummyToolExecutor : ToolExecutorPort {
+    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        return ToolExecutionResult(request.toolName, "{}")
     }
 }

@@ -14,6 +14,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -47,6 +49,8 @@ class DirectChatInferenceExecutor
         private val mediaToolDefinitionFactory: com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory,
         private val getProviderCapabilitiesUseCase: com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase,
         private val loggingPort: LoggingPort,
+        private val searchIntentClassifier: SearchIntentClassifierPort,
+        private val toolExecutor: ToolExecutorPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
             ChatHistoryRehydrator(
@@ -66,6 +70,8 @@ class DirectChatInferenceExecutor
                 mediaToolDefinitionFactory = mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
                 loggingPort = loggingPort,
+                searchIntentClassifier = searchIntentClassifier,
+                toolExecutor = toolExecutor,
             )
 
         override fun execute(
@@ -131,6 +137,15 @@ class DirectChatInferenceExecutor
                         assistantMessageId = assistantMessageId,
                         modelType = modelType,
                     )
+
+                if (preparedRequest.preRetrievalSources.isNotEmpty()) {
+                    emit(
+                        MessageGenerationState.WebSearchSourcesAttached(
+                            preparedRequest.preRetrievalSources,
+                            modelType
+                        )
+                    )
+                }
 
                 try {
                     historyRehydrator(

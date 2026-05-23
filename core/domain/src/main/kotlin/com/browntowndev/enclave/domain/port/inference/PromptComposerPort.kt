@@ -21,5 +21,6 @@ interface PromptComposerPort {
         strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         coreMemories: List<Memory> = emptyList(),
         retrievedMemories: List<Memory> = emptyList(),
+        retrievedSearchResults: String? = null,
     ): String
 }

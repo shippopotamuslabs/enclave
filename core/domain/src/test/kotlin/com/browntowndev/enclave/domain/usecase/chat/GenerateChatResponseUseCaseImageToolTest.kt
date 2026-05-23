@@ -436,6 +436,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 strategy: ToolCallStrategy,
                 coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
+                retrievedSearchResults: String?,
             ): String = baseSystemPrompt ?: ""
         }
 
@@ -470,6 +471,8 @@ class GenerateChatResponseUseCaseImageToolTest {
                     com.browntowndev.enclave.domain.usecase.media
                         .GetProviderCapabilitiesUseCase(),
                 loggingPort = mockk<LoggingPort>(relaxed = true),
+                searchIntentClassifier = mockk(relaxed = true),
+                toolExecutor = mockk(relaxed = true),
             )
         return GenerateChatResponseUseCase(
             pipelineExecutor = pipelineExecutor,

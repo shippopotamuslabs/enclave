@@ -43,6 +43,7 @@ third_party/*
 !third_party/whisper.cpp/
 !third_party/docgen_core/
 !third_party/agent_core/
+!third_party/classifier_core/
 
 bin/
 
@@ -56,6 +57,10 @@ modularization-plan.md
 
 golden-test-examples/
 *.so
+!core/agent/src/main/jniLibs/**/*.so
+
+# Python virtual environment for classifier training
+scripts/.venv_classifier/
 
 PHASE_10_HANDOFF.md
 

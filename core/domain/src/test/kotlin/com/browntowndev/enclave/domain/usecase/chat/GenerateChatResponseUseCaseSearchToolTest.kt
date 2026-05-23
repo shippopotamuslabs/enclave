@@ -54,6 +54,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 strategy: ToolCallStrategy,
                 coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
+                retrievedSearchResults: String?,
             ): String = baseSystemPrompt ?: ""
         }
 
@@ -85,6 +86,8 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 com.browntowndev.enclave.domain.usecase.media
                     .GetProviderCapabilitiesUseCase(),
             loggingPort = mockk(relaxed = true),
+            searchIntentClassifier = mockk(relaxed = true),
+            toolExecutor = mockk(relaxed = true),
         )
 
     @Test

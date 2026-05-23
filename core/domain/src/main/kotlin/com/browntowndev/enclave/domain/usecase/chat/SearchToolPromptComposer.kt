@@ -23,11 +23,13 @@ class SearchToolPromptComposer
             strategy: ToolCallStrategy,
             coreMemories: List<Memory>,
             retrievedMemories: List<Memory>,
+            retrievedSearchResults: String?,
         ): String =
             listOfNotNull(
                 formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
+                formatRetrievedSearchResults(retrievedSearchResults).takeIf(String::isNotEmpty),
                 localToolContract(
                     includeSearchTool = includeSearchTool,
                     includeXSearchTool = includeXSearchTool,
@@ -71,6 +73,15 @@ class SearchToolPromptComposer
                     append("The following information was retrieved from your long-term memory as relevant to the current conversation:\n")
                     memories.forEach { append("- ${it.content}\n") }
                 }.trim()
+            }
+
+            private fun formatRetrievedSearchResults(results: String?): String {
+                if (results.isNullOrBlank()) return ""
+                return """
+# RELEVANT WEB SEARCH RESULTS:
+The following search results were automatically retrieved based on the user's query:
+$results
+                """.trimIndent()
             }
 
             private fun searchToolContract(strategy: ToolCallStrategy): String {
