@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.studio
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -73,9 +72,6 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.feature.studio.components.PromptHeaderDivider
-import kotlin.random.Random
-import kotlin.random.nextInt
-
 internal const val GRID_COLUMNS = 2
 private const val GENERATING_SHIMMER_DURATION_MS = 1_400
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -623,7 +619,6 @@ private fun GalleryItem(
 private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
     val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
-    val phaseOffsetMs = remember { Random.nextInt(0..GENERATING_SHIMMER_DURATION_MS) }
 
     val transition = rememberInfiniteTransition(label = "studio_generating_shimmer")
     val shimmerProgress =
@@ -634,7 +629,6 @@ private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
                 infiniteRepeatable(
                     animation = tween(durationMillis = GENERATING_SHIMMER_DURATION_MS, easing = LinearEasing),
                     repeatMode = RepeatMode.Restart,
-                    initialStartOffset = StartOffset(phaseOffsetMs),
                 ),
             label = "studio_generating_shimmer_progress",
         )
@@ -649,16 +643,7 @@ private fun GeneratingPlaceholderItem(modifier: Modifier = Modifier) {
                     baseColor = baseColor,
                     highlightColor = highlightColor,
                 ),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .height(EnclaveNeoTokens.cornerRadius)
-                    .background(MaterialTheme.colorScheme.primary),
-        )
-    }
+    )
 }
 
 @Suppress("UnusedPrivateMember")
