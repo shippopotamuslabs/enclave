@@ -34,6 +34,7 @@ private val DarkColorScheme =
         surfaceVariant = DarkSurfaceVariant,
         onSurfaceVariant = DarkOnSurfaceVariant,
         outline = DarkOutline,
+        outlineVariant = DarkNeoBorder,
         error = ErrorRed,
         onError = OnErrorWhite,
     )
@@ -48,6 +49,8 @@ private val LightColorScheme =
         onPrimary = Color.White,
         onBackground = LightOnBackground,
         onSurface = LightOnBackground,
+        outline = LightOutline,
+        outlineVariant = LightNeoBorder,
         error = ErrorRed,
         onError = OnErrorWhite,
     )

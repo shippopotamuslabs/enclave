@@ -1,22 +1,17 @@
 package com.browntowndev.enclave.feature.settings
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
@@ -31,28 +26,33 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
+import com.browntowndev.enclave.core.ui.component.neo.NeoScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
+import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.component.vault.VaultReauthBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultUserUiState
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -150,20 +150,7 @@ fun SettingsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onCloseClick) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
-                    }
-                },
-            )
+            NeoScreenHeader(title = "Settings", onCloseClick = onCloseClick)
         },
     ) { innerPadding ->
         LazyColumn(
@@ -171,8 +158,8 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             item {
                 AccountSection(
@@ -185,7 +172,7 @@ fun SettingsScreen(
             }
 
             item {
-                SectionHeader(text = "Appearance")
+                NeoSectionHeader(text = "Appearance")
                 ThemeSelection(
                     selectedTheme = uiState.home.theme,
                     onThemeChange = onThemeChange,
@@ -193,124 +180,123 @@ fun SettingsScreen(
             }
 
             item {
-                SectionHeader(text = "Experience")
-                SettingsToggle(
-                    title = "Haptic Response",
-                    icon = Icons.Default.Vibration,
-                    checked = uiState.home.hapticResponse,
-                    onCheckedChange = onHapticResponseChange,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsToggle(
-                    title = "Background Inference",
-                    subtitle = "Allow chat generation to continue when the app is in the background",
-                    icon = Icons.Default.Cloud,
-                    checked = uiState.home.backgroundInferenceEnabled,
-                    onCheckedChange = onBackgroundInferenceChange,
-                )
+                NeoSectionHeader(text = "Experience")
+                NeoSettingsSection {
+                    NeoToggleRow(
+                        title = "Haptic Response",
+                        icon = Icons.Default.Vibration,
+                        checked = uiState.home.hapticResponse,
+                        onCheckedChange = onHapticResponseChange,
+                    )
+                    NeoToggleRow(
+                        title = "Background Inference",
+                        subtitle = "Allow chat generation to continue when the app is in the background",
+                        icon = Icons.Default.Cloud,
+                        checked = uiState.home.backgroundInferenceEnabled,
+                        onCheckedChange = onBackgroundInferenceChange,
+                    )
+                }
             }
 
             item {
-                SectionHeader(text = "Models")
-                SettingsNavigationItem(
-                    title = "Model Role Assignments",
-                    subtitle = "Set models for chat, media, and tts",
-                    icon = Icons.AutoMirrored.Filled.Rule,
-                    onClick = { onNavigateToModelConfigure(ModelType.MAIN) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Local Models",
-                    subtitle = "Manage on-device models",
-                    icon = Icons.Default.Memory,
-                    onClick = { onShowLocalModelsSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "API Models",
-                    subtitle = "Manage API keys and presets",
-                    icon = Icons.Default.Cloud,
-                    onClick = { onShowByokSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Text to Speech Models",
-                    subtitle = "Manage TTS voices and API keys",
-                    icon = Icons.Default.Vibration, // Using Vibration for audio/haptic feel
-                    onClick = { onShowTtsProvidersSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Media Generation Models",
-                    subtitle = "Manage Image and Video generation APIs",
-                    icon = Icons.Default.Palette,
-                    onClick = { onShowMediaProvidersSheet(true) },
-                )
+                NeoSectionHeader(text = "Models")
+                NeoSettingsSection {
+                    NeoNavRow(
+                        title = "Model Role Assignments",
+                        subtitle = "Set models for chat, media, and tts",
+                        icon = Icons.AutoMirrored.Filled.Rule,
+                        onClick = { onNavigateToModelConfigure(ModelType.MAIN) },
+                    )
+                    NeoNavRow(
+                        title = "Local Models",
+                        subtitle = "Manage on-device models",
+                        icon = Icons.Default.Memory,
+                        onClick = { onShowLocalModelsSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "API Models",
+                        subtitle = "Manage API keys and presets",
+                        icon = Icons.Default.Cloud,
+                        onClick = { onShowByokSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Text to Speech Models",
+                        subtitle = "Manage TTS voices and API keys",
+                        icon = Icons.Default.Vibration,
+                        onClick = { onShowTtsProvidersSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Media Generation Models",
+                        subtitle = "Manage Image and Video generation APIs",
+                        icon = Icons.Default.Palette,
+                        onClick = { onShowMediaProvidersSheet(true) },
+                    )
+                }
             }
 
             item {
-                SectionHeader(text = "Tools")
-                SettingsNavigationItem(
-                    title = "Search Skills",
-                    subtitle =
-                        buildString {
-                            val webEnabled = uiState.searchSkillEditor.enabled
-                            val xEnabled = uiState.xSearchEditor.enabled
-                            when {
-                                webEnabled && xEnabled -> append("Web & X Enabled")
-                                webEnabled -> append("Web Enabled")
-                                xEnabled -> append("X Enabled")
-                                else -> append("Disabled")
-                            }
-                        },
-                    icon = Icons.Default.Public,
-                    onClick = {
-                        onShowSearchSkillSheet(true)
-                    },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Vision",
-                    subtitle = ModelType.VISION.description,
-                    icon = Icons.Default.Visibility,
-                    onClick = { onShowVisionSettingsSheet(true) },
-                )
+                NeoSectionHeader(text = "Tools")
+                NeoSettingsSection {
+                    NeoNavRow(
+                        title = "Search Skills",
+                        subtitle =
+                            buildString {
+                                val webEnabled = uiState.searchSkillEditor.enabled
+                                val xEnabled = uiState.xSearchEditor.enabled
+                                when {
+                                    webEnabled && xEnabled -> append("Web & X Enabled")
+                                    webEnabled -> append("Web Enabled")
+                                    xEnabled -> append("X Enabled")
+                                    else -> append("Disabled")
+                                }
+                            },
+                        icon = Icons.Default.Public,
+                        onClick = { onShowSearchSkillSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Vision",
+                        subtitle = ModelType.VISION.description,
+                        icon = Icons.Default.Visibility,
+                        onClick = { onShowVisionSettingsSheet(true) },
+                    )
+                }
             }
 
             item {
-                SectionHeader(text = "Data & Privacy")
-                SettingsNavigationItem(
-                    title = "Memories",
-                    icon = Icons.Default.SmartToy,
-                    onClick = { onShowMemoriesSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Data Controls",
-                    icon = Icons.Default.Shield,
-                    onClick = { onShowDataControlsSheet(true) },
-                )
+                NeoSectionHeader(text = "Data & Privacy")
+                NeoSettingsSection {
+                    NeoNavRow(
+                        title = "Memories",
+                        icon = Icons.Default.SmartToy,
+                        onClick = { onShowMemoriesSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Data Controls",
+                        icon = Icons.Default.Shield,
+                        onClick = { onShowDataControlsSheet(true) },
+                    )
+                }
             }
 
             item {
-                SectionHeader(text = "About")
-                SettingsNavigationItem(
-                    title = "Terms of Service",
-                    icon = Icons.Default.Info,
-                    onClick = { onShowTosSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Feedback",
-                    icon = Icons.Default.Feedback,
-                    onClick = { onShowFeedbackSheet(true) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                SettingsNavigationItem(
-                    title = "Open Source Licenses",
-                    icon = Icons.Default.Info,
-                    onClick = { onShowOssLicensesSheet(true) },
-                )
+                NeoSectionHeader(text = "About")
+                NeoSettingsSection {
+                    NeoNavRow(
+                        title = "Terms of Service",
+                        icon = Icons.Default.Info,
+                        onClick = { onShowTosSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Feedback",
+                        icon = Icons.Default.Feedback,
+                        onClick = { onShowFeedbackSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Open Source Licenses",
+                        icon = Icons.Default.Info,
+                        onClick = { onShowOssLicensesSheet(true) },
+                    )
+                }
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -488,15 +474,10 @@ private fun AuthStateUi.toVaultAuthUiState(): VaultAuthUiState =
         is AuthStateUi.Error -> VaultAuthUiState.Error(message)
     }
 
+/** @deprecated Prefer [NeoSectionHeader]; kept for other settings flows still on legacy section headers. */
 @Composable
 fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
-    )
+    NeoSectionHeader(text = text)
 }
 
 @Composable
@@ -507,68 +488,55 @@ fun AccountSection(
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
-    SectionHeader(text = "Account")
+    NeoSectionHeader(text = "Account")
     when (authState) {
         is AuthStateUi.Authenticated -> {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            ) {
-                ListItem(
-                    leadingContent = {
-                        if (authState.user.photoUrl != null) {
-                            AsyncImage(
-                                model = authState.user.photoUrl,
-                                contentDescription = "Profile picture",
-                                modifier =
-                                    Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(20.dp)),
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    headlineContent = {
+            NeoPanel {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (authState.user.photoUrl != null) {
+                        AsyncImage(
+                            model = authState.user.photoUrl,
+                            contentDescription = "Profile picture",
+                            modifier =
+                                Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(20.dp)),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = authState.user.displayName ?: "User",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
                         )
-                    },
-                    supportingContent =
                         authState.user.email?.let { email ->
-                            {
-                                Text(
-                                    text = email,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                    trailingContent = {
-                        IconButton(onClick = onLogoutClick) {
-                            Icon(
-                                imageVector = Icons.Default.Logout,
-                                contentDescription = "Logout",
-                                tint = MaterialTheme.colorScheme.error,
+                            Text(
+                                text = email,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    },
-                    colors =
-                        androidx.compose.material3.ListItemDefaults.colors(
-                            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                )
-
+                    }
+                    NeoIconButton(
+                        onClick = onLogoutClick,
+                        icon = Icons.Default.Logout,
+                        contentDescription = "Logout",
+                    )
+                }
                 if (isReindexing) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text(
@@ -577,7 +545,7 @@ fun AccountSection(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
-                        androidx.compose.material3.LinearProgressIndicator(
+                        LinearProgressIndicator(
                             progress = { reindexProgress },
                             modifier = Modifier.fillMaxWidth().height(4.dp),
                             color = MaterialTheme.colorScheme.primary,
@@ -589,45 +557,46 @@ fun AccountSection(
             }
         }
         AuthStateUi.Unauthenticated -> {
-            ListItem(
-                leadingContent = {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                headlineContent = { Text("Login with Google") },
-                supportingContent = { Text("Sync your data across devices") },
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .clickable(onClick = onLoginClick),
+            NeoNavRow(
+                title = "Login with Google",
+                subtitle = "Sync your data across devices",
+                icon = Icons.Default.AccountCircle,
+                onClick = onLoginClick,
             )
         }
         AuthStateUi.Loading -> {
-            ListItem(
-                headlineContent = { Text("Loading account...") },
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            )
+            NeoPanel {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Text(text = "Loading account...")
+                }
+            }
         }
         is AuthStateUi.Error -> {
-            ListItem(
-                headlineContent = { Text("Error: ${authState.message}") },
-                trailingContent = {
-                    IconButton(onClick = onLoginClick) {
-                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Retry Login")
-                    }
-                },
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer),
-            )
+            NeoPanel {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Error: ${authState.message}",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    NeoIconButton(
+                        onClick = onLoginClick,
+                        icon = Icons.Default.AccountCircle,
+                        contentDescription = "Retry Login",
+                    )
+                }
+            }
         }
     }
 }
@@ -682,90 +651,11 @@ fun ThemeOption(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val backgroundColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-
-    Box(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(backgroundColor)
-                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-                .defaultMinSize(minHeight = 48.dp)
-                .clickable(onClick = onClick)
-                .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-fun SettingsToggle(
-    title: String,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    subtitle: String? = null,
-) {
-    ListItem(
-        leadingContent = {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-        headlineContent = { Text(title) },
-        supportingContent = subtitle?.let { text -> { Text(text) } },
-        trailingContent = {
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
-        },
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { onCheckedChange(!checked) },
-    )
-}
-
-@Composable
-fun SettingsNavigationItem(
-    title: String,
-    subtitle: String? = null,
-    icon: ImageVector,
-    onClick: () -> Unit,
-) {
-    SettingsNavigationItem(
-        title = title,
-        subtitle = subtitle,
-        icon = { Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+    NeoThemeChip(
+        text = text,
+        selected = selected,
         onClick = onClick,
-    )
-}
-
-@Composable
-fun SettingsNavigationItem(
-    title: String,
-    subtitle: String? = null,
-    icon: @Composable (() -> Unit),
-    onClick: () -> Unit,
-) {
-    ListItem(
-        leadingContent = {
-            icon()
-        },
-        headlineContent = { Text(title) },
-        supportingContent = subtitle?.let { { Text(it) } },
-        trailingContent = {
-            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-        },
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onClick),
+        modifier = modifier,
     )
 }
 
@@ -774,7 +664,7 @@ fun SettingsNavigationItem(
 @Preview(showBackground = true, name = "Main Settings Screen")
 @Composable
 fun PreviewSettingsScreen() {
-    EnclaveTheme {
+    EnclaveTheme(darkTheme = true) {
         SettingsScreen(
             uiState = MockSettingsData.baseUiState,
             onCloseClick = {},
