@@ -40,7 +40,6 @@ import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
-import com.browntowndev.enclave.core.data.local.EnclaveDatabaseMigrations
 import com.browntowndev.enclave.core.data.local.SQLiteVecInstaller
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
@@ -155,10 +154,6 @@ object DataModule {
                 context,
                 EnclaveDatabase::class.java,
                 "enclave.db",
-            ).addMigrations(
-                EnclaveDatabaseMigrations.MIGRATION_3_4,
-                EnclaveDatabaseMigrations.MIGRATION_4_5,
-                EnclaveDatabaseMigrations.MIGRATION_5_6,
             ).fallbackToDestructiveMigration(dropAllTables = true)
             .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
             .addCallback(

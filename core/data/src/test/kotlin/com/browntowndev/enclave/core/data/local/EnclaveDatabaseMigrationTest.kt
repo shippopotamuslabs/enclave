@@ -80,13 +80,13 @@ class EnclaveDatabaseMigrationTest {
 
     @Test
     @org.junit.jupiter.api.DisplayName("SCN-SCHEMA-001")
-    fun scnSchema001_freshVersion7DatabaseCreatesUtilityModelsTable() {
+    fun scnSchema001_freshVersion1DatabaseCreatesUtilityModelsTable() {
         val db =
             Room
                 .databaseBuilder(
                     ApplicationProvider.getApplicationContext(),
                     EnclaveDatabase::class.java,
-                    "utility_models_schema_v7.db",
+                    "utility_models_schema_v1.db",
                 ).fallbackToDestructiveMigration(dropAllTables = true)
                 .allowMainThreadQueries()
                 .build()
@@ -254,137 +254,6 @@ class EnclaveDatabaseMigrationTest {
             assertEquals("0", extractedColumn["extracted"], "extracted should default to 0 (false)")
         } finally {
             db.close()
-        }
-    }
-
-    @Test
-    fun `migration 3 to 4 creates message_transcript_segment and indexes`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_3_4_verify.db"
-        context.deleteDatabase(dbName)
-
-        val factory = FrameworkSQLiteOpenHelperFactory()
-        val openHelper =
-            factory.create(
-                SupportSQLiteOpenHelper.Configuration
-                    .builder(context)
-                    .name(dbName)
-                    .callback(
-                        object : SupportSQLiteOpenHelper.Callback(3) {
-                            override fun onCreate(db: SupportSQLiteDatabase) {
-                                // Empty schema at version 3 — migration only adds the transcript table.
-                            }
-
-                            override fun onUpgrade(
-                                db: SupportSQLiteDatabase,
-                                oldVersion: Int,
-                                newVersion: Int,
-                            ) {
-                                // Not used; migration invoked explicitly below.
-                            }
-                        },
-                    ).build(),
-            )
-        val db = openHelper.writableDatabase
-        try {
-            EnclaveDatabaseMigrations.MIGRATION_3_4.migrate(db)
-
-            fun hasTable(tableName: String): Boolean {
-                val cursor =
-                    db.query(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                        arrayOf(tableName),
-                    )
-                return cursor.use { it.count == 1 }
-            }
-
-            assertTrue(hasTable("message_transcript_segment"))
-
-            val indexCursor = db.query("PRAGMA index_list('message_transcript_segment')")
-            val indexNames =
-                buildList {
-                    indexCursor.use {
-                        while (it.moveToNext()) {
-                            add(it.getString(it.getColumnIndexOrThrow("name")))
-                        }
-                    }
-                }
-            assertTrue(indexNames.contains("index_message_transcript_segment_message_id"))
-            assertTrue(indexNames.contains("index_message_transcript_segment_message_id_ordinal"))
-        } finally {
-            db.close()
-            openHelper.close()
-            context.deleteDatabase(dbName)
-        }
-    }
-
-    @Test
-    fun `migration 4 to 5 adds sync columns and non unique ordinal index`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val dbName = "migration_4_5_verify.db"
-        context.deleteDatabase(dbName)
-
-        val factory = FrameworkSQLiteOpenHelperFactory()
-        val openHelper =
-            factory.create(
-                SupportSQLiteOpenHelper.Configuration
-                    .builder(context)
-                    .name(dbName)
-                    .callback(
-                        object : SupportSQLiteOpenHelper.Callback(3) {
-                            override fun onCreate(db: SupportSQLiteDatabase) {
-                                // Not used.
-                            }
-
-                            override fun onUpgrade(
-                                db: SupportSQLiteDatabase,
-                                oldVersion: Int,
-                                newVersion: Int,
-                            ) {
-                            }
-                        },
-                    ).build(),
-            )
-        val db = openHelper.writableDatabase
-        try {
-            EnclaveDatabaseMigrations.MIGRATION_3_4.migrate(db)
-            EnclaveDatabaseMigrations.MIGRATION_4_5.migrate(db)
-
-            val columns =
-                buildList {
-                    val cursor = db.query("PRAGMA table_info('message_transcript_segment')")
-                    cursor.use {
-                        while (it.moveToNext()) {
-                            add(it.getString(it.getColumnIndexOrThrow("name")))
-                        }
-                    }
-                }
-            assertTrue(columns.contains("pending_sync"))
-            assertTrue(columns.contains("updated_at"))
-            assertTrue(columns.contains("deleted"))
-
-            val indexCursor = db.query("PRAGMA index_list('message_transcript_segment')")
-            val indexSql =
-                buildList {
-                    indexCursor.use {
-                        while (it.moveToNext()) {
-                            val name = it.getString(it.getColumnIndexOrThrow("name"))
-                            val ic = db.query("SELECT sql FROM sqlite_master WHERE type='index' AND name=?", arrayOf(name))
-                            val sql = ic.use { if (it.moveToFirst()) it.getString(0) else null }
-                            if (sql != null) add(sql)
-                        }
-                    }
-                }
-            val ordinalIdx = indexSql.find { it.contains("message_id") && it.contains("ordinal") }
-            assertTrue(ordinalIdx != null)
-            assertTrue(
-                ordinalIdx!!.contains("CREATE INDEX"),
-                "ordinal index should be non-unique (CREATE INDEX)",
-            )
-        } finally {
-            db.close()
-            openHelper.close()
-            context.deleteDatabase(dbName)
         }
     }
 }

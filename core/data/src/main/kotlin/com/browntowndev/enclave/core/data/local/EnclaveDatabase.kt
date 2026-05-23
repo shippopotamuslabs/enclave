@@ -27,7 +27,7 @@ import androidx.room.TypeConverters
         DocumentEntity::class,
         UtilityModelEntity::class,
     ],
-    version = 7,
+    version = 1,
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class EnclaveDatabase : RoomDatabase() {
