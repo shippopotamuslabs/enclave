@@ -10,9 +10,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,15 +32,11 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,16 +53,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
-import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.core.ui.R as CoreR
 
 private sealed interface HistoryOptionsState {
     data object Hidden : HistoryOptionsState
@@ -119,13 +118,16 @@ fun HistoryScreen(
         )
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            HistoryTopBar(
-                searchQuery = searchQuery,
-                onSearchQueryChange = onSearchQueryChange,
-                onBackClick = onBackClick,
-                onSettingsClick = onSettingsClick,
-            )
+            NeoAppBarChrome {
+                HistoryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onBackClick = onBackClick,
+                    onSettingsClick = onSettingsClick,
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(
@@ -135,15 +137,29 @@ fun HistoryScreen(
                     .padding(innerPadding),
         ) {
             item {
-                NavigationButtonGroup(
-                    onNewChatClick = onNewChatClick,
-                    onStudioClick = onStudioClick,
-                    onGalleryClick = onGalleryClick,
+                NeoSettingsSection(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                )
+                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                            .padding(top = 8.dp, bottom = EnclaveNeoTokens.sectionSpacing),
+                ) {
+                    NeoNavRow(
+                        title = "New Chat",
+                        icon = Icons.Default.Edit,
+                        onClick = onNewChatClick,
+                    )
+                    NeoNavRow(
+                        title = "Studio",
+                        icon = Icons.Default.AutoAwesome,
+                        onClick = onStudioClick,
+                    )
+                    NeoNavRow(
+                        title = "Gallery",
+                        icon = Icons.Default.PhotoLibrary,
+                        onClick = onGalleryClick,
+                    )
+                }
             }
 
             if (uiState.isLoading) {
@@ -152,12 +168,16 @@ fun HistoryScreen(
                         progressState = shimmerProgress,
                         baseColor = shimmerBaseColor,
                         highlightColor = shimmerHighlightColor,
+                        modifier = historyListItemModifier(),
                     )
                 }
             } else {
                 if (uiState.pinnedChats.isNotEmpty()) {
                     item {
-                        SectionHeader(text = "Pinned")
+                        NeoSectionHeader(
+                            text = "Pinned",
+                            modifier = Modifier.padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
+                        )
                     }
                     items(
                         items = uiState.pinnedChats,
@@ -168,6 +188,7 @@ fun HistoryScreen(
                                 progressState = shimmerProgress,
                                 baseColor = shimmerBaseColor,
                                 highlightColor = shimmerHighlightColor,
+                                modifier = historyListItemModifier(),
                             )
                         } else {
                             HistoryChatItem(
@@ -176,6 +197,7 @@ fun HistoryScreen(
                                 onShowOptions = {
                                     optionsState = HistoryOptionsState.Sheet(chat)
                                 },
+                                modifier = historyListItemModifier(),
                             )
                         }
                     }
@@ -183,7 +205,10 @@ fun HistoryScreen(
 
                 if (uiState.otherChats.isNotEmpty()) {
                     item {
-                        SectionHeader(text = "Recent")
+                        NeoSectionHeader(
+                            text = "Recent",
+                            modifier = Modifier.padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
+                        )
                     }
                     items(
                         items = uiState.otherChats,
@@ -194,6 +219,7 @@ fun HistoryScreen(
                                 progressState = shimmerProgress,
                                 baseColor = shimmerBaseColor,
                                 highlightColor = shimmerHighlightColor,
+                                modifier = historyListItemModifier(),
                             )
                         } else {
                             HistoryChatItem(
@@ -202,6 +228,7 @@ fun HistoryScreen(
                                 onShowOptions = {
                                     optionsState = HistoryOptionsState.Sheet(chat)
                                 },
+                                modifier = historyListItemModifier(),
                             )
                         }
                     }
@@ -213,7 +240,7 @@ fun HistoryScreen(
     when (val state = optionsState) {
         is HistoryOptionsState.Hidden -> {}
         is HistoryOptionsState.Sheet -> {
-            JumpFreeModalBottomSheet(
+            NeoModalBottomSheet(
                 onDismissRequest = {
                     if (optionsState is HistoryOptionsState.Sheet) {
                         optionsState = HistoryOptionsState.Hidden
@@ -257,104 +284,11 @@ fun HistoryScreen(
     }
 }
 
-@Composable
-private fun NavigationButtonGroup(
-    onNewChatClick: () -> Unit,
-    onStudioClick: () -> Unit,
-    onGalleryClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp,
-    ) {
-        Column {
-            // New Chat Button (Top)
-            NavigationButton(
-                text = "New Chat",
-                icon = painterResource(CoreR.drawable.edit_square),
-                onClick = onNewChatClick,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-            )
-
-            HorizontalDivider(
-                thickness = 2.dp,
-                color = MaterialTheme.colorScheme.background,
-            )
-
-            // Studio Button (Middle)
-            NavigationButton(
-                text = "Studio",
-                icon = Icons.Default.AutoAwesome,
-                onClick = onStudioClick,
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(0.dp),
-            )
-
-            HorizontalDivider(
-                thickness = 2.dp,
-                color = MaterialTheme.colorScheme.background,
-            )
-
-            // Gallery Button (Bottom)
-            NavigationButton(
-                text = "Gallery",
-                icon = Icons.Default.PhotoLibrary,
-                onClick = onGalleryClick,
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun NavigationButton(
-    text: String,
-    icon: Any, // Can be Painter or ImageVector
-    onClick: () -> Unit,
-    containerColor: Color,
-    contentColor: Color,
-    shape: RoundedCornerShape,
-) {
-    Button(
-        onClick = onClick,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-        shape = shape,
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = containerColor,
-                contentColor = contentColor,
-            ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            when (icon) {
-                is Painter -> Icon(painter = icon, contentDescription = null, modifier = Modifier.size(24.dp))
-                is ImageVector -> Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp))
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = text,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp,
-            )
-        }
-    }
-}
+private fun historyListItemModifier(): Modifier =
+    Modifier
+        .fillMaxWidth()
+        .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+        .padding(bottom = EnclaveNeoTokens.rowSpacing)
 
 @Composable
 fun DeleteConfirmationDialog(
@@ -401,59 +335,56 @@ fun DeleteConfirmationDialog(
     )
 }
 
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HistoryChatItem(
     chat: HistoryChat,
     onClick: () -> Unit,
     onShowOptions: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val borderColor = neoBorderColor()
+    val backgroundColor = MaterialTheme.colorScheme.surface
+
     Row(
         modifier =
-            Modifier
-                .fillMaxWidth()
+            modifier
+                .neoSurface(
+                    backgroundColor = backgroundColor,
+                    borderColor = borderColor,
+                    withShadow = false,
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onShowOptions,
-                ).padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier =
                 Modifier
                     .weight(1f)
-                    .padding(vertical = 4.dp),
+                    .padding(end = 8.dp),
         ) {
             Text(
                 text = chat.name,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = chat.lastMessageDateTime,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        IconButton(onClick = onShowOptions) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "Options",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        NeoIconButton(
+            onClick = onShowOptions,
+            icon = Icons.Default.MoreVert,
+            contentDescription = "Options",
+        )
     }
 }
 
@@ -462,12 +393,20 @@ private fun HistoryChatSkeletonItem(
     progressState: State<Float>,
     baseColor: Color,
     highlightColor: Color,
+    modifier: Modifier = Modifier,
 ) {
+    val borderColor = neoBorderColor()
+    val backgroundColor = MaterialTheme.colorScheme.surface
+
     Row(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier
+                .neoSurface(
+                    backgroundColor = backgroundColor,
+                    borderColor = borderColor,
+                    withShadow = false,
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -624,25 +563,3 @@ private fun BottomSheetOption(
     }
 }
 
-@Suppress("UnusedPrivateMember")
-@Preview(showBackground = true)
-@Composable
-private fun PreviewHistoryScreenLoading() {
-    EnclaveTheme {
-        HistoryScreen(
-            uiState = HistoryUiState(isLoading = true),
-            searchQuery = "",
-            onSearchQueryChange = {},
-            onBackClick = {},
-            onChatClick = {},
-            onNewChatClick = {},
-            onStudioClick = {},
-            onGalleryClick = {},
-            onDeleteChat = {},
-            onRenameChat = { _, _ -> },
-            onPinChat = {},
-            onUnpinChat = {},
-            onSettingsClick = {},
-        )
-    }
-}

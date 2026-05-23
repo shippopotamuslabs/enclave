@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,22 +70,34 @@ fun ByokCustomHeadersScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Custom Headers", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        enabled = isDoneEnabled,
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onAddHeader) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Header")
-                    }
-                },
-            )
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = EnclaveNeoTokens.screenHorizontalPadding,
+                            vertical = 12.dp,
+                        ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NeoIconButton(
+                    onClick = onNavigateBack,
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    enabled = isDoneEnabled,
+                )
+                Text(
+                    text = "Custom Headers",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                )
+                NeoIconButton(
+                    onClick = onAddHeader,
+                    icon = Icons.Default.Add,
+                    contentDescription = "Add Header",
+                )
+            }
         },
     ) { padding ->
         Column(

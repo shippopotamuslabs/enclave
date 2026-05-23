@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.feature.settings
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,13 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -28,7 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,43 +40,25 @@ fun OssLicensesBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         modifier = modifier,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
+        NeoSheetHeader(
+            title = "Open Source Licenses",
+            subtitle = "Enclave is built with the following open-source libraries.",
+            onDismiss = onDismiss,
+        )
+        LazyColumn(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
-            Text(
-                text = "Open Source Licenses",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            Text(
-                text = "Enclave is built with the following open-source libraries.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-            LazyColumn(
-                modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement =
-                    androidx.compose.foundation.layout.Arrangement
-                        .spacedBy(12.dp),
-            ) {
-                items(
-                    items = OssLicenses.entries,
-                    key = { it.name },
-                ) { entry ->
-                    OssLicenseCard(entry = entry)
-                }
+            items(
+                items = OssLicenses.entries,
+                key = { it.name },
+            ) { entry ->
+                OssLicenseCard(entry = entry)
             }
         }
     }
@@ -88,61 +71,56 @@ private fun OssLicenseCard(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        onClick = { expanded = !expanded },
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = neoBorderColor(),
+                    withShadow = false,
+                )
+                .clickable { expanded = !expanded }
+                .padding(16.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = entry.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = if (entry.version.startsWith("BOM")) entry.version else "v${entry.version}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                LicenseChip(licenseType = entry.licenseType)
-            }
-            if (expanded) {
-                Spacer(modifier = Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = entry.licenseText,
+                    text = entry.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (entry.version.startsWith("BOM")) entry.version else "v${entry.version}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = entry.licenseType,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier =
+                    Modifier
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+        if (expanded) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = entry.licenseText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
-}
-
-@Composable
-private fun LicenseChip(
-    licenseType: String,
-    modifier: Modifier = Modifier,
-) {
-    SuggestionChip(
-        onClick = {},
-        label = {
-            Text(
-                text = licenseType,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        },
-        modifier = modifier,
-        colors =
-            SuggestionChipDefaults.suggestionChipColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-    )
 }
 
 @Preview(showBackground = true, name = "OSS Licenses Sheet — Light")

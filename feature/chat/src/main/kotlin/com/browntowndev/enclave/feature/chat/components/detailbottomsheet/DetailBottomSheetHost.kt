@@ -6,7 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.platform.LocalInspectionMode
 
 /**
  * Hosts [DetailBottomSheet] at screen scope (sibling to main content), matching
@@ -40,7 +41,10 @@ fun ProvideDetailBottomSheet(content: @Composable () -> Unit) {
             )
         }
 
-    CompositionLocalProvider(LocalDetailBottomSheetController provides controller) {
+    CompositionLocalProvider(
+        LocalDetailBottomSheetHostActive provides true,
+        LocalDetailBottomSheetController provides controller,
+    ) {
         content()
     }
 
@@ -78,10 +82,33 @@ class DetailBottomSheetController internal constructor(
     }
 }
 
+/** True while [ProvideDetailBottomSheet] wraps the current subtree (e.g. [ChatScreen]). */
+internal val LocalDetailBottomSheetHostActive = compositionLocalOf { false }
+
+/**
+ * Defaults to a no-op controller so @Preview roots (e.g. [MessageListPreviews]) do not crash.
+ * [ProvideDetailBottomSheet] on [com.browntowndev.enclave.feature.chat.ChatScreen] supplies the real host.
+ */
 val LocalDetailBottomSheetController =
-    staticCompositionLocalOf<DetailBottomSheetController> {
-        error("DetailBottomSheetController not provided. Wrap content in ProvideDetailBottomSheet.")
+    compositionLocalOf { previewDetailBottomSheetController() }
+
+/**
+ * Resolves the detail sheet controller for list rows and assistant message chrome.
+ */
+@Composable
+internal fun rememberDetailBottomSheetController(usePreviewStub: Boolean = LocalInspectionMode.current): DetailBottomSheetController {
+    if (usePreviewStub || !LocalDetailBottomSheetHostActive.current) {
+        return remember { previewDetailBottomSheetController() }
     }
+    return LocalDetailBottomSheetController.current
+}
+
+private fun previewDetailBottomSheetController(): DetailBottomSheetController =
+    DetailBottomSheetController(
+        onShow = { _, _ -> },
+        onUpdateElapsed = {},
+        onDismiss = {},
+    )
 
 private fun DetailBottomSheetConfig.withDismiss(onDismiss: () -> Unit): DetailBottomSheetConfig =
     when (this) {

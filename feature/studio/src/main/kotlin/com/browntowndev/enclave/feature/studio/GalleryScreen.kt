@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,15 +44,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
@@ -57,16 +58,13 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -93,17 +91,21 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.browntowndev.enclave.core.ui.component.VideoThumbnail
 import com.browntowndev.enclave.core.ui.component.dialog.AddAlbumDialog
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionMark
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.component.dialog.RenameAlbumDialog
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.enclave.core.ui.util.loadVideoFrame
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +113,6 @@ import kotlinx.coroutines.withContext
 
 private const val ALBUM_GRID_COLUMNS = 2
 private const val ALBUM_COVER_GRID_COLUMNS = 2
-private val AlbumCoverCornerRadius = 18.dp
 
 @Composable
 fun GalleryRoute(
@@ -135,7 +136,6 @@ fun GalleryRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
     uiState: GalleryUiState,
@@ -209,6 +209,7 @@ fun GalleryScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             val selectionCount = selectedMediaItemIds.size + selectedAlbumIds.size
             val isDefaultAlbumSelected = DEFAULT_GALLERY_ALBUM_ID in selectedAlbumIds
@@ -222,7 +223,6 @@ fun GalleryScreen(
                         selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID &&
                         selectedMediaItemIds.isEmpty(),
                 showDeleteIcon = selectionCount > 0 && !isDefaultAlbumSelected,
-                hazeState = hazeState,
                 onBackClick = {
                     if (selectedMediaItemIds.isNotEmpty()) {
                         selectedMediaItemIds = emptySet()
@@ -396,7 +396,6 @@ fun GalleryScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
 @Composable
 private fun GalleryTopBar(
@@ -406,7 +405,6 @@ private fun GalleryTopBar(
     showAddAlbumIcon: Boolean,
     showRenameAlbumIcon: Boolean,
     showDeleteIcon: Boolean,
-    hazeState: HazeState,
     onBackClick: () -> Unit,
     onClearSelectionClick: () -> Unit,
     onAddAlbumClick: () -> Unit,
@@ -416,91 +414,74 @@ private fun GalleryTopBar(
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    CenterAlignedTopAppBar(
-        colors =
-            TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = Color.Transparent,
-                scrolledContainerColor = Color.Transparent,
-                titleContentColor = Color.White,
-                navigationIconContentColor = Color.White,
-                actionIconContentColor = Color.White,
-            ),
-        modifier =
-            modifier.hazeEffect(state = hazeState) {
-                blurRadius = 24.dp
-                tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
-                noiseFactor = 0.15f
-            },
-        navigationIcon = {
-            if (selectedItemCount > 0) {
-                IconButton(onClick = onClearSelectionClick) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Clear selection",
-                    )
-                }
-            } else {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                    )
-                }
-            }
-        },
-        title = {
+    NeoAppBarChrome(modifier = modifier) {
+        if (selectedItemCount > 0) {
+            NeoIconButton(
+                onClick = onClearSelectionClick,
+                icon = Icons.Default.Close,
+                contentDescription = "Clear selection",
+            )
+        } else {
+            NeoIconButton(
+                onClick = onBackClick,
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+            )
+        }
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
             Text(
                 text = if (selectedItemCount > 0) "$selectedItemCount Selected" else title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-        },
-        actions = {
-            if (selectedItemCount > 0) {
+        }
+        if (selectedItemCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
                 if (selectedMediaItemCount > 0) {
-                    IconButton(onClick = onShareClick) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share",
-                        )
-                    }
-                }
-                IconButton(onClick = onMoveClick) {
-                    Icon(
-                        imageVector = Icons.Default.DriveFileMove,
-                        contentDescription = "Move",
+                    NeoIconButton(
+                        onClick = onShareClick,
+                        icon = Icons.Default.Share,
+                        contentDescription = "Share",
                     )
                 }
+                NeoIconButton(
+                    onClick = onMoveClick,
+                    icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                    contentDescription = "Move",
+                )
                 if (showDeleteIcon) {
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                        )
-                    }
-                }
-            } else {
-                if (showRenameAlbumIcon) {
-                    IconButton(onClick = onRenameClick) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Rename album",
-                        )
-                    }
-                }
-                if (showAddAlbumIcon) {
-                    IconButton(onClick = onAddAlbumClick) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add album",
-                        )
-                    }
+                    NeoIconButton(
+                        onClick = onDeleteClick,
+                        icon = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                    )
                 }
             }
-        },
-    )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                if (showRenameAlbumIcon) {
+                    NeoIconButton(
+                        onClick = onRenameClick,
+                        icon = Icons.Default.Edit,
+                        contentDescription = "Rename album",
+                    )
+                }
+                if (showAddAlbumIcon) {
+                    NeoIconButton(
+                        onClick = onAddAlbumClick,
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add album",
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -519,13 +500,13 @@ private fun AlbumGrid(
         modifier = modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
-                start = 16.dp,
-                top = 16.dp + topPadding,
-                end = 16.dp,
-                bottom = 16.dp,
+                start = EnclaveNeoTokens.screenHorizontalPadding,
+                top = EnclaveNeoTokens.rowSpacing + topPadding,
+                end = EnclaveNeoTokens.screenHorizontalPadding,
+                bottom = EnclaveNeoTokens.screenHorizontalPadding,
             ),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
+        verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
     ) {
         items(
             items = albums,
@@ -561,7 +542,7 @@ private fun AlbumCard(
         label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else AlbumCoverCornerRadius,
+        targetValue = EnclaveNeoTokens.cornerRadius,
         label = "selection_corner_radius",
     )
     val coverShape = RoundedCornerShape(cornerRadius)
@@ -589,34 +570,13 @@ private fun AlbumCard(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (selectionModeActive) {
-                Box(
+                NeoSelectionMark(
+                    selected = isSelected,
                     modifier =
                         Modifier
-                            .padding(8.dp)
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    Color.Black.copy(alpha = 0.4f)
-                                },
-                            ).border(
-                                width = 2.dp,
-                                color = Color.White,
-                                shape = CircleShape,
-                            ).align(Alignment.TopStart),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                )
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -643,10 +603,15 @@ private fun AlbumCover(
     videoThumbnails: Map<String, Bitmap?>,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.aspectRatio(1f),
-        shape = RoundedCornerShape(AlbumCoverCornerRadius),
-        color = MaterialTheme.colorScheme.surface,
+    Box(
+        modifier =
+            modifier
+                .aspectRatio(1f)
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = neoBorderColor(),
+                    withShadow = false,
+                ),
     ) {
         if (items.isEmpty()) {
             EmptyAlbumCover()
@@ -655,9 +620,8 @@ private fun AlbumCover(
                 columns = GridCells.Fixed(ALBUM_COVER_GRID_COLUMNS),
                 userScrollEnabled = false,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 items(
                     items = items,
@@ -694,10 +658,7 @@ private fun AlbumCoverItem(
     videoThumbnail: Bitmap?,
     modifier: Modifier = Modifier,
 ) {
-    val itemModifier =
-        modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
+    val itemModifier = modifier.aspectRatio(1f)
 
     if (item.mediaType == MediaCapability.VIDEO) {
         VideoThumbnail(
@@ -792,9 +753,10 @@ private fun AlbumMediaItem(
         label = "selection_padding",
     )
     val cornerRadius by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 0.dp,
+        targetValue = if (isSelected) EnclaveNeoTokens.cornerRadius else 0.dp,
         label = "selection_corner_radius",
     )
+    val tileShape = RoundedCornerShape(cornerRadius)
 
     Box(
         modifier =
@@ -813,7 +775,19 @@ private fun AlbumMediaItem(
                     onLongClick = {
                         onSelectionToggled()
                     },
-                ).padding(padding),
+                )
+                .padding(padding)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(
+                            width = EnclaveNeoTokens.borderWidth,
+                            color = neoBorderColor(),
+                            shape = tileShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         if (item.mediaType == MediaCapability.VIDEO) {
             VideoThumbnail(
@@ -826,14 +800,14 @@ private fun AlbumMediaItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(tileShape),
             )
         } else if (item.mediaType == MediaCapability.MUSIC) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius))
+                        .clip(tileShape)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black),
@@ -855,7 +829,7 @@ private fun AlbumMediaItem(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(cornerRadius)),
+                        .clip(tileShape),
                 contentScale = ContentScale.Crop,
                 onState = { state ->
                     if (state is AsyncImagePainter.State.Success) {
@@ -867,59 +841,42 @@ private fun AlbumMediaItem(
                 },
             )
         }
-        Surface(
-            color = Color.Black.copy(alpha = 0.6f),
-            shape = RoundedCornerShape(4.dp),
-            modifier =
-                Modifier
-                    .padding(8.dp)
-                    .align(Alignment.BottomEnd),
-        ) {
-            Icon(
-                imageVector =
-                    when (item.mediaType) {
-                        MediaCapability.IMAGE -> Icons.Default.Image
-                        MediaCapability.VIDEO -> Icons.Default.Videocam
-                        else -> Icons.Default.MusicNote
-                    },
-                contentDescription = null,
-                tint = Color.White,
-                modifier =
-                    Modifier
-                        .padding(4.dp)
-                        .size(16.dp),
-            )
-        }
-
-        if (selectionModeActive) {
+        if (item.mediaType != MediaCapability.IMAGE) {
             Box(
                 modifier =
                     Modifier
-                        .padding(16.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                Color.Black.copy(alpha = 0.4f)
-                            },
-                        ).border(
-                            width = 2.dp,
-                            color = Color.White,
-                            shape = CircleShape,
-                        ).align(Alignment.TopStart),
-                contentAlignment = Alignment.Center,
+                        .padding(8.dp)
+                        .align(Alignment.BottomEnd)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = false,
+                        ),
             ) {
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                Icon(
+                    imageVector =
+                        when (item.mediaType) {
+                            MediaCapability.VIDEO -> Icons.Default.Videocam
+                            else -> Icons.Default.MusicNote
+                        },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier =
+                        Modifier
+                            .padding(4.dp)
+                            .size(16.dp),
+                )
             }
+        }
+
+        if (selectionModeActive) {
+            NeoSelectionMark(
+                selected = isSelected,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+            )
         }
     }
 }
@@ -958,13 +915,13 @@ private fun AlbumSkeletonGrid(
         modifier = modifier.fillMaxSize(),
         contentPadding =
             PaddingValues(
-                start = 16.dp,
-                top = 16.dp + topPadding,
-                end = 16.dp,
-                bottom = 16.dp,
+                start = EnclaveNeoTokens.screenHorizontalPadding,
+                top = EnclaveNeoTokens.rowSpacing + topPadding,
+                end = EnclaveNeoTokens.screenHorizontalPadding,
+                bottom = EnclaveNeoTokens.screenHorizontalPadding,
             ),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
+        verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
     ) {
         items(count = 6) {
             AlbumSkeletonItem(
@@ -989,7 +946,7 @@ private fun AlbumSkeletonItem(
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(AlbumCoverCornerRadius))
+                    .clip(EnclaveNeoTokens.shape)
                     .shimmerEffect(
                         progressState = progress,
                         baseColor = baseColor,
@@ -1003,7 +960,7 @@ private fun AlbumSkeletonItem(
                     .padding(horizontal = 8.dp)
                     .fillMaxWidth(0.72f)
                     .height(16.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(EnclaveNeoTokens.shape)
                     .shimmerEffect(
                         progressState = progress,
                         baseColor = baseColor,
@@ -1017,7 +974,7 @@ private fun AlbumSkeletonItem(
                     .padding(horizontal = 8.dp)
                     .fillMaxWidth(0.44f)
                     .height(12.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(EnclaveNeoTokens.shape)
                     .shimmerEffect(
                         progressState = progress,
                         baseColor = baseColor,
@@ -1098,10 +1055,10 @@ private fun DeleteAlbumsDialog(
 }
 
 @Suppress("UnusedPrivateMember")
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun GalleryScreenPopulatedPreview() {
-    EnclaveTheme {
+    EnclaveTheme(darkTheme = true) {
         GalleryScreen(
             uiState =
                 GalleryUiState(
@@ -1116,36 +1073,6 @@ private fun GalleryScreenPopulatedPreview() {
                                 id = "album-1",
                                 name = "Moodboards",
                                 items = emptyList(),
-                            ),
-                        ),
-                ),
-            onBackClick = {},
-            onMediaClick = { _, _ -> },
-            onAddAlbum = {},
-            onRenameAlbum = { _, _ -> },
-            onDeleteAlbums = {},
-            onShareMedia = {},
-            onDeleteMedia = {},
-            onMoveMedia = { _, _ -> },
-            onMediaItemMeasured = { _, _ -> },
-        )
-    }
-}
-
-@Suppress("UnusedPrivateMember")
-@Preview
-@Composable
-private fun GalleryScreenDarkPreview() {
-    EnclaveTheme(darkTheme = true) {
-        GalleryScreen(
-            uiState =
-                GalleryUiState(
-                    albums =
-                        listOf(
-                            GalleryAlbumUi(
-                                id = DEFAULT_GALLERY_ALBUM_ID,
-                                name = "Default Album",
-                                items = previewGalleryItems(),
                             ),
                         ),
                 ),

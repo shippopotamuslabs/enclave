@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,8 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,16 +42,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.inference.SystemPromptTemplates
-
 /** Model format string constant for GGUF models handled by llama.cpp. */
 internal const val MODEL_FORMAT_GGUF = "GGUF"
 
@@ -105,43 +108,28 @@ fun LocalModelConfigureScreen(
             config.contextWindow.isNotBlank()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Configure Local Preset", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = "Configure Local Preset",
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
             if (!config.isSystemPreset) {
-                Row(
+                NeoPrimaryButton(
+                    text = "Save Preset",
+                    onClick = onSave,
+                    enabled = isSaveEnabled,
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 20.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Button(
-                        onClick = onSave,
-                        enabled = isSaveEnabled,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .testTag("SaveButton"),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text(
-                            text = "Save Preset",
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
+                            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
+                            .padding(bottom = 20.dp)
+                            .testTag("SaveButton"),
+                )
             }
         },
     ) { padding ->
@@ -150,16 +138,17 @@ fun LocalModelConfigureScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                     .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
-            OutlinedTextField(
+            Spacer(modifier = Modifier.height(8.dp))
+
+            NeoOutlinedTextField(
                 value = config.displayName,
                 onValueChange = { onConfigChange(config.copy(displayName = it)) },
                 label = { Text("Preset Name (e.g. Creative)") },
                 modifier = Modifier.fillMaxWidth().testTag("DisplayNameField"),
-                shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                 readOnly = config.isSystemPreset,
                 enabled = !config.isSystemPreset,
@@ -177,7 +166,7 @@ fun LocalModelConfigureScreen(
                             },
                         ),
             ) {
-                OutlinedTextField(
+                NeoOutlinedTextField(
                     value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
                     onValueChange = {},
                     label = {
@@ -195,92 +184,19 @@ fun LocalModelConfigureScreen(
                     enabled = false,
                     readOnly = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
                     minLines = 4,
                     maxLines = 4,
-                    colors =
-                        OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
+                    colors = neoOutlinedTextFieldColors(),
                 )
             }
 
-            if (showSystemPromptSheet) {
-                JumpFreeModalBottomSheet(
-                    onDismissRequest = { showSystemPromptSheet = false },
-                    sheetState = sheetState,
-                ) {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 20.dp)
-                                .padding(bottom = 32.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Edit System Prompt",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-
-                            var expanded by remember { mutableStateOf(false) }
-                            Row {
-                                TextButton(onClick = { expanded = true }) {
-                                    Text("Import Template")
-                                }
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                ) {
-                                    SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                        DropdownMenuItem(
-                                            text = { Text(modelType.displayName()) },
-                                            onClick = {
-                                                onConfigChange(config.copy(systemPrompt = prompt))
-                                                expanded = false
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        OutlinedTextField(
-                            value = config.systemPrompt,
-                            onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            placeholder = { Text("Enter system prompt...") },
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Button(
-                            onClick = { showSystemPromptSheet = false },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                        ) {
-                            Text("Done", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
+            SystemPromptEditSheet(
+                visible = showSystemPromptSheet,
+                prompt = config.systemPrompt,
+                onPromptChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                onDismiss = { showSystemPromptSheet = false },
+                sheetState = sheetState,
+            )
 
             ConfigurationHeader("Context")
 
@@ -288,7 +204,7 @@ fun LocalModelConfigureScreen(
             // has no output token limit — the engine generates until natural stop.
             if (isGgufFormat) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
+                    NeoOutlinedTextField(
                         value = config.maxTokens,
                         onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
                         label = {
@@ -299,7 +215,6 @@ fun LocalModelConfigureScreen(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
                         keyboardOptions =
                             KeyboardOptions(
                                 keyboardType = KeyboardType.Number,
@@ -309,7 +224,7 @@ fun LocalModelConfigureScreen(
                         enabled = !config.isSystemPreset,
                     )
 
-                    OutlinedTextField(
+                    NeoOutlinedTextField(
                         value = config.contextWindow,
                         onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
                         label = {
@@ -319,8 +234,7 @@ fun LocalModelConfigureScreen(
                                 PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
                             }
                         },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).testTag("ContextWindowField"),
                         keyboardOptions =
                             KeyboardOptions(
                                 keyboardType = KeyboardType.Number,
@@ -331,7 +245,7 @@ fun LocalModelConfigureScreen(
                     )
                 }
             } else {
-                OutlinedTextField(
+                NeoOutlinedTextField(
                     value = config.contextWindow,
                     onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
                     label = {
@@ -342,7 +256,6 @@ fun LocalModelConfigureScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
                     keyboardOptions =
                         KeyboardOptions(
                             keyboardType = KeyboardType.Number,
@@ -366,7 +279,6 @@ fun LocalModelConfigureScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
                 keyboardOptions =
                     KeyboardOptions(
                         keyboardType = KeyboardType.Number,
@@ -418,33 +330,14 @@ fun LocalModelConfigureScreen(
                 )
             }
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        text = "Thinking",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "Enable extended reasoning.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = config.thinkingEnabled,
-                    onCheckedChange = { onConfigChange(config.copy(thinkingEnabled = it)) },
-                    enabled = !config.isSystemPreset,
-                    modifier = Modifier.testTag("ThinkingSwitch"),
-                )
-            }
+            NeoToggleRow(
+                title = "Thinking",
+                checked = config.thinkingEnabled,
+                onCheckedChange = { onConfigChange(config.copy(thinkingEnabled = it)) },
+                subtitle = "Enable extended reasoning.",
+                enabled = !config.isSystemPreset,
+                switchTestTag = "ThinkingSwitch",
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }

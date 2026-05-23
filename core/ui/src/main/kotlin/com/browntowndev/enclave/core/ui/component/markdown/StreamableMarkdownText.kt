@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -56,21 +57,33 @@ fun StreamableMarkdownText(
     enableScroll: Boolean = true,
     onLinkClick: ((String) -> Unit)? = null,
     isPreview: Boolean = false, // Default to false for production; pass true for previews
+    bodyStyle: TextStyle? = null,
     // Allows tests to inject a tracked factory and assert it is called only once per lifetime.
     themeFactory: MarkdownThemeFactory = MarkdownThemeFactory { darkMarkdownTheme() },
 ) {
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
+
+    val resolvedBodyStyle = bodyStyle ?: LlmBodyTextStyle
 
     // In preview mode, use SimpleMarkdownText to avoid library initialization issues
     if (isPreview) {
         SimpleMarkdownText(
             text = markdown,
             modifier = modifier,
+            bodyStyle = resolvedBodyStyle,
         )
         return
     }
 
-    val theme = remember { themeFactory.create() }
+    val contentColor = MaterialTheme.colorScheme.onBackground
+    val theme =
+        remember(bodyStyle, contentColor, themeFactory) {
+            if (bodyStyle != null) {
+                darkMarkdownTheme(bodyStyle = resolvedBodyStyle.copy(color = contentColor))
+            } else {
+                themeFactory.create()
+            }
+        }
 
     // Read the cache at composition entry. Non-null on re-entry after LazyColumn eviction,
     // allowing synchronous render with no async-parse spinner.
@@ -123,6 +136,7 @@ fun StreamableMarkdownText(
 fun SimpleMarkdownText(
     text: String,
     modifier: Modifier = Modifier,
+    bodyStyle: TextStyle = LlmBodyTextStyle,
 ) {
     val annotatedString =
         remember(text) {
@@ -131,7 +145,7 @@ fun SimpleMarkdownText(
     Text(
         text = annotatedString,
         style =
-            LlmBodyTextStyle.copy(
+            bodyStyle.copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
         modifier = modifier,

@@ -48,6 +48,8 @@ data class XSearchParams(
     val language: String? = "en",
     @ToolParam(description = "The order in which to return results.", required = false)
     val sort_order: XSortOrder = XSortOrder.relevancy,
+    @ToolParam(description = "If true, include replies in the search results. Defaults to false for higher signal.", required = false)
+    val include_replies: Boolean = false,
     @ToolParam(description = "DEPRECATED: Use structured fields instead. Raw search query.", required = false)
     val query: String? = null,
 ) : ToolParameters

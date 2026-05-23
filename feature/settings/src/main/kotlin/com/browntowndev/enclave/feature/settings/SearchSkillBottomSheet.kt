@@ -1,8 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,22 +18,14 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
+import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -46,15 +36,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.XIcon
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,65 +75,30 @@ fun SearchSkillBottomSheet(
     var showSwitchConfirm by remember { mutableStateOf<SearchProvider?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
-            TabRow(
+            NeoSheetHeader(
+                title = "Search Skills",
+                subtitle = "Configure web and X search for the assistant.",
+                onDismiss = onDismiss,
+            )
+
+            NeoSheetTabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = BottomSheetDefaults.ContainerColor,
-                contentColor = MaterialTheme.colorScheme.primary,
-                divider = {},
-                indicator = { tabPositions ->
-                    SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onTabChange(0) },
-                    selectedContentColor = MaterialTheme.colorScheme.primary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = "Web",
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onTabChange(1) },
-                    selectedContentColor = MaterialTheme.colorScheme.primary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    icon = {
-                        Icon(
-                            imageVector = XIcon,
-                            contentDescription = "X",
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                )
-            }
+                tabs = listOf("Web", "X"),
+                onTabSelected = onTabChange,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
             ) {
                 if (selectedTab == 0) {
                     WebSearchTabContent(
@@ -225,46 +182,6 @@ fun SearchSkillBottomSheet(
     }
 }
 
-@Composable
-private fun SearchSkillToggleCard(
-    title: String,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    subtitle: String? = null,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-    ) {
-        ListItem(
-            leadingContent = {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            headlineContent = { Text(title) },
-            supportingContent = subtitle?.let { text -> { Text(text) } },
-            trailingContent = {
-                Switch(checked = checked, onCheckedChange = onCheckedChange)
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onCheckedChange(!checked) },
-        )
-    }
-}
-
 internal fun shouldShowProviderSwitchAlert(state: SearchSkillEditorUiState): Boolean {
     val currentHasKey =
         when (state.selectedProvider) {
@@ -282,67 +199,14 @@ internal fun ApiKeyInput(
     keyPresent: Boolean,
     onClearKey: () -> Unit,
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    val showSavedIndicator = keyPresent && value.isEmpty()
-
-    Column {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label)
-                    if (showSavedIndicator) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Key saved",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true,
-            placeholder = {
-                if (showSavedIndicator) {
-                    Text("Saved securely")
-                } else if (keyPresent) {
-                    Text("••••••••••••••••")
-                }
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Toggle key visibility" else "Toggle key visibility",
-                    )
-                }
-            },
-            supportingText = {
-                if (keyPresent) {
-                    Text(
-                        if (value.isEmpty()) {
-                            "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                        } else {
-                            "You are entering a new key. The previously stored key will be replaced upon saving."
-                        },
-                    )
-                }
-            },
-        )
-        if (keyPresent) {
-            TextButton(
-                onClick = onClearKey,
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text("Clear Saved Key", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
+    NeoApiKeyField(
+        label = label,
+        value = value,
+        onValueChange = onValueChange,
+        keyPresent = keyPresent,
+        onClearKey = onClearKey,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
@@ -357,8 +221,8 @@ private fun WebSearchTabContent(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SearchSkillToggleCard(
+    Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing)) {
+        NeoToggleRow(
             title = "Enable Web Search",
             icon = Icons.Default.Public,
             checked = searchState.enabled,
@@ -367,7 +231,7 @@ private fun WebSearchTabContent(
         )
 
         if (searchState.enabled) {
-            SectionHeader(text = "Search Provider")
+            NeoSectionHeader(text = "Search Provider")
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -421,21 +285,14 @@ private fun WebSearchTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        NeoPrimaryButton(
+            text = "Save Web Settings",
+            icon = Icons.Default.Check,
             onClick = {
                 onSave()
                 onDismiss()
             },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Save Web Settings", fontWeight = FontWeight.SemiBold)
-        }
+        )
     }
 }
 
@@ -448,8 +305,8 @@ private fun XSearchTabContent(
     onSave: (onSuccess: () -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SearchSkillToggleCard(
+    Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing)) {
+        NeoToggleRow(
             title = "Enable X Search",
             icon = XIcon,
             checked = xSearchState.enabled,
@@ -469,21 +326,14 @@ private fun XSearchTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        NeoPrimaryButton(
+            text = "Save X Settings",
+            icon = Icons.Default.Check,
             onClick = {
                 onSave {
                     onDismiss()
                 }
             },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Save X Settings", fontWeight = FontWeight.SemiBold)
-        }
+        )
     }
 }

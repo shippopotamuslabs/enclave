@@ -1,8 +1,17 @@
 package com.browntowndev.enclave.feature.chat.components.messagelist
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
@@ -15,29 +24,81 @@ import com.browntowndev.enclave.feature.chat.ThinkingDataUi
 import com.browntowndev.enclave.feature.chat.ToolCallBannerKind
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.fakeLongMessages
+import com.browntowndev.enclave.feature.chat.typographyPreviewMessages
 
-@Preview
+/**
+ * Mirrors [com.browntowndev.enclave.feature.chat.ChatScreen] composition locals and preview viewport.
+ *
+ * @param productionMarkdown When true, assistant replies use the full markdown renderer and bundled
+ *   reading fonts (same as on device). When false, uses the lightweight preview markdown path.
+ */
 @Composable
-internal fun PreviewMessageListEmpty() {
-    EnclaveTheme {
-        MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview = true)
+private fun MessageListPreviewHost(
+    darkTheme: Boolean = true,
+    productionMarkdown: Boolean = false,
+    content: @Composable (isPreview: Boolean) -> Unit,
+) {
+    EnclaveTheme(darkTheme = darkTheme) {
+        ProvideDetailBottomSheet {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(640.dp)
+                        .background(MaterialTheme.colorScheme.background),
+            ) {
+                content(!productionMarkdown)
+            }
+        }
     }
 }
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "Typography — UI + reading fonts")
 @Composable
-internal fun PreviewMessageListLong() {
-    EnclaveTheme(darkTheme = true) {
-        MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview = true)
-    }
-}
-
-@Preview
-@Composable
-internal fun PreviewMessageListThinking() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewMessageListTypography() {
+    MessageListPreviewHost(productionMarkdown = true) { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            messages = typographyPreviewMessages,
+            hasActiveIndicator = false,
+            isPreview = isPreview,
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — empty")
+@Composable
+fun PreviewMessageListEmpty() {
+    MessageListPreviewHost(darkTheme = false) { isPreview ->
+        MessageList(
+            modifier = Modifier.fillMaxSize(),
+            messages = emptyList(),
+            hasActiveIndicator = false,
+            isPreview = isPreview,
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — long")
+@Composable
+fun PreviewMessageListLong() {
+    MessageListPreviewHost(productionMarkdown = true) { isPreview ->
+        MessageList(
+            modifier = Modifier.fillMaxSize(),
+            messages = fakeLongMessages,
+            hasActiveIndicator = true,
+            isPreview = isPreview,
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — thinking")
+@Composable
+fun PreviewMessageListThinking() {
+    MessageListPreviewHost { isPreview ->
+        MessageList(
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.THINKING,
             messages =
@@ -79,12 +140,13 @@ internal fun PreviewMessageListThinking() {
     }
 }
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — processing")
 @Composable
-internal fun PreviewMessageListProcessing() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewMessageListProcessing() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -109,12 +171,13 @@ internal fun PreviewMessageListProcessing() {
     }
 }
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — generating")
 @Composable
-internal fun PreviewMessageListGenerating() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewMessageListGenerating() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.FAST,
             messages =
@@ -152,12 +215,13 @@ internal fun PreviewMessageListGenerating() {
 }
 
 // DRAFT_ONE - Generating with ThinkingData
-@Preview(name = "Pipeline: DRAFT_ONE Generating with Thinking")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: DRAFT_ONE Generating with Thinking")
 @Composable
-internal fun PreviewPipelineDraftOneGeneratingWithThinking() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineDraftOneGeneratingWithThinking() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             chatMode = ChatModeUi.COUNCIL,
             messages =
@@ -194,12 +258,13 @@ internal fun PreviewPipelineDraftOneGeneratingWithThinking() {
 }
 
 // DRAFT_ONE - Thinking (streaming)
-@Preview(name = "Pipeline: DRAFT_ONE Thinking")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: DRAFT_ONE Thinking")
 @Composable
-internal fun PreviewPipelineDraftOneThinking() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineDraftOneThinking() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -236,12 +301,13 @@ internal fun PreviewPipelineDraftOneThinking() {
 }
 
 // DRAFT_ONE - Processing
-@Preview(name = "Pipeline: DRAFT_ONE Processing")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: DRAFT_ONE Processing")
 @Composable
-internal fun PreviewPipelineDraftOneProcessing() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineDraftOneProcessing() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -267,12 +333,13 @@ internal fun PreviewPipelineDraftOneProcessing() {
 }
 
 // Full chain: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL (all complete with varied thinkingData)
-@Preview(name = "Pipeline: Full Chain with FINAL Thinking")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: Full Chain with FINAL Thinking")
 @Composable
-internal fun PreviewPipelineFullChainWithFinalThinking() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineFullChainWithFinalThinking() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -381,12 +448,13 @@ internal fun PreviewPipelineFullChainWithFinalThinking() {
 }
 
 // Full chain: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL (all complete, FINAL without thinking)
-@Preview(name = "Pipeline: Full Chain without FINAL Thinking")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: Full Chain without FINAL Thinking")
 @Composable
-internal fun PreviewPipelineFullChainNoFinalThinking() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineFullChainNoFinalThinking() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -481,12 +549,13 @@ internal fun PreviewPipelineFullChainNoFinalThinking() {
 }
 
 // Pipeline in progress: Thinking -> Generating -> Complete
-@Preview(name = "Pipeline: Various Steps In Progress")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: Various Steps In Progress")
 @Composable
-internal fun PreviewPipelineVariousStepsInProgress() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineVariousStepsInProgress() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -560,12 +629,13 @@ internal fun PreviewPipelineVariousStepsInProgress() {
 }
 
 // Single step: DRAFT_ONE in various states
-@Preview(name = "Pipeline: DRAFT_ONE All States")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: DRAFT_ONE All States")
 @Composable
-internal fun PreviewPipelineDraftOneAllStates() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineDraftOneAllStates() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -661,12 +731,13 @@ internal fun PreviewPipelineDraftOneAllStates() {
 }
 
 // FINAL step states
-@Preview(name = "Pipeline: FINAL All States")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Pipeline: FINAL All States")
 @Composable
-internal fun PreviewPipelineFinalAllStates() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewPipelineFinalAllStates() {
+    MessageListPreviewHost { isPreview ->
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             messages =
                 listOf(
@@ -761,13 +832,14 @@ internal fun PreviewPipelineFinalAllStates() {
     }
 }
 
-@Preview(name = "Message List with Tool Call Banner")
+@Preview(showBackground = true, backgroundColor = 0xFF000000, name = "Message list — tool call banner")
 @Composable
-internal fun PreviewMessageListWithToolCall() {
-    EnclaveTheme(darkTheme = true) {
+fun PreviewMessageListWithToolCall() {
+    MessageListPreviewHost { isPreview ->
         val messageId = MessageId("active_msg")
         MessageList(
-            isPreview = true,
+            modifier = Modifier.fillMaxSize(),
+            isPreview = isPreview,
             hasActiveIndicator = true,
             activeIndicatorMessageId = messageId,
             activeToolCallBanner =

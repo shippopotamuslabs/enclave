@@ -10,13 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.components.InputBar
 import com.browntowndev.enclave.feature.chat.components.ShareBottomSheet
@@ -90,6 +89,7 @@ fun ChatScreen(
 
     ProvideDetailBottomSheet {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 ChatTopBar(
                     onMenuClick = onNavigateToHistory,
@@ -192,27 +192,3 @@ fun ChatScreen(
     }
 }
 
-@Suppress("UnusedPrivateMember")
-@Preview(showBackground = true)
-@Composable
-private fun PreviewChatScreenLight() {
-    EnclaveTheme {
-        ChatScreen(
-            uiState = ChatUiState(),
-            onNavigateToHistory = {},
-            onNewChat = {},
-            onSendMessage = {},
-            onStopGenerating = {},
-            onModeChange = {},
-            onInputChange = {},
-            onEditMessage = {},
-            onPlayAudio = {},
-            onImagesSelected = {},
-            onRemoveImage = {},
-            onFileSelected = {},
-            onClearFile = {},
-            onShieldTap = {},
-            onMicClick = {},
-        )
-    }
-}

@@ -273,3 +273,64 @@ val fakeLongMessages =
             modelDisplayName = "Qwen 3 8B",
         ),
     )
+
+/**
+ * Focused sample for the Message List typography preview: user sans, Thought-for chrome, serif markdown body.
+ */
+val typographyPreviewMessages =
+    listOf(
+        ChatMessage(
+            id = MessageId("typo-user"),
+            chatId = ChatId("1"),
+            role = MessageRole.User,
+            content =
+                ContentUi(
+                    text =
+                        "Explain how structured concurrency keeps cancellation safe when many " +
+                            "child jobs are running.",
+                ),
+            formattedTimestamp = "10:31 AM",
+        ),
+        ChatMessage(
+            id = MessageId("typo-assistant"),
+            chatId = ChatId("1"),
+            role = MessageRole.Assistant,
+            content =
+                ContentUi(
+                    text =
+                        """
+                        ## Structured concurrency
+
+                        Structured concurrency ties every child coroutine to a parent **scope** so nothing outlives the work you started. When the scope is cancelled, every child receives cancellation promptly.
+
+                        ### Why it matters
+
+                        1. **No leaked jobs** after a screen closes
+                        2. **Predictable teardown** for streaming inference
+                        3. **Easier debugging** — failure surfaces in one place
+
+                        ```kotlin
+                        suspend fun loadModel(path: String) = coroutineScope {
+                            val weights = async { readWeights(path) }
+                            val vocab = async { readVocab(path) }
+                            Model(weights.await(), vocab.await())
+                        }
+                        ```
+
+                        > Use `coroutineScope` or `supervisorScope` at feature boundaries; avoid `GlobalScope` in UI code.
+                        """.trimIndent(),
+                ),
+            formattedTimestamp = "10:32 AM",
+            indicatorState =
+                IndicatorState.Complete(
+                    thinkingData =
+                        ThinkingDataUi(
+                            thinkingDurationSeconds = 18,
+                            thinkingRaw =
+                                "Break down structured concurrency: parent scope, cancellation propagation, " +
+                                    "and how it applies to streaming chat.",
+                        ),
+                ),
+            modelDisplayName = "Qwen 3 8B",
+        ),
+    )

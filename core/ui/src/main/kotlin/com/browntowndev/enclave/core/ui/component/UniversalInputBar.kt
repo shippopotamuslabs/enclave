@@ -1,13 +1,11 @@
 package com.browntowndev.enclave.core.ui.component
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -75,7 +73,12 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.ShimmerText
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.port.media.SpeechState
+import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -84,12 +87,15 @@ import dev.chrisbanes.haze.hazeEffect
  * A universal container for input bars (Chat, Studio, etc.).
  * Handles the shared "premium" layout, including the bleed-to-bottom background,
  * navigation bar insets, and slot-based vertical structure.
+ *
+ * Neo-brutalist borders, shadows, and icon treatments are intentional for every Enclave
+ * input dock built on this component; feature modules should not swap them for flat M3 chrome.
  */
 @Composable
 fun UniversalInputBar(
     modifier: Modifier = Modifier,
-    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainer,
-    shape: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    shape: Shape = EnclaveNeoTokens.inputBarShape,
     attachmentContent: (@Composable ColumnScope.() -> Unit)? = null,
     inputContent: @Composable ColumnScope.() -> Unit,
     actionContent: (@Composable RowScope.() -> Unit)? = null,
@@ -101,10 +107,12 @@ fun UniversalInputBar(
     hazeAlpha: Float = 0.4f,
 ) {
     val focusManager = LocalFocusManager.current
+    val borderColor = neoBorderColor()
 
+    // Surface matches the bar face so the dock reads full-bleed edge-to-edge.
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
+        color = backgroundColor,
     ) {
         Box(
             modifier =
@@ -119,11 +127,21 @@ fun UniversalInputBar(
                                 noiseFactor = 0.15f
                             }
                         } else {
-                            Modifier.background(backgroundColor)
+                            Modifier.neoSurface(
+                                backgroundColor = backgroundColor,
+                                borderColor = borderColor,
+                                withShadow = false,
+                                shape = shape,
+                            )
                         },
-                    ).navigationBarsPadding(),
+                    ),
         ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            BoxWithConstraints(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+            ) {
                 val contentMaxH = maxHeight
                 val density = LocalDensity.current
                 var attachmentHeight by remember { mutableStateOf(0.dp) }
@@ -141,8 +159,10 @@ fun UniversalInputBar(
                 )
 
                 // Calculate the true collapsed height based on the current unconstrained inner content
-                val unconstrainedHeight = 12.dp + innerTopHeight + 56.dp
-                val trueCollapsedHeight = unconstrainedHeight.coerceIn(112.dp, maxHeightCollapsed)
+                val unconstrainedHeight =
+                    InputBarLayoutMetrics.topPadding + innerTopHeight + InputBarLayoutMetrics.bottomRowReserve
+                val trueCollapsedHeight =
+                    unconstrainedHeight.coerceIn(InputBarLayoutMetrics.minCollapsedHeight, maxHeightCollapsed)
                 val currentHeight = lerp(trueCollapsedHeight, contentMaxH * 0.7f, expandFraction)
 
                 Box(
@@ -151,7 +171,11 @@ fun UniversalInputBar(
                             .fillMaxWidth()
                             .then(
                                 when (expandFraction) {
-                                    0f -> Modifier.heightIn(min = 112.dp, max = maxHeightCollapsed)
+                                    0f ->
+                                        Modifier.heightIn(
+                                            min = InputBarLayoutMetrics.minCollapsedHeight,
+                                            max = maxHeightCollapsed,
+                                        )
                                     1f -> Modifier.fillMaxHeight(0.7f) // Reduced from 0.9f to avoid hitting TopAppBar
                                     else -> Modifier.height(currentHeight)
                                 },
@@ -162,7 +186,10 @@ fun UniversalInputBar(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(top = 12.dp, bottom = 56.dp) // Reserves space for the bottom row (48dp height + 8dp padding)
+                                .padding(
+                                    top = InputBarLayoutMetrics.topPadding,
+                                    bottom = InputBarLayoutMetrics.bottomRowReserve,
+                                )
                                 .then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
                         verticalArrangement = Arrangement.Top,
                     ) {
@@ -194,14 +221,17 @@ fun UniversalInputBar(
                                     verticalAlignment = Alignment.Top,
                                 ) {
                                     Column(
-                                        modifier = Modifier.weight(1f),
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .padding(bottom = 8.dp),
                                     ) {
                                         inputContent()
                                     }
 
                                     if (onExpandToggle != null) {
                                         // Sufficient space for the top-right chevron
-                                        Spacer(Modifier.width(40.dp))
+                                        Spacer(Modifier.width(InputBarLayoutMetrics.expandChevronWidth))
                                     }
                                 }
                             }
@@ -209,55 +239,55 @@ fun UniversalInputBar(
                     }
 
                     // BOTTOM LEFT: Action Content (Attach, Mode, etc)
-                    var lastActionContent by remember { mutableStateOf(actionContent) }
-                    if (actionContent != null) {
-                        lastActionContent = actionContent
-                    }
-
-                    AnimatedVisibility(
-                        visible = actionContent != null,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                        modifier = Modifier.align(Alignment.BottomStart),
+                    Row(
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .animateContentSize()
+                                .padding(bottom = InputBarLayoutMetrics.actionRowBottomPadding)
+                                .heightIn(
+                                    min =
+                                        if (actionContent != null) {
+                                            InputBarLayoutMetrics.actionRowHeight
+                                        } else {
+                                            0.dp
+                                        },
+                                ),
+                        verticalAlignment = Alignment.Bottom,
                     ) {
-                        lastActionContent?.let { content ->
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                        .heightIn(min = 48.dp),
-                                verticalAlignment = Alignment.Bottom,
-                            ) {
-                                content()
+                        if (actionContent != null) {
+                            actionContent()
 
-                                // Ensure the trailing area is reserved in the action row too
-                                if (trailingAction != null) {
-                                    Spacer(Modifier.width(104.dp))
-                                }
+                            if (trailingAction != null) {
+                                Spacer(Modifier.width(InputBarLayoutMetrics.trailingActionReserve))
                             }
                         }
                     }
 
                     // Top Right: Expand/Collapse Toggle
                     if (onExpandToggle != null) {
-                        CircularIconButton(
+                        NeoIconButton(
                             onClick = {
                                 if (isExpanded) focusManager.clearFocus()
                                 onExpandToggle()
                             },
+                            icon =
+                                if (isExpanded) {
+                                    Icons.Default.ExpandLess
+                                } else {
+                                    Icons.Default.ExpandMore
+                                },
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
                             modifier =
                                 Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 4.dp),
                             size = 32.dp,
-                        ) {
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            withShadow = false,
+                        )
                     }
 
                     // Bottom Right: Trailing Container (Mic, Send)
@@ -266,8 +296,8 @@ fun UniversalInputBar(
                             modifier =
                                 Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(bottom = 8.dp)
-                                    .heightIn(min = 48.dp),
+                                    .padding(bottom = InputBarLayoutMetrics.actionRowBottomPadding)
+                                    .heightIn(min = InputBarLayoutMetrics.actionRowHeight),
                             verticalAlignment = Alignment.Bottom,
                             horizontalArrangement = Arrangement.End,
                         ) {
@@ -293,22 +323,20 @@ fun StandardTrailingAction(
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     disabledContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-    shape: Shape = CircleShape,
     description: String? = null,
+    withShadow: Boolean = true,
 ) {
-    CircularTrailingAction(
+    NeoIconButton(
         onClick = onClick,
+        icon = icon,
+        contentDescription = description,
         modifier = modifier,
         enabled = enabled,
-        shape = shape,
-        containerColor = if (enabled) containerColor else disabledContainerColor,
-        content = {
-            Icon(
-                imageVector = icon,
-                contentDescription = description,
-                tint = if (enabled) contentColor else disabledContentColor,
-            )
-        },
+        size = EnclaveNeoTokens.trailingActionSize,
+        backgroundColor = if (enabled) containerColor else disabledContainerColor,
+        iconTint = if (enabled) contentColor else disabledContentColor,
+        borderColor = neoBorderColor(),
+        withShadow = withShadow && enabled,
     )
 }
 
@@ -325,54 +353,20 @@ fun StandardTrailingAction(
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     disabledContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-    shape: Shape = CircleShape,
     description: String? = null,
+    withShadow: Boolean = true,
 ) {
-    CircularTrailingAction(
+    NeoIconButton(
         onClick = onClick,
+        icon = painter,
+        contentDescription = description,
         modifier = modifier,
         enabled = enabled,
-        shape = shape,
-        containerColor = if (enabled) containerColor else disabledContainerColor,
-        content = {
-            Icon(
-                painter = painter,
-                contentDescription = description,
-                tint = if (enabled) contentColor else disabledContentColor,
-            )
-        },
-    )
-}
-
-@Composable
-private fun CircularTrailingAction(
-    onClick: () -> Unit,
-    modifier: Modifier,
-    enabled: Boolean,
-    shape: Shape,
-    containerColor: Color,
-    content: @Composable BoxScope.() -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Box(
-        modifier =
-            modifier
-                .size(48.dp)
-                .clip(shape)
-                .background(containerColor, shape = shape)
-                .then(
-                    if (enabled) {
-                        Modifier.clickable(
-                            interactionSource = interactionSource,
-                            indication = ripple(bounded = true, radius = 24.dp),
-                            onClick = onClick,
-                        )
-                    } else {
-                        Modifier
-                    },
-                ),
-        contentAlignment = Alignment.Center,
-        content = content,
+        size = EnclaveNeoTokens.trailingActionSize,
+        backgroundColor = if (enabled) containerColor else disabledContainerColor,
+        iconTint = if (enabled) contentColor else disabledContentColor,
+        borderColor = neoBorderColor(),
+        withShadow = withShadow && enabled,
     )
 }
 
@@ -385,11 +379,6 @@ fun UniversalVoicePromptPlaceholder(
     idlePlaceholder: String = "Enter the Enclave",
     modifier: Modifier = Modifier,
 ) {
-    val isRecordingPhase =
-        speechState is SpeechState.Listening ||
-            speechState is SpeechState.ModelLoading ||
-            speechState is SpeechState.Transcribing
-
     Box(modifier = modifier) {
         AnimatedContent(
             targetState = speechState,
@@ -457,14 +446,9 @@ fun UniversalVoiceTrailingAction(
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isRecordingPhase =
-        speechState is SpeechState.Listening ||
-            speechState is SpeechState.ModelLoading ||
-            speechState is SpeechState.Transcribing
-
     if (speechState is SpeechState.Transcribing) {
         Box(
-            modifier = modifier.size(48.dp),
+            modifier = modifier.size(EnclaveNeoTokens.trailingActionSize),
             contentAlignment = Alignment.Center,
         ) {
             CircularProgressIndicator(
@@ -475,7 +459,7 @@ fun UniversalVoiceTrailingAction(
         }
     } else {
         AnimatedContent(
-            targetState = hasSendableContent && !isGenerating && !isRecordingPhase,
+            targetState = hasSendableContent && !isGenerating && !speechState.isActiveVoiceInput,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "SendMicTransition",
             modifier = modifier,
@@ -524,6 +508,7 @@ fun UniversalVoiceTrailingAction(
                 enabled = enabled,
                 containerColor = containerColor,
                 contentColor = contentColor,
+                withShadow = enabled,
             )
         }
     }

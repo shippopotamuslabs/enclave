@@ -254,7 +254,8 @@ class LocalModelConfigureScreenTest {
         }
 
         composeTestRule.onNodeWithTag("DisplayNameField").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Creative").assertIsDisplayed()
-        composeTestRule.onNodeWithText("8192").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Creative", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag("ContextWindowField", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("8192", useUnmergedTree = true).assertExists()
     }
 }
