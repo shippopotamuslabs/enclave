@@ -36,7 +36,6 @@ fun NeoSheetTabRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = -EnclaveNeoTokens.screenHorizontalPadding)
                 .background(background),
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {

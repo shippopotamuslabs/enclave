@@ -11,12 +11,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -29,16 +31,25 @@ fun NeoIconButton(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    size: Dp = EnclaveNeoTokens.iconButtonSize,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    borderColor: Color = neoBorderColor(),
+    withShadow: Boolean = true,
 ) {
     NeoIconButtonSurface(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
+        size = size,
+        backgroundColor = backgroundColor,
+        borderColor = borderColor,
+        withShadow = withShadow,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = iconTint,
         )
     }
 }
@@ -50,16 +61,25 @@ fun NeoIconButton(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    size: Dp = EnclaveNeoTokens.iconButtonSize,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    borderColor: Color = neoBorderColor(),
+    withShadow: Boolean = true,
 ) {
     NeoIconButtonSurface(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
+        size = size,
+        backgroundColor = backgroundColor,
+        borderColor = borderColor,
+        withShadow = withShadow,
     ) {
         Icon(
             painter = icon,
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = iconTint,
         )
     }
 }
@@ -69,26 +89,34 @@ private fun NeoIconButtonSurface(
     onClick: () -> Unit,
     modifier: Modifier,
     enabled: Boolean,
+    size: Dp,
+    backgroundColor: Color,
+    borderColor: Color,
+    withShadow: Boolean,
     icon: @Composable () -> Unit,
 ) {
-    val borderColor = neoBorderColor()
-    val backgroundColor = MaterialTheme.colorScheme.surface
     val shadowColor = neoShadowColor()
     val shadowOffset = neoButtonShadowOffset()
     val interactionSource = remember { MutableInteractionSource() }
+    val showShadow = withShadow && enabled
 
-    // Reserve space for the hard shadow; a fixed 44dp box clips drawBehind offsets.
     Box(modifier = modifier) {
         Box(
             modifier =
                 Modifier
-                    .padding(end = shadowOffset, bottom = shadowOffset)
-                    .size(EnclaveNeoTokens.iconButtonSize)
+                    .then(
+                        if (showShadow) {
+                            Modifier.padding(end = shadowOffset, bottom = shadowOffset)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .size(size)
                     .semantics { role = Role.Button }
                     .neoSurface(
                         backgroundColor = backgroundColor,
                         borderColor = borderColor,
-                        withShadow = true,
+                        withShadow = showShadow,
                         shadowColor = shadowColor,
                         shadowOffset = shadowOffset,
                     )

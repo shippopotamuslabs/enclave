@@ -75,9 +75,8 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.ShimmerText
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.port.media.SpeechState
@@ -258,23 +257,27 @@ fun UniversalInputBar(
 
                     // Top Right: Expand/Collapse Toggle
                     if (onExpandToggle != null) {
-                        CircularIconButton(
+                        NeoIconButton(
                             onClick = {
                                 if (isExpanded) focusManager.clearFocus()
                                 onExpandToggle()
                             },
+                            icon =
+                                if (isExpanded) {
+                                    Icons.Default.ExpandLess
+                                } else {
+                                    Icons.Default.ExpandMore
+                                },
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
                             modifier =
                                 Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(top = 4.dp),
                             size = 32.dp,
-                        ) {
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            withShadow = false,
+                        )
                     }
 
                     // Bottom Right: Trailing Container (Mic, Send)
@@ -314,21 +317,17 @@ fun StandardTrailingAction(
     description: String? = null,
     withShadow: Boolean = true,
 ) {
-    CircularTrailingAction(
+    NeoIconButton(
         onClick = onClick,
+        icon = icon,
+        contentDescription = description,
         modifier = modifier,
         enabled = enabled,
-        shape = shape,
-        containerColor = if (enabled) containerColor else disabledContainerColor,
+        size = EnclaveNeoTokens.trailingActionSize,
+        backgroundColor = if (enabled) containerColor else disabledContainerColor,
+        iconTint = if (enabled) contentColor else disabledContentColor,
         borderColor = neoBorderColor(),
         withShadow = withShadow && enabled,
-        content = {
-            Icon(
-                imageVector = icon,
-                contentDescription = description,
-                tint = if (enabled) contentColor else disabledContentColor,
-            )
-        },
     )
 }
 
@@ -349,72 +348,18 @@ fun StandardTrailingAction(
     description: String? = null,
     withShadow: Boolean = true,
 ) {
-    CircularTrailingAction(
+    NeoIconButton(
         onClick = onClick,
+        icon = painter,
+        contentDescription = description,
         modifier = modifier,
         enabled = enabled,
-        shape = shape,
-        containerColor = if (enabled) containerColor else disabledContainerColor,
+        size = EnclaveNeoTokens.trailingActionSize,
+        backgroundColor = if (enabled) containerColor else disabledContainerColor,
+        iconTint = if (enabled) contentColor else disabledContentColor,
         borderColor = neoBorderColor(),
         withShadow = withShadow && enabled,
-        content = {
-            Icon(
-                painter = painter,
-                contentDescription = description,
-                tint = if (enabled) contentColor else disabledContentColor,
-            )
-        },
     )
-}
-
-@Composable
-private fun CircularTrailingAction(
-    onClick: () -> Unit,
-    modifier: Modifier,
-    enabled: Boolean,
-    shape: Shape,
-    containerColor: Color,
-    borderColor: Color,
-    withShadow: Boolean,
-    content: @Composable BoxScope.() -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val shadowOffset = neoButtonShadowOffset()
-    Box(modifier = modifier) {
-        Box(
-            modifier =
-                Modifier
-                    .then(
-                        if (withShadow) {
-                            Modifier.padding(end = shadowOffset, bottom = shadowOffset)
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .size(EnclaveNeoTokens.trailingActionSize)
-                    .neoSurface(
-                        backgroundColor = containerColor,
-                        borderColor = borderColor,
-                        withShadow = withShadow,
-                        shadowColor = neoShadowColor(),
-                        shadowOffset = shadowOffset,
-                        shape = shape,
-                    )
-                    .then(
-                        if (enabled) {
-                            Modifier.clickable(
-                                interactionSource = interactionSource,
-                                indication = null,
-                                onClick = onClick,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
-            contentAlignment = Alignment.Center,
-            content = content,
-        )
-    }
 }
 
 /**

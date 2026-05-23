@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -28,6 +29,8 @@ fun NeoToggleRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     icon: ImageVector? = null,
+    enabled: Boolean = true,
+    switchTestTag: String? = null,
 ) {
     val borderColor = neoBorderColor()
     val backgroundColor = MaterialTheme.colorScheme.surface
@@ -41,7 +44,13 @@ fun NeoToggleRow(
                     borderColor = borderColor,
                     withShadow = false,
                 )
-                .clickable { onCheckedChange(!checked) }
+                .then(
+                    if (enabled) {
+                        Modifier.clickable { onCheckedChange(!checked) }
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -67,6 +76,13 @@ fun NeoToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier =
+                if (switchTestTag != null) {
+                    Modifier.testTag(switchTestTag)
+                } else {
+                    Modifier
+                },
         )
     }
 }

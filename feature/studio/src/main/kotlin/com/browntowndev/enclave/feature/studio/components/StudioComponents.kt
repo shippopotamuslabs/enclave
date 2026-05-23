@@ -38,7 +38,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.MediaModeToggle
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
 import com.browntowndev.enclave.core.ui.component.neo.NeoStepper
@@ -194,48 +193,6 @@ fun SettingRow(
             Box(contentAlignment = Alignment.CenterEnd) {
                 content()
             }
-        }
-    }
-}
-
-@Composable
-fun ResolutionSelector(
-    selected: String,
-    options: List<String>,
-    onSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { res ->
-            FilterChip(
-                selected = selected == res,
-                onClick = { onSelected(res) },
-                label = { Text(res) },
-            )
-        }
-    }
-}
-
-@Composable
-fun DurationSelector(
-    selected: Int,
-    options: List<Int>,
-    onSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { duration ->
-            FilterChip(
-                selected = selected == duration,
-                onClick = { onSelected(duration) },
-                label = { Text("${duration}s") },
-            )
         }
     }
 }
@@ -783,7 +740,7 @@ fun AspectRatioSelector(
 }
 
 @Composable
-fun GenerationCountPicker(
+private fun GenerationCountPicker(
     count: Int,
     onCountChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
