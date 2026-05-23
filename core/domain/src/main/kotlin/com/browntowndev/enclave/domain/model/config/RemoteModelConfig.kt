@@ -27,6 +27,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class RemoteModelAsset(
+    @kotlinx.serialization.json.JsonNames("displayName", "display_name")
     val displayName: String = "",
     val huggingFaceModelName: String = "",
     val huggingFacePath: String? = null,
@@ -42,6 +43,20 @@ data class RemoteModelAsset(
     val mmprojSizeInBytes: Long? = null,
     val configurations: List<RemoteModelConfiguration> = emptyList(),
 )
+
+/**
+ * Resolves the human-readable asset label from catalog JSON.
+ * Prefers asset-level [displayName], then the first preset label, then a short name from [huggingFaceModelName].
+ */
+fun RemoteModelAsset.effectiveDisplayName(): String {
+    displayName.takeIf { it.isNotBlank() }?.let { return it }
+    configurations.firstOrNull()?.displayName?.takeIf { it.isNotBlank() }?.let { return it }
+    if (huggingFaceModelName.isBlank()) return ""
+    return huggingFaceModelName
+        .substringAfterLast('/')
+        .replace(Regex("""[-_]"""), " ")
+        .trim()
+}
 
 /**
  * A tuning preset within a remote model asset.
