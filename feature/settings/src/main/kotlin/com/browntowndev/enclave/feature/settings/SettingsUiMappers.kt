@@ -258,6 +258,7 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                         ActiveModelConfigurationDecryptException.USER_MESSAGE
                     else -> null
                 },
+        modelId = modelId,
         isMultimodal = isMultimodal,
     )
 

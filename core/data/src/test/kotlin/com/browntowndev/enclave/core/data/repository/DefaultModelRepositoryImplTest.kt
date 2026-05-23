@@ -165,7 +165,7 @@ class DefaultModelRepositoryImplTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
-                    modelId = "",
+                    modelId = "gpt-4o",
                     displayName = localEncryption.encryptString("Default"),
                 )
             coEvery { apiCredentialsDao.getById(credId) } returns
@@ -183,6 +183,7 @@ class DefaultModelRepositoryImplTest {
             assertEquals("OpenAI Primary", result?.displayName)
             assertEquals("OpenAI", result?.providerName)
             assertEquals("Default", result?.presetName)
+            assertEquals("gpt-4o", result?.modelId)
         }
 
     @Test
@@ -261,6 +262,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = localEncryption.encryptString("Thinking"),
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = "Gemma 4 E4B",
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -297,6 +299,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = localEncryption.encryptString("Precise"),
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = "Gemma 4 E4B",
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -316,6 +319,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = ApiModelConfigurationId("api-cfg"),
                             localPresetName = null,
                             apiPresetName = localEncryption.encryptString("Default"),
+                            apiModelId = "grok-4-3",
                             localAssetName = null,
                             apiAssetName = localEncryption.encryptString("OpenAI Primary"),
                             apiCredentialsId = ApiCredentialsId("12"),
@@ -335,6 +339,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = null,
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -354,6 +359,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = null,
                             localPresetName = null,
                             apiPresetName = null,
+                            apiModelId = null,
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = null,
@@ -381,6 +387,7 @@ class DefaultModelRepositoryImplTest {
                 val vision = requireNotNull(assignments[ModelType.VISION])
                 assertEquals("OpenAI Primary", vision.displayName)
                 assertEquals("Default", vision.presetName)
+                assertEquals("grok-4-3", vision.modelId)
                 assertEquals("OpenAI", vision.providerName)
 
                 val tts = requireNotNull(assignments[ModelType.TTS])
@@ -426,6 +433,7 @@ class DefaultModelRepositoryImplTest {
                             apiConfigId = ApiModelConfigurationId("api-cfg"),
                             localPresetName = null,
                             apiPresetName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
+                            apiModelId = "grok-vision",
                             localAssetName = null,
                             apiAssetName = null,
                             apiCredentialsId = ApiCredentialsId("12"),

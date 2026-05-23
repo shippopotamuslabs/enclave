@@ -107,7 +107,7 @@ fun VisionSettingsBottomSheet(
                                 )
                             },
                             headlineContent = { Text("API Vision Model", fontWeight = FontWeight.Bold) },
-                            supportingContent = { Text(currentVisionModel?.currentModelName ?: "None") },
+                            supportingContent = { Text(formatVisionAssignmentSubtitle(currentVisionModel)) },
                             trailingContent = {
                                 Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                             },
@@ -116,5 +116,20 @@ fun VisionSettingsBottomSheet(
                 }
             }
         }
+    }
+}
+
+private fun formatVisionAssignmentSubtitle(assignment: DefaultModelAssignmentUi?): String {
+    if (assignment == null) return "None"
+    val provider = assignment.providerName
+    val modelLabel =
+        assignment.modelId?.takeIf { it.isNotBlank() }
+            ?: assignment.presetName
+            ?: assignment.currentModelName.takeIf { it != "None Assigned" }
+    return when {
+        provider != null && modelLabel != null -> "$provider • $modelLabel"
+        provider != null -> provider
+        modelLabel != null -> modelLabel
+        else -> "None"
     }
 }
