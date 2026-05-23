@@ -93,6 +93,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.browntowndev.enclave.core.ui.component.VideoThumbnail
 import com.browntowndev.enclave.core.ui.component.dialog.AddAlbumDialog
+import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
@@ -414,95 +415,72 @@ private fun GalleryTopBar(
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .statusBarsPadding(),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = EnclaveNeoTokens.screenHorizontalPadding,
-                            vertical = 8.dp,
-                        ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (selectedItemCount > 0) {
+    NeoAppBarChrome(modifier = modifier) {
+        if (selectedItemCount > 0) {
+            NeoIconButton(
+                onClick = onClearSelectionClick,
+                icon = Icons.Default.Close,
+                contentDescription = "Clear selection",
+            )
+        } else {
+            NeoIconButton(
+                onClick = onBackClick,
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+            )
+        }
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (selectedItemCount > 0) "$selectedItemCount Selected" else title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        if (selectedItemCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                if (selectedMediaItemCount > 0) {
                     NeoIconButton(
-                        onClick = onClearSelectionClick,
-                        icon = Icons.Default.Close,
-                        contentDescription = "Clear selection",
-                    )
-                } else {
-                    NeoIconButton(
-                        onClick = onBackClick,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        onClick = onShareClick,
+                        icon = Icons.Default.Share,
+                        contentDescription = "Share",
                     )
                 }
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (selectedItemCount > 0) "$selectedItemCount Selected" else title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                NeoIconButton(
+                    onClick = onMoveClick,
+                    icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                    contentDescription = "Move",
+                )
+                if (showDeleteIcon) {
+                    NeoIconButton(
+                        onClick = onDeleteClick,
+                        icon = Icons.Default.Delete,
+                        contentDescription = "Delete",
                     )
-                }
-                if (selectedItemCount > 0) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
-                        if (selectedMediaItemCount > 0) {
-                            NeoIconButton(
-                                onClick = onShareClick,
-                                icon = Icons.Default.Share,
-                                contentDescription = "Share",
-                            )
-                        }
-                        NeoIconButton(
-                            onClick = onMoveClick,
-                            icon = Icons.AutoMirrored.Filled.DriveFileMove,
-                            contentDescription = "Move",
-                        )
-                        if (showDeleteIcon) {
-                            NeoIconButton(
-                                onClick = onDeleteClick,
-                                icon = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                            )
-                        }
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
-                        if (showRenameAlbumIcon) {
-                            NeoIconButton(
-                                onClick = onRenameClick,
-                                icon = Icons.Default.Edit,
-                                contentDescription = "Rename album",
-                            )
-                        }
-                        if (showAddAlbumIcon) {
-                            NeoIconButton(
-                                onClick = onAddAlbumClick,
-                                icon = Icons.Default.Add,
-                                contentDescription = "Add album",
-                            )
-                        }
-                    }
                 }
             }
-            HorizontalDivider(
-                thickness = EnclaveNeoTokens.borderWidth,
-                color = neoBorderColor(),
-            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+                if (showRenameAlbumIcon) {
+                    NeoIconButton(
+                        onClick = onRenameClick,
+                        icon = Icons.Default.Edit,
+                        contentDescription = "Rename album",
+                    )
+                }
+                if (showAddAlbumIcon) {
+                    NeoIconButton(
+                        onClick = onAddAlbumClick,
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add album",
+                    )
+                }
+            }
         }
     }
 }

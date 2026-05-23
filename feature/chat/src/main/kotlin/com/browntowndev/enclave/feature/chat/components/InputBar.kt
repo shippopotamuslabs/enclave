@@ -25,10 +25,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertPhoto
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
@@ -58,11 +57,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
@@ -275,27 +277,37 @@ fun InputBar(
             },
         trailingAction = {
             if (!isRecordingPhase) {
-                // ChatModeUi selector
-                ExposedDropdownMenuBox(
-                    expanded = modeExpanded,
-                    onExpandedChange = { modeExpanded = it },
-                ) {
+                Box {
                     StandardTrailingAction(
                         painter = painterResource(selectedMode.iconRes),
-                        onClick = { /* Toggle handled via onExpandedChange */ },
-                        modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                        onClick = { modeExpanded = true },
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         description = selectedMode.getDisplayName(context),
                     )
-                    ExposedDropdownMenu(
+                    DropdownMenu(
                         expanded = modeExpanded,
                         onDismissRequest = { modeExpanded = false },
-                        modifier = Modifier.width(200.dp),
+                        modifier =
+                            Modifier
+                                .width(200.dp)
+                                .neoSurface(
+                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    borderColor = neoBorderColor(),
+                                    withShadow = true,
+                                    shadowColor = neoShadowColor(),
+                                    shadowOffset = neoButtonShadowOffset(),
+                                    shape = EnclaveNeoTokens.shape,
+                                ),
                     ) {
                         ChatModeUi.entries.forEach { mode ->
                             DropdownMenuItem(
-                                text = { Text(mode.getDisplayName(context)) },
+                                text = {
+                                    Text(
+                                        mode.getDisplayName(context),
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                },
                                 onClick = {
                                     onModeChange(mode)
                                     modeExpanded = false
@@ -304,6 +316,7 @@ fun InputBar(
                                     Icon(
                                         painter = painterResource(mode.iconRes),
                                         contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
                                     )
                                 },
                             )

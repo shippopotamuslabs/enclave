@@ -11,6 +11,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -24,6 +25,7 @@ fun NeoModalBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    tonalElevation: Dp = Dp.Hairline,
     dragHandle: @Composable (() -> Unit)? = { BottomSheetDefaults.DragHandle() },
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -33,6 +35,7 @@ fun NeoModalBottomSheet(
         sheetState = sheetState,
         shape = EnclaveNeoTokens.bottomSheetShape,
         containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = tonalElevation,
         dragHandle = dragHandle,
     ) {
         Column(

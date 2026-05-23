@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.MediaModeToggle
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
+import com.browntowndev.enclave.core.ui.component.neo.NeoStepper
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
@@ -270,92 +272,12 @@ fun PillSelector(
     modifier: Modifier = Modifier,
 ) {
     val selectedIndex = options.indexOf(selected).coerceAtLeast(0)
-    val itemWidthFallback = if (options.size > 3) 72.dp else 84.dp
-    val totalWidthFallback = itemWidthFallback * options.size
-
-    Box(
-        modifier =
-            modifier
-                .then(if (modifier == Modifier) Modifier.width(totalWidthFallback) else Modifier)
-                .height(38.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-    ) {
-        BoxWithConstraints(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(2.dp),
-        ) {
-            val indicatorWidth = maxWidth / options.size.coerceAtLeast(1)
-            val targetBias =
-                if (options.size > 1) {
-                    (selectedIndex.toFloat() / (options.size - 1).toFloat()) * 2f - 1f
-                } else {
-                    -1f
-                }
-            val horizontalBias by animateFloatAsState(
-                targetValue = targetBias,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                label = "pillIndicatorBias",
-            )
-
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxHeight()
-                        .width(indicatorWidth)
-                        .align(BiasAlignment(horizontalBias = horizontalBias, verticalBias = 0f))
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape),
-            )
-
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                options.forEachIndexed { index, option ->
-                    val isSelected = index == selectedIndex
-                    val textColor by animateColorAsState(
-                        targetValue =
-                            if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        label = "pillTextColor",
-                    )
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(CircleShape)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = { onSelected(option) },
-                                ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = option,
-                            style =
-                                MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = if (options.size > 3) 11.sp else 12.sp,
-                                ),
-                            color = textColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-    }
+    NeoSegmentedControl(
+        options = options,
+        selectedIndex = selectedIndex,
+        onOptionSelected = { index -> onSelected(options[index]) },
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -380,9 +302,28 @@ fun StudioOptionsSheetContent(
             onDismiss = onDismiss,
         )
 
-        MediaModeToggle(
-            selectedType = state.mediaType,
-            onTypeChange = onMediaTypeChange,
+        NeoSegmentedControl(
+            options =
+                listOf(
+                    MediaCapability.IMAGE.displayName,
+                    MediaCapability.VIDEO.displayName,
+                    MediaCapability.MUSIC.displayName,
+                ),
+            selectedIndex =
+                when (state.mediaType) {
+                    MediaCapability.IMAGE -> 0
+                    MediaCapability.VIDEO -> 1
+                    MediaCapability.MUSIC -> 2
+                },
+            onOptionSelected = { index ->
+                val type =
+                    when (index) {
+                        0 -> MediaCapability.IMAGE
+                        1 -> MediaCapability.VIDEO
+                        else -> MediaCapability.MUSIC
+                    }
+                onMediaTypeChange(type)
+            },
             modifier =
                 Modifier
                     .fillMaxWidth(0.75f)
@@ -853,112 +794,13 @@ fun GenerationCountPicker(
     onCountChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val min = ImageGenerationSettings.MIN_GENERATION_COUNT
-    val max = ImageGenerationSettings.MAX_GENERATION_COUNT
-
-    Row(
-        modifier =
-            modifier
-                .width(100.dp)
-                .height(44.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(12.dp),
-                ).clip(RoundedCornerShape(12.dp))
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(12.dp),
-                ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        var textValue by remember(count) { mutableStateOf(count.toString()) }
-
-        BasicTextField(
-            value = textValue,
-            onValueChange = {
-                textValue = it
-                it.toIntOrNull()?.let { newVal ->
-                    onCountChange(newVal.coerceIn(min, max))
-                }
-            },
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            textStyle =
-                MaterialTheme.typography.bodyLarge.copy(
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                ),
-            keyboardOptions =
-                KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done,
-                ),
-            singleLine = true,
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            decorationBox = { innerTextField ->
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    innerTextField()
-                }
-            },
-        )
-
-        VerticalDivider(
-            color = MaterialTheme.colorScheme.outlineVariant,
-            thickness = 1.dp,
-        )
-
-        Column(
-            modifier =
-                Modifier
-                    .width(42.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clickable { if (count < max) onCountChange(count + 1) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Increase",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 1.dp,
-            )
-
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clickable { if (count > min) onCountChange(count - 1) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Remove,
-                    contentDescription = "Decrease",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-    }
+    NeoStepper(
+        value = count,
+        onValueChange = onCountChange,
+        modifier = modifier,
+        min = ImageGenerationSettings.MIN_GENERATION_COUNT,
+        max = ImageGenerationSettings.MAX_GENERATION_COUNT,
+    )
 }
 
 @Preview(showBackground = true, name = "Studio Options - Music")

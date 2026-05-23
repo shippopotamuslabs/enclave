@@ -40,6 +40,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
+import com.browntowndev.enclave.core.ui.component.neo.NeoMediaActionButton
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
@@ -457,46 +458,19 @@ private fun ActionItem(
         state = tooltipState,
         enableUserInput = false,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier =
-                modifier
-                    .alpha(if (enabled) 1f else 0.38f)
-                    .clickable {
-                        if (enabled) {
-                            onClick()
-                        } else if (disabledTooltip != null) {
-                            scope.launch { tooltipState.show() }
-                        }
-                    },
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(56.dp)
-                        .background(
-                            if (isDestructive) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
-                            CircleShape,
-                        ).border(
-                            1.dp,
-                            if (isDestructive) Color.Red.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.2f),
-                            CircleShape,
-                        ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = if (isDestructive) Color.Red else Color.White,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isDestructive) Color.Red else Color.White.copy(alpha = 0.8f),
-            )
-        }
+        NeoMediaActionButton(
+            icon = icon,
+            label = label,
+            onClick = {
+                if (enabled) {
+                    onClick()
+                } else if (disabledTooltip != null) {
+                    scope.launch { tooltipState.show() }
+                }
+            },
+            enabled = enabled,
+            isDestructive = isDestructive,
+            modifier = modifier,
+        )
     }
 }
