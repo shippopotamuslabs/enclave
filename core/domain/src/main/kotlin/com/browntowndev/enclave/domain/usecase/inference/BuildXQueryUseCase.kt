@@ -51,6 +51,12 @@ class BuildXQueryUseCase
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { parts.add("lang:$it") }
 
+            val isToUserSearch = params.to_user?.trim()?.isNotEmpty() == true
+            val hasExplicitReplyFilter = params.query?.contains("is:reply", ignoreCase = true) == true
+            if (!params.include_replies && !isToUserSearch && !hasExplicitReplyFilter) {
+                parts.add("-is:reply")
+            }
+
             val query = parts.joinToString(" ").trim()
 
             // Conjunction-required safeguard: operators like has:media cannot be used alone.
