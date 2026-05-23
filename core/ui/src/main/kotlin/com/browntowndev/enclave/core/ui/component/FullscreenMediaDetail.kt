@@ -23,16 +23,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -40,11 +35,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoMediaActionButton
+import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import kotlinx.coroutines.launch
 
 const val FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP =
     "Setup a video model in Settings to enable."
@@ -194,32 +190,18 @@ fun FullscreenMediaActionButton(
     action: FullscreenMediaAction,
     modifier: Modifier = Modifier,
 ) {
-    val tooltipState = rememberTooltipState(isPersistent = true)
-    val scope = rememberCoroutineScope()
-
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-        tooltip = {
-            if (!action.enabled && action.disabledTooltip != null) {
-                PlainTooltip { Text(action.disabledTooltip) }
-            }
-        },
-        state = tooltipState,
-        enableUserInput = false,
+    NeoDisabledActionTooltip(
+        enabled = action.enabled,
+        disabledReason = action.disabledTooltip,
+        modifier = modifier,
     ) {
+        val handleClick = rememberNeoDisabledClick(enabled = action.enabled, onEnabledClick = action.onClick)
         NeoMediaActionButton(
             icon = action.icon,
             label = action.label,
-            onClick = {
-                if (action.enabled) {
-                    action.onClick()
-                } else if (action.disabledTooltip != null) {
-                    scope.launch { tooltipState.show() }
-                }
-            },
+            onClick = handleClick,
             enabled = action.enabled,
             isDestructive = action.isDestructive,
-            modifier = modifier,
         )
     }
 }

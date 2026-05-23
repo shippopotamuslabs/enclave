@@ -13,15 +13,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
@@ -32,38 +29,27 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
 import com.browntowndev.enclave.core.ui.component.neo.NeoActionRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
+import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
@@ -74,12 +60,12 @@ import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
-import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
+import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.port.media.SpeechState
+import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import com.browntowndev.enclave.feature.chat.ChatModeUi
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
@@ -89,9 +75,7 @@ fun InputBar(
     speechState: SpeechState,
     selectedImageUris: List<String>,
     selectedFileName: String?,
-    @Suppress("UnusedParameter")
     isPhotoAttachmentEnabled: Boolean,
-    @Suppress("UnusedParameter")
     photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
@@ -127,9 +111,6 @@ fun InputBar(
             }
         }
 
-    val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
-    val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
-
     if (showAttachmentSheet) {
         NeoModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
@@ -147,7 +128,9 @@ fun InputBar(
                     showAttachmentSheet = false
                     onImageAttach()
                 },
-                enabled = isPhotoAttachmentEnabled,
+                enabled =
+                    isPhotoAttachmentEnabled &&
+                        selectedImageUris.size < photoAttachmentMaxItems,
                 disabledReason = photoAttachmentDisabledReason,
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -167,7 +150,7 @@ fun InputBar(
         onExpandToggle = { isExpanded = !isExpanded },
         modifier =
             modifier.then(
-                if (!isExpanded && !isRecordingPhase) {
+                if (!isExpanded && !speechState.isActiveVoiceInput) {
                     Modifier.clickable { focusRequester.requestFocus() }
                 } else {
                     Modifier
@@ -234,44 +217,17 @@ fun InputBar(
             }
         },
         inputContent = {
-            BasicTextField(
+            UniversalPromptTextField(
                 value = inputText,
-                onValueChange = {
-                    onInputChange(it)
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
-                textStyle =
-                    MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 22.sp,
-                    ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
-                keyboardOptions =
-                    KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Default,
-                    ),
-                decorationBox = { innerTextField ->
-                    Box(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
-                        if (inputText.isEmpty() || isRecordingPhase) {
-                            UniversalVoicePromptPlaceholder(
-                                speechState = speechState,
-                                idlePlaceholder = "Enter the Enclave",
-                            )
-                        }
-                        if (!isRecordingPhase) {
-                            innerTextField()
-                        }
-                    }
-                },
+                onValueChange = onInputChange,
+                speechState = speechState,
+                idlePlaceholder = "Enter the Enclave",
+                isExpanded = isExpanded,
+                focusRequester = focusRequester,
             )
         },
         actionContent =
-            if (isRecordingPhase) {
+            if (speechState.isActiveVoiceInput) {
                 null
             } else {
                 {
@@ -283,7 +239,7 @@ fun InputBar(
                 }
             },
         trailingAction = {
-            if (!isRecordingPhase) {
+            if (!speechState.isActiveVoiceInput) {
                 Box {
                     StandardTrailingAction(
                         painter = painterResource(selectedMode.iconRes),
@@ -362,40 +318,17 @@ private fun AttachmentMenuItem(
     enabled: Boolean = true,
     disabledReason: String? = null,
 ) {
-    val scope = rememberCoroutineScope()
-    val tooltipState = rememberTooltipState(isPersistent = true)
-
-    val content = @Composable {
+    NeoDisabledActionTooltip(
+        enabled = enabled,
+        disabledReason = disabledReason,
+    ) {
+        val handleClick = rememberNeoDisabledClick(enabled = enabled, onEnabledClick = onClick)
         NeoActionRow(
             title = label,
             icon = icon,
             enabled = enabled,
-            onClick = {
-                if (enabled) {
-                    onClick()
-                } else if (!disabledReason.isNullOrBlank()) {
-                    scope.launch { tooltipState.show() }
-                }
-            },
+            onClick = handleClick,
         )
-    }
-
-    if (!enabled && !disabledReason.isNullOrBlank()) {
-        TooltipBox(
-            positionProvider =
-                TooltipDefaults.rememberTooltipPositionProvider(
-                    positioning = TooltipAnchorPosition.Above,
-                ),
-            tooltip = {
-                PlainTooltip {
-                    Text(disabledReason)
-                }
-            },
-            state = tooltipState,
-            content = content,
-        )
-    } else {
-        content()
     }
 }
 
