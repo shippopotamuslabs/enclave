@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -27,9 +26,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,7 +53,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -138,18 +140,11 @@ fun LocalModelsBottomSheetContent(
         }
     }
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             val viewState =
                 remember(uiState) {
                     when {
@@ -170,6 +165,7 @@ fun LocalModelsBottomSheetContent(
                     is LocalModelsSheetView.ConfigList -> {
                         LocalModelConfigListView(
                             asset = state.asset,
+                            onDismiss = onDismiss,
                             onBack = { onSelectLocalModelAsset(null) },
                             onEditConfig = { config ->
                                 onSelectLocalModelConfig(config)
@@ -192,6 +188,7 @@ fun LocalModelsBottomSheetContent(
                             localModels = uiState.localModelsSheet.models,
                             availableToDownloadModels = uiState.localModelsSheet.availableDownloads,
                             reDownloadStates = reDownloadStates,
+                            onDismiss = onDismiss,
                             onSelectAsset = { asset -> onSelectLocalModelAsset(asset) },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = LocalDeleteTarget.Asset(asset.metadataId, asset.friendlyName)
@@ -257,38 +254,25 @@ private fun LocalModelAssetListView(
     localModels: List<LocalModelAssetUi>,
     availableToDownloadModels: List<LocalModelAssetUi>,
     reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
+    onDismiss: () -> Unit,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
     onReDownloadModel: (LocalModelId) -> Unit,
 ) {
-    Column {
-        Text(
-            text = "Local AI Models",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-
-        Text(
-            text = "Manage your downloaded models and their tuning presets.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 24.dp),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        NeoSheetHeader(
+            title = "Local AI Models",
+            subtitle = "Manage your downloaded models and their tuning presets.",
+            onDismiss = onDismiss,
         )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             if (localModels.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "Downloaded",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
+                    NeoSectionHeader(text = "Downloaded")
                 }
                 items(localModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
@@ -309,13 +293,8 @@ private fun LocalModelAssetListView(
 
             if (availableToDownloadModels.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "AVAILABLE FOR DOWNLOAD",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
+                    Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
+                    NeoSectionHeader(text = "Available for download")
                 }
                 items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
@@ -350,24 +329,19 @@ private fun LocalModelAssetCard(
     onReDownloadClick: () -> Unit,
 ) {
     val card: @Composable () -> Unit = {
-        Card(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onSelectAsset(asset) },
-            shape = RoundedCornerShape(16.dp),
-            colors =
-                CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
+                    .neoSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        borderColor = neoBorderColor(),
+                        withShadow = false,
+                    )
+                    .clickable { onSelectAsset(asset) }
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -473,7 +447,6 @@ private fun LocalModelAssetCard(
                         modifier = Modifier.padding(start = 4.dp),
                     )
                 }
-            }
         }
     }
 
@@ -491,7 +464,7 @@ private fun LocalModelAssetCard(
             )
         SwipeToDismissBox(
             state = dismissState,
-            modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+            modifier = Modifier.clip(EnclaveNeoTokens.shape),
             enableDismissFromStartToEnd = false,
             backgroundContent = {
                 Box(
@@ -518,52 +491,39 @@ private fun LocalModelAssetCard(
 @Composable
 private fun LocalModelConfigListView(
     asset: LocalModelAssetUi,
+    onDismiss: () -> Unit,
     onBack: () -> Unit,
     onEditConfig: (LocalModelConfigUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteConfig: (LocalModelConfigUi) -> Unit,
     onAddConfig: () -> Unit,
 ) {
-    Column {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp),
-        ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to local models")
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = asset.friendlyName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (asset.isMultimodal) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "Vision capable",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Text(
-                    text = "Presets",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = { onRequestDeleteAsset(asset) }) {
+    val presetSubtitle =
+        if (asset.isMultimodal) {
+            "Presets • Vision"
+        } else {
+            "Presets"
+        }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            NeoSheetHeader(
+                title = asset.friendlyName,
+                subtitle = presetSubtitle,
+                onDismiss = onDismiss,
+                onBackClick = onBack,
+            )
+            TextButton(
+                onClick = { onRequestDeleteAsset(asset) },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
                 Text("Delete Model", color = MaterialTheme.colorScheme.error)
             }
         }
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             items(asset.configurations, key = { it.id.value }) { config ->
                 val isSwipeEnabled = isPresetSwipeDeletionEnabled(asset.configurations.size)
@@ -581,7 +541,7 @@ private fun LocalModelConfigListView(
 
                 SwipeToDismissBox(
                     state = dismissState,
-                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.clip(EnclaveNeoTokens.shape),
                     enableDismissFromStartToEnd = false,
                     gesturesEnabled = isSwipeEnabled,
                     backgroundContent = {
@@ -601,64 +561,22 @@ private fun LocalModelConfigListView(
                         }
                     },
                 ) {
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onEditConfig(config) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                    ) {
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = config.displayName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
+                    SettingsProviderCard(
+                        title = config.displayName,
+                        subtitle = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
+                        onClick = { onEditConfig(config) },
+                    )
                 }
             }
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
+                NeoPrimaryButton(
+                    text = "Add Preset",
+                    icon = Icons.Default.Add,
                     onClick = onAddConfig,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add Preset",
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+                )
             }
         }
     }

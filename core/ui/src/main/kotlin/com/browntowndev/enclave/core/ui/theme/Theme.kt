@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -34,6 +35,7 @@ private val DarkColorScheme =
         surfaceVariant = DarkSurfaceVariant,
         onSurfaceVariant = DarkOnSurfaceVariant,
         outline = DarkOutline,
+        outlineVariant = DarkNeoBorder,
         error = ErrorRed,
         onError = OnErrorWhite,
     )
@@ -48,6 +50,8 @@ private val LightColorScheme =
         onPrimary = Color.White,
         onBackground = LightOnBackground,
         onSurface = LightOnBackground,
+        outline = LightOutline,
+        outlineVariant = LightNeoBorder,
         error = ErrorRed,
         onError = OnErrorWhite,
     )
@@ -162,10 +166,12 @@ private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> =
             ),
     )
 
-fun darkMarkdownTheme(): MarkdownTheme =
+fun darkMarkdownTheme(
+    bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
+): MarkdownTheme =
     MarkdownTheme(
         headingStyles = darkHeadingStyles(),
-        bodyStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
+        bodyStyle = bodyStyle,
         inlineCodeStyle = SpanStyle(color = DarkOnBackground),
         inlineCodeBackground = DarkSurfaceVariant,
         codeBlockStyle =

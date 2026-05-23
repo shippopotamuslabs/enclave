@@ -9,10 +9,10 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ContentUi
 import com.browntowndev.enclave.feature.chat.MessageRole
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble — dark")
 @Composable
-internal fun PreviewMessageBubbleUser() {
-    EnclaveTheme {
+fun PreviewMessageBubbleUserDark() {
+    EnclaveTheme(darkTheme = true) {
         MessageBubble(
             message =
                 ChatMessage(
@@ -26,10 +26,10 @@ internal fun PreviewMessageBubbleUser() {
     }
 }
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble code — dark")
 @Composable
-internal fun PreviewMessageBubbleCode() {
-    EnclaveTheme {
+fun PreviewMessageBubbleCodeDark() {
+    EnclaveTheme(darkTheme = true) {
         MessageBubble(
             message =
                 ChatMessage(
@@ -53,10 +53,10 @@ fun main() {
     }
 }
 
-@Preview
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "User bubble long — dark")
 @Composable
-internal fun PreviewMessageBubbleLong() {
-    EnclaveTheme {
+fun PreviewMessageBubbleLongDark() {
+    EnclaveTheme(darkTheme = true) {
         MessageBubble(
             message =
                 ChatMessage(

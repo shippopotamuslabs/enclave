@@ -23,12 +23,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
 @Composable
-internal fun ExpandableTruncatableMessageText(text: String) {
+internal fun ExpandableTruncatableMessageText(
+    text: String,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
     var isExpanded by remember(text) { mutableStateOf(false) }
     var isTruncatable by remember(text) { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(
@@ -49,6 +53,7 @@ internal fun ExpandableTruncatableMessageText(text: String) {
         Text(
             text = text,
             style = bodyStyle,
+            color = color,
             modifier =
                 Modifier
                     .fillMaxWidth()

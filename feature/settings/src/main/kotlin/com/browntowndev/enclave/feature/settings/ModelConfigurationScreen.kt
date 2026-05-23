@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +35,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryTabRow
+import com.browntowndev.enclave.core.ui.component.neo.NeoChevronCard
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -55,8 +59,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -89,14 +97,12 @@ fun ModelConfigurationScreen(
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit,
 ) {
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("Model Role Assignments", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = "Model Role Assignments",
+                onBackClick = onNavigateBack,
             )
         },
     ) { padding ->
@@ -105,8 +111,8 @@ fun ModelConfigurationScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
@@ -204,83 +210,18 @@ fun DefaultAssignmentsCard(
     assignments: List<DefaultModelAssignmentUi>,
     onEditAssignment: (ModelType) -> Unit,
 ) {
-    Column {
-        Text(
-            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                assignments.forEach { assignment ->
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = assignment.displayLabel,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                if (assignment.isMultimodal) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Visibility,
-                                        contentDescription = "Vision capable",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-
-                                PersistentTooltip(description = assignment.modelType.description)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = assignment.assignmentHeadlineName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            if (assignment.providerName != null) {
-                                Text(
-                                    text = "Provider: ${assignment.providerName}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (assignment.presetName != null) {
-                                Text(
-                                    text = "Preset: ${assignment.presetName}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        IconButton(onClick = { onEditAssignment(assignment.modelType) }) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Change default model for ${assignment.displayLabel}",
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                    }
-                    if (assignment != assignments.last()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    }
-                }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
+        NeoSectionHeader(text = title)
+        assignments.forEach { assignment ->
+            SettingsAssignmentRow(
+                displayLabel = assignment.displayLabel,
+                headline = assignment.assignmentHeadlineName,
+                providerName = assignment.providerName,
+                presetName = assignment.presetName,
+                isMultimodal = assignment.isMultimodal,
+                modelTypeDescription = assignment.modelType.description,
+                onEditClick = { onEditAssignment(assignment.modelType) },
+            )
         }
     }
 }
@@ -303,15 +244,12 @@ fun AssignmentSelectionBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         AssignmentSelectionContent(
-            modifier =
-                Modifier
-                    .padding(bottom = 32.dp),
+            modifier = Modifier.fillMaxWidth(),
             slotLabel = slotLabel,
             localAssets = localAssets,
             apiAssets = apiAssets,
@@ -379,106 +317,27 @@ fun AssignmentSelectionContent(
     ) {
         when (val state = viewState) {
             is AssignmentSelectionView.AssetList -> {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = if (onBack != null) 20.dp else 0.dp, vertical = 16.dp),
-                ) {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                    Text(
-                        text = "Assign Model to $slotLabel",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = if (onBack != null) TextAlign.Start else TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                NeoSheetHeader(
+                    title = "Assign Model to $slotLabel",
+                    onDismiss = onDismiss,
+                    onBackClick = onBack,
+                )
             }
             is AssignmentSelectionView.LocalConfigList -> {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                ) {
-                    IconButton(
-                        onClick = { viewState = AssignmentSelectionView.AssetList },
-                        modifier = Modifier.size(40.dp).padding(end = 8.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to models")
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = state.asset.friendlyName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (state.asset.isMultimodal) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = "Vision capable",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Presets",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                NeoSheetHeader(
+                    title = state.asset.friendlyName,
+                    subtitle = "Presets",
+                    onDismiss = onDismiss,
+                    onBackClick = { viewState = AssignmentSelectionView.AssetList },
+                )
             }
             is AssignmentSelectionView.ApiConfigList -> {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                ) {
-                    IconButton(
-                        onClick = { viewState = AssignmentSelectionView.AssetList },
-                        modifier = Modifier.size(40.dp).padding(end = 8.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = state.asset.displayName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (state.asset.configurations.any { it.isMultimodal }) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = "Vision capable",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Presets",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                NeoSheetHeader(
+                    title = state.asset.displayName,
+                    subtitle = "Presets",
+                    onDismiss = onDismiss,
+                    onBackClick = { viewState = AssignmentSelectionView.AssetList },
+                )
             }
         }
 
@@ -494,30 +353,11 @@ fun AssignmentSelectionContent(
                 is AssignmentSelectionView.AssetList -> {
                     Column {
                         if (tabs.size > 1) {
-                            SecondaryTabRow(
+                            NeoSheetTabRow(
                                 selectedTabIndex = selectedTabIndex,
-                                containerColor = BottomSheetDefaults.ContainerColor,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                tabs.forEachIndexed { index, title ->
-                                    Tab(
-                                        selected = selectedTabIndex == index,
-                                        onClick = { selectedTabIndex = index },
-                                        text = {
-                                            Text(
-                                                text = title,
-                                                color =
-                                                    if (selectedTabIndex == index) {
-                                                        MaterialTheme.colorScheme.primary
-                                                    } else {
-                                                        contentColorFor(BottomSheetDefaults.ContainerColor)
-                                                    },
-                                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                            )
-                                        },
-                                    )
-                                }
-                            }
+                                tabs = tabs,
+                                onTabSelected = { selectedTabIndex = it },
+                            )
                         }
 
                         AnimatedContent(
@@ -543,10 +383,10 @@ fun AssignmentSelectionContent(
                                 when (currentTabTitle) {
                                     "Local Models" -> {
                                         items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.friendlyName,
                                                 subtitle = "${asset.providerName} • ${asset.format}",
-                                                presetCount = asset.configurations.size,
+                                                footer = "${asset.configurations.size} Preset(s) available",
                                                 isMultimodal = asset.isMultimodal,
                                                 isSelected = asset.configurations.any { it.id == selectedLocalId },
                                                 onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) },
@@ -555,10 +395,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "API Models" -> {
                                         items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = asset.provider.displayName,
-                                                presetCount = asset.configurations.size,
+                                                footer = "${asset.configurations.size} Preset(s) available",
                                                 isMultimodal = asset.configurations.any { it.isMultimodal },
                                                 isSelected = asset.configurations.any { it.id == selectedApiId },
                                                 onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) },
@@ -567,10 +407,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "TTS Providers" -> {
                                         items(ttsAssets, key = { "tts_${it.id.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
-                                                presetCount = 1,
+                                                footer = "1 Preset(s) available",
                                                 isSelected = selectedTtsId == asset.id,
                                                 onClick = {
                                                     selectedTtsId = asset.id
@@ -583,10 +423,10 @@ fun AssignmentSelectionContent(
                                     }
                                     "Media Providers" -> {
                                         items(mediaAssets, key = { "media_${it.id.value}" }) { asset ->
-                                            AssignmentAssetCard(
+                                            NeoChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.modelName}",
-                                                presetCount = 1,
+                                                footer = "1 Preset(s) available",
                                                 isSelected = selectedMediaId == asset.id,
                                                 onClick = {
                                                     selectedMediaId = asset.id
@@ -667,21 +507,17 @@ fun AssignmentSelectionContent(
                     .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(
+            NeoSecondaryButton(
+                text = "Cancel",
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text("Cancel")
-            }
-            Button(
+            )
+            NeoPrimaryButton(
+                text = "Confirm",
                 onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId, selectedMediaId) },
                 enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null || selectedMediaId != null,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text("Confirm")
-            }
+            )
         }
     }
 }
@@ -800,52 +636,12 @@ private fun ConfigSelectionCard(
     isSelected: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .let { m ->
-                    if (isSelected) {
-                        m.border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(16.dp),
-                        )
-                    } else {
-                        m
-                    }
-                }.clickable(onClick = onClick)
-                .defaultMinSize(minHeight = 48.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-            ),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
+    NeoSelectionCard(
+        title = label,
+        subtitle = subtitle,
+        isSelected = isSelected,
+        onClick = onClick,
+    )
 }
 
 // ==================== PREVIEWS ====================

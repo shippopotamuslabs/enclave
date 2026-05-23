@@ -51,6 +51,7 @@ internal fun AssistantResponseFinalMessage(
             elapsedSeconds = transcriptSheetElapsedSeconds,
             isStreaming = transcriptSheetStreaming,
             onDismiss = { transcriptSheetVisible = false },
+            isPreview = isPreview,
         )
     }
 

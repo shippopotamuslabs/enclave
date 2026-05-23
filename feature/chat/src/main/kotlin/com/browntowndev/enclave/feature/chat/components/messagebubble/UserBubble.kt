@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -23,9 +26,10 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +45,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -91,44 +96,54 @@ internal fun UserBubble(
                 onImageClick = { fullscreenImageUri = it },
             )
 
-            Surface(
+            Box(
                 modifier =
                     Modifier
                         .fillMaxWidth(fraction = USER_BUBBLE_WIDTH_FRACTION)
+                        .padding(
+                            end = 2.dp,
+                            bottom = EnclaveNeoTokens.userBubbleShadowOffset,
+                        )
                         .zIndex(1f)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor = neoBorderColor(),
+                            withShadow = true,
+                            shadowColor = neoShadowColor(),
+                            shadowOffset = EnclaveNeoTokens.userBubbleShadowOffset,
+                            shape = EnclaveNeoTokens.userBubbleShape,
+                        )
                         .clickable(
                             onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
                         ) { showActions = !showActions },
-                shape =
-                    RoundedCornerShape(
-                        topStart = 20.dp,
-                        topEnd = 20.dp,
-                        bottomStart = 20.dp,
-                        bottomEnd = 4.dp,
-                    ),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(EnclaveNeoTokens.userBubbleContentPadding)) {
+                    val bubbleContentColor = MaterialTheme.colorScheme.onSurface
                     UserBubbleFileAttachments(attachments = message.content.fileAttachments)
 
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
-                        UserBubbleMessageBody(
-                            contentText = message.content.text,
-                            hasImages = message.content.imageUris.isNotEmpty(),
-                            onCopyCode = copyToClipboard,
-                        )
+                        CompositionLocalProvider(LocalContentColor provides bubbleContentColor) {
+                            UserBubbleMessageBody(
+                                contentText = message.content.text,
+                                contentColor = bubbleContentColor,
+                                hasImages = message.content.imageUris.isNotEmpty(),
+                                onCopyCode = copyToClipboard,
+                            )
+                        }
                     }
-                    Text(
-                        text = message.formattedTimestamp,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier =
-                            Modifier
-                                .padding(top = 4.dp)
-                                .align(Alignment.End),
-                    )
                 }
             }
+
+            Text(
+                text = message.formattedTimestamp,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                modifier =
+                    Modifier
+                        .fillMaxWidth(fraction = USER_BUBBLE_WIDTH_FRACTION)
+                        .padding(top = 4.dp, end = 2.dp),
+            )
 
             BubbleActions(
                 visible = showActions,
@@ -167,7 +182,7 @@ private fun UserBubbleImagePreviews(
                     Modifier
                         .widthIn(max = 120.dp)
                         .heightIn(max = 120.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(EnclaveNeoTokens.shape)
                         .clickable { onImageClick(imageUri) },
             )
         }
@@ -219,6 +234,7 @@ private fun UserBubbleFileAttachments(
 @Composable
 private fun UserBubbleMessageBody(
     contentText: String,
+    contentColor: Color,
     hasImages: Boolean,
     onCopyCode: (String) -> Unit,
 ) {
@@ -227,6 +243,7 @@ private fun UserBubbleMessageBody(
             Text(
                 text = "",
                 style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
             )
         }
         return
@@ -247,6 +264,8 @@ private fun UserBubbleMessageBody(
         ) {
             Text(
                 text = codeContent,
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(end = 8.dp),
             )
@@ -254,11 +273,15 @@ private fun UserBubbleMessageBody(
                 Icon(
                     painter = painterResource(R.drawable.content_copy),
                     contentDescription = "Copy code",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     } else {
-        ExpandableTruncatableMessageText(text = contentText)
+        ExpandableTruncatableMessageText(
+            text = contentText,
+            color = contentColor,
+        )
     }
 }
 

@@ -14,91 +14,119 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
-// Pairs of dot indices (0–8 in a 3×3 grid) that light up together.
-// No consecutive pair shares a dot, so every step produces a clean crossfade.
-private val ACTIVATION_SEQUENCE =
-    listOf(
-        0 to 8,
-        2 to 6,
-        1 to 7,
-        3 to 5,
-        4 to 0,
-        8 to 3,
-        2 to 7,
-        5 to 1,
-        6 to 4,
-        0 to 5,
-        8 to 1,
-        3 to 6,
-        4 to 2,
-        7 to 0,
-        5 to 8,
-        1 to 4,
-    )
+/** Snake order through the 3×3 matrix (row-major). */
+private val MATRIX_SNAKE_SEQUENCE = listOf(0, 1, 2, 5, 4, 3, 6, 7, 8)
+
+private const val MATRIX_GRID_SIZE_DP = 22
+private const val MATRIX_CELL_GAP_FRACTION = 0.14f
+private const val MATRIX_STEP_MS = 220L
+private const val MATRIX_CROSSFADE_MS = 140
 
 /**
- * 3×3 dot-grid animation: two dots illuminate at a time using the primary colour,
- * cycling through a fixed sequence every 500 ms with a 400 ms alpha crossfade.
- * Replaces the old per-pixel disco-ball which ran complex trig math at 60 fps.
+ * Neo-brutalist 3×3 cell matrix: hard-edged tiles step through a fixed sequence with a
+ * short crossfade (no pulsing circles or gradient orb).
  *
- * Outer Box matches the 46 dp touch/layout footprint of the old orb; the Canvas
- * is sized to the same 24 dp the old Spacer used, keeping visual alignment identical.
+ * Outer [modifier] keeps the 46 dp layout slot used beside "Thinking…" / "Responding…" rows.
  */
 @Composable
 fun DynamicThinkingAnimation(modifier: Modifier = Modifier) {
-    var stepIndex by remember { mutableIntStateOf((0 until ACTIVATION_SEQUENCE.size).random()) }
+    var sequenceIndex by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(500L.milliseconds)
-            stepIndex = (stepIndex + 1) % ACTIVATION_SEQUENCE.size
+            delay(MATRIX_STEP_MS.milliseconds)
+            sequenceIndex = (sequenceIndex + 1) % MATRIX_SNAKE_SEQUENCE.size
         }
     }
 
-    val (activeA, activeB) = ACTIVATION_SEQUENCE[stepIndex]
+    val activeCell = MATRIX_SNAKE_SEQUENCE[sequenceIndex]
 
-    // One animateFloatAsState per dot — drives both opacity and radius from a single value.
-    // Called unconditionally at the top level per Compose rules.
-    val a0 by animateFloatAsState(targetValue = if (activeA == 0 || activeB == 0) 1f else 0.15f, animationSpec = tween(400), label = "a0")
-    val a1 by animateFloatAsState(targetValue = if (activeA == 1 || activeB == 1) 1f else 0.15f, animationSpec = tween(400), label = "a1")
-    val a2 by animateFloatAsState(targetValue = if (activeA == 2 || activeB == 2) 1f else 0.15f, animationSpec = tween(400), label = "a2")
-    val a3 by animateFloatAsState(targetValue = if (activeA == 3 || activeB == 3) 1f else 0.15f, animationSpec = tween(400), label = "a3")
-    val a4 by animateFloatAsState(targetValue = if (activeA == 4 || activeB == 4) 1f else 0.15f, animationSpec = tween(400), label = "a4")
-    val a5 by animateFloatAsState(targetValue = if (activeA == 5 || activeB == 5) 1f else 0.15f, animationSpec = tween(400), label = "a5")
-    val a6 by animateFloatAsState(targetValue = if (activeA == 6 || activeB == 6) 1f else 0.15f, animationSpec = tween(400), label = "a6")
-    val a7 by animateFloatAsState(targetValue = if (activeA == 7 || activeB == 7) 1f else 0.15f, animationSpec = tween(400), label = "a7")
-    val a8 by animateFloatAsState(targetValue = if (activeA == 8 || activeB == 8) 1f else 0.15f, animationSpec = tween(400), label = "a8")
+    val c0 by cellAlpha(activeCell, 0)
+    val c1 by cellAlpha(activeCell, 1)
+    val c2 by cellAlpha(activeCell, 2)
+    val c3 by cellAlpha(activeCell, 3)
+    val c4 by cellAlpha(activeCell, 4)
+    val c5 by cellAlpha(activeCell, 5)
+    val c6 by cellAlpha(activeCell, 6)
+    val c7 by cellAlpha(activeCell, 7)
+    val c8 by cellAlpha(activeCell, 8)
 
-    val dotColor = MaterialTheme.colorScheme.primary
+    val activeFill = MaterialTheme.colorScheme.primary
+    val idleFill = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier,
     ) {
-        Canvas(modifier = Modifier.size(18.dp)) {
-            val dotAlphas = floatArrayOf(a0, a1, a2, a3, a4, a5, a6, a7, a8)
-            val baseRadius = size.minDimension / 11f
-            val pad = size.width * 0.08f
-            val spacingX = (size.width - 2f * pad) / 2f
-            val spacingY = (size.height - 2f * pad) / 2f
+        Canvas(modifier = Modifier.size(MATRIX_GRID_SIZE_DP.dp)) {
+            val cellAlphas = floatArrayOf(c0, c1, c2, c3, c4, c5, c6, c7, c8)
+            val gap = size.minDimension * MATRIX_CELL_GAP_FRACTION
+            val cellSize = (size.minDimension - gap * 2f) / 3f
+            val cornerPx = EnclaveNeoTokens.cornerRadius.toPx().coerceAtMost(cellSize / 4f)
+            val strokePx = (EnclaveNeoTokens.borderWidth / 2).toPx()
 
-            for (i in 0 until 9) {
-                val alpha = dotAlphas[i]
-                val center =
+            // Outer frame — matches neo panels
+            drawRoundRect(
+                color = borderColor,
+                topLeft = Offset.Zero,
+                size = Size(size.width, size.height),
+                cornerRadius = CornerRadius(cornerPx),
+                style = Stroke(width = strokePx),
+            )
+
+            for (index in 0 until 9) {
+                val col = index % 3
+                val row = index / 3
+                val topLeft =
                     Offset(
-                        x = pad + (i % 3) * spacingX,
-                        y = pad + (i / 3) * spacingY,
+                        x = gap + col * cellSize,
+                        y = gap + row * cellSize,
                     )
-                drawCircle(
-                    color = dotColor.copy(alpha = alpha),
-                    radius = baseRadius * (0.55f + alpha * 0.7f),
-                    center = center,
+                val alpha = cellAlphas[index]
+                val fill =
+                    androidx.compose.ui.graphics.lerp(
+                        idleFill,
+                        activeFill,
+                        alpha,
+                    )
+                drawRoundRect(
+                    color = fill,
+                    topLeft = topLeft,
+                    size = Size(cellSize, cellSize),
+                    cornerRadius = CornerRadius(cornerPx),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun cellAlpha(
+    activeCell: Int,
+    cellIndex: Int,
+): androidx.compose.runtime.State<Float> =
+    animateFloatAsState(
+        targetValue = if (activeCell == cellIndex) 1f else 0f,
+        animationSpec = tween(durationMillis = MATRIX_CROSSFADE_MS),
+        label = "neoMatrixCell$cellIndex",
+    )
+
+@Suppress("UnusedPrivateMember")
+@Preview(showBackground = true, backgroundColor = 0xFF18181B, name = "Neo thinking matrix")
+@Composable
+private fun PreviewDynamicThinkingAnimation() {
+    EnclaveTheme(darkTheme = true) {
+        DynamicThinkingAnimation(modifier = Modifier.size(46.dp))
     }
 }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.markdown.StreamableMarkdownText
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.feature.chat.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,31 +50,22 @@ fun DetailBottomSheet(
             else -> 0L
         }
 
-    JumpFreeModalBottomSheet(
+    NeoModalBottomSheet(
         onDismissRequest = config.onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
+        DetailBottomSheetHeader(config = config, displayDuration = displayDuration)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f, fill = false),
         ) {
-            DetailBottomSheetHeader(config = config, displayDuration = displayDuration)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LazyColumn(
-                modifier = Modifier.weight(1f, fill = false),
-            ) {
-                item {
-                    DetailBottomSheetBody(
-                        config = config,
-                        onSourceClick = { url -> uriHandler.openUri(url) },
-                    )
-                }
+            item {
+                DetailBottomSheetBody(
+                    config = config,
+                    onSourceClick = { url -> uriHandler.openUri(url) },
+                )
             }
         }
     }
@@ -197,8 +187,9 @@ fun ThinkingDetailsBottomSheet(
     thinkingRaw: String,
     elapsedSeconds: Int = 0,
     isStreaming: Boolean = false,
+    isPreview: Boolean = false,
 ) {
-    val controller = LocalDetailBottomSheetController.current
+    val controller = rememberDetailBottomSheetController(usePreviewStub = isPreview)
 
     LaunchedEffect(isVisible, thinkingRaw, thinkingDurationSeconds, isStreaming) {
         if (isVisible) {

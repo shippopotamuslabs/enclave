@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,10 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -33,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
@@ -215,51 +217,36 @@ fun ByokConfigureScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            NeoBackScreenHeader(
+                title = title,
+                onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            Row(
+            NeoPrimaryButton(
+                text =
+                    when {
+                        isSearchMode -> "Save Search Settings"
+                        isPresetMode -> "Save Preset"
+                        else -> "Save Credentials"
+                    },
+                onClick =
+                    when {
+                        isSearchMode -> onSaveSearchSettings
+                        isPresetMode -> onSaveApiModelConfig
+                        else -> onSaveApiCredentials
+                    },
+                enabled = isSaveEnabled,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                         .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Button(
-                    onClick =
-                        when {
-                            isSearchMode -> onSaveSearchSettings
-                            isPresetMode -> onSaveApiModelConfig
-                            else -> onSaveApiCredentials
-                        },
-                    enabled = isSaveEnabled,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(
-                        text =
-                            when {
-                                isSearchMode -> "Save Search Settings"
-                                isPresetMode -> "Save Preset"
-                                else -> "Save Credentials"
-                            },
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
+            )
         },
     ) { padding ->
         Column(
@@ -267,9 +254,10 @@ fun ByokConfigureScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                     .imePadding()
                     .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             if (isSearchMode) {
                 SearchSkillConfigurationForm(

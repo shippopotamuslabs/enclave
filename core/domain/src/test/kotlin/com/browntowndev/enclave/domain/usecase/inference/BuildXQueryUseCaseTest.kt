@@ -11,7 +11,7 @@ class BuildXQueryUseCaseTest {
     fun `invoke with keywords only`() {
         val params = XSearchParams(keywords = listOf("Google", "I/O"))
         val result = useCase(params)
-        assertEquals("Google I/O lang:en", result)
+        assertEquals("Google I/O lang:en -is:reply", result)
     }
 
     @Test
@@ -23,7 +23,7 @@ class BuildXQueryUseCaseTest {
                 exclude_keywords = listOf("spam", "ads"),
             )
         val result = useCase(params)
-        assertEquals("AI (artificial intelligence OR machine learning) -spam -ads lang:en", result)
+        assertEquals("AI (artificial intelligence OR machine learning) -spam -ads lang:en -is:reply", result)
     }
 
     @Test
@@ -38,7 +38,7 @@ class BuildXQueryUseCaseTest {
                 language = null,
             )
         val result = useCase(params)
-        assertEquals("(from:TwitterDev OR from:TwitterAPI) has:media", result)
+        assertEquals("(from:TwitterDev OR from:TwitterAPI) has:media -is:reply", result)
     }
 
     @Test
@@ -51,7 +51,7 @@ class BuildXQueryUseCaseTest {
                 language = null,
             )
         val result = useCase(params)
-        assertEquals("(from:NWSNHC OR from:NHC_Atlantic OR from:NWSHouston) has:geo", result)
+        assertEquals("(from:NWSNHC OR from:NHC_Atlantic OR from:NWSHouston) has:geo -is:reply", result)
     }
 
     @Test
@@ -66,7 +66,7 @@ class BuildXQueryUseCaseTest {
                 language = null,
             )
         val result = useCase(params)
-        assertEquals("#nowplaying (happy OR exciting OR favorite) -horrible -worst place_country:US", result)
+        assertEquals("#nowplaying (happy OR exciting OR favorite) -horrible -worst place_country:US -is:reply", result)
     }
 
     @Test
@@ -85,7 +85,7 @@ class BuildXQueryUseCaseTest {
     fun `invoke with phrases`() {
         val params = XSearchParams(phrases = listOf("artificial intelligence", "machine learning"))
         val result = useCase(params)
-        assertEquals("\"artificial intelligence\" \"machine learning\" lang:en", result)
+        assertEquals("\"artificial intelligence\" \"machine learning\" lang:en -is:reply", result)
     }
 
     @Test
@@ -96,7 +96,7 @@ class BuildXQueryUseCaseTest {
                 mentions = listOf("@Google", "OpenAI"),
             )
         val result = useCase(params)
-        assertEquals("#AI #tech @Google @OpenAI lang:en", result)
+        assertEquals("#AI #tech @Google @OpenAI lang:en -is:reply", result)
     }
 
     @Test
@@ -119,7 +119,7 @@ class BuildXQueryUseCaseTest {
                 has_links = true,
             )
         val result = useCase(params)
-        assertEquals("cat has:images has:links lang:en", result)
+        assertEquals("cat has:images has:links lang:en -is:reply", result)
     }
 
     @Test
@@ -130,7 +130,7 @@ class BuildXQueryUseCaseTest {
                 language = "es",
             )
         val result = useCase(params)
-        assertEquals("noticias lang:es", result)
+        assertEquals("noticias lang:es -is:reply", result)
     }
 
     @Test
@@ -142,7 +142,7 @@ class BuildXQueryUseCaseTest {
                 has_videos = true,
             )
         val result = useCase(params)
-        assertEquals("breaking news AI has:videos lang:en", result)
+        assertEquals("breaking news AI has:videos lang:en -is:reply", result)
     }
 
     @Test
@@ -153,6 +153,17 @@ class BuildXQueryUseCaseTest {
                 language = null,
             )
         val result = useCase(params)
-        assertEquals("test", result)
+        assertEquals("test -is:reply", result)
+    }
+
+    @Test
+    fun `invoke with include_replies true does not append reply filter`() {
+        val params =
+            XSearchParams(
+                keywords = listOf("test"),
+                include_replies = true,
+            )
+        val result = useCase(params)
+        assertEquals("test lang:en", result)
     }
 }

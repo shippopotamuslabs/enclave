@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import com.browntowndev.enclave.feature.chat.IndicatorState
@@ -53,7 +54,7 @@ internal fun MessageListItem(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
     ) {
         MessageListItemIndicators(
             modelDisplayName = message.modelDisplayName,
@@ -61,6 +62,7 @@ internal fun MessageListItem(
             chatMode = chatMode,
             suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
             reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
+            isPreview = isPreview,
         )
 
         val inlineToolCallBannerInTranscript = usesInlineToolCallBannerInTranscript(message)
@@ -97,6 +99,7 @@ private fun MessageListItemIndicators(
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
     reserveCrewGeneratingSlot: Boolean,
+    isPreview: Boolean,
 ) {
     if (indicatorState == null) return
 
@@ -142,6 +145,7 @@ private fun MessageListItemIndicators(
             elapsedSeconds = elapsedSeconds,
             isStreaming = isIndicatorStreaming(indicatorState),
             onDismiss = { isThinkingSheetVisible = false },
+            isPreview = isPreview,
         )
     }
 }

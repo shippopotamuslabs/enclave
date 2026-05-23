@@ -30,8 +30,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,13 +55,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
+import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
+import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
-import com.browntowndev.enclave.domain.model.inference.SystemPromptTemplates
 
 @Composable
 fun SearchSkillConfigurationForm(
@@ -73,9 +74,6 @@ fun SearchSkillConfigurationForm(
     onApiKeyChange: (String) -> Unit,
     onClearSavedKey: () -> Unit,
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-    val showSavedIndicator = state.tavilyKeyPresent && apiKey.isEmpty()
-
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             modifier =
@@ -105,64 +103,15 @@ fun SearchSkillConfigurationForm(
             )
         }
 
-        OutlinedTextField(
+        NeoApiKeyField(
+            label = "Tavily API Key",
             value = apiKey,
             onValueChange = onApiKeyChange,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tavily API Key")
-                    if (showSavedIndicator) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Key saved",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
+            keyPresent = state.tavilyKeyPresent,
+            onClearKey = onClearSavedKey,
+            hintWhenEmpty = "Save a Tavily key before enabling live web search.",
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            placeholder = {
-                if (showSavedIndicator) {
-                    Text("Saved securely")
-                }
-            },
-            supportingText = {
-                Text(
-                    if (state.tavilyKeyPresent) {
-                        if (apiKey.isEmpty()) {
-                            "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                        } else {
-                            "You are entering a new key. The previously stored key will be replaced upon saving."
-                        }
-                    } else {
-                        "Save a Tavily key before enabling live web search."
-                    },
-                )
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Hide Tavily API key" else "Show Tavily API key",
-                    )
-                }
-            },
         )
-
-        if (state.tavilyKeyPresent) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onClearSavedKey) {
-                    Text("Clear Saved Key")
-                }
-            }
-        }
     }
 }
 
@@ -179,7 +128,7 @@ fun ProviderSelectionField(
         onExpandedChange = { providerDropdownExpanded = it },
         modifier = Modifier.fillMaxWidth(),
     ) {
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = asset.provider.displayName,
             onValueChange = {},
             readOnly = true,
@@ -190,7 +139,6 @@ fun ProviderSelectionField(
                     .padding(top = 16.dp)
                     .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
         )
         ExposedDropdownMenu(
             expanded = providerDropdownExpanded,
@@ -242,17 +190,23 @@ fun ModelSelectionField(
     val hasModels = availableModels.isNotEmpty()
 
     Column {
+        val modelHint =
+            when {
+                isFetchingModels -> "Fetching models..."
+                hasModels -> "${availableModels.size} models discovered"
+                else -> "Load models for better configuration"
+            }
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
         ) {
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = config.modelId,
                 onValueChange = { onConfigChange(config.copy(modelId = it)) },
-                readOnly = true,
-                enabled = false,
+                readOnly = hasModels,
+                enabled = !hasModels,
                 label = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Model")
@@ -271,45 +225,31 @@ fun ModelSelectionField(
                         },
                     )
                 },
-                supportingText = {
-                    Text(
-                        text =
-                            if (isFetchingModels) {
-                                "Fetching models..."
-                            } else if (hasModels) {
-                                "${availableModels.size} models discovered"
-                            } else {
-                                "Load models for better configuration"
-                            },
-                    )
-                },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors =
-                    OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
+                colors = neoOutlinedTextFieldColors(),
                 trailingIcon =
                     if (hasModels) {
-                        (
-                            {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = "Select Model",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        )
+                        {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select Model",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     } else {
                         null
                     },
             )
         }
+        Text(
+            text = modelHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 4.dp, end = 16.dp),
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -509,9 +449,7 @@ fun CredentialsConfigurationForm(
     onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
     onTestConnection: () -> Unit,
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
     val isKeySaved = selectedReusableCredential != null || asset.credentialsId.value.isNotEmpty()
-    val showSavedIndicator = isKeySaved && apiKey.isEmpty()
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ProviderSelectionField(
@@ -519,12 +457,11 @@ fun CredentialsConfigurationForm(
             onAssetChange = onAssetChange,
         )
 
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = asset.baseUrl ?: "",
             onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
             label = { Text("Base URL (Optional)") },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
         )
 
         val canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty()
@@ -536,51 +473,12 @@ fun CredentialsConfigurationForm(
             )
         }
 
-        OutlinedTextField(
+        NeoApiKeyField(
+            label = "API Key",
             value = apiKey,
             onValueChange = onApiKeyChange,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("API Key")
-                    if (showSavedIndicator) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Key saved",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
+            keyPresent = isKeySaved,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            placeholder = {
-                if (showSavedIndicator) {
-                    Text("Saved securely")
-                }
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            supportingText = {
-                if (isKeySaved) {
-                    Text(
-                        text =
-                            if (apiKey.isEmpty()) {
-                                "The stored key stays encrypted and hidden. Typing here switches back to a new key."
-                            } else {
-                                "You are entering a new key. The previously stored key will be replaced upon saving."
-                            },
-                    )
-                }
-            },
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                    )
-                }
-            },
         )
 
         val canTestConnection =
@@ -623,12 +521,11 @@ fun CredentialsConfigurationForm(
             }
         }
 
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = asset.displayName,
             onValueChange = { onAssetChange(asset.copy(displayName = it)) },
             label = { Text("Display Name (e.g. My OpenAI)") },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
         )
     }
 }
@@ -645,7 +542,7 @@ fun SystemPromptConfiguration(
     Box(
         modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true },
     ) {
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
             onValueChange = {},
             label = {
@@ -663,94 +560,20 @@ fun SystemPromptConfiguration(
             enabled = false,
             readOnly = true,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            singleLine = false,
             minLines = 4,
             maxLines = 4,
-            colors =
-                OutlinedTextFieldDefaults.colors(
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    disabledBorderColor = MaterialTheme.colorScheme.outline,
-                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
+            colors = neoOutlinedTextFieldColors(),
         )
     }
 
-    if (showSystemPromptSheet) {
-        JumpFreeModalBottomSheet(
-            onDismissRequest = { showSystemPromptSheet = false },
-            sheetState = sheetState,
-        ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 32.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Edit System Prompt",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-
-                    var expanded by remember { mutableStateOf(false) }
-                    Row {
-                        TextButton(
-                            onClick = { expanded = true },
-                        ) {
-                            Text("Import Template")
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                        ) {
-                            SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                DropdownMenuItem(
-                                    text = { Text(modelType.displayName()) },
-                                    onClick = {
-                                        onConfigChange(config.copy(systemPrompt = prompt))
-                                        expanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = config.systemPrompt,
-                    onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    placeholder = { Text("Enter system prompt...") },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = { showSystemPromptSheet = false },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text("Done", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
+    SystemPromptEditSheet(
+        visible = showSystemPromptSheet,
+        prompt = config.systemPrompt,
+        onPromptChange = { onConfigChange(config.copy(systemPrompt = it)) },
+        onDismiss = { showSystemPromptSheet = false },
+        sheetState = sheetState,
+    )
 }
 
 @Composable
@@ -761,7 +584,7 @@ fun ContextConfiguration(
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        OutlinedTextField(
+        NeoOutlinedTextField(
             modifier = Modifier.weight(1f),
             value = config.contextWindow,
             onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
@@ -773,12 +596,11 @@ fun ContextConfiguration(
                     PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
                 }
             },
-            shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
         )
 
         if (supportsMaxTokens) {
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 modifier = Modifier.weight(1f),
                 value = config.maxTokens,
                 onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
@@ -790,7 +612,6 @@ fun ContextConfiguration(
                         PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
                     }
                 },
-                shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             )
         }
@@ -856,29 +677,17 @@ fun ParameterExclusionSection(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ParameterExclusionChip(
     label: String,
     selected: Boolean,
     onSelectedChange: (Boolean) -> Unit,
 ) {
-    FilterChip(
+    NeoFilterChip(
+        label = label,
         selected = selected,
         onClick = { onSelectedChange(!selected) },
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        leadingIcon =
-            if (selected) {
-                {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = null,
-                        modifier = Modifier.size(FilterChipDefaults.IconSize),
-                    )
-                }
-            } else {
-                null
-            },
+        showClearIconWhenSelected = true,
     )
 }
 
@@ -893,7 +702,7 @@ fun TuningConfiguration(
     var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
 
     if (parameterSupport.supportsTopK) {
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = config.topK,
             onValueChange = { onConfigChange(config.copy(topK = it)) },
             enabled = !config.topKDisabled,
@@ -905,7 +714,6 @@ fun TuningConfiguration(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
         )
     }
@@ -916,7 +724,7 @@ fun TuningConfiguration(
             onExpandedChange = { reasoningDropdownExpanded = it },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
                 onValueChange = {},
                 readOnly = true,
@@ -928,7 +736,6 @@ fun TuningConfiguration(
                     Modifier
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
                 placeholder = {
                     Text(
                         if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
@@ -1051,12 +858,11 @@ fun PresetConfigurationForm(
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        OutlinedTextField(
+        NeoOutlinedTextField(
             value = config.displayName,
             onValueChange = { onConfigChange(config.copy(displayName = it)) },
             label = { Text("Preset Name (e.g. Creative)") },
             modifier = Modifier.padding(top = 16.dp).fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
         )
 
