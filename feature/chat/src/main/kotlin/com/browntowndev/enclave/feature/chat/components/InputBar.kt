@@ -241,7 +241,6 @@ fun InputBar(
                 },
                 modifier =
                     Modifier
-                        .padding(vertical = 5.dp)
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
                 textStyle =

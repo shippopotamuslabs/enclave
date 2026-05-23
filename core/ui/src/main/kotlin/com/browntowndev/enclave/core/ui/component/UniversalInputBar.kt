@@ -210,7 +210,10 @@ fun UniversalInputBar(
                                     verticalAlignment = Alignment.Top,
                                 ) {
                                     Column(
-                                        modifier = Modifier.weight(1f),
+                                        modifier =
+                                            Modifier
+                                                .weight(1f)
+                                                .padding(bottom = 8.dp),
                                     ) {
                                         inputContent()
                                     }
