@@ -36,6 +36,7 @@ internal fun AssistantResponseTranscript(
             enableScroll = false,
             isStreaming = isStreaming,
             isPreview = isPreview,
+            bodyStyle = AssistantResponseBodyTextStyle,
         )
         return
     }
@@ -91,6 +92,7 @@ internal fun AssistantResponseTranscript(
                         enableScroll = false,
                         isStreaming = segment.isStreaming && isStreaming,
                         isPreview = isPreview,
+                        bodyStyle = AssistantResponseBodyTextStyle,
                     )
                 }
             }
