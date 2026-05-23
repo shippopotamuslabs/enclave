@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -75,6 +74,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalVoicePromptPlaceholder
+import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionMark
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
 import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
@@ -1057,36 +1057,14 @@ private fun GalleryItem(
             }
         }
 
-        // Selection indicator (only for non-saved items)
         if (selectionModeActive && asset.albumId == null) {
-            Box(
+            NeoSelectionMark(
+                selected = isSelected,
                 modifier =
                     Modifier
-                        .padding(8.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                Color.Black.copy(alpha = 0.4f)
-                            },
-                        ).border(
-                            width = 2.dp,
-                            color = Color.White,
-                            shape = CircleShape,
-                        ).align(Alignment.TopStart),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+            )
         }
     }
 }

@@ -2,20 +2,17 @@ package com.browntowndev.enclave.feature.chat.components.messagelist
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 
 /**
- * Circular FAB that fades in when the user has scrolled above the bottom,
- * and triggers a smooth scroll to the last item when tapped.
+ * Neo-brutalist scroll-to-bottom control that fades in when the user has scrolled
+ * above the bottom, and triggers a smooth scroll to the last item when tapped.
  */
 @Composable
 internal fun ScrollToBottomFab(
@@ -30,17 +27,11 @@ internal fun ScrollToBottomFab(
     )
 
     if (alpha > 0f || visible) {
-        SmallFloatingActionButton(
+        NeoIconButton(
             onClick = onClick,
+            icon = Icons.Default.KeyboardArrowDown,
+            contentDescription = "Scroll to bottom",
             modifier = modifier.graphicsLayer { this.alpha = alpha },
-            shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ) {
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Scroll to bottom",
-            )
-        }
+        )
     }
 }
