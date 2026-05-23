@@ -1,41 +1,43 @@
 package com.browntowndev.enclave.feature.settings
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.ExperimentalMaterial3Api
-import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSearchField
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -93,7 +95,8 @@ fun ModelSelectionContent(
     onModelSelected: (String) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
-    var isProviderFiltering by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isProviderFiltering by remember { mutableStateOf(false) }
+
     @Suppress("MagicNumber")
     Column(
         modifier =
@@ -107,11 +110,11 @@ fun ModelSelectionContent(
         )
 
         val providers =
-            androidx.compose.runtime.remember(availableModels) {
+            remember(availableModels) {
                 availableModels.mapNotNull { it.providerName }.distinct().sorted()
             }
         val filteredProviders =
-            androidx.compose.runtime.remember(providers, searchQuery, isProviderFiltering) {
+            remember(providers, searchQuery, isProviderFiltering) {
                 if (isProviderFiltering) {
                     providers.filter { it.contains(searchQuery, ignoreCase = true) }
                 } else {
@@ -119,67 +122,57 @@ fun ModelSelectionContent(
                 }
             }
 
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (isProviderFiltering) {
-                androidx.compose.material3.IconButton(onClick = {
-                    onUpdateSearchQuery("")
-                    isProviderFiltering = false
-                }) {
-                    androidx.compose.material3.Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = "Back to models",
-                    )
-                }
-            } else {
-                androidx.compose.material3.FilledTonalIconButton(
-                    onClick = {
+            NeoIconButton(
+                onClick = {
+                    if (isProviderFiltering) {
+                        onUpdateSearchQuery("")
+                        isProviderFiltering = false
+                    } else {
                         onUpdateSearchQuery("")
                         isProviderFiltering = true
+                    }
+                },
+                icon =
+                    if (isProviderFiltering) {
+                        Icons.AutoMirrored.Filled.ArrowBack
+                    } else {
+                        Icons.Default.FilterList
                     },
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    androidx.compose.material3.Icon(
-                        Icons.Default.FilterList,
-                        contentDescription = "Filter by provider",
-                    )
-                }
-            }
+                contentDescription =
+                    if (isProviderFiltering) {
+                        "Back to models"
+                    } else {
+                        "Filter by provider"
+                    },
+                size = 48.dp,
+                withShadow = true,
+            )
 
-            OutlinedTextField(
+            NeoSearchField(
                 value = searchQuery,
                 onValueChange = onUpdateSearchQuery,
-                label = { Text(if (isProviderFiltering) "Search providers" else "Search models") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                trailingIcon =
-                    if (searchQuery.isNotEmpty()) {
-                        {
-                            androidx.compose.material3.IconButton(onClick = { onUpdateSearchQuery("") }) {
-                                androidx.compose.material3.Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Clear search",
-                                )
-                            }
-                        }
+                placeholder =
+                    if (isProviderFiltering) {
+                        "Search providers"
                     } else {
-                        null
+                        "Search models"
                     },
+                modifier = Modifier.weight(1f),
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
 
         if (!isProviderFiltering) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 val hasCreated = availableModels.any { it.created != null }
                 val hasPrice = availableModels.any { it.promptPrice != null || it.completionPrice != null }
@@ -207,35 +200,28 @@ fun ModelSelectionContent(
                 }
             }
             if (providerFilters.isNotEmpty()) {
-                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                androidx.compose.foundation.layout.FlowRow(
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     providerFilters.forEach { provider ->
-                        androidx.compose.material3.InputChip(
+                        NeoFilterChip(
+                            label = provider,
                             selected = true,
                             onClick = { onToggleProviderFilter(provider) },
-                            label = { Text(provider) },
-                            trailingIcon = {
-                                androidx.compose.material3.Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove filter",
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            },
+                            showClearIconWhenSelected = true,
                         )
                     }
                     if (providerFilters.size > 1) {
                         Text(
                             text = "Clear All",
                             color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                             modifier =
                                 Modifier
-                                    .align(androidx.compose.ui.Alignment.CenterVertically)
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .align(Alignment.CenterVertically)
                                     .clickable { onClearProviderFilters() }
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                         )
@@ -244,135 +230,61 @@ fun ModelSelectionContent(
             }
             Spacer(modifier = Modifier.height(8.dp))
         } else {
-            Text(
-                text = "Select Providers",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
+            NeoSectionHeader(text = "Select Providers")
         }
 
         val showCustomModel = !isProviderFiltering && searchQuery.isNotBlank() && filteredModels.none { it.modelId == searchQuery }
-        val totalItems =
-            if (isProviderFiltering) {
-                filteredProviders.size
-            } else {
-                (if (showCustomModel) 1 else 0) + filteredModels.size
-            }
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
             if (isProviderFiltering) {
-                items(filteredProviders.size) { index ->
-                    val provider = filteredProviders[index]
+                items(filteredProviders, key = { it }) { provider ->
                     val isSelected = providerFilters.contains(provider)
-                    val shape =
-                        when {
-                            totalItems == 1 -> RoundedCornerShape(16.dp)
-                            index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                            index == totalItems - 1 -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                            else -> RectangleShape
-                        }
-                    val borderModifier =
-                        if (isSelected) {
-                            Modifier.border(1.dp, MaterialTheme.colorScheme.primary, shape)
-                        } else {
-                            Modifier
-                        }
-                    ListItem(
-                        headlineContent = { Text(provider) },
-                        modifier =
-                            Modifier
-                                .clip(shape)
-                                .then(borderModifier)
-                                .clickable {
-                                    onToggleProviderFilter(provider)
-                                },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        trailingContent = {
-                            if (isSelected) {
-                                androidx.compose.material3.Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        },
+                    NeoSelectionCard(
+                        title = provider,
+                        isSelected = isSelected,
+                        onClick = { onToggleProviderFilter(provider) },
                     )
                 }
             } else {
                 if (showCustomModel) {
-                    item {
-                        val shape =
-                            if (totalItems == 1) {
-                                RoundedCornerShape(16.dp)
-                            } else {
-                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                            }
-                        ListItem(
-                            headlineContent = { Text("Use custom model: $searchQuery") },
-                            modifier =
-                                Modifier
-                                    .clip(shape)
-                                    .clickable {
-                                        onModelSelected(searchQuery)
-                                        onDismissRequest()
-                                    },
-                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    item(key = "custom:$searchQuery") {
+                        NeoSelectionCard(
+                            title = "Use custom model: $searchQuery",
+                            onClick = {
+                                onModelSelected(searchQuery)
+                                onDismissRequest()
+                            },
                         )
                     }
                 }
 
-                items(filteredModels.size) { index ->
-                    val model = filteredModels[index]
-                    val absoluteIndex = (if (showCustomModel) 1 else 0) + index
-                    val shape =
-                        when {
-                            totalItems == 1 -> RoundedCornerShape(16.dp)
-                            absoluteIndex == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                            absoluteIndex == totalItems - 1 -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                            else -> RectangleShape
-                        }
-
-                    ListItem(
-                        modifier =
-                            Modifier
-                                .clip(shape)
-                                .clickable {
-                                    onModelSelected(model.modelId)
-                                    onDismissRequest()
-                                },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        headlineContent = { Text(model.name ?: model.modelId) },
-                        supportingContent = {
-                            Column {
-                                if (model.name != null) {
-                                    Text(model.modelId)
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (model.contextWindowTokens != null) {
-                                        Text("Ctx: ${model.contextWindowTokens / 1000}k")
-                                    }
-                                    model.promptPrice
-                                        ?.formatUsdPerMillion()
-                                        ?.let { formattedPrice ->
-                                            Text("In: $$formattedPrice/1M")
-                                        }
-                                    model.completionPrice
-                                        ?.formatUsdPerMillion()
-                                        ?.let { formattedPrice ->
-                                            Text("Out: $$formattedPrice/1M")
-                                        }
-                                }
-                            }
+                items(filteredModels, key = { it.modelId }) { model ->
+                    NeoSelectionCard(
+                        title = model.name ?: model.modelId,
+                        subtitle = modelSelectionSubtitle(model),
+                        onClick = {
+                            onModelSelected(model.modelId)
+                            onDismissRequest()
                         },
                     )
                 }
             }
         }
     }
+}
+
+private fun modelSelectionSubtitle(model: DiscoveredApiModelUi): String? {
+    val parts = mutableListOf<String>()
+    if (model.name != null) {
+        parts += model.modelId
+    }
+    model.contextWindowTokens?.let { parts += "Ctx: ${it / 1000}k" }
+    model.promptPrice?.formatUsdPerMillion()?.let { parts += "In: $$it/1M" }
+    model.completionPrice?.formatUsdPerMillion()?.let { parts += "Out: $$it/1M" }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
 @Preview(showBackground = true, name = "Model Selection - Filtered")
@@ -398,118 +310,15 @@ fun PreviewModelSelectionBottomSheet() {
                 providerName = "Anthropic",
                 created = 1718841600L,
             ),
-            DiscoveredApiModelUi(
-                modelId = "google/gemini-pro-1.5",
-                name = "Gemini 1.5 Pro",
-                contextWindowTokens = 1000000,
-                promptPrice = 3.5,
-                completionPrice = 10.5,
-                providerName = "Google",
-                created = 1715644800L,
-            ),
-            DiscoveredApiModelUi(
-                modelId = "meta-llama/llama-3-70b-instruct",
-                name = "Llama 3 70B Instruct",
-                contextWindowTokens = 8192,
-                promptPrice = 0.59,
-                completionPrice = 0.79,
-                providerName = "Meta",
-                created = 1713484800L,
-            ),
         )
 
-    EnclaveTheme {
-        ModelSelectionContent(
-            availableModels = mockModels,
-            filteredModels = mockModels,
-            searchQuery = "",
-            providerFilters = emptySet(),
-            sortOption = ModelSortOption.A_TO_Z,
-            onUpdateSearchQuery = {},
-            onToggleProviderFilter = {},
-            onClearProviderFilters = {},
-            onUpdateSortOption = {},
-            onModelSelected = {},
-            onDismissRequest = {},
-        )
-    }
-}
-
-private fun usdPerMillionFormatter(): DecimalFormat =
-    DecimalFormat(
-        "#,##0.####",
-        DecimalFormatSymbols(Locale.US),
-    )
-
-internal fun Double.formatUsdPerMillion(): String? =
-    takeIf { isFinite() && this >= 0.0 }
-        ?.let { usdPerMillionFormatter().format(it) }
-
-@Preview(showBackground = true, name = "Model Selection - Searching")
-@Composable
-fun PreviewModelSelectionBottomSheetSearching() {
-    val mockModels =
-        listOf(
-            DiscoveredApiModelUi(
-                modelId = "openai/gpt-4o",
-                name = "GPT-4o",
-                contextWindowTokens = 128000,
-                promptPrice = 5.0,
-                completionPrice = 15.0,
-                providerName = "OpenAI",
-                created = 1715558400L,
-            ),
-        )
-
-    EnclaveTheme {
-        ModelSelectionContent(
-            availableModels = mockModels,
-            filteredModels = emptyList(),
-            searchQuery = "custom-model-id",
-            providerFilters = emptySet(),
-            sortOption = ModelSortOption.A_TO_Z,
-            onUpdateSearchQuery = {},
-            onToggleProviderFilter = {},
-            onClearProviderFilters = {},
-            onUpdateSortOption = {},
-            onModelSelected = {},
-            onDismissRequest = {},
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "Model Selection - Filtered by Provider")
-@Composable
-fun PreviewModelSelectionBottomSheetFiltered() {
-    val mockModels =
-        listOf(
-            DiscoveredApiModelUi(
-                modelId = "openai/gpt-4o",
-                name = "GPT-4o",
-                contextWindowTokens = 128000,
-                promptPrice = 5.0,
-                completionPrice = 15.0,
-                providerName = "OpenAI",
-                created = 1715558400L,
-            ),
-            DiscoveredApiModelUi(
-                modelId = "openai/gpt-4-turbo",
-                name = "GPT-4 Turbo",
-                contextWindowTokens = 128000,
-                promptPrice = 10.0,
-                completionPrice = 30.0,
-                providerName = "OpenAI",
-                created = 1712620800L,
-            ),
-        )
-
-    EnclaveTheme {
+    EnclaveTheme(darkTheme = true) {
         ModelSelectionContent(
             availableModels = mockModels,
             filteredModels = mockModels,
             searchQuery = "",
             providerFilters = setOf("OpenAI"),
-            sortOption = ModelSortOption.PRICE_LOW_TO_HIGH,
+            sortOption = ModelSortOption.A_TO_Z,
             onUpdateSearchQuery = {},
             onToggleProviderFilter = {},
             onClearProviderFilters = {},
@@ -518,4 +327,58 @@ fun PreviewModelSelectionBottomSheetFiltered() {
             onDismissRequest = {},
         )
     }
+}
+
+@Preview(showBackground = true, name = "Model Selection - Searching")
+@Composable
+fun PreviewModelSelectionBottomSheetSearching() {
+    EnclaveTheme(darkTheme = true) {
+        ModelSelectionContent(
+            availableModels = emptyList(),
+            filteredModels = emptyList(),
+            searchQuery = "grok",
+            providerFilters = emptySet(),
+            sortOption = ModelSortOption.A_TO_Z,
+            onUpdateSearchQuery = {},
+            onToggleProviderFilter = {},
+            onClearProviderFilters = {},
+            onUpdateSortOption = {},
+            onModelSelected = {},
+            onDismissRequest = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Model Selection - Provider Filter")
+@Composable
+fun PreviewModelSelectionBottomSheetFiltered() {
+    EnclaveTheme(darkTheme = true) {
+        ModelSelectionContent(
+            availableModels =
+                listOf(
+                    DiscoveredApiModelUi(modelId = "x-ai/grok", name = "Grok", providerName = "xAI"),
+                    DiscoveredApiModelUi(modelId = "openai/gpt-4o", name = "GPT-4o", providerName = "OpenAI"),
+                ),
+            filteredModels = emptyList(),
+            searchQuery = "",
+            providerFilters = emptySet(),
+            sortOption = ModelSortOption.A_TO_Z,
+            onUpdateSearchQuery = {},
+            onToggleProviderFilter = {},
+            onClearProviderFilters = {},
+            onUpdateSortOption = {},
+            onModelSelected = {},
+            onDismissRequest = {},
+        )
+    }
+}
+
+internal fun Double.formatUsdPerMillion(): String? {
+    if (!isFinite() || this < 0) return null
+    val formatter =
+        DecimalFormat("#,##0.####", DecimalFormatSymbols.getInstance(Locale.US)).apply {
+            minimumFractionDigits = 0
+            maximumFractionDigits = 4
+        }
+    return formatter.format(this)
 }
