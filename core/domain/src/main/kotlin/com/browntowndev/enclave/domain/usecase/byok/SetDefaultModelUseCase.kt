@@ -40,10 +40,7 @@ class SetDefaultModelUseCaseImpl
                 val config =
                     apiModelRepository.getConfigurationById(configId)
                         ?: throw IllegalArgumentException("Vision slot requires a valid API model configuration.")
-                val credentials =
-                    apiModelRepository.getCredentialsById(config.apiCredentialsId)
-                        ?: throw IllegalArgumentException("Vision slot requires a valid API model provider.")
-                require(credentials.isMultimodal) {
+                require(config.isMultimodal) {
                     "Vision slot requires a multimodal API model."
                 }
             }

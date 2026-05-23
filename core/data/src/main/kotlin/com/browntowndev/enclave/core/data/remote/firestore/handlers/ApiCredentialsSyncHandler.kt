@@ -40,8 +40,6 @@ internal class ApiCredentialsSyncHandler(
             "display_name" to local.displayName.encryptedForFirestore(ctx, collectionPath, local.id.value, "display_name"),
             "provider" to local.provider.name,
             "base_url" to local.baseUrl?.let { it.encryptedForFirestore(ctx, collectionPath, local.id.value, "base_url") },
-            "model_id" to local.modelId,
-            "is_multimodal" to local.isMultimodal,
             "credential_alias" to local.credentialAlias,
             "encrypted_api_key" to (local.encryptedApiKey?.let { Blob.fromBytes(it) }),
             "api_key_signature" to local.apiKeySignature,
@@ -58,8 +56,6 @@ internal class ApiCredentialsSyncHandler(
                 com.browntowndev.enclave.domain.model.inference.ApiProvider
                     .valueOf(doc.getString("provider") ?: "OPENAI"),
             baseUrl = doc.getEncryptedField(ctx, "base_url"),
-            modelId = doc.getString("model_id") ?: "",
-            isMultimodal = doc.getBoolean("is_multimodal") ?: false,
             credentialAlias = doc.getString("credential_alias") ?: "",
             encryptedApiKey = doc.getBlob("encrypted_api_key")?.toBytes(),
             apiKeySignature = doc.getString("api_key_signature"),

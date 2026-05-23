@@ -72,9 +72,7 @@ class ByokProvidersCoordinatorTest {
                     credentialsId = ApiCredentialsId("cred"),
                     displayName = "OpenAI",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4",
                     baseUrl = null,
-                    isMultimodal = false,
                     credentialAlias = "alias",
                     configurations = emptyList(),
                 )

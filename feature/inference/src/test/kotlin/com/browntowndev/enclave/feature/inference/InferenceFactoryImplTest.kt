@@ -203,25 +203,25 @@ class InferenceFactoryImplTest {
         }
 
     @Test
-    fun `withInferenceService recreates API service when credential model changes under same config`() =
+    fun `withInferenceService recreates API service when preset model changes under same config`() =
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("7"))
-            val config =
-                ApiModelConfiguration(
+            var config =
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "gpt-4o",
                     displayName = "Thinking preset",
                 )
-            var credentials = apiCredentials(modelId = "gpt-4o")
+            val credentials = apiCredentials()
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } answers { credentials }
+            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } answers { config }
+            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
             coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
             val first = factory.withInferenceService(ModelType.THINKING) { it }
 
-            credentials = apiCredentials(modelId = "gpt-5")
+            config = config.copy(modelId = "gpt-5")
             val second = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(first, second)
@@ -232,12 +232,12 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("7"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "gpt-4o",
                     displayName = "Thinking preset",
                 )
-            val credentials = apiCredentials(modelId = "gpt-4o")
+            val credentials = apiCredentials()
             var apiKey = "secret-a"
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
@@ -275,12 +275,12 @@ class InferenceFactoryImplTest {
                 )
 
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "gpt-4o",
                     displayName = "API preset",
                 )
-            val credentials = apiCredentials(modelId = "gpt-4o")
+            val credentials = apiCredentials()
 
             // First load local model
             coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns localAssignment
@@ -340,12 +340,12 @@ class InferenceFactoryImplTest {
                 )
 
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "gpt-4o",
                     displayName = "API preset",
                 )
-            val credentials = apiCredentials(modelId = "gpt-4o")
+            val credentials = apiCredentials()
 
             // Load local model for both FAST and THINKING
             coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns localAssignmentFast
@@ -377,12 +377,12 @@ class InferenceFactoryImplTest {
     fun `withInferenceService keeps separate API service instances per model type`() =
         runTest {
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "gpt-5",
                     displayName = "Shared preset",
                 )
-            val credentials = apiCredentials(modelId = "gpt-5")
+            val credentials = apiCredentials()
 
             coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns
                 DefaultModelAssignment(
@@ -409,12 +409,12 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("9"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "openai/gpt-5.2:nitro",
                     displayName = "Router preset",
                 )
-            val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER)
+            val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
             coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
@@ -438,16 +438,17 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("10"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("10"),
                     apiCredentialsId = ApiCredentialsId("12"),
+                    modelId = "claude-sonnet-4-20250514",
                     displayName = "Anthropic preset",
                 )
             val credentials =
                 apiCredentials(
-                    modelId = "claude-sonnet-4-20250514",
                     provider = ApiProvider.ANTHROPIC,
                     baseUrl = null,
+                    id = ApiCredentialsId("12"),
                 )
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
@@ -472,16 +473,17 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("13"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("13"),
                     apiCredentialsId = ApiCredentialsId("12"),
+                    modelId = "gemini-2.5-flash",
                     displayName = "Google preset",
                 )
             val credentials =
                 apiCredentials(
-                    modelId = "gemini-2.5-flash",
                     provider = ApiProvider.GOOGLE,
                     baseUrl = null,
+                    id = ApiCredentialsId("12"),
                 )
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
@@ -506,12 +508,12 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("9"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "openai/gpt-5.2:nitro",
                     displayName = "Router preset",
                 )
-            val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER, baseUrl = null)
+            val credentials = apiCredentials(provider = ApiProvider.OPENROUTER, baseUrl = null)
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
             coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
@@ -536,12 +538,12 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("9"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "grok-2",
                     displayName = "xAI preset",
                 )
-            val credentials = apiCredentials(modelId = "grok-2", provider = ApiProvider.XAI, baseUrl = "   ")
+            val credentials = apiCredentials(provider = ApiProvider.XAI, baseUrl = "   ")
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
             coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
@@ -567,12 +569,12 @@ class InferenceFactoryImplTest {
             val customUrl = "https://custom.endpoint.com/v1"
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("9"),
-                    apiCredentialsId = ApiCredentialsId("11"),
+                    modelId = "openai/gpt-5.2:nitro",
                     displayName = "Router preset",
                 )
-            val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER, baseUrl = customUrl)
+            val credentials = apiCredentials(provider = ApiProvider.OPENROUTER, baseUrl = customUrl)
 
             coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
             coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
@@ -597,9 +599,10 @@ class InferenceFactoryImplTest {
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.VISION, apiConfigId = ApiModelConfigurationId("vision-config"))
             val config =
-                ApiModelConfiguration(
+                apiModelConfiguration(
                     id = ApiModelConfigurationId("vision-config"),
                     apiCredentialsId = ApiCredentialsId("vision-creds"),
+                    modelId = "gpt-4o",
                     displayName = "Vision preset",
                 )
 
@@ -607,7 +610,6 @@ class InferenceFactoryImplTest {
             coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("vision-config")) } returns config
             coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("vision-creds")) } returns
                 apiCredentials(
-                    modelId = "gpt-4o",
                     provider = ApiProvider.OPENAI,
                     id = ApiCredentialsId("vision-creds"),
                 )
@@ -638,7 +640,6 @@ class InferenceFactoryImplTest {
         }
 
     private fun apiCredentials(
-        modelId: String,
         provider: ApiProvider = ApiProvider.OPENAI,
         baseUrl: String? = provider.defaultBaseUrl() ?: "https://api.openai.com/v1",
         id: ApiCredentialsId = ApiCredentialsId("11"),
@@ -647,9 +648,21 @@ class InferenceFactoryImplTest {
             id = id,
             displayName = "OpenAI",
             provider = provider,
-            modelId = modelId,
             baseUrl = baseUrl,
             credentialAlias = "alias",
+        )
+
+    private fun apiModelConfiguration(
+        id: ApiModelConfigurationId,
+        modelId: String,
+        apiCredentialsId: ApiCredentialsId = ApiCredentialsId("11"),
+        displayName: String = "Preset",
+    ): ApiModelConfiguration =
+        ApiModelConfiguration(
+            id = id,
+            apiCredentialsId = apiCredentialsId,
+            modelId = modelId,
+            displayName = displayName,
         )
 
     private suspend fun resolveApiService(
@@ -665,15 +678,15 @@ class InferenceFactoryImplTest {
                 apiConfigId = apiConfigId,
             )
         coEvery { apiModelRepository.getConfigurationById(apiConfigId) } returns
-            ApiModelConfiguration(
+            apiModelConfiguration(
                 id = apiConfigId,
                 apiCredentialsId = apiCredentialsId,
+                modelId = modelId,
                 displayName = "${provider.name} preset",
             )
         coEvery { apiModelRepository.getCredentialsById(apiCredentialsId) } returns
             apiCredentials(
                 id = apiCredentialsId,
-                modelId = modelId,
                 provider = provider,
                 baseUrl =
                     when (provider) {

@@ -122,9 +122,8 @@ class AutoAssignLocalModelsUseCase
 
         private fun firstMultimodalApi(apiAssets: List<ApiModelAsset>): ApiModelConfigurationId? =
             apiAssets.asSequence()
-                .filter { it.credentials.isMultimodal }
                 .flatMap { it.configurations.asSequence() }
-                .firstOrNull()
+                .firstOrNull { it.isMultimodal }
                 ?.id
 
         private data class Candidate(

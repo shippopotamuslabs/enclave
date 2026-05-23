@@ -44,6 +44,36 @@ class ApiModelConfigurationsDaoTest {
     private fun nextCredId() = ApiCredentialsId(UUID.randomUUID().toString())
 
     @Test
+    fun `SCN-DAO-002 ApiModelConfigurationsDao Round-Trip Model Fields`() =
+        runTest {
+            val credId = nextCredId()
+            credDao.upsert(
+                ApiCredentialsEntity(
+                    id = credId,
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "key1",
+                    displayName = "GPT-4o",
+                ),
+            )
+
+            val configId = ApiModelConfigurationId("preset-1")
+            configDao.upsert(
+                ApiModelConfigurationEntity(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    modelId = "gpt-4o",
+                    isMultimodal = true,
+                    displayName = "Creative",
+                ),
+            )
+
+            val retrieved = configDao.getById(configId)
+            assertNotNull(retrieved)
+            assertEquals("gpt-4o", retrieved?.modelId)
+            assertEquals(true, retrieved?.isMultimodal)
+        }
+
+    @Test
     fun `insert and retrieve an API tuning preset`() =
         runTest {
             val credId = nextCredId()
@@ -51,7 +81,6 @@ class ApiModelConfigurationsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                     displayName = "GPT-4o",
                 ),
@@ -62,6 +91,7 @@ class ApiModelConfigurationsDaoTest {
                 ApiModelConfigurationEntity(
                     id = configId,
                     apiCredentialsId = credId,
+                    modelId = "",
                     displayName = "Default",
                     temperature = 0.7,
                     maxTokens = 4096,
@@ -81,7 +111,6 @@ class ApiModelConfigurationsDaoTest {
                 ApiCredentialsEntity(
                     id = credId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                     displayName = "GPT-4o",
                 ),
@@ -91,6 +120,7 @@ class ApiModelConfigurationsDaoTest {
                 ApiModelConfigurationEntity(
                     id = ApiModelConfigurationId("test-api-config-1"),
                     apiCredentialsId = credId,
+                    modelId = "gpt-4o",
                     displayName = "Fast",
                 ),
             )
@@ -98,6 +128,7 @@ class ApiModelConfigurationsDaoTest {
                 ApiModelConfigurationEntity(
                     id = ApiModelConfigurationId("test-api-config-2"),
                     apiCredentialsId = credId,
+                    modelId = "gpt-4o-mini",
                     displayName = "Thorough",
                 ),
             )

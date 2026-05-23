@@ -179,7 +179,14 @@ fun TtsConfigureScreen(
             val reusableCredentials =
                 uiState.apiProvidersSheet.assets
                     .filter { it.provider == draft.provider }
-                    .map { ReusableApiCredentialUi(it.credentialsId, it.displayName, it.modelId, it.credentialAlias) }
+                    .map {
+                        ReusableApiCredentialUi(
+                            credentialsId = it.credentialsId,
+                            displayName = it.displayName,
+                            providerLabel = it.provider.displayName,
+                            credentialAlias = it.credentialAlias,
+                        )
+                    }
 
             if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
                 ReusableCredentialDropdown(

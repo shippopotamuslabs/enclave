@@ -126,6 +126,63 @@ class PrepareModelDeletionUseCaseTest {
             assertEquals(1, result.reassignmentCandidates.size)
         }
 
+    @Test
+    fun `SCN-USECASE-DELETION-001 prepareApiPreset filters reassignment to multimodal presets when vision slot needs reassignment`() =
+        runTest {
+            val deletedConfigId = ApiModelConfigurationId("deleted")
+            val multimodalConfigId = ApiModelConfigurationId("vision")
+            val textOnlyConfigId = ApiModelConfigurationId("text")
+            val credentialsId = ApiCredentialsId("cred")
+
+            coEvery { deleteApiModelConfigurationUseCase.getModelTypesNeedingReassignment(deletedConfigId) } returns
+                listOf(ModelType.VISION)
+
+            val apiAsset =
+                ApiModelAsset(
+                    credentials =
+                        ApiCredentials(
+                            id = credentialsId,
+                            displayName = "OpenAI",
+                            provider = ApiProvider.OPENAI,
+                            credentialAlias = "alias",
+                        ),
+                    configurations =
+                        listOf(
+                            ApiModelConfiguration(
+                                id = deletedConfigId,
+                                apiCredentialsId = credentialsId,
+                                modelId = "gpt-4o",
+                                isMultimodal = true,
+                                displayName = "Deleted",
+                            ),
+                            ApiModelConfiguration(
+                                id = multimodalConfigId,
+                                apiCredentialsId = credentialsId,
+                                modelId = "gpt-4o-mini",
+                                isMultimodal = true,
+                                displayName = "Vision OK",
+                            ),
+                            ApiModelConfiguration(
+                                id = textOnlyConfigId,
+                                apiCredentialsId = credentialsId,
+                                modelId = "gpt-3.5",
+                                isMultimodal = false,
+                                displayName = "Text only",
+                            ),
+                        ),
+                )
+
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
+
+            val result = useCase(ModelDeletionTarget.ApiPreset(deletedConfigId))
+
+            assertTrue(result is PreparedModelDeletion.Ready)
+            assertEquals(listOf(ModelType.VISION), result.modelTypesNeedingReassignment)
+            assertEquals(1, result.reassignmentCandidates.size)
+            assertEquals(multimodalConfigId, result.reassignmentCandidates.single().configId)
+        }
+
     private fun createLocalModelAsset(
         id: LocalModelId,
         configIds: List<LocalModelConfigurationId>,

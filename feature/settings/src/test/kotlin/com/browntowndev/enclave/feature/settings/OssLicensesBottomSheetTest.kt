@@ -375,6 +375,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                     saveApiPreset = mockk(relaxed = true),
                     discoverApiModels = mockk(relaxed = true),
                     applyApiModelMetadataDefaults = mockk(relaxed = true),
+                    testApiProviderConnection = mockk(relaxed = true),
                 ),
             assignments =
                 SettingsAssignmentUseCasesImpl(

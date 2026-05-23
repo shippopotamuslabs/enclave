@@ -76,6 +76,7 @@ class SettingsApiProviderUseCasesImpl
         override val saveApiPreset: SaveApiPresetUseCase,
         override val discoverApiModels: DiscoverApiModelsUseCase,
         override val applyApiModelMetadataDefaults: ApplyApiModelMetadataDefaultsUseCase,
+        override val testApiProviderConnection: TestApiProviderConnectionUseCase,
     ) : SettingsApiProviderUseCases
 
 class SettingsAssignmentUseCasesImpl

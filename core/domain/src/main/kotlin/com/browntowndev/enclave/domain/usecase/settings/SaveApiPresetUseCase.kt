@@ -24,6 +24,8 @@ class SaveApiPresetUseCase
                 ApiModelConfiguration(
                     id = draft.id,
                     apiCredentialsId = draft.credentialsId.takeIf { it.value.isNotEmpty() } ?: parentCredentialsId,
+                    modelId = draft.modelId,
+                    isMultimodal = draft.isMultimodal,
                     displayName = draft.displayName,
                     maxTokens = draft.maxTokens.toIntOrNull() ?: 4096,
                     contextWindow = draft.contextWindow.toIntOrNull() ?: 4096,

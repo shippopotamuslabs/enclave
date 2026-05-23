@@ -52,7 +52,6 @@ class ApiModelRepositorySyncTest {
                     id = ApiCredentialsId(""),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4",
                     credentialAlias = "alias",
                 )
 
@@ -63,7 +62,6 @@ class ApiModelRepositorySyncTest {
                     id = ApiCredentialsId("saved"),
                     displayName = "Test",
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4",
                     credentialAlias = "alias",
                 )
 
@@ -82,6 +80,7 @@ class ApiModelRepositorySyncTest {
                 ApiModelConfiguration(
                     id = ApiModelConfigurationId(""),
                     apiCredentialsId = ApiCredentialsId("cred-id"),
+                    modelId = "gpt-4o",
                     displayName = "Config",
                 )
 

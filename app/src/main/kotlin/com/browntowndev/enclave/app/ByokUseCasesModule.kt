@@ -18,6 +18,7 @@ import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUse
 import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCaseImpl
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.settings.TestApiProviderConnectionUseCase
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -62,4 +63,8 @@ abstract class ByokUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSetDefaultModelUseCase(impl: SetDefaultModelUseCaseImpl): SetDefaultModelUseCase
+
+    @Binds
+    @Singleton
+    abstract fun bindTestApiProviderConnectionUseCase(impl: TestApiProviderConnectionUseCase): TestApiProviderConnectionUseCase
 }

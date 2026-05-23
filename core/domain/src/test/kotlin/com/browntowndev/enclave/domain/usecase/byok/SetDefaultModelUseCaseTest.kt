@@ -1,14 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
+import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
+import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
@@ -51,6 +55,27 @@ class SetDefaultModelUseCaseTest {
 
             val assignment = repository.getDefault(ModelType.TTS)
             assertEquals(ttsId, assignment?.ttsProviderId)
+        }
+
+    @Test
+    fun `SCN-USECASE-VISION-001 Vision Default Requires Multimodal Preset`() =
+        runTest {
+            val configId = ApiModelConfigurationId("config-1")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = ApiCredentialsId("cred-1"),
+                    modelId = "gpt-4o",
+                    isMultimodal = false,
+                    displayName = "Text Only",
+                )
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.VISION, localConfigId = null, apiConfigId = configId)
+                }
+
+            assertTrue(error.message!!.contains("multimodal", ignoreCase = true))
         }
 
     @Test

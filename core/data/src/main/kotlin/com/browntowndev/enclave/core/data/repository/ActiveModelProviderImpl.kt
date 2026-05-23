@@ -80,14 +80,14 @@ class ActiveModelProviderImpl
                             AadContext("ApiModelConfigurationEntity", "displayName", config.id.value).toBytes(),
                             modelType,
                         ),
-                    modelId = credentials.modelId,
+                    modelId = config.modelId,
                     systemPrompt =
                         decryptRequired(
                             config.systemPrompt,
                             AadContext("ApiModelConfigurationEntity", "systemPrompt", config.id.value).toBytes(),
                             modelType,
                         ),
-                    isMultimodal = credentials.isMultimodal,
+                    isMultimodal = config.isMultimodal,
                     reasoningEffort =
                         config.reasoningEffort?.let {
                             com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort

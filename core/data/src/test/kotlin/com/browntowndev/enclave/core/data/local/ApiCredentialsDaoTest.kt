@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,21 +46,22 @@ class ApiCredentialsDaoTest {
     private fun nextId() = ApiCredentialsId(UUID.randomUUID().toString())
 
     @Test
-    fun `insert and retrieve API credentials`() =
+    fun `SCN-DAO-001 ApiCredentialsDao Round-Trip`() =
         runTest {
             val entityId = nextId()
             val entity =
                 ApiCredentialsEntity(
                     id = entityId,
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
-                    credentialAlias = "my_openai_key",
-                    displayName = "GPT-4o",
+                    credentialAlias = "openai-main",
+                    displayName = "PCENC:v1:…",
                 )
             dao.upsert(entity)
             val retrieved = dao.getById(entityId)
             assertNotNull(retrieved)
-            assertEquals("my_openai_key", retrieved?.credentialAlias)
+            assertEquals(ApiProvider.OPENAI, retrieved?.provider)
+            assertEquals("openai-main", retrieved?.credentialAlias)
+            assertFalse(ApiCredentialsEntity::class.members.any { it.name == "modelId" })
         }
 
     @Test
@@ -69,7 +71,6 @@ class ApiCredentialsDaoTest {
                 ApiCredentialsEntity(
                     id = nextId(),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4",
                     credentialAlias = "key1",
                     displayName = "GPT-4",
                     updatedAt = 1000,
@@ -78,7 +79,6 @@ class ApiCredentialsDaoTest {
                 ApiCredentialsEntity(
                     id = nextId(),
                     provider = ApiProvider.ANTHROPIC,
-                    modelId = "claude",
                     credentialAlias = "key2",
                     displayName = "Claude",
                     updatedAt = 2000,
@@ -99,7 +99,6 @@ class ApiCredentialsDaoTest {
                 ApiCredentialsEntity(
                     id = nextId(),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                     displayName = "GPT-4o",
                     baseUrl = "https://api.openai.com/v1",
@@ -109,7 +108,6 @@ class ApiCredentialsDaoTest {
                 ApiCredentialsEntity(
                     id = nextId(),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key2",
                     displayName = "GPT-4o Duplicate",
                     baseUrl = "https://api.openai.com/v1",
@@ -131,7 +129,6 @@ class ApiCredentialsDaoTest {
                 ApiCredentialsEntity(
                     id = nextId(),
                     provider = ApiProvider.OPENAI,
-                    modelId = "gpt-4o",
                     credentialAlias = "key1",
                     displayName = "GPT-4o",
                     baseUrl = "https://api.openai.com/v1",

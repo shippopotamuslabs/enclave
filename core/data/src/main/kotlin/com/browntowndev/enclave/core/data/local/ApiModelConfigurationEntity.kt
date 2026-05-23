@@ -29,6 +29,10 @@ data class ApiModelConfigurationEntity(
     val apiCredentialsId: ApiCredentialsId,
     @ColumnInfo(name = "display_name")
     val displayName: String,
+    @ColumnInfo(name = "model_id")
+    val modelId: String,
+    @ColumnInfo(name = "is_multimodal")
+    val isMultimodal: Boolean = false,
     @ColumnInfo(name = "custom_headers")
     val customHeaders: String = "{}",
     @ColumnInfo(name = "max_tokens")

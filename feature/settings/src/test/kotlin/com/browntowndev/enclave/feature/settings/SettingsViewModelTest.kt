@@ -116,10 +116,19 @@ class SettingsViewModelTest {
                             id = uiAsset.credentialsId,
                             displayName = uiAsset.displayName,
                             provider = uiAsset.provider,
-                            modelId = uiAsset.modelId,
+                            baseUrl = uiAsset.baseUrl,
                             credentialAlias = uiAsset.credentialAlias,
                         ),
-                    configurations = emptyList(),
+                    configurations =
+                        uiAsset.configurations.map { config ->
+                            com.browntowndev.enclave.domain.model.config.ApiModelConfiguration(
+                                id = config.id,
+                                apiCredentialsId = config.credentialsId,
+                                modelId = config.modelId,
+                                isMultimodal = config.isMultimodal,
+                                displayName = config.displayName,
+                            )
+                        },
                 )
             }
         every { getApiModelAssetsUseCase() } returns MutableStateFlow(apiAssets)
@@ -174,6 +183,7 @@ class SettingsViewModelTest {
                         saveApiPreset = saveApiPresetUseCase,
                         discoverApiModels = discoverApiModelsUseCase,
                         applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
+                        testApiProviderConnection = mockk(relaxed = true),
                     ),
                 assignments =
                     SettingsAssignmentUseCasesImpl(
@@ -366,8 +376,7 @@ class SettingsViewModelTest {
             }
             assertEquals(
                 listOf("gemini-2.5-flash-preview-tts"),
-                viewModel.uiState.value.apiProviderEditor.discovery.models
-                    .map { it.modelId },
+                viewModel.uiState.value.apiProviderEditor.discovery.models.map { it.modelId },
             )
         }
 
@@ -685,7 +694,7 @@ class SettingsViewModelTest {
                             id = draft.credentialsId,
                             displayName = draft.displayName,
                             provider = draft.provider,
-                            modelId = draft.modelId,
+                            baseUrl = draft.baseUrl,
                             credentialAlias = "alias-1",
                         ),
                     configurations = emptyList(),
@@ -761,7 +770,9 @@ class SettingsViewModelTest {
     fun `onFetchApiModels discovers models from API draft`() =
         runTest {
             val asset = MockSettingsData.apiModels.first()
-            coEvery { discoverApiModelsUseCase(any()) } returns
+            val preset = asset.configurations.first()
+            val requestSlot = io.mockk.slot<ApiModelDiscoveryRequest>()
+            coEvery { discoverApiModelsUseCase(capture(requestSlot)) } returns
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -772,22 +783,20 @@ class SettingsViewModelTest {
                         ApiModelDiscoveryScope(
                             provider = ApiProvider.OPENAI,
                             baseUrl = "",
-                            credentialAlias = asset.credentialAlias,
+                            credentialAlias = null,
                         ),
                 )
 
             viewModel.onSelectApiModelAsset(asset)
+            viewModel.onSelectApiModelConfig(preset)
+            viewModel.onApiKeyChange("secret")
             viewModel.onFetchApiModels()
             advanceUntilIdle()
 
-            coVerify {
-                discoverApiModelsUseCase(
-                    match { request ->
-                        request.provider == ApiProvider.OPENAI &&
-                            request.credentialAlias == asset.credentialAlias
-                    },
-                )
-            }
+            assertEquals(ApiProvider.OPENAI, requestSlot.captured.provider)
+            assertEquals("secret", requestSlot.captured.currentApiKey)
+            assertEquals(asset.credentialAlias, requestSlot.captured.credentialAlias)
+            assertEquals(preset.modelId, requestSlot.captured.selectedModelId)
             assertEquals(2, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
             assertEquals(
                 "gpt-4o",
@@ -863,12 +872,7 @@ class SettingsViewModelTest {
                 viewModel.uiState.value.apiProvidersSheet.selectedAsset
                     ?.credentialsId,
             )
-            assertEquals(1, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
-            assertEquals(
-                asset2.modelId,
-                viewModel.uiState.value.apiProviderEditor.discovery.models[0]
-                    .modelId,
-            )
+            assertEquals(0, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
         }
 
     @Test
@@ -882,12 +886,7 @@ class SettingsViewModelTest {
             viewModel.onApiModelAssetFieldChange(changedAsset)
             advanceUntilIdle()
 
-            assertEquals(1, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
-            assertEquals(
-                asset.modelId,
-                viewModel.uiState.value.apiProviderEditor.discovery.models[0]
-                    .modelId,
-            )
+            assertEquals(0, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
             assertEquals(
                 ApiProvider.ANTHROPIC,
                 viewModel.uiState.value.apiProviderEditor.assetDraft
@@ -905,10 +904,16 @@ class SettingsViewModelTest {
                             id = ApiCredentialsId("api-1"),
                             displayName = "OpenAI",
                             provider = ApiProvider.OPENAI,
-                            modelId = "gpt-4o",
                             credentialAlias = "alias-1",
                         ),
-                    configurations = emptyList(),
+                    configurations =
+                        listOf(
+                            com.browntowndev.enclave.domain.model.config.ApiModelConfiguration(
+                                apiCredentialsId = ApiCredentialsId("api-1"),
+                                modelId = "gpt-4o",
+                                displayName = "Default",
+                            ),
+                        ),
                 )
             val selection =
                 ResolvedAssignedModelSelection(
