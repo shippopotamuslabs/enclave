@@ -124,6 +124,7 @@ internal fun StudioInputDock(
                     onSend = { onGenerateClick() },
                     onStop = onGenerateClick,
                     onMicClick = onMicClick,
+                    onCollapse = { isExpanded = false },
                 )
             },
         )

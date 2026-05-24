@@ -200,4 +200,52 @@ class InputBarTest {
         // verify the visual "bleed" via Previews as requested by the user.
         assertTrue("InputBar should support bleeding", true)
     }
+
+    @Test
+    fun `when message sent from expanded input bar, it auto-collapses`() {
+        var onSendCalled = false
+
+        composeTestRule.setContent {
+            InputBar(
+                inputText = "Hello World",
+                speechState = SpeechState.Idle,
+                selectedImageUris = emptyList(),
+                selectedFileName = null,
+                isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
+                photoAttachmentDisabledReason = null,
+                selectedMode = ChatModeUi.FAST,
+                isGenerating = false,
+                canStop = false,
+                isGlobalInferenceBlocked = false,
+                onInputChange = {},
+                onModeChange = {},
+                onSend = { onSendCalled = true },
+                onStopGenerating = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = { _ -> },
+                onClearFile = {},
+                onMicClick = {},
+            )
+        }
+
+        // Verify initial state is collapsed (Expand toggle is shown)
+        composeTestRule.onNodeWithContentDescription("Expand").assertIsDisplayed()
+
+        // Expand it
+        composeTestRule.onNodeWithContentDescription("Expand").performClick()
+
+        // Verify it is expanded (Collapse toggle is shown)
+        composeTestRule.onNodeWithContentDescription("Collapse").assertIsDisplayed()
+
+        // Click Send button (contentDescription in UniversalVoiceTrailingAction is "Send")
+        composeTestRule.onNodeWithContentDescription("Send").performClick()
+
+        // Verify onSend was invoked
+        assertTrue(onSendCalled)
+
+        // Verify that it is collapsed now (Expand toggle is shown)
+        composeTestRule.onNodeWithContentDescription("Expand").assertIsDisplayed()
+    }
 }
