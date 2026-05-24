@@ -1,19 +1,117 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.port.repository.SettingsData
+import com.browntowndev.enclave.domain.usecase.chat.ChatInferenceRequestPreparer
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertAll
 
 class OpenRouterRequestMapperTest {
+    @Test
+    fun `LTD-13 search_x_recent remains catalog-visible but inactive until disclosure`() =
+        runTest {
+            val preparer = createPreparer(SettingsData(xSearchEnabled = true))
+            val request =
+                preparer(
+                    prompt = "What is trending on X?",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            val prompt = request.options.systemPrompt.orEmpty()
+            val params =
+                OpenRouterRequestMapper.mapToChatCompletionParams(
+                    modelId = "openai/gpt-5.2",
+                    prompt = request.prompt,
+                    history = emptyList(),
+                    options = request.options,
+                )
+            val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
+
+            assertAll(
+                { assertTrue(request.options.toolCatalog.any { it.name == "search_x_recent" }) },
+                { assertFalse(request.options.activeTools.contains(ToolDefinition.X_SEARCH)) },
+                { assertFalse(request.options.activeTools.contains(ToolDefinition.X_SEARCH)) },
+                { assertTrue(prompt.contains("# TOOL CATALOG:")) },
+                { assertTrue(prompt.contains("search_x_recent")) },
+                { assertFalse(prompt.contains("ActionResult{\"name\":\"search_x_recent\"")) },
+                { assertFalse(prompt.contains("call:search_x_recent")) },
+                { assertFalse(registeredToolNames.contains("search_x_recent")) },
+            )
+        }
+
+    private fun createPreparer(settings: SettingsData): ChatInferenceRequestPreparer =
+        ChatInferenceRequestPreparer(
+            activeModelProvider =
+                mockk {
+                    coEvery { getActiveConfiguration(ModelType.FAST) } returns
+                        ActiveModelConfiguration(
+                            modelId = "test",
+                            id = LocalModelConfigurationId("test"),
+                            isLocal = true,
+                            name = "Test",
+                            systemPrompt = "Be concise.",
+                            temperature = 0.7,
+                            topK = 40,
+                            topP = 0.9,
+                            maxTokens = 512,
+                            contextWindow = 4096,
+                            thinkingEnabled = false,
+                            isMultimodal = false,
+                            minP = 0.05,
+                            repetitionPenalty = 1.1,
+                        )
+                    coEvery { getActiveConfiguration(ModelType.VISION) } returns null
+                },
+            settingsRepository =
+                mockk {
+                    every { settingsFlow } returns flowOf(settings)
+                },
+            messageRepository =
+                mockk {
+                    coEvery { getMessageById(any()) } returns mockk(relaxed = true)
+                    coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns null
+                },
+            memoriesRepository =
+                mockk {
+                    coEvery { getCoreMemories() } returns emptyList()
+                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
+                },
+            embeddingEnginePort =
+                mockk {
+                    coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f)
+                },
+            promptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
+            loggingPort = mockk(relaxed = true),
+        )
+
     @Test
     fun `mapToResponseParams adds openrouter fallback routing defaults`() {
         val params =
@@ -201,7 +299,7 @@ class OpenRouterRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 

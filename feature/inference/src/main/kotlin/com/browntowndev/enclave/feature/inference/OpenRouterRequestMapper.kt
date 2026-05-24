@@ -94,8 +94,9 @@ object OpenRouterRequestMapper {
         if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
             options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
         }
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+        val toolsToRegister = options.activeTools
+        if (options.toolingEnabled && toolsToRegister.isNotEmpty()) {
+            toolsToRegister.forEach { builder.addTool(it.toChatCompletionTool()) }
             builder.parallelToolCalls(false)
         }
 
@@ -156,8 +157,9 @@ object OpenRouterRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
+        val responseToolsToRegister = options.activeTools
+        if (options.toolingEnabled && responseToolsToRegister.isNotEmpty()) {
+            responseToolsToRegister.forEach { builder.addTool(it.toResponsesTool()) }
             builder.parallelToolCalls(false)
             builder.maxToolCalls(1)
         }

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 
 class ConversationSignatureTest {
     @Test
-    fun buildConversationSignature_reflectsAvailableTools() {
+    fun buildConversationSignature_reflectsActiveTools() {
         val signature =
             buildConversationSignature(
                 modelType = ModelType.FAST,
@@ -23,7 +23,7 @@ class ConversationSignatureTest {
                 options =
                     GenerationOptions(
                         reasoningBudget = 0,
-                        availableTools =
+                        activeTools =
                             listOf(
                                 ToolDefinition.WEB_SEARCH,
                                 ToolDefinition.SEARCH_CHAT,
@@ -37,5 +37,29 @@ class ConversationSignatureTest {
         assertTrue(signature.hasMemoryTools)
         assertTrue(signature.hasArtifactTools)
         assertEquals("prompt", signature.systemPrompt)
+    }
+
+    @Test
+    fun buildConversationSignature_usesActiveToolsForArtifactFlags() {
+        val signature =
+            buildConversationSignature(
+                modelType = ModelType.FAST,
+                configId = LocalModelConfigurationId("cfg-1"),
+                thinkingEnabled = true,
+                systemPrompt = "prompt",
+                samplerConfig = SamplerConfig(temperature = 0.5, topP = 0.9, topK = 20),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        activeTools =
+                            listOf(
+                                ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                ToolDefinition.WEB_SEARCH,
+                            ),
+                    ),
+            )
+
+        assertTrue(signature.hasSearchTool)
+        assertFalse(signature.hasArtifactTools)
     }
 }

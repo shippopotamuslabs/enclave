@@ -5,6 +5,8 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SamplerConfig
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 import com.browntowndev.enclave.feature.inference.ConversationImpl
 import com.browntowndev.enclave.feature.inference.LiteRtConversation
 import com.google.ai.edge.litertlm.Conversation
@@ -45,6 +47,15 @@ internal class ConversationSignatureCache {
     @Volatile
     var latestAssistantMessageId: MessageId? = null
 
+    @Volatile
+    var activeToolNames: List<String> = emptyList()
+
+    @Volatile
+    var toolCatalog: List<ToolCatalogEntry> = emptyList()
+
+    @Volatile
+    var toolCallStrategy: ToolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
+
     fun clearTransientToolResults() {
         hasTransientToolResults = false
         transientToolResultTokens = 0
@@ -59,6 +70,9 @@ internal class ConversationSignatureCache {
         currentSamplerConfig = null
         currentSignature = null
         activeBackendIsNpu = false
+        activeToolNames = emptyList()
+        toolCatalog = emptyList()
+        toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
     }
 
     fun wrapConversation(

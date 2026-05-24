@@ -88,12 +88,13 @@ object XaiRequestMapper {
             toolsPayload.add(mapOf("type" to "code_execution"))
         }
 
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+        val xaiToolsToRegister = options.activeTools
+        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
             if (isMultiAgentModel(modelId)) {
                 // NOTE: Client-side tools are not currently available for multi-agent models
                 // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
             } else {
-                toolsPayload.addAll(options.availableTools.map { it.toChatCompletionToolMap() })
+                toolsPayload.addAll(xaiToolsToRegister.map { it.toChatCompletionToolMap() })
                 builder.parallelToolCalls(false)
             }
         }
@@ -172,12 +173,13 @@ object XaiRequestMapper {
             toolsPayload.add(mapOf("type" to "code_execution"))
         }
 
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+        val xaiToolsToRegister = options.activeTools
+        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
             if (isMultiAgentModel(modelId)) {
                 // NOTE: Client-side tools are not currently available for multi-agent models
                 // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
             } else {
-                toolsPayload.addAll(options.availableTools.map { it.toResponseToolPayloadMap() })
+                toolsPayload.addAll(xaiToolsToRegister.map { it.toResponseToolPayloadMap() })
             }
         }
 

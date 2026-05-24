@@ -17,11 +17,12 @@ interface RustCompatibleInferenceService : LlmInferencePort {
      *
      * @param sessionMessages full message history from the Rust session (already compacted if needed)
      * @param systemPrompt system prompt to prepend (may differ from [options] if Rust overrides it)
-     * @param availableTools tools the model may call this turn; empty when [allowToolCall] is false
+     * @param availableTools per-turn callable tools from the Rust session (not [GenerationOptions.activeTools]);
+     *   typically derived from the turn catalog plus any tools activated via disclosure this session
+     * @param options original [GenerationOptions] from [sendPrompt] (catalog, IDs, model params, etc.)
      * @param allowToolCall whether the model is permitted to emit a tool call this turn
      * @param onTextToken callback for each streamed text delta
      * @param onThinkingToken callback for each streamed reasoning/thinking delta
-     * @param options original [GenerationOptions] from [sendPrompt] (for model params, IDs, etc.)
      */
     suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,

@@ -432,6 +432,8 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopSessionIoPa
     FfiSessionIoParams(
         provider = provider,
         contextWindowTokens = contextWindowTokens,
+        toolCatalogJson = toolCatalogJson,
+        toolSchemaRegistryJson = toolSchemaRegistryJson,
         toolsSchemaJson = toolsSchemaJson,
         systemPrompt = systemPrompt,
     )
@@ -465,6 +467,7 @@ private fun AgentToolResult.toFfi(): FfiToolResultRecord =
         resultJson = resultJson,
         truncated = truncated,
         softFailure = softFailure,
+        activatedToolNames = activatedToolNames,
     )
 
 private fun AgentSummaryResult.toFfi(): FfiSummaryResult =

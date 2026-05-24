@@ -30,7 +30,7 @@ internal fun buildConversationSignature(
     samplerConfig: SamplerConfig,
     options: GenerationOptions?,
 ): ConversationSignature {
-    val availableTools = options?.availableTools.orEmpty()
+    val activeTools = options?.activeTools.orEmpty()
     return ConversationSignature(
         modelType = modelType,
         configId = configId,
@@ -39,13 +39,13 @@ internal fun buildConversationSignature(
         temperature = samplerConfig.temperature,
         topP = samplerConfig.topP,
         topK = samplerConfig.topK,
-        hasSearchTool = ToolDefinition.WEB_SEARCH in availableTools,
-        hasExtractTool = ToolDefinition.WEB_EXTRACT in availableTools,
-        hasImageTool = ToolDefinition.ATTACHED_IMAGE_INSPECT in availableTools,
+        hasSearchTool = ToolDefinition.WEB_SEARCH in activeTools,
+        hasExtractTool = ToolDefinition.WEB_EXTRACT in activeTools,
+        hasImageTool = ToolDefinition.ATTACHED_IMAGE_INSPECT in activeTools,
         hasMemoryTools =
-            ToolDefinition.SEARCH_CHAT_HISTORY in availableTools ||
-                ToolDefinition.SEARCH_CHAT in availableTools,
-        hasGetMessageContextTool = ToolDefinition.GET_MESSAGE_CONTEXT in availableTools,
-        hasArtifactTools = ToolDefinition.START_ARTIFACT in availableTools,
+            ToolDefinition.SEARCH_CHAT_HISTORY in activeTools ||
+                ToolDefinition.SEARCH_CHAT in activeTools,
+        hasGetMessageContextTool = ToolDefinition.GET_MESSAGE_CONTEXT in activeTools,
+        hasArtifactTools = ToolDefinition.START_ARTIFACT in activeTools,
     )
 }

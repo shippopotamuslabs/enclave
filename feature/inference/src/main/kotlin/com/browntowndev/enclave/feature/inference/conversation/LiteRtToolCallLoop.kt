@@ -2,12 +2,16 @@ package com.browntowndev.enclave.feature.inference.conversation
 
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.LocalToolResultPolicy
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 
 internal class LiteRtToolCallLoop(
     private val cache: ConversationSignatureCache,
@@ -25,6 +29,19 @@ internal class LiteRtToolCallLoop(
         if (cancellationGate.isCurrentGenerationCancelled) {
             loggingPort.warning(TAG, "Tool execution aborted: generation was cancelled")
             throw CancellationException("Generation was cancelled")
+        }
+
+        if (request.toolName == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
+            val parsedNames =
+                runCatching {
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(request.argumentsJson)
+                        .jsonObject["tool_names"]
+                        ?.jsonArray
+                        ?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                        ?: emptyList()
+                }.getOrDefault(emptyList())
+            return handleDisclosure(parsedNames)
         }
 
         val effectiveRequest =
@@ -113,6 +130,38 @@ internal class LiteRtToolCallLoop(
             ConversationErrorMapper.executionFailed(effectiveRequest.toolName, rootCause)
         }
     }
+
+    /**
+     * Intercepts a `disclose_tool_schemas` request locally without invoking [ToolExecutorPort].
+     * Updates [ConversationSignatureCache.activeToolNames] in first-seen order and returns
+     * the canonical resolver JSON payload.
+     */
+    fun handleDisclosure(toolNames: List<String>): String {
+        val activeNames = cache.activeToolNames
+        val activeNameSet = activeNames.toSet()
+        val deferredCatalog =
+            cache.toolCatalog.filter { entry ->
+                entry.name !in activeNameSet
+            }
+        val activeDefinitions = activeNames.mapNotNull(ToolDefinition::fromName)
+        val resolution =
+            disclosureResolver.resolve(
+                toolNames = toolNames,
+                toolCatalog = deferredCatalog,
+                activeTools = activeDefinitions,
+                strategy = cache.toolCallStrategy,
+            )
+        if (resolution.activatedToolNames.isNotEmpty()) {
+            val seen = activeNames.toMutableList()
+            resolution.activatedToolNames.forEach { newName ->
+                if (newName !in seen) seen += newName
+            }
+            cache.activeToolNames = seen
+        }
+        return resolution.resultJson
+    }
+
+    private val disclosureResolver = ToolSchemaDisclosureResolver()
 
     private fun repairLiteRtToolRequest(request: ToolCallRequest): ToolCallRequest =
         try {

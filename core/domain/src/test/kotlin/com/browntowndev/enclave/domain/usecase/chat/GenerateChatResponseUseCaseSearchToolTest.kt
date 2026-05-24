@@ -42,14 +42,8 @@ class GenerateChatResponseUseCaseSearchToolTest {
         object : com.browntowndev.enclave.domain.port.inference.PromptComposerPort {
             override fun compose(
                 baseSystemPrompt: String?,
-                includeSearchTool: Boolean,
-                includeXSearchTool: Boolean,
-                includeImageInspectTool: Boolean,
-                includeMemoryTools: Boolean,
-                includeArtifactTool: Boolean,
-                includeImageGenerationTool: Boolean,
-                includeVideoGenerationTool: Boolean,
-                includeMusicGenerationTool: Boolean,
+                toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+                activeTools: List<ToolDefinition>,
                 currentChatId: String?,
                 strategy: ToolCallStrategy,
                 coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
@@ -146,10 +140,11 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
             val options = inferenceService.getSentOptions().single()
             assertTrue(options.toolingEnabled)
-            assertTrue(options.availableTools.contains(ToolDefinition.WEB_SEARCH))
-            assertTrue(options.availableTools.contains(ToolDefinition.WEB_EXTRACT))
-            assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
-            assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
+            assertTrue(options.activeTools.contains(ToolDefinition.WEB_SEARCH))
+            assertTrue(options.activeTools.contains(ToolDefinition.WEB_EXTRACT))
+            val catalogNames = options.toolCatalog.map { it.name }
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT_HISTORY.name))
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT.name))
         }
 
     @Test

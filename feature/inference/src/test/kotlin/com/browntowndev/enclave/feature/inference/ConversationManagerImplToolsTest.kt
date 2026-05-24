@@ -6,6 +6,10 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
+import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -17,9 +21,18 @@ import com.browntowndev.enclave.feature.inference.conversation.LiteRtNativeTools
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
-import io.mockk.*
+import io.mockk.MockKAnnotations
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,6 +46,7 @@ class ConversationManagerImplToolsTest {
 
     private lateinit var manager: ConversationManagerImpl
     private lateinit var toolLoop: LiteRtToolCallLoop
+    private lateinit var signatureCache: ConversationSignatureCache
 
     @BeforeEach
     fun setUp() {
@@ -52,9 +66,10 @@ class ConversationManagerImplToolsTest {
                 toolExecutor = toolExecutor,
             )
 
+        signatureCache = ConversationSignatureCache()
         toolLoop =
             LiteRtToolCallLoop(
-                cache = ConversationSignatureCache(),
+                cache = signatureCache,
                 toolExecutor = toolExecutor,
                 loggingPort = loggingPort,
                 agentPolicyPort = NoopAgentPolicyPort,
@@ -66,6 +81,46 @@ class ConversationManagerImplToolsTest {
     fun tearDown() {
         unmockkStatic(Log::class)
     }
+
+    @Test
+    fun `LTD-12 LiteRT native toolset list expands after disclosure`() =
+        runTest {
+            signatureCache.activeToolNames = listOf("disclose_tool_schemas", "web_search", "web_extract")
+            signatureCache.toolCatalog =
+                listOf(
+                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                )
+            signatureCache.toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
+            val disclosureResult = toolLoop.handleDisclosure(listOf("append_blocks"))
+            val toolsets =
+                LiteRtNativeToolsets.buildToolList(
+                    activeToolNames = signatureCache.activeToolNames,
+                    context = createToolContext(),
+                )
+            val callableNames = toolsets.flatMap { toolset -> toolset.javaClass.methods.map { it.name } }
+
+            assertTrue(disclosureResult.contains("\"activated_tools\":[\"append_blocks\"]"))
+            assertEquals(
+                listOf("disclose_tool_schemas", "web_search", "web_extract", "append_blocks"),
+                signatureCache.activeToolNames,
+            )
+            assertEquals(
+                listOf("disclose_tool_schemas", "tavily_web_search", "tavily_extract", "append_blocks"),
+                callableNames
+                    .filter {
+                        it in
+                            listOf(
+                                "disclose_tool_schemas",
+                                "tavily_web_search",
+                                "tavily_extract",
+                                ToolDefinition.APPEND_BLOCKS.name,
+                            )
+                    },
+            )
+        }
 
     @Test
     fun `LocalSearchChatHistoryToolset splits multiple queries correctly`() =
@@ -133,6 +188,38 @@ class ConversationManagerImplToolsTest {
             assertTrue(result.contains("Network error"))
             verify { loggingPort.error(any(), any(), any()) }
         }
+
+    @Test
+    fun `disclosure rejects tools absent from turn catalog`() =
+        runTest {
+            signatureCache.activeToolNames = listOf("disclose_tool_schemas", "web_search", "web_extract")
+            signatureCache.toolCatalog =
+                listOf(
+                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                )
+
+            val disclosureResult = toolLoop.handleDisclosure(listOf("search_chat_history"))
+
+            assertTrue(disclosureResult.contains("\"status\":\"error\""))
+            assertTrue(disclosureResult.contains("\"unknown_tools\":[\"search_chat_history\"]"))
+            assertEquals(
+                listOf("disclose_tool_schemas", "web_search", "web_extract"),
+                signatureCache.activeToolNames,
+            )
+        }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
 
     private fun createToolContext(): LiteRtToolContext =
         LiteRtToolContext(

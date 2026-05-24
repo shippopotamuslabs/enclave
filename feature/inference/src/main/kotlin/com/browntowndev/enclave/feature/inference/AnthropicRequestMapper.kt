@@ -84,7 +84,7 @@ object AnthropicRequestMapper {
 
         builder.addMessage(buildUserMessage(prompt, options.imageUris))
         if (options.toolingEnabled) {
-            options.availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+            options.activeTools.forEach { builder.addTool(it.toAnthropicTool()) }
         }
 
         return builder.build()

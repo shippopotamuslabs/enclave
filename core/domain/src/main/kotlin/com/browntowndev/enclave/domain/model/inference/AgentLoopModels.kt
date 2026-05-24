@@ -66,6 +66,8 @@ data class AgentLoopSessionIoParams(
     val provider: String,
     val contextWindowTokens: UInt,
     val toolsSchemaJson: String,
+    val toolCatalogJson: String = "[]",
+    val toolSchemaRegistryJson: String = "[]",
     val systemPrompt: String,
 )
 
@@ -122,6 +124,7 @@ data class AgentToolResult(
     val resultJson: String,
     val truncated: Boolean,
     val softFailure: Boolean,
+    val activatedToolNames: List<String> = emptyList(),
 )
 
 data class AgentSummaryRequest(

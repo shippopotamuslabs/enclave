@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
+import com.browntowndev.enclave.domain.util.SearchIntentPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
@@ -99,11 +100,24 @@ class ChatInferenceRequestPreparer(
 
         val retrievedSearchResults =
             if (embedding != null && searchEnabled) {
-                val probability = searchIntentClassifier.getSearchIntentProbability(embedding)
-                val needsSearch = searchIntentClassifier.requiresSearch(embedding, threshold = 0.5f)
+                val heuristicNonSearch = SearchIntentPolicy.isHeuristicNonSearchPrompt(prompt)
+                val probability =
+                    if (heuristicNonSearch) {
+                        0.0f
+                    } else {
+                        searchIntentClassifier.getSearchIntentProbability(embedding)
+                    }
+                val needsSearch =
+                    !heuristicNonSearch &&
+                        searchIntentClassifier.requiresSearch(
+                            embedding,
+                            threshold = SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD,
+                        )
                 loggingPort.info(
                     TAG,
-                    "Search intent classification decision: requiresSearch=$needsSearch (probability=$probability) for prompt: \"$prompt\""
+                    "Search intent classification decision: requiresSearch=$needsSearch " +
+                        "(probability=$probability, heuristicNonSearch=$heuristicNonSearch, " +
+                        "threshold=${SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD}) for prompt: \"$prompt\"",
                 )
                 if (needsSearch) {
                     loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
@@ -198,36 +212,12 @@ class ChatInferenceRequestPreparer(
                 null
             }
 
-        val systemPrompt =
-            if (toolingEnabled) {
-                promptComposer.compose(
-                    baseSystemPrompt = config?.systemPrompt,
-                    includeSearchTool = searchEnabled,
-                    includeXSearchTool = xSearchEnabled,
-                    includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
-                    includeMemoryTools = true,
-                    includeArtifactTool = true,
-                    includeImageGenerationTool = imageTool != null,
-                    includeVideoGenerationTool = videoTool != null,
-                    includeMusicGenerationTool = musicTool != null,
-                    currentChatId = chatId.value,
-                    strategy = strategy,
-                    coreMemories = coreMemories,
-                    retrievedMemories = retrievedMemories,
-                    retrievedSearchResults = retrievedSearchResults,
-                )
-            } else {
-                config?.systemPrompt
-            }
-
-        val availableTools =
+        val eligibleTools =
             buildList {
+                add(ToolDefinition.DISCLOSE_TOOL_SCHEMAS)
                 if (settings.searchEnabled) {
                     add(ToolDefinition.WEB_SEARCH)
                     add(ToolDefinition.WEB_EXTRACT)
-                }
-                if (settings.xSearchEnabled) {
-                    add(ToolDefinition.X_SEARCH)
                 }
                 if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
                 add(ToolDefinition.SEARCH_CHAT_HISTORY)
@@ -237,9 +227,45 @@ class ChatInferenceRequestPreparer(
                 add(ToolDefinition.START_ARTIFACT)
                 add(ToolDefinition.APPEND_BLOCKS)
                 add(ToolDefinition.SEARCH_CURRENT_ARTIFACT)
-                imageTool?.let { add(it) }
-                videoTool?.let { add(it) }
-                musicTool?.let { add(it) }
+                if (settings.xSearchEnabled) {
+                    add(ToolDefinition.X_SEARCH)
+                }
+                imageTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }
+                videoTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }
+                musicTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }
+            }
+
+        val toolCatalog =
+            eligibleTools.map { tool ->
+                tool.catalogEntry().copy(
+                    disclosureMode =
+                        if (tool.name in PRELOADED_TOOL_NAMES) {
+                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.PRELOADED
+                        } else {
+                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.DISCLOSE_ON_DEMAND
+                        },
+                )
+            }
+
+        val activeTools =
+            eligibleTools.filter { tool ->
+                tool.name in PRELOADED_TOOL_NAMES
+            }
+
+        val systemPrompt =
+            if (toolingEnabled) {
+                promptComposer.compose(
+                    baseSystemPrompt = config?.systemPrompt,
+                    toolCatalog = toolCatalog,
+                    activeTools = activeTools,
+                    currentChatId = chatId.value,
+                    strategy = strategy,
+                    coreMemories = coreMemories,
+                    retrievedMemories = retrievedMemories,
+                    retrievedSearchResults = retrievedSearchResults,
+                )
+            } else {
+                config?.systemPrompt
             }
 
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
@@ -281,7 +307,9 @@ class ChatInferenceRequestPreparer(
                     frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
                     presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
                     toolingEnabled = toolingEnabled,
-                    availableTools = availableTools,
+                    toolCatalog = toolCatalog,
+                    activeTools = activeTools,
+                    toolCallStrategy = strategy,
                     chatId = chatId,
                     userMessageId = userMessageId,
                     assistantMessageId = assistantMessageId,
@@ -313,6 +341,14 @@ class ChatInferenceRequestPreparer(
     private companion object {
         private const val TAG = "GenerateChatResponse"
         private const val PROMPT_LOG_CHUNK_SIZE = 2_000
+
+        private val PRELOADED_TOOL_NAMES =
+            setOf(
+                ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name,
+                ToolDefinition.WEB_SEARCH.name,
+                ToolDefinition.WEB_EXTRACT.name,
+                ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
+            )
     }
 }
 

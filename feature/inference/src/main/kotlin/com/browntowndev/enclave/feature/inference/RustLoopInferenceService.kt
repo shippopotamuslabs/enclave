@@ -28,6 +28,7 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
+import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
@@ -72,6 +73,7 @@ class RustLoopInferenceService(
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
 ) : RustCompatibleInferenceService {
     private val conversationHistory = mutableListOf<ChatMessage>()
+    private val disclosureResolver = ToolSchemaDisclosureResolver()
 
     override fun sendPrompt(
         prompt: String,
@@ -119,7 +121,7 @@ class RustLoopInferenceService(
                                     toolsForRequest(
                                         toolsSchemaJson = toolsSchemaJson,
                                         toolContextIndexJson = toolContextIndexJson,
-                                        availableTools = options.availableTools,
+                                        eligibleTools = eligibleToolPool(options),
                                         allowToolCall = allowToolCall,
                                     ),
                                 allowToolCall = allowToolCall,
@@ -334,10 +336,61 @@ class RustLoopInferenceService(
                 AgentLoopSessionIoParams(
                     provider = provider,
                     contextWindowTokens = (options.contextWindow ?: DEFAULT_CONTEXT_WINDOW).toUInt(),
-                    toolsSchemaJson = serializeToolsSchema(options.availableTools),
+                    toolsSchemaJson = serializeToolsSchema(options.activeTools),
+                    toolCatalogJson = serializeToolCatalog(options.toolCatalog),
+                    toolSchemaRegistryJson = serializeFullRegistry(options.toolCatalog),
                     systemPrompt = options.systemPrompt ?: "",
                 ),
         )
+
+    private fun serializeToolCatalog(
+        catalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+    ): String {
+        if (catalog.isEmpty()) return "[]"
+        val array =
+            buildJsonArray {
+                catalog.forEach { entry ->
+                    add(
+                        buildJsonObject {
+                            put("name", entry.name)
+                            put("description", entry.description)
+                            put("disclosureMode", entry.disclosureMode.name)
+                        },
+                    )
+                }
+            }
+        return Json.encodeToString(
+            kotlinx.serialization.json.JsonArray
+                .serializer(),
+            array,
+        )
+    }
+
+    private fun serializeFullRegistry(
+        catalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+    ): String {
+        if (catalog.isEmpty()) return "[]"
+        val array =
+            buildJsonArray {
+                catalog.forEach { entry ->
+                    val def = ToolDefinition.fromName(entry.name)
+                    add(
+                        buildJsonObject {
+                            put("name", entry.name)
+                            put("description", entry.description)
+                            if (def != null) {
+                                put("parameters", def.schema.toJsonObject())
+                            }
+                        },
+                    )
+                }
+            }
+        return Json.encodeToString(
+            kotlinx.serialization.json.JsonArray
+                .serializer(),
+            array,
+        )
+    }
 
     private fun serializeToolsSchema(tools: List<ToolDefinition>): String {
         if (tools.isEmpty()) return "[]"
@@ -359,10 +412,20 @@ class RustLoopInferenceService(
         )
     }
 
+    /** Full eligible tool set for mapping Rust-emitted active names back to [ToolDefinition]. */
+    private fun eligibleToolPool(options: GenerationOptions): List<ToolDefinition> {
+        val byName = LinkedHashMap<String, ToolDefinition>()
+        options.toolCatalog.forEach { entry ->
+            ToolDefinition.fromName(entry.name)?.let { byName[it.name] = it }
+        }
+        options.activeTools.forEach { byName[it.name] = it }
+        return byName.values.toList()
+    }
+
     private fun toolsForRequest(
         toolsSchemaJson: String,
         toolContextIndexJson: String?,
-        availableTools: List<ToolDefinition>,
+        eligibleTools: List<ToolDefinition>,
         allowToolCall: Boolean,
     ): List<ToolDefinition> {
         if (!allowToolCall) return emptyList()
@@ -370,38 +433,50 @@ class RustLoopInferenceService(
             toolContextIndexJson?.let(::toolNamesFromContextIndex)
                 ?: toolNamesFromSchema(toolsSchemaJson)
         return when {
-            allowedNames == null -> availableTools
+            allowedNames == null -> eligibleTools
             allowedNames.isEmpty() -> emptyList()
-            else -> availableTools.filter { it.name in allowedNames }
+            else -> {
+                // Preserve the order in which Rust supplied the active tool names.
+                val byName = eligibleTools.associateBy { it.name }
+                val unknownNames = allowedNames.filter { name -> name !in byName }
+                if (unknownNames.isNotEmpty()) {
+                    loggingPort.warning(
+                        TAG,
+                        "Rust active tool names not in eligible pool: $unknownNames",
+                    )
+                }
+                allowedNames.mapNotNull { name -> byName[name] }
+            }
         }
     }
 
-    private fun toolNamesFromSchema(toolsSchemaJson: String): Set<String>? {
+    private fun toolNamesFromSchema(toolsSchemaJson: String): List<String>? {
         if (toolsSchemaJson.isBlank()) return null
         return runCatching {
             Json
                 .parseToJsonElement(toolsSchemaJson)
                 .jsonArray
                 .mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
-                .toSet()
         }.getOrNull()
     }
 
-    private fun toolNamesFromContextIndex(toolContextIndexJson: String): Set<String>? =
+    private fun toolNamesFromContextIndex(toolContextIndexJson: String): List<String>? =
         runCatching {
             Json
                 .parseToJsonElement(toolContextIndexJson)
                 .jsonObject["advertised_tools"]
                 ?.jsonArray
                 ?.mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
-                ?.toSet()
         }.getOrNull()
 
     private suspend fun executeOneTool(
         call: AgentToolCall,
         options: GenerationOptions,
-    ): AgentToolResult =
-        try {
+    ): AgentToolResult {
+        if (call.name == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
+            return handleDisclosureCall(call, options)
+        }
+        return try {
             val request =
                 ToolCallRequest(
                     toolName = call.name,
@@ -430,6 +505,38 @@ class RustLoopInferenceService(
                 softFailure = true,
             )
         }
+    }
+
+    private fun handleDisclosureCall(
+        call: AgentToolCall,
+        options: GenerationOptions,
+    ): AgentToolResult {
+        val requestedNames =
+            runCatching {
+                val args = Json.parseToJsonElement(call.argumentsJson).jsonObject
+                args["tool_names"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content } ?: emptyList()
+            }.getOrDefault(emptyList())
+        val effectiveActive = options.activeTools
+        val activeNames = effectiveActive.map { it.name }.toSet()
+        val deferredCatalog =
+            options.toolCatalog.filter { entry ->
+                entry.name !in activeNames
+            }
+        val resolution =
+            disclosureResolver.resolve(
+                toolNames = requestedNames,
+                toolCatalog = deferredCatalog,
+                activeTools = effectiveActive,
+                strategy = options.toolCallStrategy,
+            )
+        return AgentToolResult(
+            callId = call.callId,
+            resultJson = resolution.resultJson,
+            truncated = false,
+            softFailure = false,
+            activatedToolNames = resolution.activatedToolNames,
+        )
+    }
 
     private fun buildSessionContext(options: GenerationOptions): Map<String, String> =
         buildMap {

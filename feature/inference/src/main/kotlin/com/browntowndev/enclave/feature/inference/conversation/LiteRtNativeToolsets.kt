@@ -34,32 +34,62 @@ internal object LiteRtNativeToolsets {
     private const val TAG = "ConversationManager"
 
     fun buildToolList(
-        signature: ConversationSignature,
+        activeToolNames: List<String>,
         context: LiteRtToolContext,
-    ) =
+    ): List<ToolSet> =
         buildList {
-            if (signature.hasSearchTool) {
-                add(tool(LocalSearchToolset(context)))
-            }
-            if (signature.hasExtractTool) {
-                add(tool(LocalExtractToolset(context)))
-            }
-            if (signature.hasImageTool) {
-                add(tool(LocalImageInspectToolset(context)))
-            }
-            if (signature.hasMemoryTools) {
-                add(tool(LocalSearchChatHistoryToolset(context)))
-                add(tool(LocalSearchChatToolset(context)))
-            }
-            if (signature.hasGetMessageContextTool) {
-                add(tool(LocalGetMessageContextToolset(context)))
-            }
-            if (signature.hasArtifactTools) {
-                add(tool(LocalStartArtifactToolset(context)))
-                add(tool(LocalAppendBlocksToolset(context)))
-                add(tool(LocalSearchArtifactToolset(context)))
+            activeToolNames.forEach { name ->
+                val set: ToolSet? =
+                    when (name) {
+                        "disclose_tool_schemas" -> LocalDiscloseToolset(context)
+                        "web_search" -> LocalSearchToolset(context)
+                        "web_extract" -> LocalExtractToolset(context)
+                        "attached_image_inspect" -> LocalImageInspectToolset(context)
+                        "search_chat_history" -> LocalSearchChatHistoryToolset(context)
+                        "search_chat" -> LocalSearchChatToolset(context)
+                        "get_message_context" -> LocalGetMessageContextToolset(context)
+                        "start_artifact" -> LocalStartArtifactToolset(context)
+                        "append_blocks" -> LocalAppendBlocksToolset(context)
+                        "search_current_artifact" -> LocalSearchArtifactToolset(context)
+                        else -> null
+                    }
+                if (set != null) add(set)
             }
         }
+
+    /**
+     * Production helper: build a list of LiteRT [com.google.ai.edge.litertlm.ToolProvider]
+     * instances wrapped via the litertlm `tool(...)` factory. The active-name [buildToolList]
+     * overload above is exposed as raw [ToolSet] so unit tests can introspect class identities
+     * without depending on litertlm internals.
+     */
+    fun buildToolProviders(
+        activeToolNames: List<String>,
+        context: LiteRtToolContext,
+    ): List<com.google.ai.edge.litertlm.ToolProvider> =
+        buildToolList(activeToolNames, context).map { tool(it) }
+
+    @Suppress("FunctionNaming")
+    internal class LocalDiscloseToolset(
+        private val context: LiteRtToolContext,
+    ) : ToolSet {
+        @com.google.ai.edge.litertlm.Tool(
+            description = "Disclose full schemas for deferred tools so the model may call them next turn.",
+        )
+        fun disclose_tool_schemas(
+            @ToolParam(description = "JSON array of deferred tool names to activate.") tool_names: String,
+        ): String =
+            runBlocking(Dispatchers.IO) {
+                context.toolLoop.handleDisclosure(
+                    runCatching {
+                        KJson
+                            .parseToJsonElement(tool_names)
+                            .jsonArray
+                            .mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    }.getOrDefault(emptyList()),
+                )
+            }
+    }
 
     @Suppress("FunctionNaming")
     internal class LocalSearchToolset(
