@@ -372,6 +372,7 @@ class AnthropicInferenceServiceImpl(
             else ->
                 when (options.reasoningEffort) {
                     null -> null
+                    ApiReasoningEffort.NONE -> null
                     ApiReasoningEffort.LOW -> 1024L
                     ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
                     ApiReasoningEffort.HIGH -> 2048L

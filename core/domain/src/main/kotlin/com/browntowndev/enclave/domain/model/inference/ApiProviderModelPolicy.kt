@@ -129,11 +129,12 @@ object ApiProviderModelPolicy {
             return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }
 
-        // xAI only accepts user-controlled reasoning effort on the grok-3-mini and multi-agent families.
+        // xAI only accepts user-controlled reasoning effort on the grok-3-mini, grok-4.3, and multi-agent families.
         val reasoningEffortSupported =
             when {
                 isXaiGrok3MiniModel(modelId) -> true
                 isXaiMultiAgentModel(modelId) -> true
+                modelId.startsWith("grok-4.3") -> true
                 else -> false
             }
 
@@ -156,6 +157,17 @@ object ApiProviderModelPolicy {
             ApiReasoningPolicy(
                 controlStyle = ApiReasoningControlStyle.XAI_MULTI_AGENT,
                 supportedEfforts = xaiMultiAgentEfforts,
+                defaultEffort = ApiReasoningEffort.LOW,
+            )
+        } else if (provider == ApiProvider.XAI && modelId.startsWith("grok-4.3")) {
+            ApiReasoningPolicy(
+                controlStyle = ApiReasoningControlStyle.STANDARD,
+                supportedEfforts = listOf(
+                    ApiReasoningEffort.NONE,
+                    ApiReasoningEffort.LOW,
+                    ApiReasoningEffort.MEDIUM,
+                    ApiReasoningEffort.HIGH,
+                ),
                 defaultEffort = ApiReasoningEffort.LOW,
             )
         } else {

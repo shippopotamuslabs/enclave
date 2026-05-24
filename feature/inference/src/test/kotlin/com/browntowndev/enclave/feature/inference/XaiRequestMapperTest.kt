@@ -129,6 +129,82 @@ class XaiRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams allows reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                    ),
+            )
+
+        assertTrue(params.reasoning().isPresent)
+        assertEquals(
+            "high",
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
+    fun `mapToResponseParams maps NONE reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.NONE,
+                    ),
+            )
+
+        assertTrue(params.reasoning().isPresent)
+        assertEquals(
+            "none",
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
+    fun `mapToChatCompletionParams allows reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.MEDIUM,
+                    ),
+            )
+
+        assertTrue(params.reasoningEffort().isPresent)
+        assertEquals(
+            "medium",
+            params
+                .reasoningEffort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
     fun `mapToChatCompletionParams removes reasoning effort for grok 3`() {
         val params =
             XaiRequestMapper.mapToChatCompletionParams(
