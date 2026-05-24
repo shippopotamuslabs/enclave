@@ -246,39 +246,40 @@ data class ToolDefinition(
             ToolDefinition(
                 name = "start_artifact",
                 description =
-                    "Initialize a new professional document. " +
-                        "Returns an artifact_id to be used with append_blocks. " +
-                        "Use this as the first step for generating any report, plan, or summary. " +
+                    "Start creating a downloadable document for the user (exported as PDF or Word .docx). " +
+                        "Use when they ask to make or write a document, report, plan, PDF, or Word file — " +
+                        "not for casual chat replies. Returns artifact_id for append_blocks. " +
+                        "Call once per document before any append_blocks. " +
                         "Required: top-level `title` (string). Optional: `author`. " +
                         "Do not put the title only inside nested metadata; " +
-                        "after this call succeeds once, use append_blocks only (do not call start_artifact again).",
+                        "after this succeeds once, use append_blocks only (do not call start_artifact again).",
                 parametersClass = StartArtifactParams::class,
-                displayName = "Starting Artifact...",
+                displayName = "Creating document...",
             )
 
         val APPEND_BLOCKS =
             ToolDefinition(
                 name = "append_blocks",
                 description =
-                    "Append content blocks to an existing artifact. " +
+                    "Add content to the in-progress PDF/Word document started with start_artifact. " +
                         "ONLY include NEW blocks in each call. Do NOT resend previously appended blocks. " +
-                        "Use artifactId for the artifact identifier. " +
-                        "Include the final blocks AND set isComplete:true in the same call - " +
+                        "Use artifactId from start_artifact. " +
+                        "Include the final blocks AND set isComplete:true in the same call — " +
                         "do not make a separate empty-blocks finalization call. " +
-                        "Set isComplete to true only when the entire document is finished.",
+                        "When isComplete is true, the user can export the finished PDF or Word document.",
                 parametersClass = AppendBlocksParams::class,
-                displayName = "Appending blocks...",
+                displayName = "Writing document...",
             )
 
         val SEARCH_CURRENT_ARTIFACT =
             ToolDefinition(
                 name = "search_current_artifact",
                 description =
-                    "Semantically search for specific details, names, or sections " +
-                        "in the artifact currently being generated. Use this to recall context " +
-                        "that might have been compressed away.",
+                    "Search within the PDF/Word document currently being written for names, " +
+                        "figures, or sections that may have been compressed out of context. " +
+                        "Requires artifactId from start_artifact.",
                 parametersClass = SearchArtifactParams::class,
-                displayName = "Searching artifact...",
+                displayName = "Searching document...",
             )
 
         @Suppress("MaxLineLength")

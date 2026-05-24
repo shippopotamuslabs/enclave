@@ -245,8 +245,8 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Initialize a new professional document. Returns artifact_id for use with append_blocks. " +
-                    "Call once before any append_blocks calls.",
+                "Start a downloadable PDF or Word (.docx) document. Returns artifact_id for append_blocks. " +
+                    "Use when the user asks to make a document, PDF, or Word file. Call once before append_blocks.",
         )
         fun start_artifact(
             @ToolParam(description = "The document title as a top-level string.") title: String,
@@ -276,8 +276,8 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Append content blocks to an existing artifact. Emit 10-15 blocks per call. " +
-                    "Set is_complete=true on the final call.",
+                "Add sections to the in-progress PDF/Word document. Emit 10-15 blocks per call. " +
+                    "Set is_complete=true on the final call to finish export.",
         )
         fun append_blocks(
             @ToolParam(description = "The artifact ID returned by start_artifact.") artifact_id: String,
@@ -311,7 +311,8 @@ internal object LiteRtNativeToolsets {
         private val context: LiteRtToolContext,
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
-            description = "Semantically search the artifact currently being generated to recall compressed context.",
+            description =
+                "Search the PDF/Word document currently being written to recall details lost from context.",
         )
         fun search_current_artifact(
             @ToolParam(description = "The artifact ID to search within.") artifact_id: String,
