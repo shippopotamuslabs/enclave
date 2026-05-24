@@ -16,5 +16,6 @@ data class ToolArgumentHint(
 
 enum class ToolDisclosureMode {
     PRELOADED,
+    INTENT_ACTIVATED,
     DISCLOSE_ON_DEMAND,
 }

@@ -57,4 +57,26 @@ object SearchIntentPolicy {
         if (trimmed.isEmpty()) return true
         return nonSearchPatterns.any { it.containsMatchIn(trimmed) }
     }
+
+    private val concurrentResearchPatterns =
+        listOf(
+            Regex(
+                """\b(research|look up|find out|investigate)\b""",
+                RegexOption.IGNORE_CASE,
+            ),
+            Regex(
+                """\b(latest|current|today|recent|breaking)\b""",
+                RegexOption.IGNORE_CASE,
+            ),
+            Regex(
+                """\b(news|headlines|mortgage rates|stock price)\b""",
+                RegexOption.IGNORE_CASE,
+            ),
+        )
+
+    fun hasConcurrentResearchIntent(prompt: String): Boolean {
+        val trimmed = prompt.trim()
+        if (trimmed.isEmpty()) return false
+        return concurrentResearchPatterns.any { it.containsMatchIn(trimmed) }
+    }
 }

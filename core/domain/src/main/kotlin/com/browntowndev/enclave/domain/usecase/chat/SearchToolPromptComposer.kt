@@ -129,7 +129,11 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                                     entry.optionalArguments.map { it.name to "optional" })
                                     .joinToString(", ") { (name, kind) -> "$name:$kind" }
                             val disclosureTag =
-                                if (entry.disclosureMode == ToolDisclosureMode.PRELOADED) "preloaded" else "deferred"
+                                when (entry.disclosureMode) {
+                                    ToolDisclosureMode.PRELOADED -> "preloaded"
+                                    ToolDisclosureMode.INTENT_ACTIVATED -> "intent-activated"
+                                    ToolDisclosureMode.DISCLOSE_ON_DEMAND -> "deferred"
+                                }
                             append("- ${entry.name} [$disclosureTag]: ${entry.description}")
                             if (args.isNotEmpty()) append(" args($args)")
                             append("\n")

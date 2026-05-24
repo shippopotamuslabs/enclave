@@ -26,6 +26,15 @@ class SearchIntentPolicyTest {
     }
 
     @Test
+    fun `IGTA-05b hasConcurrentResearchIntent true on combined prompt`() {
+        assertTrue(
+            SearchIntentPolicy.hasConcurrentResearchIntent(
+                "Research current mortgage rates and write a PDF report",
+            ),
+        )
+    }
+
+    @Test
     fun `heuristic allows typical web lookup prompts`() {
         val prompts =
             listOf(
