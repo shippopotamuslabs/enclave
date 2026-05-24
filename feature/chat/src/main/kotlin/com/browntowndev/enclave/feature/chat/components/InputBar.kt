@@ -308,6 +308,7 @@ fun InputBar(
                     }
                 },
                 isGlobalInferenceBlocked = isGlobalInferenceBlocked,
+                onCollapse = { isExpanded = false },
             )
         },
     )

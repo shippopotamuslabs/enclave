@@ -443,6 +443,7 @@ fun UniversalVoiceTrailingAction(
     modifier: Modifier = Modifier,
     isGlobalInferenceBlocked: Boolean = false,
     hasSendableContent: Boolean = inputText.isNotBlank(),
+    onCollapse: (() -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -491,6 +492,13 @@ fun UniversalVoiceTrailingAction(
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
 
+            val description =
+                when {
+                    isGenerating || isRecording -> "Stop"
+                    isSending -> "Send"
+                    else -> "Voice input"
+                }
+
             StandardTrailingAction(
                 onClick = {
                     when {
@@ -499,6 +507,7 @@ fun UniversalVoiceTrailingAction(
                         isSending -> {
                             keyboardController?.hide()
                             focusManager.clearFocus()
+                            onCollapse?.invoke()
                             onSend(inputText)
                         }
                         else -> onMicClick()
@@ -509,6 +518,7 @@ fun UniversalVoiceTrailingAction(
                 containerColor = containerColor,
                 contentColor = contentColor,
                 withShadow = enabled,
+                description = description,
             )
         }
     }
