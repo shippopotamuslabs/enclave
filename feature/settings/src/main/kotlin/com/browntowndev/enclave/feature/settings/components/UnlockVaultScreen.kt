@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.feature.settings.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -7,15 +9,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.VaultUnlockContent
 
 /**
- * Full-screen wrapper around the shared [VaultUnlockContent] body. Owns the [Surface] chrome,
- * system-bar / IME insets, and vertical scroll behaviour for the cold-start unlock route.
+ * Full-screen wrapper around the shared [VaultUnlockContent] body. Owns the neo-brutalist
+ * background, system-bar / IME insets, and vertical scroll behaviour for the cold-start unlock
+ * route.
  */
 @Composable
 fun UnlockVaultScreen(
@@ -27,9 +29,10 @@ fun UnlockVaultScreen(
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
     onBiometricUnlockClick: (() -> Unit)? = null,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
     ) {
         VaultUnlockContent(
             authState = authState,
