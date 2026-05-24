@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
+import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
@@ -48,6 +49,64 @@ class ChatGenerationProgressPersisterTest {
                     thinkingStartTime = any<Long>(),
                     thinkingEndTime = any<Long>(),
                     thinkingDuration = any<Int>(),
+                    thinkingRaw = any(),
+                    content = any(),
+                    messageState = any(),
+                    pipelineStep = any(),
+                    webSearchSources = any(),
+                    artifacts = any(),
+                    generatedMediaUris = any(),
+                    generatedMediaAssetIds = any(),
+                    generatedMediaTypes = any(),
+                    generatedMediaPrompts = any(),
+                    transcriptSegments = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `applyState persists web search sources immediately when attached`() =
+        runTest {
+            val chatRepository = mockChatRepository()
+            val session =
+                ChatGenerationProgressPersister(
+                    chatRepository = chatRepository,
+                    messageRepository = mockk(relaxed = true),
+                    embeddingEngine = mockk(relaxed = true),
+                    extractedUrlTracker = FakeExtractedUrlTracker(),
+                ).startSession(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                )
+            val sources =
+                listOf(
+                    WebSearchSource(
+                        messageId = MessageId("assistant"),
+                        title = "Source",
+                        url = "https://example.com",
+                        content = "snippet",
+                    ),
+                )
+
+            session.applyState(
+                MessageGenerationState.WebSearchSourcesAttached(sources, ModelType.FAST),
+            )
+
+            coVerify(exactly = 1) {
+                chatRepository.persistWebSearchSources(
+                    messageId = MessageId("assistant"),
+                    sources = sources,
+                )
+            }
+            coVerify(exactly = 0) {
+                chatRepository.persistAllMessageData(
+                    messageId = any(),
+                    modelType = any(),
+                    thinkingStartTime = any(),
+                    thinkingEndTime = any(),
+                    thinkingDuration = any(),
                     thinkingRaw = any(),
                     content = any(),
                     messageState = any(),
