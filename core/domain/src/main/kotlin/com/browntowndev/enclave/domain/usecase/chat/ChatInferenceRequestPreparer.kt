@@ -10,6 +10,9 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.util.SearchIntentPolicy
+import com.browntowndev.enclave.domain.util.ToolIntentActivationPolicy
+import com.browntowndev.enclave.domain.util.isWebSearchSkillConfigured
+import com.browntowndev.enclave.domain.util.isXSearchSkillConfigured
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
@@ -69,8 +72,8 @@ class ChatInferenceRequestPreparer(
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
         val userMessage = messageRepository.getMessageById(userMessageId)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
-        val searchEnabled = settings.searchEnabled
-        val xSearchEnabled = settings.xSearchEnabled
+        val webSearchConfigured = settings.isWebSearchSkillConfigured()
+        val xSearchConfigured = settings.isXSearchSkillConfigured()
         val activeVisionCapable = config?.isMultimodal == true
         val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.isMultimodal
         val hasImageContext = resolvedImageTarget != null
@@ -96,36 +99,43 @@ class ChatInferenceRequestPreparer(
                 emptyList()
             }
 
+        val intentDecision =
+            ToolIntentActivationPolicy.resolve(
+                prompt = prompt,
+                embedding = embedding,
+                settings = settings,
+                classifier = searchIntentClassifier,
+            )
+
+        loggingPort.info(
+            TAG,
+            "Tool intent activation: artifact=${intentDecision.activateArtifactTools} " +
+                "x=${intentDecision.activateSearchX} webPreRetrieval=${intentDecision.runWebPreRetrieval} " +
+                "heuristicNonSearch=${SearchIntentPolicy.isHeuristicNonSearchPrompt(prompt)} " +
+                "researchBypass=${SearchIntentPolicy.hasConcurrentResearchIntent(prompt)}",
+        )
+
         var preRetrievalSources = emptyList<WebSearchSource>()
 
         val retrievedSearchResults =
-            if (embedding != null && searchEnabled) {
-                val heuristicNonSearch = SearchIntentPolicy.isHeuristicNonSearchPrompt(prompt)
-                val probability =
-                    if (heuristicNonSearch) {
-                        0.0f
-                    } else {
-                        searchIntentClassifier.getSearchIntentProbability(embedding)
-                    }
-                val needsSearch =
-                    !heuristicNonSearch &&
-                        searchIntentClassifier.requiresSearch(
-                            embedding,
-                            threshold = SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD,
-                        )
+            if (intentDecision.runWebPreRetrieval) {
+                val probability = searchIntentClassifier.getSearchIntentProbability(embedding!!)
                 loggingPort.info(
                     TAG,
-                    "Search intent classification decision: requiresSearch=$needsSearch " +
-                        "(probability=$probability, heuristicNonSearch=$heuristicNonSearch, " +
-                        "threshold=${SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD}) for prompt: \"$prompt\"",
+                    "Search intent classification decision: requiresSearch=true " +
+                        "(probability=$probability, threshold=${SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD}) " +
+                        "for prompt: \"$prompt\"",
                 )
-                if (needsSearch) {
-                    loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
-                    try {
-                        val argumentsJson = Json.encodeToString(buildJsonObject {
-                            put("query", prompt)
-                        })
-                        val searchRequest = ToolCallRequest(
+                loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
+                try {
+                    val argumentsJson =
+                        Json.encodeToString(
+                            buildJsonObject {
+                                put("query", prompt)
+                            },
+                        )
+                    val searchRequest =
+                        ToolCallRequest(
                             toolName = ToolDefinition.WEB_SEARCH.name,
                             argumentsJson = argumentsJson,
                             provider = config?.apiProvider?.name ?: "local",
@@ -134,21 +144,22 @@ class ChatInferenceRequestPreparer(
                             userMessageId = userMessageId,
                             assistantMessageId = assistantMessageId,
                         )
-                        val searchResult = toolExecutor.execute(searchRequest)
-                        preRetrievalSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
-                        loggingPort.info(TAG, "Retrieved ${preRetrievalSources.size} results from search tool for query: \"$prompt\"")
-                        searchResult.resultJson
-                    } catch (e: Exception) {
-                        loggingPort.error(TAG, "Pre-retrieval search execution failed: ${e.message}", e)
-                        null
-                    }
-                } else {
+                    val searchResult = toolExecutor.execute(searchRequest)
+                    preRetrievalSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
+                    loggingPort.info(
+                        TAG,
+                        "Retrieved ${preRetrievalSources.size} results from search tool for query: \"$prompt\"",
+                    )
+                    searchResult.resultJson
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Pre-retrieval search execution failed: ${e.message}", e)
                     null
                 }
             } else {
                 loggingPort.info(
                     TAG,
-                    "Skipping search intent classification: embeddingIsNull=${embedding == null}, searchEnabled=$searchEnabled"
+                    "Skipping search intent classification: embeddingIsNull=${embedding == null}, " +
+                        "webSearchConfigured=$webSearchConfigured",
                 )
                 null
             }
@@ -156,7 +167,7 @@ class ChatInferenceRequestPreparer(
         loggingPort.debug(
             TAG,
             "generateWithService config modelType=$modelType configName=${config?.name} " +
-                "isLocal=${config?.isLocal} searchEnabled=$searchEnabled xSearchEnabled=$xSearchEnabled " +
+                "isLocal=${config?.isLocal} webSearchConfigured=$webSearchConfigured xSearchConfigured=$xSearchConfigured " +
                 "imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable " +
                 "apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} " +
                 "reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
@@ -212,10 +223,22 @@ class ChatInferenceRequestPreparer(
                 null
             }
 
+        val intentActivatedNames =
+            buildSet {
+                if (intentDecision.activateArtifactTools) {
+                    add(ToolDefinition.START_ARTIFACT.name)
+                    add(ToolDefinition.APPEND_BLOCKS.name)
+                    add(ToolDefinition.SEARCH_CURRENT_ARTIFACT.name)
+                }
+                if (intentDecision.activateSearchX) {
+                    add(ToolDefinition.X_SEARCH.name)
+                }
+            }
+
         val eligibleTools =
             buildList {
                 add(ToolDefinition.DISCLOSE_TOOL_SCHEMAS)
-                if (settings.searchEnabled) {
+                if (webSearchConfigured) {
                     add(ToolDefinition.WEB_SEARCH)
                     add(ToolDefinition.WEB_EXTRACT)
                 }
@@ -227,7 +250,7 @@ class ChatInferenceRequestPreparer(
                 add(ToolDefinition.START_ARTIFACT)
                 add(ToolDefinition.APPEND_BLOCKS)
                 add(ToolDefinition.SEARCH_CURRENT_ARTIFACT)
-                if (settings.xSearchEnabled) {
+                if (xSearchConfigured) {
                     add(ToolDefinition.X_SEARCH)
                 }
                 imageTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }
@@ -237,19 +260,22 @@ class ChatInferenceRequestPreparer(
 
         val toolCatalog =
             eligibleTools.map { tool ->
-                tool.catalogEntry().copy(
-                    disclosureMode =
-                        if (tool.name in PRELOADED_TOOL_NAMES) {
+                val disclosureMode =
+                    when {
+                        tool.name in PRELOADED_TOOL_NAMES ->
                             com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.PRELOADED
-                        } else {
+                        tool.name in intentActivatedNames ->
+                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.INTENT_ACTIVATED
+                        else ->
                             com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.DISCLOSE_ON_DEMAND
-                        },
-                )
+                    }
+                tool.catalogEntry().copy(disclosureMode = disclosureMode)
             }
 
+        val activeToolNames = PRELOADED_TOOL_NAMES + intentActivatedNames
         val activeTools =
             eligibleTools.filter { tool ->
-                tool.name in PRELOADED_TOOL_NAMES
+                tool.name in activeToolNames
             }
 
         val systemPrompt =

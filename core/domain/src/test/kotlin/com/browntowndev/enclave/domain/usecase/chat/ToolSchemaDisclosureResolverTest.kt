@@ -102,6 +102,25 @@ class ToolSchemaDisclosureResolverTest {
     }
 
     @Test
+    fun `IGTA-14 disclose_tool_schemas reports already_active for intent-activated tool`() {
+        val result =
+            resolver.resolve(
+                toolNames = listOf("append_blocks"),
+                toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.INTENT_ACTIVATED)),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.APPEND_BLOCKS,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertEquals(emptyList<String>(), result.activatedToolNames)
+        assertTrue(result.resultJson.contains("already_active"))
+        assertTrue(result.resultJson.contains("append_blocks"))
+    }
+
+    @Test
     fun `disclosure call_example uses supplied strategy`() {
         val result =
             resolver.resolve(

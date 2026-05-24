@@ -44,7 +44,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -173,7 +176,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository =
                         mockMessageRepository(
                             resolvedImageTarget =
@@ -220,7 +226,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -258,7 +267,10 @@ class ChatInferenceRequestPreparerTest {
                                 ),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -293,7 +305,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = apiVisionConfig(), // API model
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -332,7 +347,10 @@ class ChatInferenceRequestPreparerTest {
                                 ),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -717,7 +735,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),
@@ -761,7 +782,10 @@ class ChatInferenceRequestPreparerTest {
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                        ),
                     messageRepository = mockMessageRepository(resolvedImageTarget = null),
                     memoriesRepository = mockMemoriesRepository(),
                     embeddingEnginePort = mockEmbeddingEngine(),

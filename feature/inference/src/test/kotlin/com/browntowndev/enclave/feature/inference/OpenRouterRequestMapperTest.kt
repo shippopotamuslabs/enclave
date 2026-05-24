@@ -29,19 +29,31 @@ import org.junit.jupiter.api.assertAll
 
 class OpenRouterRequestMapperTest {
     @Test
-    fun `LTD-13 search_x_recent remains catalog-visible but inactive until disclosure`() =
+    fun `IGTA-09 OpenRouter mapper registers search_x_recent when preparer intent-activates X`() =
         runTest {
-            val preparer = createPreparer(SettingsData(xSearchEnabled = true))
+            val classifier = mockk<com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort>()
+            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
+            every { classifier.requiresSearch(any(), any()) } returns true
+
+            val preparer =
+                createPreparer(
+                    SettingsData(
+                        searchEnabled = true,
+                        tavilyKeyPresent = true,
+                        xSearchEnabled = true,
+                        xApiKeyPresent = true,
+                    ),
+                    classifier,
+                )
             val request =
                 preparer(
-                    prompt = "What is trending on X?",
+                    prompt = "What is trending on X right now?",
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     assistantMessageId = MessageId("assistant"),
                     modelType = ModelType.FAST,
                 )
 
-            val prompt = request.options.systemPrompt.orEmpty()
             val params =
                 OpenRouterRequestMapper.mapToChatCompletionParams(
                     modelId = "openai/gpt-5.2",
@@ -52,18 +64,16 @@ class OpenRouterRequestMapperTest {
             val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
 
             assertAll(
-                { assertTrue(request.options.toolCatalog.any { it.name == "search_x_recent" }) },
-                { assertFalse(request.options.activeTools.contains(ToolDefinition.X_SEARCH)) },
-                { assertFalse(request.options.activeTools.contains(ToolDefinition.X_SEARCH)) },
-                { assertTrue(prompt.contains("# TOOL CATALOG:")) },
-                { assertTrue(prompt.contains("search_x_recent")) },
-                { assertFalse(prompt.contains("ActionResult{\"name\":\"search_x_recent\"")) },
-                { assertFalse(prompt.contains("call:search_x_recent")) },
-                { assertFalse(registeredToolNames.contains("search_x_recent")) },
+                { assertTrue(registeredToolNames.contains("search_x_recent")) },
+                { assertTrue(registeredToolNames.size >= 4) },
             )
         }
 
-    private fun createPreparer(settings: SettingsData): ChatInferenceRequestPreparer =
+    private fun createPreparer(
+        settings: SettingsData,
+        searchIntentClassifier: com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort =
+            mockk(relaxed = true),
+    ): ChatInferenceRequestPreparer =
         ChatInferenceRequestPreparer(
             activeModelProvider =
                 mockk {
@@ -110,6 +120,7 @@ class OpenRouterRequestMapperTest {
             mediaToolDefinitionFactory = mockk(relaxed = true),
             getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
+            searchIntentClassifier = searchIntentClassifier,
         )
 
     @Test

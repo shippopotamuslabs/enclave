@@ -123,6 +123,52 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("- The sky is blue."))
     }
 
+    @Test
+    fun `IGTA-10 JSON XML prompt includes search_x_recent example when intent-activated`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("search_x_recent", ToolDisclosureMode.INTENT_ACTIVATED),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.WEB_SEARCH,
+                        ToolDefinition.WEB_EXTRACT,
+                        ToolDefinition.X_SEARCH,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("ActionResult{\"name\":\"search_x_recent\""))
+        assertTrue(prompt.contains("[intent-activated]"))
+    }
+
+    @Test
+    fun `IGTA-11 JSON XML prompt includes start_artifact example when intent-activated`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("start_artifact", ToolDisclosureMode.INTENT_ACTIVATED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.START_ARTIFACT,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("ActionResult{\"name\":\"start_artifact\""))
+        assertFalse(prompt.contains("tool_names\":[\"start_artifact\"]"))
+    }
+
     private fun catalogEntry(
         name: String,
         disclosureMode: ToolDisclosureMode,
