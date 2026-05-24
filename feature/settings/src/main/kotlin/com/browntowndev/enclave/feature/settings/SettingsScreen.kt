@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
@@ -572,12 +573,7 @@ fun AccountSection(
             }
         }
         AuthStateUi.Unauthenticated -> {
-            NeoNavRow(
-                title = "Login with Google",
-                subtitle = "Sync your data across devices",
-                icon = Icons.Default.AccountCircle,
-                onClick = onLoginClick,
-            )
+            GoogleSignInButton(onClick = onLoginClick)
         }
         AuthStateUi.Loading -> {
             NeoPanel {
