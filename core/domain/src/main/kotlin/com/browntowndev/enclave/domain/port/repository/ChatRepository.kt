@@ -180,6 +180,15 @@ interface ChatRepository {
      * @param messageState The final message state
      * @param pipelineStep The pipeline step (for COUNCIL mode messages)
      */
+    /**
+     * Persists web search sources as soon as they are known (e.g. pre-retrieval), without
+     * waiting for the assistant message to reach a terminal generation state.
+     */
+    suspend fun persistWebSearchSources(
+        messageId: MessageId,
+        sources: List<WebSearchSource>,
+    )
+
     @Suppress("LongParameterList")
     suspend fun persistAllMessageData(
         messageId: MessageId,

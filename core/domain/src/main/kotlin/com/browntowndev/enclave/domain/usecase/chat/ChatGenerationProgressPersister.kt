@@ -53,6 +53,12 @@ class ChatGenerationProgressSession internal constructor(
     suspend fun applyState(state: MessageGenerationState): AccumulatedMessages {
         markExtractedSources()
         val accumulatedMessages = accumulatorManager.reduce(state)
+        if (state is MessageGenerationState.WebSearchSourcesAttached && state.sources.isNotEmpty()) {
+            chatRepository.persistWebSearchSources(
+                messageId = state.sources.first().messageId,
+                sources = state.sources,
+            )
+        }
         if (state.isTerminal) {
             persistAccumulatedMessages()
             extractedUrlTracker.clear()

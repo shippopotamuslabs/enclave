@@ -284,6 +284,22 @@ class ChatRepositoryImpl
             triggerSync()
         }
 
+        override suspend fun persistWebSearchSources(
+            messageId: MessageId,
+            sources: List<WebSearchSource>,
+        ) {
+            val scopedSources = sources.filter { it.messageId == messageId }
+            if (scopedSources.isEmpty()) return
+            transactionProvider.runInTransaction {
+                webSearchSourceDao.insertAll(
+                    scopedSources.map { source ->
+                        SensitiveEntityFieldEncryptors.encrypt(source.toEntity(), healer)
+                    },
+                )
+            }
+            triggerSync()
+        }
+
         /**
          * Persists all message data atomically in a single transaction.
          * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.

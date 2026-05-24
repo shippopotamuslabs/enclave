@@ -222,6 +222,35 @@ class FakeChatRepository : ChatRepository {
     override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> =
         _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
 
+    override suspend fun persistWebSearchSources(
+        messageId: MessageId,
+        sources: List<WebSearchSource>,
+    ) {
+        if (sources.isEmpty()) return
+        val latest =
+            persistedMessageData.lastOrNull { it.messageId == messageId }
+                ?: PersistedMessageData(
+                    messageId = messageId,
+                    modelType = ModelType.FAST,
+                    thinkingStartTime = 0L,
+                    thinkingEndTime = 0L,
+                    thinkingDuration = null,
+                    thinkingRaw = null,
+                    content = "",
+                    messageState = MessageState.PROCESSING,
+                    pipelineStep = null,
+                    webSearchSources = emptyList(),
+                    artifacts = emptyList(),
+                    generatedMediaUris = emptyList(),
+                    generatedMediaAssetIds = emptyList(),
+                    generatedMediaTypes = emptyList(),
+                    generatedMediaPrompts = emptyList(),
+                    transcriptSegments = emptyList(),
+                )
+        persistedMessageData.removeAll { it.messageId == messageId }
+        persistedMessageData.add(latest.copy(webSearchSources = sources))
+    }
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
