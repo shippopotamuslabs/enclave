@@ -221,20 +221,22 @@ object XaiRequestMapper {
         if (reasoningEffort == null) {
             return null
         }
-        if (ApiProviderModelPolicy.isXaiGrok420Family(modelId)) {
-            return if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
-        }
-        if (ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId)) {
-            return reasoningEffort
-        }
-        if (
+        return when {
+            ApiProviderModelPolicy.isXaiGrok420Family(modelId) -> {
+                if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
+            }
+            ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId) || modelId.startsWith("grok-4.3") -> {
+                reasoningEffort
+            }
             ApiProviderModelPolicy.isXaiGrok3Model(modelId) ||
-            ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId) ||
-            ApiProviderModelPolicy.isXaiGrok4NonReasoningFamily(modelId)
-        ) {
-            return null
+                ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId) ||
+                ApiProviderModelPolicy.isXaiGrok4NonReasoningFamily(modelId) -> {
+                null
+            }
+            else -> {
+                reasoningEffort
+            }
         }
-        return reasoningEffort
     }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
