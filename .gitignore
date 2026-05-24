@@ -103,5 +103,6 @@ functions/node_modules/
 .worktrees/
 
 node_modules/
+scripts/.cache/
 build_output.txt
 .antigravitycli/
