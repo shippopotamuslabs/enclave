@@ -4,7 +4,9 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -12,6 +14,70 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 class OpenAiRequestMapperTest {
+    @Test
+    fun `LTD-04 provider native request mappers use activeTools only`() {
+        val params =
+            OpenAiRequestMapper.mapToChatCompletionParams(
+                modelId = "gpt-4o",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog =
+                            listOf(
+                                catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                            ),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
+
+        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertEquals(2, registeredToolNames.size)
+    }
+
+    @Test
+    fun `MUT-01 deferred schema never leaks before disclosure`() {
+        val params =
+            OpenAiRequestMapper.mapToChatCompletionParams(
+                modelId = "gpt-4o",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
+
+        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertFalse(
+            params
+                .tools()
+                .orElseThrow()
+                .toString()
+                .contains("\"append_blocks\""),
+        )
+    }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
+
     @Test
     fun `mapToChatCompletionParams correctly maps model, prompt, and history`() {
         val history =
@@ -169,7 +235,7 @@ class OpenAiRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -188,7 +254,7 @@ class OpenAiRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+                        activeTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
                     ),
             )
 

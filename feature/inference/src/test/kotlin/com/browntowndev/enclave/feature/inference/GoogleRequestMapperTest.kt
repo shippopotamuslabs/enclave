@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.WebSearchParams
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -11,6 +12,40 @@ import java.io.File
 import com.browntowndev.enclave.domain.model.chat.Role as DomainRole
 
 class GoogleRequestMapperTest {
+    @Test
+    fun `LTD-14 non Rust mapper uses activeTools only`() {
+        val request =
+            GoogleRequestMapper.mapToGenerateContentRequest(
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        apiProvider = com.browntowndev.enclave.domain.model.inference.ApiProvider.GOOGLE,
+                        modelId = "gemini-1.5-flash",
+                    ),
+            )
+
+        val declaredFunctionNames =
+            request.config
+                .tools()
+                .orElseThrow()
+                .flatMap { it.functionDeclarations().orElseThrow() }
+                .map { it.name().orElseThrow() }
+
+        assertEquals(listOf("disclose_tool_schemas", "web_search"), declaredFunctionNames)
+        assertFalse(declaredFunctionNames.contains("append_blocks"))
+    }
+
+    private fun deferredAppendTool(): ToolDefinition =
+        ToolDefinition(
+            name = "append_blocks",
+            description = "Append blocks to an artifact.",
+            parametersClass = WebSearchParams::class,
+        )
+
     @Test
     fun `mapToGenerateContentRequest maps system prompt history and reasoning budget`() {
         val history =
@@ -136,7 +171,7 @@ class GoogleRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                         apiProvider = com.browntowndev.enclave.domain.model.inference.ApiProvider.GOOGLE,
                         modelId = "gemini-1.5-flash",
                     ),
@@ -173,7 +208,7 @@ class GoogleRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+                        activeTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
                         apiProvider = com.browntowndev.enclave.domain.model.inference.ApiProvider.GOOGLE,
                         modelId = "gemini-1.5-flash",
                     ),

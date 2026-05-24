@@ -369,7 +369,7 @@ class InferenceService : Service() {
                     modelType = modelType,
                     maxTokens = finalMaxTokens,
                     toolingEnabled = hasImageTool,
-                    availableTools =
+                    activeTools =
                         if (hasImageTool) {
                             listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT)
                         } else {

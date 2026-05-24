@@ -280,7 +280,7 @@ class LlamaInferenceServiceImpl
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
-                    availableTools = availableTools,
+                    activeTools = availableTools,
                     systemPrompt = systemPrompt.ifBlank { options.systemPrompt },
                 )
             val domainHistory = sessionMessages.map(::toLlamaDomainMessage)

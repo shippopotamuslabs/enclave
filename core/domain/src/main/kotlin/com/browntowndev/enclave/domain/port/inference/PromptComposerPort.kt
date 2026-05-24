@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.port.inference
 
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 
@@ -9,14 +11,8 @@ import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 interface PromptComposerPort {
     fun compose(
         baseSystemPrompt: String?,
-        includeSearchTool: Boolean = true,
-        includeXSearchTool: Boolean = false,
-        includeImageInspectTool: Boolean = false,
-        includeMemoryTools: Boolean = true,
-        includeArtifactTool: Boolean = false,
-        includeImageGenerationTool: Boolean = false,
-        includeVideoGenerationTool: Boolean = false,
-        includeMusicGenerationTool: Boolean = false,
+        toolCatalog: List<ToolCatalogEntry>,
+        activeTools: List<ToolDefinition>,
         currentChatId: String? = null,
         strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         coreMemories: List<Memory> = emptyList(),

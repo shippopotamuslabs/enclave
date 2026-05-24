@@ -22,7 +22,9 @@ import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
@@ -35,6 +37,10 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
+import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
+import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -45,6 +51,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -55,6 +70,181 @@ import javax.inject.Provider
 
 class RustLoopInferenceServiceTest {
     private val logger = RecordingLogger()
+
+    @Test
+    fun `LTD-05 disclosure tool activates append_blocks for the next Rust backed model turn`() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val nextTurnCompleted = CompletableDeferred<Unit>()
+            val innerService = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-1",
+                                        name = "disclose_tool_schemas",
+                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                    ),
+                                ),
+                            ).single()
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson =
+                            serializeToolNames(
+                                listOf(
+                                    "disclose_tool_schemas",
+                                    "web_search",
+                                    "web_extract",
+                                    "append_blocks",
+                                ),
+                            ),
+                        allowToolCall = true,
+                    )
+                    nextTurnCompleted.complete(Unit)
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = innerService)
+
+            service
+                .sendPrompt(
+                    prompt = "write",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                ),
+                        ),
+                ).toList()
+            withTimeout(1_000) { nextTurnCompleted.await() }
+
+            val json = Json.parseToJsonElement(result.resultJson).jsonObject
+            val nextTurnToolNames = innerService.lastAvailableTools.map { tool -> tool.name }
+
+            assertAll(
+                { assertEquals("ok", json["status"]?.jsonPrimitive?.content) },
+                { assertEquals(listOf("append_blocks"), json["activated_tools"]?.jsonArray?.map { it.jsonPrimitive.content }) },
+                { assertEquals(listOf("append_blocks"), result.activatedToolNames) },
+                {
+                    assertEquals(
+                        listOf("disclose_tool_schemas", "web_search", "web_extract", "append_blocks"),
+                        nextTurnToolNames,
+                    )
+                },
+            )
+        }
+
+    @Test
+    fun `LTD-11 disclosure interception never invokes ToolExecutorPort`() =
+        runTest {
+            val callCount = AtomicInteger(0)
+            val executor =
+                object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+                        callCount.incrementAndGet()
+                        return ToolExecutionResult(request.toolName, """{"ok":true}""")
+                    }
+                }
+            lateinit var rustResult: AgentToolResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    rustResult =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-1",
+                                        name = "disclose_tool_schemas",
+                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, toolExecutor = executor)
+            val cache = ConversationSignatureCache()
+            val liteRtLoop =
+                LiteRtToolCallLoop(
+                    cache = cache,
+                    toolExecutor = executor,
+                    loggingPort = logger,
+                    agentPolicyPort = NoopAgentPolicyPort,
+                    cancellationGate = ConversationCancellationGate(),
+                )
+
+            val disclosureCatalog =
+                listOf(
+                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                )
+            cache.toolCatalog = disclosureCatalog
+            service
+                .sendPrompt(
+                    prompt = "disclose",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog = disclosureCatalog,
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                ),
+                        ),
+                ).toList()
+            val liteRtResult =
+                liteRtLoop.executeToolSafely(
+                    ToolCallRequest(
+                        toolName = "disclose_tool_schemas",
+                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                        provider = "LITERT",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertAll(
+                { assertEquals(0, callCount.get()) },
+                { assertEquals(listOf("append_blocks"), rustResult.activatedToolNames) },
+                { assertTrue(liteRtResult.contains("\"activated_tools\":[\"append_blocks\"]")) },
+                { assertEquals(0, callCount.get()) },
+            )
+        }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
+
+    private fun serializeToolNames(names: List<String>): String =
+        Json.encodeToString(
+            JsonArray.serializer(),
+            buildJsonArray {
+                names.forEach { name ->
+                    add(
+                        buildJsonObject {
+                            put("name", name)
+                            put("description", "$name description")
+                        },
+                    )
+                }
+            },
+        )
 
     @Test
     fun sendPrompt_populatesSessionContextAndLlamaCapabilities() =
@@ -166,7 +356,7 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            availableTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
                         ),
                 ).toList()
 
@@ -196,7 +386,7 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH),
                         ),
                 ).toList()
 

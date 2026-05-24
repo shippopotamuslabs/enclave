@@ -85,20 +85,14 @@ class DirectChatInferenceExecutorTest {
             mockk {
                 every {
                     compose(
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
+                        baseSystemPrompt = any(),
+                        toolCatalog = any(),
+                        activeTools = any(),
+                        currentChatId = any(),
+                        strategy = any(),
+                        coreMemories = any(),
+                        retrievedMemories = any(),
+                        retrievedSearchResults = any(),
                     )
                 } returns ""
             }

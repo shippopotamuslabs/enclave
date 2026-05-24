@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 
 /**
  * Per-response generation options passed at request time.
@@ -34,7 +35,9 @@ data class GenerationOptions(
     val frequencyPenaltyDisabled: Boolean = false,
     val presencePenaltyDisabled: Boolean = false,
     val toolingEnabled: Boolean = false,
-    val availableTools: List<ToolDefinition> = emptyList(),
+    val toolCatalog: List<ToolCatalogEntry> = emptyList(),
+    val activeTools: List<ToolDefinition> = emptyList(),
+    val toolCallStrategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
     val maxToolCalls: Int = 10,
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,

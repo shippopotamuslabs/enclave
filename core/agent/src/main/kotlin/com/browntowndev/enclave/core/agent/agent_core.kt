@@ -2990,6 +2990,8 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
 data class FfiSessionIoParams (
     var `provider`: kotlin.String, 
     var `contextWindowTokens`: kotlin.UInt, 
+    var `toolCatalogJson`: kotlin.String, 
+    var `toolSchemaRegistryJson`: kotlin.String, 
     var `toolsSchemaJson`: kotlin.String, 
     var `systemPrompt`: kotlin.String
 ) {
@@ -3007,12 +3009,16 @@ public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSess
             FfiConverterUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
     override fun allocationSize(value: FfiSessionIoParams) = (
             FfiConverterString.allocationSize(value.`provider`) +
             FfiConverterUInt.allocationSize(value.`contextWindowTokens`) +
+            FfiConverterString.allocationSize(value.`toolCatalogJson`) +
+            FfiConverterString.allocationSize(value.`toolSchemaRegistryJson`) +
             FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
             FfiConverterString.allocationSize(value.`systemPrompt`)
     )
@@ -3020,6 +3026,8 @@ public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSess
     override fun write(value: FfiSessionIoParams, buf: ByteBuffer) {
             FfiConverterString.write(value.`provider`, buf)
             FfiConverterUInt.write(value.`contextWindowTokens`, buf)
+            FfiConverterString.write(value.`toolCatalogJson`, buf)
+            FfiConverterString.write(value.`toolSchemaRegistryJson`, buf)
             FfiConverterString.write(value.`toolsSchemaJson`, buf)
             FfiConverterString.write(value.`systemPrompt`, buf)
     }
@@ -3331,7 +3339,8 @@ data class FfiToolResultRecord (
     var `callId`: kotlin.String, 
     var `resultJson`: kotlin.String, 
     var `truncated`: kotlin.Boolean, 
-    var `softFailure`: kotlin.Boolean
+    var `softFailure`: kotlin.Boolean, 
+    var `activatedToolNames`: List<kotlin.String>
 ) {
     
     companion object
@@ -3347,6 +3356,7 @@ public object FfiConverterTypeFfiToolResultRecord: FfiConverterRustBuffer<FfiToo
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
     }
 
@@ -3354,7 +3364,8 @@ public object FfiConverterTypeFfiToolResultRecord: FfiConverterRustBuffer<FfiToo
             FfiConverterString.allocationSize(value.`callId`) +
             FfiConverterString.allocationSize(value.`resultJson`) +
             FfiConverterBoolean.allocationSize(value.`truncated`) +
-            FfiConverterBoolean.allocationSize(value.`softFailure`)
+            FfiConverterBoolean.allocationSize(value.`softFailure`) +
+            FfiConverterSequenceString.allocationSize(value.`activatedToolNames`)
     )
 
     override fun write(value: FfiToolResultRecord, buf: ByteBuffer) {
@@ -3362,6 +3373,7 @@ public object FfiConverterTypeFfiToolResultRecord: FfiConverterRustBuffer<FfiToo
             FfiConverterString.write(value.`resultJson`, buf)
             FfiConverterBoolean.write(value.`truncated`, buf)
             FfiConverterBoolean.write(value.`softFailure`, buf)
+            FfiConverterSequenceString.write(value.`activatedToolNames`, buf)
     }
 }
 

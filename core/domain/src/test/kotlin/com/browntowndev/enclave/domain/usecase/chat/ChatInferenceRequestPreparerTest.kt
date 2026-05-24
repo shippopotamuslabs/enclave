@@ -21,16 +21,99 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ChatInferenceRequestPreparerTest {
+    @Test
+    fun `LTD-01 request preparer seeds catalog and active tools separately`() =
+        runTest {
+            val preparer =
+                ChatInferenceRequestPreparer(
+                    activeModelProvider =
+                        mockActiveModelProvider(
+                            fastConfig = fastTextConfig(),
+                            visionConfig = null,
+                        ),
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = mockMemoriesRepository(),
+                    embeddingEnginePort = mockEmbeddingEngine(),
+                    promptComposer = SearchToolPromptComposer(),
+                    defaultModelRepository = mockk(relaxed = true),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    mediaToolDefinitionFactory = mockk(relaxed = true),
+                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
+                    loggingPort = mockk(relaxed = true),
+                )
+
+            val request =
+                preparer(
+                    prompt = "Build a document from recent sources",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            assertAll(
+                {
+                    assertEquals(
+                        listOf(
+                            "disclose_tool_schemas",
+                            "web_search",
+                            "web_extract",
+                            "search_chat_history",
+                            "search_chat",
+                            "get_message_context",
+                            "manage_memories",
+                            "start_artifact",
+                            "append_blocks",
+                            "search_current_artifact",
+                        ),
+                        request.options.toolCatalog.map { it.name },
+                    )
+                },
+                {
+                    assertEquals(
+                        listOf("disclose_tool_schemas", "web_search", "web_extract"),
+                        request.options.activeTools.map { it.name },
+                    )
+                },
+                {
+                    assertEquals(
+                        "DISCLOSE_ON_DEMAND",
+                        request
+                            .options
+                            .toolCatalog
+                            .single { it.name == "append_blocks" }
+                            .disclosureMode
+                            .name,
+                    )
+                },
+                {
+                    assertEquals(
+                        "PRELOADED",
+                        request
+                            .options
+                            .toolCatalog
+                            .single { it.name == "web_search" }
+                            .disclosureMode
+                            .name,
+                    )
+                },
+            )
+        }
+
     @Test
     fun `multimodal local model sends image directly without tool contract`() =
         runTest {
@@ -70,11 +153,12 @@ class ChatInferenceRequestPreparerTest {
                 )
 
             assertEquals(listOf("file:///tmp/direct.jpg"), request.options.imageUris)
-            assertFalse(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
-            assertFalse(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.MANAGE_MEMORIES))
+            val catalogNames = request.options.toolCatalog.map { it.name }
+            assertFalse(catalogNames.contains(ToolDefinition.WEB_SEARCH.name))
+            assertFalse(catalogNames.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name))
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT_HISTORY.name))
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT.name))
+            assertTrue(catalogNames.contains(ToolDefinition.MANAGE_MEMORIES.name))
             assertTrue(request.options.toolingEnabled)
             assertTrue(request.prompt.contains("The user attached one or more images."))
         }
@@ -119,15 +203,15 @@ class ChatInferenceRequestPreparerTest {
 
             assertTrue(request.options.toolingEnabled)
             assertTrue(request.options.imageUris.isEmpty())
-            assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
+            assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
+            assertTrue(request.options.activeTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
             assertTrue(request.options.systemPrompt?.contains("Be concise.") == true)
             assertTrue(request.options.systemPrompt?.contains("attached_image_inspect") == true)
             assertTrue(request.prompt.contains("The user attached one or more images."))
         }
 
     @Test
-    fun `search enabled includes both WEB_SEARCH and WEB_EXTRACT in availableTools`() =
+    fun `search enabled includes both WEB_SEARCH and WEB_EXTRACT in activeTools`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -157,8 +241,8 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_EXTRACT))
+            assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
+            assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_EXTRACT))
         }
 
     @Test
@@ -232,7 +316,7 @@ class ChatInferenceRequestPreparerTest {
 
             // SDK_NATIVE strategy should result in no tool instructions in system prompt
             assertFalse(request.options.systemPrompt?.contains("web_search") == true)
-            assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
+            assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
         }
 
     @Test
@@ -304,17 +388,18 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertFalse(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
-            assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
+            val catalogNames = request.options.toolCatalog.map { it.name }
+            assertFalse(catalogNames.contains(ToolDefinition.WEB_SEARCH.name))
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT_HISTORY.name))
+            assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT.name))
+            assertTrue(catalogNames.contains(ToolDefinition.GET_MESSAGE_CONTEXT.name))
             assertTrue(request.options.toolingEnabled)
             assertFalse(request.options.systemPrompt?.contains("web_search") == true)
             assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
         }
 
     @Test
-    fun `GET_MESSAGE_CONTEXT is always included in availableTools`() =
+    fun `GET_MESSAGE_CONTEXT is always included in toolCatalog`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -344,7 +429,7 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
+            assertTrue(request.options.toolCatalog.map { it.name }.contains(ToolDefinition.GET_MESSAGE_CONTEXT.name))
         }
 
     @Test
@@ -658,5 +743,50 @@ class ChatInferenceRequestPreparerTest {
             val systemPrompt = request.options.systemPrompt
             assertTrue(systemPrompt != null && systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
             assertTrue(systemPrompt != null && systemPrompt.contains("Search result content"))
+        }
+
+    @Test
+    fun `when heuristic marks non-search then pre-retrieval search is skipped even if classifier is positive`() =
+        runTest {
+            val mockClassifier = mockk<SearchIntentClassifierPort>()
+            val mockExecutor = mockk<ToolExecutorPort>()
+
+            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.95f
+            every { mockClassifier.requiresSearch(any(), any()) } returns true
+
+            val preparer =
+                ChatInferenceRequestPreparer(
+                    activeModelProvider =
+                        mockActiveModelProvider(
+                            fastConfig = fastTextConfig(),
+                            visionConfig = null,
+                        ),
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = mockMemoriesRepository(),
+                    embeddingEnginePort = mockEmbeddingEngine(),
+                    promptComposer = SearchToolPromptComposer(),
+                    defaultModelRepository = mockk(relaxed = true),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    mediaToolDefinitionFactory = mockk(relaxed = true),
+                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
+                    loggingPort = mockk(relaxed = true),
+                    searchIntentClassifier = mockClassifier,
+                    toolExecutor = mockExecutor,
+                )
+
+            val request =
+                preparer(
+                    prompt = "I want this as an artifact that I can export",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            val systemPrompt = request.options.systemPrompt
+            assertTrue(systemPrompt == null || !systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
+            coVerify(exactly = 0) { mockExecutor.execute(any()) }
+            verify(exactly = 0) { mockClassifier.getSearchIntentProbability(any()) }
         }
 }

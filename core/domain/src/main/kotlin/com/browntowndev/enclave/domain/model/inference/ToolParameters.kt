@@ -20,7 +20,49 @@ import kotlin.reflect.jvm.jvmErasure
 /**
  * Marker interface for tool parameters.
  */
-interface ToolParameters
+interface ToolParameters {
+    companion object {
+        /**
+         * Extracts top-level argument hints from a [ToolSchema]. Nested object schemas,
+         * `oneOf`, `anyOf`, and `definitions` are intentionally excluded — the catalog
+         * stays compact while full schemas live behind the disclosure tool.
+         */
+        fun extractArgumentHints(
+            schema: ToolSchema,
+        ): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
+            val required = mutableListOf<ToolArgumentHint>()
+            val optional = mutableListOf<ToolArgumentHint>()
+            schema.properties.forEach { (name, element) ->
+                val obj = element as? JsonObject ?: return@forEach
+                val rawType = obj["type"]
+                val type =
+                    when (rawType) {
+                        is JsonPrimitive -> rawType.content
+                        is JsonArray ->
+                            rawType
+                                .mapNotNull { (it as? JsonPrimitive)?.content }
+                                .firstOrNull { it != "null" }
+                                ?: "string"
+                        else -> "string"
+                    }
+                val repeated = type == "array"
+                val hint = ToolArgumentHint(name = name, type = type, repeated = repeated)
+                if (schema.required.contains(name)) {
+                    required += hint
+                } else {
+                    optional += hint
+                }
+            }
+            return required to optional
+        }
+    }
+}
+
+@kotlinx.serialization.Serializable
+data class DiscloseToolSchemasParams(
+    @ToolParam(description = "Deferred tool names whose full schemas should be disclosed.")
+    val tool_names: List<String>,
+) : ToolParameters
 
 /**
  * Annotation to provide descriptions for tool parameters.

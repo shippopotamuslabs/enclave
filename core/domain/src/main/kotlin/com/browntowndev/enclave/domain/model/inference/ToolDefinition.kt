@@ -22,6 +22,8 @@ data class ToolDefinition(
     val parametersClass: KClass<out ToolParameters>,
     val displayName: String? = null,
     val schemaOverride: ToolSchema? = null,
+    val disclosureMode: ToolDisclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+    val supportsLazyDisclosure: Boolean = true,
 ) {
     val schema: ToolSchema by lazy {
         schemaProvider?.getSchema(name)?.let { ToolSchema.fromFullSchema(it) }
@@ -45,6 +47,17 @@ data class ToolDefinition(
             }
             ToolCallStrategy.SDK_NATIVE -> ""
         }
+
+    fun catalogEntry(): ToolCatalogEntry {
+        val (required, optional) = ToolParameters.extractArgumentHints(schema)
+        return ToolCatalogEntry(
+            name = name,
+            description = description,
+            disclosureMode = disclosureMode,
+            requiredArguments = required,
+            optionalArguments = optional,
+        )
+    }
 
     private fun buildExampleJsonMap(): String {
         val properties = schema.properties
@@ -167,6 +180,7 @@ data class ToolDefinition(
                 description = "Search the web and return ranked results.",
                 parametersClass = WebSearchParams::class,
                 displayName = "Searching the web...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
         @Suppress("MaxLineLength")
@@ -178,6 +192,7 @@ data class ToolDefinition(
                         "Use this to read the details of webpages returned by web_search.",
                 parametersClass = WebExtractParams::class,
                 displayName = "Reading webpage content...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
         val ATTACHED_IMAGE_INSPECT =
@@ -186,6 +201,16 @@ data class ToolDefinition(
                 description = "Inspect an attached image to answer a question about it.",
                 parametersClass = AttachedImageInspectParams::class,
                 displayName = "Inspecting image...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+            )
+
+        val DISCLOSE_TOOL_SCHEMAS =
+            ToolDefinition(
+                name = "disclose_tool_schemas",
+                description = "Disclose full schemas for deferred tools before calling them.",
+                parametersClass = DiscloseToolSchemasParams::class,
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+                supportsLazyDisclosure = false,
             )
 
         @Suppress("MaxLineLength")
@@ -303,6 +328,7 @@ data class ToolDefinition(
 
         val ALL_TOOLS =
             listOf(
+                DISCLOSE_TOOL_SCHEMAS,
                 WEB_SEARCH,
                 WEB_EXTRACT,
                 ATTACHED_IMAGE_INSPECT,
