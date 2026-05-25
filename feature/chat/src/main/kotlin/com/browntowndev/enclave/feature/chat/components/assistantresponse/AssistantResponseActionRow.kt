@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,7 @@ internal fun AssistantResponseActionRow(
     onPlayAudio: (String) -> Unit,
     onShareClick: (MessageId) -> Unit,
     onShowSources: () -> Unit,
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -85,7 +88,7 @@ internal fun AssistantResponseActionRow(
                             .size(32.dp),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.content_copy),
+                        imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "Copy response",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp),
@@ -109,6 +112,20 @@ internal fun AssistantResponseActionRow(
                     }
                 }
 
+                if (isComplete) {
+                    IconButton(
+                        onClick = { onStatsClick(message.id) },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.BarChart,
+                            contentDescription = "Response statistics",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
                 if (message.webSearchSources.isNotEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -124,7 +141,7 @@ internal fun AssistantResponseActionRow(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.link),
+                                imageVector = Icons.Filled.Share,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                             )

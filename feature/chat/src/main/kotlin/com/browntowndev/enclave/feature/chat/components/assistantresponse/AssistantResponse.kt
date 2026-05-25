@@ -30,6 +30,7 @@ fun AssistantResponse(
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val contentText = message.content.text
     val pipelineStep = message.content.pipelineStep
@@ -95,6 +96,7 @@ fun AssistantResponse(
                 onArtifactCardClick = onArtifactCardClick,
                 onNavigateToStudio = onNavigateToStudio,
                 onShareClick = onShareClick,
+                onStatsClick = onStatsClick,
                 onShowSources = { showSources = true },
             )
         }

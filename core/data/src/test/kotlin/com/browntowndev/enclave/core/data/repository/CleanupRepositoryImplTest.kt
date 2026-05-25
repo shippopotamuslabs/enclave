@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.core.data.repository
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
@@ -16,12 +18,21 @@ class CleanupRepositoryImplTest {
     private val cleanupDao = mockk<CleanupDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private val preferencesDataStore = mockk<DataStore<Preferences>>(relaxed = true)
+    private val userIdProvider: () -> String? = { "user-1" }
     private lateinit var cleanupRepository: CleanupRepositoryImpl
 
     @BeforeEach
     fun setup() {
         every { database.cleanupDao() } returns cleanupDao
-        cleanupRepository = CleanupRepositoryImpl(database, apiKeyManager, syncTrigger)
+        cleanupRepository =
+            CleanupRepositoryImpl(
+                database = database,
+                apiKeyManager = apiKeyManager,
+                syncTrigger = syncTrigger,
+                preferencesDataStore = preferencesDataStore,
+                userIdProvider = userIdProvider,
+            )
     }
 
     @Test

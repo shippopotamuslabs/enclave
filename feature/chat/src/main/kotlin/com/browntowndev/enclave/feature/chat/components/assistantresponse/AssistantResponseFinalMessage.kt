@@ -36,6 +36,7 @@ internal fun AssistantResponseFinalMessage(
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
+    onStatsClick: (MessageId) -> Unit = {},
     onShowSources: () -> Unit,
 ) {
     var transcriptSheetVisible by remember { mutableStateOf(false) }
@@ -121,6 +122,7 @@ internal fun AssistantResponseFinalMessage(
         hasTtsProviderAssigned = hasTtsProviderAssigned,
         onPlayAudio = onPlayAudio,
         onShareClick = onShareClick,
+        onStatsClick = onStatsClick,
         onShowSources = onShowSources,
     )
 }

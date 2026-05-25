@@ -15,6 +15,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.feature.chat.artifactexport.ArtifactExportWizardContent
+import com.browntowndev.enclave.feature.chat.stats.ChatStatsBottomSheet
+import com.browntowndev.enclave.feature.chat.stats.ResponseStatsBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +58,32 @@ fun ChatRoute(
     }
 
     val exportSheet = uiState.artifactExportSheet
+
+    if (uiState.responseStatsSheet.isVisible) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        NeoModalBottomSheet(
+            onDismissRequest = viewModel::dismissResponseStatsSheet,
+            sheetState = sheetState,
+        ) {
+            ResponseStatsBottomSheet(
+                state = uiState.responseStatsSheet,
+                onDismiss = viewModel::dismissResponseStatsSheet,
+            )
+        }
+    }
+
+    if (uiState.chatStatsSheet.isVisible) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        NeoModalBottomSheet(
+            onDismissRequest = viewModel::dismissChatStatsSheet,
+            sheetState = sheetState,
+        ) {
+            ChatStatsBottomSheet(
+                state = uiState.chatStatsSheet,
+                onDismiss = viewModel::dismissChatStatsSheet,
+            )
+        }
+    }
 
     if (exportSheet is ArtifactExportSheetState.Visible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -105,6 +133,8 @@ fun ChatRoute(
             onShareTurn = viewModel::onShareTurn,
             onShareFullChat = viewModel::onShareFullChat,
             onDismissShareSheet = viewModel::onDismissShareSheet,
+            onStatsClick = viewModel::onResponseStatsClick,
+            onViewChatStatsClick = viewModel::onChatStatsClick,
         )
     }
 }

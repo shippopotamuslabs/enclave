@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.enclave.domain.model.chat.Mode
@@ -88,6 +89,10 @@ internal class ChatGenerationAccumulatorManager(
                         }
                     }
                 }
+            }
+
+            is MessageGenerationState.TelemetryCaptured -> {
+                getOrCreateAccumulator(state.modelType).telemetryRows.add(state.telemetry)
             }
 
             is MessageGenerationState.StepCompleted,
@@ -270,6 +275,7 @@ internal class MessageAccumulator(
     generatedMediaAssetIds: MutableList<String> = mutableListOf(),
     generatedMediaTypes: MutableList<String> = mutableListOf(),
     generatedMediaPrompts: MutableList<String> = mutableListOf(),
+    val telemetryRows: MutableList<TurnTelemetry> = mutableListOf(),
     private val transcriptSegmentsMutable: MutableList<MutableTranscriptSegment> = mutableListOf(),
 ) {
     private val webSearchSourcesList = SnapshotMutableList(webSearchSources)
@@ -535,6 +541,7 @@ internal class MessageAccumulator(
             generatedMediaTypes = generatedMediaTypesSnapshot.value(),
             generatedMediaPrompts = generatedMediaPromptsSnapshot.value(),
             transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
+            telemetryRows = telemetryRows.toList(),
         ).also { snapshot ->
             cachedSnapshot = snapshot
             cachedSnapshotVersion = snapshotVersion

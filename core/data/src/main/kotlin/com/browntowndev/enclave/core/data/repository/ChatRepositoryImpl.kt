@@ -8,7 +8,9 @@ import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayloa
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageFileEntity
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentEntity
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
+import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceEntity
@@ -34,6 +36,7 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.chat.ThinkingData
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
@@ -57,6 +60,7 @@ class ChatRepositoryImpl
         private val documentDao: DocumentDao,
         private val transactionProvider: com.browntowndev.enclave.domain.port.repository.TransactionProvider,
         private val cleanupDao: CleanupDao,
+        private val messageInferenceTelemetryDao: MessageInferenceTelemetryDao,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ChatRepository {
@@ -321,6 +325,7 @@ class ChatRepositoryImpl
             generatedMediaTypes: List<String>,
             generatedMediaPrompts: List<String>,
             transcriptSegments: List<MessageTranscriptSegment>,
+            telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry>,
         ) {
             val mediaUrisJson =
                 if (generatedMediaUris.isNotEmpty()) {
@@ -418,6 +423,10 @@ class ChatRepositoryImpl
                         )
                     }
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
+
+                if (telemetry.isNotEmpty()) {
+                    messageInferenceTelemetryDao.insertAll(telemetry.map(TurnTelemetry::toEntity))
+                }
             }
             triggerSync()
         }

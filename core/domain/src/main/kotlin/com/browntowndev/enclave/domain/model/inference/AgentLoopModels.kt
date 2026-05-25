@@ -93,6 +93,7 @@ data class AgentModelTurnResult(
     val toolCalls: List<AgentRawToolCall>,
     val finishReason: AgentFinishReason,
     val providerReasoningContent: String? = null,
+    val telemetry: com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry? = null,
 )
 
 data class AgentRawToolCall(

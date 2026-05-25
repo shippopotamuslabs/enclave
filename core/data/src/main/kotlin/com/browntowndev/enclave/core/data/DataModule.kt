@@ -37,6 +37,7 @@ import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
@@ -58,6 +59,8 @@ import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.enclave.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ChatRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.InferenceTelemetryRepositoryImpl
+import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryRepositoryPort
 import com.browntowndev.enclave.core.data.repository.CompositeToolExecutor
 import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
@@ -213,6 +216,10 @@ object DataModule {
     fun provideMessageVisionAnalysisDao(database: EnclaveDatabase): MessageVisionAnalysisDao = database.messageVisionAnalysisDao()
 
     @Provides
+    fun provideMessageInferenceTelemetryDao(database: EnclaveDatabase): MessageInferenceTelemetryDao =
+        database.messageInferenceTelemetryDao()
+
+    @Provides
     fun provideLocalModelsDao(database: EnclaveDatabase): LocalModelsDao = database.localModelsDao()
 
     @Provides
@@ -327,6 +334,14 @@ object DataModule {
 
     @Provides
     @Singleton
+    fun provideJavaTimeClock(): java.time.Clock = java.time.Clock.systemDefaultZone()
+
+    @Provides
+    @Singleton
+    fun provideZoneId(): java.time.ZoneId = java.time.ZoneId.systemDefault()
+
+    @Provides
+    @Singleton
     fun provideDownloadSpeedTracker(clock: Clock): DownloadSpeedTrackerPort = DownloadSpeedTracker(clock)
 
     @Provides
@@ -385,6 +400,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindChatRepository(impl: ChatRepositoryImpl): ChatRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindInferenceTelemetryRepository(
+        impl: InferenceTelemetryRepositoryImpl,
+    ): InferenceTelemetryRepositoryPort
 
     @Binds
     @Singleton

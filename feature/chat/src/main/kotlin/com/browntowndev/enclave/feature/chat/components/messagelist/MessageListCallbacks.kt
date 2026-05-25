@@ -16,4 +16,5 @@ internal data class MessageListCallbacks(
         prompts: List<String>,
     ) -> Unit = { _, _, _, _ -> },
     val onShareClick: (MessageId) -> Unit = {},
+    val onStatsClick: (MessageId) -> Unit = {},
 )

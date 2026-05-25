@@ -18,13 +18,19 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
+import com.browntowndev.enclave.feature.inference.openai.accumulateOpenAiStreamUsage
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
+import java.math.BigDecimal
 import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
@@ -56,6 +62,7 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val loggingPort: LoggingPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
+    private val telemetrySupport: InferenceTelemetrySupport? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -100,6 +107,8 @@ abstract class BaseOpenAiSdkInferenceService(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val timing = telemetrySupport?.let { InferenceTurnTiming() }
+        val captureContext = telemetrySupport?.captureContext(options)
         val lastUserIndex = sessionMessages.indexOfLast { msg ->
             msg.role == Role.USER && run {
                 val meta = msg.metadataJson
@@ -170,12 +179,19 @@ abstract class BaseOpenAiSdkInferenceService(
             options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
         }
 
+        builder.streamOptions(
+            ChatCompletionStreamOptions.builder().includeUsage(true).build(),
+        )
+
         val response =
             streamChatCompletions(
                 params = builder.build(),
                 emitEvent = { event ->
                     when (event) {
-                        is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                        is InferenceEvent.PartialResponse -> {
+                            timing?.markFirstOutput()
+                            onTextToken(event.chunk)
+                        }
                         is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
                         else -> {}
                     }
@@ -192,6 +208,25 @@ abstract class BaseOpenAiSdkInferenceService(
             }
         val bufferedText = response.assistantMessageText
 
+        val telemetry =
+            if (telemetrySupport != null && timing != null && captureContext != null) {
+                telemetrySupport.openAiTurnTelemetry(
+                    context = captureContext,
+                    providerLabel = telemetrySupport.providerLabel(provider),
+                    modelId = modelId,
+                    modelLabel = modelId,
+                    timing = timing,
+                    inputTokens = response.inputTokens,
+                    outputTokens = response.outputTokens,
+                    reasoningTokens = response.reasoningTokens,
+                    cacheReadInputTokens = response.cacheReadInputTokens,
+                    cacheWriteInputTokens = response.cacheWriteInputTokens,
+                    costUsd = response.costUsd,
+                )
+            } else {
+                null
+            }
+
         return AgentModelTurnResult(
             assistantText = bufferedText.takeIf { it.isNotBlank() },
             toolCalls = toolCalls,
@@ -204,6 +239,7 @@ abstract class BaseOpenAiSdkInferenceService(
                         ?: AgentFinishReason.Stop
                 },
             providerReasoningContent = response.providerReasoningContent,
+            telemetry = telemetry,
         )
     }
 
@@ -500,6 +536,12 @@ abstract class BaseOpenAiSdkInferenceService(
             assistantMessageText = state.accumulatedText.toString(),
             finishReason = state.finishReason,
             providerReasoningContent = state.accumulatedReasoning.toString().takeIf { it.isNotBlank() },
+            inputTokens = state.inputTokens,
+            outputTokens = state.outputTokens,
+            reasoningTokens = state.reasoningTokens,
+            cacheReadInputTokens = state.cacheReadInputTokens,
+            cacheWriteInputTokens = state.cacheWriteInputTokens,
+            costUsd = state.costUsd,
         )
     }
 
@@ -515,6 +557,7 @@ abstract class BaseOpenAiSdkInferenceService(
         if (state.responseId == null) {
             state.responseId = event.id()
         }
+        accumulateOpenAiStreamUsage(event, state.usageAccumulator)
         val choices = event.choices()
         if (choices.isEmpty()) {
             loggingPort.debug(tag, "Chat stream chunk had no choices model=$modelId")
@@ -626,7 +669,15 @@ abstract class BaseOpenAiSdkInferenceService(
         var outputTextDeltaCount: Int = 0,
         val accumulatedReasoning: StringBuilder = StringBuilder(),
         val trackedToolCalls: MutableMap<Long, TrackedToolCall> = mutableMapOf(),
-    )
+        val usageAccumulator: OpenAiStreamUsageAccumulator = OpenAiStreamUsageAccumulator(),
+        var costUsd: BigDecimal? = null,
+    ) {
+        val inputTokens: Int? get() = usageAccumulator.inputTokens
+        val outputTokens: Int? get() = usageAccumulator.outputTokens
+        val reasoningTokens: Int? get() = usageAccumulator.reasoningTokens
+        val cacheReadInputTokens: Int? get() = usageAccumulator.cacheReadInputTokens
+        val cacheWriteInputTokens: Int? get() = usageAccumulator.cacheWriteInputTokens
+    }
 
     private data class TrackedToolCall(
         var id: String? = null,

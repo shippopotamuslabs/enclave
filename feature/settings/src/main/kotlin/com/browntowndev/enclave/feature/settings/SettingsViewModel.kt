@@ -14,9 +14,12 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +45,7 @@ internal class SettingsViewModel
         private val deletionHelper: SettingsDeletionHelper,
         settingsUseCases: SettingsUseCases,
         private val settingsUiStateFactory: SettingsUiStateFactory,
+        private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val embeddingProgressPort: EmbeddingProgressPort,
     ) : ViewModel() {
@@ -62,6 +66,7 @@ internal class SettingsViewModel
         private val _dataControlsState = MutableStateFlow(DataControlsTransientState())
         private val _xSearchState = MutableStateFlow(XSearchTransientState())
         private val _vaultReauthSheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+        private val _usageSpendPeriod = MutableStateFlow(UsagePeriodUi.LIFETIME)
         private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
         private val _currentApiKey = MutableStateFlow("")
@@ -82,6 +87,11 @@ internal class SettingsViewModel
         private val memoriesFlow =
             memoriesUseCases.getAllMemoriesFlow().map { memories ->
                 memories.map { StoredMemory(it.id, it.content, it.category) }
+            }
+
+        private val usageSpendSummaryFlow =
+            _usageSpendPeriod.flatMapLatest { period ->
+                observeUsageSpendSummaryUseCase(period.toDomain())
             }
 
         val uiState: StateFlow<SettingsUiState> =
@@ -114,6 +124,7 @@ internal class SettingsViewModel
                         isReindexing = embeddingProgressPort.isReindexing,
                         reindexProgress = embeddingProgressPort.progress,
                         vaultReauthSheet = _vaultReauthSheet,
+                        usageSpendSummary = usageSpendSummaryFlow,
                     ),
                 ).stateIn(
                     scope = viewModelScope,
@@ -160,6 +171,12 @@ internal class SettingsViewModel
         fun onShowTosSheet(show: Boolean) = generalDelegate.onShowTosSheet(_sheetVisibility, show)
 
         fun onShowFeedbackSheet(show: Boolean) = generalDelegate.onShowFeedbackSheet(_sheetVisibility, show)
+
+        fun onShowUsageSpendSheet(show: Boolean) = generalDelegate.onShowUsageSpendSheet(_sheetVisibility, show)
+
+        fun onUsageSpendPeriodChange(period: UsagePeriodUi) {
+            _usageSpendPeriod.value = period
+        }
 
         fun onShowOssLicensesSheet(show: Boolean) = generalDelegate.onShowOssLicensesSheet(_sheetVisibility, show)
 
@@ -628,4 +645,10 @@ internal class SettingsViewModel
             _currentApiKey.value = ""
             _ttsState.value = TtsProvidersTransientState()
         }
+    }
+
+private fun UsagePeriodUi.toDomain(): UsagePeriod =
+    when (this) {
+        UsagePeriodUi.LIFETIME -> UsagePeriod.LIFETIME
+        UsagePeriodUi.CURRENT_MONTH -> UsagePeriod.CURRENT_MONTH
     }

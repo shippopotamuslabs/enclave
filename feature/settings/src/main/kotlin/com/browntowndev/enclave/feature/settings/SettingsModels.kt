@@ -58,6 +58,7 @@ data class SettingsUiState(
     val dataControls: DataControlsUiState = DataControlsUiState(),
     val memories: MemoriesUiState = MemoriesUiState(),
     val feedback: FeedbackUiState = FeedbackUiState(),
+    val usageSpend: UsageSpendSheetUiState = UsageSpendSheetUiState(),
     val localModelsSheet: LocalModelsSheetUiState = LocalModelsSheetUiState(),
     val localModelEditor: LocalModelEditorUiState = LocalModelEditorUiState(),
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
@@ -110,6 +111,7 @@ data class SettingsHomeUiState(
     val isDataControlsSheetOpen: Boolean = false,
     val isMemoriesSheetOpen: Boolean = false,
     val isFeedbackSheetOpen: Boolean = false,
+    val isUsageSpendSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
@@ -688,3 +690,26 @@ object MockSettingsData {
             assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
         )
 }
+
+@Immutable
+enum class UsagePeriodUi {
+    LIFETIME,
+    CURRENT_MONTH,
+}
+
+@Immutable
+data class UsageSpendProviderRowUi(
+    val providerLabel: String,
+    val costLabel: String,
+    val turnCount: Int,
+)
+
+@Immutable
+data class UsageSpendSheetUiState(
+    val isVisible: Boolean = false,
+    val selectedPeriod: UsagePeriodUi = UsagePeriodUi.LIFETIME,
+    val totalCostLabel: String = "",
+    val providerRows: List<UsageSpendProviderRowUi> = emptyList(),
+    val emptyMessage: String? = null,
+    val missingCostTurnsLabel: String? = null,
+)

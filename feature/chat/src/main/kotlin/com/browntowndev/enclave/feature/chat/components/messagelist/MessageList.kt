@@ -69,12 +69,14 @@ fun MessageList(
         prompts: List<String>,
     ) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val onEditMessageRef = rememberUpdatedState(onEditMessage)
     val onPlayAudioRef = rememberUpdatedState(onPlayAudio)
     val onArtifactCardClickRef = rememberUpdatedState(onArtifactCardClick)
     val onNavigateToStudioRef = rememberUpdatedState(onNavigateToStudio)
     val onShareClickRef = rememberUpdatedState(onShareClick)
+    val onStatsClickRef = rememberUpdatedState(onStatsClick)
     val callbacks =
         remember {
             MessageListCallbacks(
@@ -85,6 +87,7 @@ fun MessageList(
                     onNavigateToStudioRef.value(ids, uris, types, prompts)
                 },
                 onShareClick = { onShareClickRef.value(it) },
+                onStatsClick = { onStatsClickRef.value(it) },
             )
         }
     val listState =

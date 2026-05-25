@@ -4,6 +4,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,8 +26,10 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 fun ChatTopBar(
     onMenuClick: () -> Unit,
     onNewChatClick: () -> Unit,
+    onViewChatStatsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    var overflowExpanded by remember { mutableStateOf(false) }
     NeoAppBarChrome(modifier = modifier) {
         NeoIconButton(
             onClick = onMenuClick,
@@ -38,10 +47,31 @@ fun ChatTopBar(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
-        NeoIconButton(
-            onClick = onNewChatClick,
-            icon = painterResource(R.drawable.edit_square),
-            contentDescription = "Start new chat",
-        )
+        Box {
+            NeoIconButton(
+                onClick = { overflowExpanded = true },
+                icon = Icons.Default.MoreVert,
+                contentDescription = "Chat options",
+            )
+            DropdownMenu(
+                expanded = overflowExpanded,
+                onDismissRequest = { overflowExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("New chat") },
+                    onClick = {
+                        overflowExpanded = false
+                        onNewChatClick()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("View chat stats") },
+                    onClick = {
+                        overflowExpanded = false
+                        onViewChatStatsClick()
+                    },
+                )
+            }
+        }
     }
 }

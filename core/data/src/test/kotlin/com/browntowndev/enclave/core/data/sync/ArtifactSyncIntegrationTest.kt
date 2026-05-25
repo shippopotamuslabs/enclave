@@ -115,6 +115,7 @@ class ArtifactSyncIntegrationTest {
                 documentDao = documentDao,
                 transactionProvider = transactionProvider,
                 cleanupDao = mockk(relaxed = true),
+                messageInferenceTelemetryDao = mockk(relaxed = true),
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
                 readRepairApplier = readRepairApplier,
             )

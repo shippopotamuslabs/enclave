@@ -38,6 +38,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 generatedMediaTypes = accumulator.generatedMediaTypes.toList(),
                 generatedMediaPrompts = accumulator.generatedMediaPrompts.toList(),
                 transcriptSegments = accumulator.toTranscriptSegments(),
+                telemetry = accumulator.telemetryRows.toList(),
             )
 
             // Generate and save embedding for the assistant message

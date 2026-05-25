@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.chat.ThinkingData
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -207,6 +208,7 @@ interface ChatRepository {
         generatedMediaTypes: List<String> = emptyList(),
         generatedMediaPrompts: List<String> = emptyList(),
         transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
+        telemetry: List<TurnTelemetry> = emptyList(),
     )
 
     /**

@@ -95,6 +95,7 @@ internal object FirestoreSyncDependencyGraph {
         "message_files" to MESSAGE_CHILD_PARENTS,
         "web_search_sources" to MESSAGE_CHILD_PARENTS,
         "message_transcript_segments" to MESSAGE_CHILD_PARENTS,
+        "message_inference_telemetry" to MESSAGE_CHILD_PARENTS,
         "documents" to MESSAGE_CHILD_PARENTS,
         "api_credentials" to NO_PARENTS,
         "api_keys" to NO_PARENTS,

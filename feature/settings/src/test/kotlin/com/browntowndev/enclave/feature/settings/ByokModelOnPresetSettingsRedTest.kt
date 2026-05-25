@@ -73,6 +73,7 @@ class ByokModelOnPresetSettingsRedTest {
                 mediaProviderAssetUiMapper = mockk(relaxed = true),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper = com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper(),
             )
     }
 

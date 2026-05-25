@@ -58,6 +58,8 @@ class SettingsScreenTest {
                     onDeleteMemory = {},
                     onShowTosSheet = {},
                     onShowFeedbackSheet = {},
+                    onShowUsageSpendSheet = {},
+                    onUsageSpendPeriodChange = {},
                     onShowOssLicensesSheet = {},
                     onShowVisionSettingsSheet = {},
                     onNavigateToModelConfigure = {},

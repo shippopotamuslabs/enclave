@@ -8,6 +8,7 @@ internal class FirestoreSyncDaos private constructor(
     val chatDao = chatSyncDaos.chatDao
     val messageDao = chatSyncDaos.messageDao
     val messageTranscriptSegmentDao = chatSyncDaos.messageTranscriptSegmentDao
+    val messageInferenceTelemetryDao = chatSyncDaos.messageInferenceTelemetryDao
     val memoriesDao = configSyncDaos.memoriesDao
     val webSearchSourceDao = chatSyncDaos.webSearchSourceDao
     val ttsProviderDao = configSyncDaos.ttsProviderDao

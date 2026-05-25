@@ -13,6 +13,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.handlers.LocalModelSy
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MediaProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MemoriesSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageFileSyncHandler
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageInferenceTelemetrySyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageTranscriptSegmentSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioAlbumSyncHandler
@@ -35,10 +36,11 @@ internal class FirestoreSyncAdapterRegistry(
             MessageFileSyncHandler(ctx),
             WebSearchSourceSyncHandler(ctx),
             MessageTranscriptSegmentSyncHandler(ctx),
+            MessageInferenceTelemetrySyncHandler(ctx),
             ApiModelConfigSyncHandler(ctx),
+            LocalModelSyncHandler(ctx),
             LocalModelConfigSyncHandler(ctx),
             DefaultModelSyncHandler(ctx),
-            LocalModelSyncHandler(ctx),
             UtilityModelSyncHandler(ctx),
             TtsProviderSyncHandler(ctx),
             MediaProviderSyncHandler(ctx),

@@ -29,9 +29,14 @@ import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +44,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import java.math.BigDecimal
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -277,7 +284,9 @@ class SettingsViewModelTest {
                         mediaProviderAssetUiMapper,
                         ApiDiscoveryUiFilter(),
                         applyApiModelMetadataDefaultsUseCase,
+                        UsageSpendUiMapper(),
                     ),
+                observeUsageSpendSummaryUseCase = testUsageSpendSummaryUseCase(),
                 generalDelegate = generalDelegate,
                 memoriesDelegate = memoriesDelegate,
                 dataControlsDelegate = dataControlsDelegate,
@@ -982,4 +991,21 @@ class SettingsViewModelTest {
             assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
             assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
         }
+}
+
+internal fun testUsageSpendSummaryUseCase(): ObserveUsageSpendSummaryUseCase {
+    val useCase = io.mockk.mockk<ObserveUsageSpendSummaryUseCase>()
+    every { useCase.invoke(any()) } returns
+        flowOf(
+            UsageSpendSummary(
+                period = UsagePeriod.LIFETIME,
+                periodStartUtcMs = null,
+                periodEndUtcMs = null,
+                totalCostUsd = BigDecimal.ZERO,
+                telemetryBackedTurnCount = 0,
+                missingCostTurnCount = 0,
+                providerBreakdown = emptyList(),
+            ),
+        )
+    return useCase
 }

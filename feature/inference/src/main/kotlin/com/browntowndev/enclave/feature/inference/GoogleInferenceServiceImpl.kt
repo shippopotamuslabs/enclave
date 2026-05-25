@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCallingConfig
@@ -37,6 +38,7 @@ class GoogleInferenceServiceImpl(
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
+    private val telemetrySupport: InferenceTelemetrySupport? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -157,6 +159,8 @@ class GoogleInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
+        val captureContext = telemetrySupport?.captureContext(options)
         val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
         val imageUris = options.imageUris.take(3600)
 
@@ -247,7 +251,10 @@ class GoogleInferenceServiceImpl(
                 allowToolCall = allowToolCall,
                 emitEvent = { event ->
                     when (event) {
-                        is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                        is InferenceEvent.PartialResponse -> {
+                            timing?.markFirstOutput()
+                            onTextToken(event.chunk)
+                        }
                         is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
                         else -> {}
                     }
@@ -274,6 +281,23 @@ class GoogleInferenceServiceImpl(
         }
         val assistantText = assistantTextParts.joinToString("").takeIf { it.isNotBlank() }
 
+        val outputTokenEstimate =
+            assistantText
+                ?.takeIf { it.isNotBlank() }
+                ?.let { text -> (text.length / 4).coerceAtLeast(1) }
+        val telemetry =
+            if (telemetrySupport != null && timing != null && captureContext != null) {
+                telemetrySupport.localTurnTelemetry(
+                    context = captureContext,
+                    providerLabel = "Google",
+                    modelLabel = modelId,
+                    timing = timing,
+                    outputTokens = outputTokenEstimate,
+                )
+            } else {
+                null
+            }
+
         return AgentModelTurnResult(
             assistantText = assistantText,
             toolCalls = toolCalls,
@@ -283,6 +307,7 @@ class GoogleInferenceServiceImpl(
                     finishReason = response.finishReason,
                     assistantText = assistantText,
                 ),
+            telemetry = telemetry,
         )
     }
 

@@ -1018,6 +1018,31 @@ class BaseOpenAiSdkInferenceServiceTest {
             }
         }
 
+    @Test
+    fun `completeSingleTurn enables streaming usage in stream options`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = emptyList(),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val streamOptions = requireNotNull(capturedParams).streamOptions()
+            assertTrue(streamOptions.isPresent)
+            assertEquals(true, streamOptions.get().includeUsage().orElse(false))
+        }
+
     // ── Helper ──────────────────────────────────────────────────────────────────
 
     private fun createSingleTurnService(
