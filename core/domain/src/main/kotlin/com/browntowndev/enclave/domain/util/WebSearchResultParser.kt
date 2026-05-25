@@ -36,13 +36,15 @@ object WebSearchResultParser {
                         postObj["text"]?.jsonPrimitive?.content
                             ?: postObj["content"]?.jsonPrimitive?.content
                     val url = postObj["url"]?.jsonPrimitive?.content
-                    val userName = postObj["user_name"]?.jsonPrimitive?.content
+                    val title = postObj["user_name"]?.jsonPrimitive?.content
+                        ?: postObj["username"]?.jsonPrimitive?.content
+                        ?: "X Post"
 
                     if (!content.isNullOrBlank() && !url.isNullOrBlank()) {
                         sources.add(
                             WebSearchSource(
                                 messageId = messageId,
-                                title = userName ?: "X Post",
+                                title = title,
                                 url = url,
                                 content = content,
                                 score = postObj["impact_score"]?.jsonPrimitive?.double ?: 1.0,
@@ -51,23 +53,30 @@ object WebSearchResultParser {
                     }
                 }
             } else if (jsonElement is JsonObject) {
-                // Handle standard web search format (Tavily/Exa/Google)
+                // Handle standard web search format (Tavily/Exa/Google) or X thread response
                 // Some formats might have results in "results" or "data"
                 val results = jsonElement["results"]?.jsonArray ?: jsonElement["data"]?.jsonArray
 
                 if (results != null) {
                     results.forEach { itemElement ->
                         val item = itemElement.jsonObject
-                        val title = item["title"]?.jsonPrimitive?.content
+                        val content =
+                            item["text"]?.jsonPrimitive?.content
+                                ?: item["content"]?.jsonPrimitive?.content
                         val url = item["url"]?.jsonPrimitive?.content
-                        val content = item["content"]?.jsonPrimitive?.content
-                        val score = item["score"]?.jsonPrimitive?.double ?: 0.0
+                        val title = item["user_name"]?.jsonPrimitive?.content
+                            ?: item["username"]?.jsonPrimitive?.content
+                            ?: item["title"]?.jsonPrimitive?.content
+                            ?: "Source"
+                        val score = item["impact_score"]?.jsonPrimitive?.double
+                            ?: item["score"]?.jsonPrimitive?.double
+                            ?: 0.0
 
                         if (!url.isNullOrBlank() && !content.isNullOrBlank()) {
                             sources.add(
                                 WebSearchSource(
                                     messageId = messageId,
-                                    title = title ?: "Source",
+                                    title = title,
                                     url = url,
                                     content = content,
                                     score = score,

@@ -23,8 +23,8 @@ class ToolDefinitionXSearchTest {
         assertTrue(properties.containsKey("query"), "Schema should have 'query' property")
         assertEquals("string", properties["query"]!!.jsonObject["type"]!!.jsonPrimitive.content)
 
-        val required = schema["required"]!!.jsonArray
-        assertTrue(required.any { it.jsonPrimitive.content == "query" }, "Query should be a required property")
+        val required = schema["required"]?.jsonArray
+        assertTrue(required == null || required.none { it.jsonPrimitive.content == "query" }, "Query should be an optional property")
     }
 
     @Test

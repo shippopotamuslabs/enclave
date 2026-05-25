@@ -20,12 +20,14 @@ class SearchToolPromptComposer
             coreMemories: List<Memory>,
             retrievedMemories: List<Memory>,
             retrievedSearchResults: String?,
+            retrievedXSearchResults: String?,
         ): String =
             listOfNotNull(
                 formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
                 formatRetrievedSearchResults(retrievedSearchResults).takeIf(String::isNotEmpty),
+                formatRetrievedXSearchResults(retrievedXSearchResults).takeIf(String::isNotEmpty),
                 catalogToolContract(
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
@@ -70,6 +72,15 @@ class SearchToolPromptComposer
                 return """
 # RELEVANT WEB SEARCH RESULTS:
 The following search results were automatically retrieved based on the user's query:
+$results
+                """.trimIndent()
+            }
+
+            private fun formatRetrievedXSearchResults(results: String?): String {
+                if (results.isNullOrBlank()) return ""
+                return """
+# RELEVANT X SEARCH RESULTS:
+The following X search results were automatically retrieved based on the user's query:
 $results
                 """.trimIndent()
             }
