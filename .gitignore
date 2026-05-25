@@ -59,8 +59,29 @@ golden-test-examples/
 *.so
 !core/agent/src/main/jniLibs/**/*.so
 
-# Python virtual environment for classifier training
+# Python (classifier training, eval scripts, tooling)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+
+# Search-intent / classifier training session artifacts
 scripts/.venv_classifier/
+scripts/.cache/
+scripts/search_intent_train/**/checkpoints/
+
+# Ad-hoc scratch notes at repo root (agent sessions, local experiments)
+/scratch*
+/scratch_*
+
+# Agent / CI session logs (not checked in; see AGENTS.md)
+lint_output.txt
+core_data_ksp_output.txt
+/*_ksp_output.txt
 
 PHASE_10_HANDOFF.md
 
@@ -103,6 +124,5 @@ functions/node_modules/
 .worktrees/
 
 node_modules/
-scripts/.cache/
 build_output.txt
 .antigravitycli/
