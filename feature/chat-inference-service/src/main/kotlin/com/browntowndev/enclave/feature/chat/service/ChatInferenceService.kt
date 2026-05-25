@@ -391,6 +391,11 @@ class ChatInferenceService : Service() {
                         is InferenceEvent.PreCompact -> null
                         is InferenceEvent.PostCompact -> null
                         is InferenceEvent.ToolRepaired -> null
+                        is InferenceEvent.TelemetryCaptured ->
+                            MessageGenerationState.TelemetryCaptured(
+                                telemetry = event.telemetry,
+                                modelType = event.modelType,
+                            )
                         is InferenceEvent.Finished -> {
                             maybeShowCompletionNotification(chatId)
                             MessageGenerationState.Finished(event.modelType)

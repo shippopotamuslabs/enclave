@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.model.chat
 
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 
 /**
  * Sealed interface for message generation states.
@@ -81,6 +82,11 @@ sealed interface MessageGenerationState {
         val modelDisplayName: String,
         val modelType: ModelType,
         val stepType: PipelineStep,
+    ) : MessageGenerationState
+
+    data class TelemetryCaptured(
+        val telemetry: TurnTelemetry,
+        val modelType: ModelType,
     ) : MessageGenerationState
 }
 

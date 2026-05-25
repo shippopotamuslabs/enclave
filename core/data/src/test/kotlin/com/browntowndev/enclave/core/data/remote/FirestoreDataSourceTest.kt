@@ -1096,6 +1096,29 @@ class FirestoreDataSourceTest {
             }
 
         @Test
+        fun `SCN-HYDRATION-001 replay resets stale cursor when Room is empty`() =
+            runTest {
+                val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
+                coEvery { chatDao.countActiveChats() } returns 0
+                val harness =
+                    EventFeedHarness(
+                        userId = "alice",
+                        vaultUnlocked = true,
+                        lastAppliedSequence = 500,
+                        chatDao = chatDao,
+                    )
+                harness.feedGateway.pages.add(
+                    listOf(syncEvent(1L, "chats", "chat-1")),
+                )
+
+                val replay = harness.dataSource.syncRemoteChangesFromCloud().getOrThrow()
+
+                assertEquals("sequence > 0", harness.feedGateway.fetchQueries.single().filter)
+                assertEquals(1, replay.eventsApplied)
+                assertEquals(1L, replay.lastAppliedSequence)
+            }
+
+        @Test
         fun `SCN-PURGE-001 purge detaches event listener`() =
             runTest {
                 val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 0)
@@ -1150,6 +1173,8 @@ class FirestoreDataSourceTest {
             userId: String,
             vaultUnlocked: Boolean,
             lastAppliedSequence: Long,
+            chatDao: com.browntowndev.enclave.core.data.local.ChatDao =
+                mockk(relaxed = true),
             eventDispatcher: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher =
                 RecordOnlyDispatcher(),
             syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore =
@@ -1168,6 +1193,7 @@ class FirestoreDataSourceTest {
                 dataSource =
                     createTestFirestoreDataSource(
                         firestore = firestore,
+                        chatDao = chatDao,
                         cryptoManager = cm,
                         userIdProvider = { userId },
                         externalScope = testScope,

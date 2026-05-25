@@ -116,6 +116,7 @@ internal fun MessageListItem(
                 onArtifactCardClick = callbacks.onArtifactCardClick,
                 onNavigateToStudio = callbacks.onNavigateToStudio,
                 onShareClick = callbacks.onShareClick,
+                onStatsClick = callbacks.onStatsClick,
             )
         }
     }

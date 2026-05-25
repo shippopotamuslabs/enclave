@@ -77,6 +77,7 @@ class AnalyzeImageUseCase
                                     is InferenceEvent.PreCompact -> Unit
                                     is InferenceEvent.PostCompact -> Unit
                                     is InferenceEvent.ToolRepaired -> Unit
+                                    is InferenceEvent.TelemetryCaptured -> Unit
                                     is InferenceEvent.Finished -> {
                                         loggingPort.info(
                                             TAG,

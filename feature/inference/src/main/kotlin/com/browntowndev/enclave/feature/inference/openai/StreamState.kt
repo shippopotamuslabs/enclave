@@ -54,6 +54,12 @@ data class StreamedOpenAiResponse(
     val assistantMessageText: String,
     val finishReason: String? = null,
     val providerReasoningContent: String? = null,
+    val inputTokens: Int? = null,
+    val outputTokens: Int? = null,
+    val reasoningTokens: Int? = null,
+    val cacheReadInputTokens: Int? = null,
+    val cacheWriteInputTokens: Int? = null,
+    val costUsd: java.math.BigDecimal? = null,
 ) {
     /** Single-call convenience: the first function call, or null if none. */
     val functionCall: ToolCallRequest? get() = functionCalls.firstOrNull()

@@ -6,6 +6,7 @@ import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
@@ -23,6 +24,7 @@ class ChatSyncDaos
         val messageFileDao: MessageFileDao,
         val messageVisionAnalysisDao: MessageVisionAnalysisDao,
         val messageTranscriptSegmentDao: MessageTranscriptSegmentDao,
+        val messageInferenceTelemetryDao: MessageInferenceTelemetryDao,
         val webSearchSourceDao: WebSearchSourceDao,
         val documentDao: DocumentDao,
         val embeddingDao: EmbeddingDao,

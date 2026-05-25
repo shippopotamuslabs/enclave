@@ -56,6 +56,8 @@ fun ChatScreen(
     onShareTurn: () -> Unit = {},
     onShareFullChat: () -> Unit = {},
     onDismissShareSheet: () -> Unit = {},
+    onStatsClick: (MessageId) -> Unit = {},
+    onViewChatStatsClick: () -> Unit = {},
 ) {
     StreamingResponseHapticEffect(
         hapticsEnabled = uiState.hapticResponse,
@@ -94,6 +96,7 @@ fun ChatScreen(
                 ChatTopBar(
                     onMenuClick = onNavigateToHistory,
                     onNewChatClick = onNewChat,
+                    onViewChatStatsClick = onViewChatStatsClick,
                 )
             },
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -127,6 +130,7 @@ fun ChatScreen(
                     onArtifactCardClick = onArtifactCardClick,
                     onNavigateToStudio = onNavigateToStudio,
                     onShareClick = onShareClick,
+                    onStatsClick = onStatsClick,
                 )
 
                 if (uiState.shieldReason != null) {

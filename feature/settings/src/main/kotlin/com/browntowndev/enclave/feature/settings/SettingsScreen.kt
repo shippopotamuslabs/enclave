@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
@@ -41,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -70,6 +72,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
@@ -103,6 +106,8 @@ fun SettingsScreen(
     onDeleteMemory: (String) -> Unit,
     onShowTosSheet: (Boolean) -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowUsageSpendSheet: (Boolean) -> Unit,
+    onUsageSpendPeriodChange: (UsagePeriodUi) -> Unit,
     onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
@@ -285,6 +290,12 @@ fun SettingsScreen(
                 NeoSectionHeader(text = "Data & Privacy")
                 NeoSettingsSection {
                     NeoNavRow(
+                        title = "Usage & Spend",
+                        icon = Icons.Default.BarChart,
+                        onClick = { onShowUsageSpendSheet(true) },
+                        modifier = Modifier.testTag("usage_spend_row"),
+                    )
+                    NeoNavRow(
                         title = "Memories",
                         icon = Icons.Default.SmartToy,
                         onClick = { onShowMemoriesSheet(true) },
@@ -442,6 +453,12 @@ fun SettingsScreen(
         if (uiState.home.isTosSheetOpen) {
             TosBottomSheet(onDismiss = { onShowTosSheet(false) })
         }
+
+        UsageSpendBottomSheet(
+            state = uiState.usageSpend,
+            onDismiss = { onShowUsageSpendSheet(false) },
+            onPeriodChange = onUsageSpendPeriodChange,
+        )
 
         when (val sheet = uiState.vaultReauthSheet) {
             VaultReauthSheetState.Hidden -> Unit
@@ -706,6 +723,8 @@ fun PreviewSettingsScreen() {
             onDeleteMemory = {},
             onShowTosSheet = {},
             onShowFeedbackSheet = {},
+            onShowUsageSpendSheet = {},
+            onUsageSpendPeriodChange = {},
             onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},

@@ -34,6 +34,7 @@ interface CleanupDao {
         deleteChats()
         deleteMessages()
         deleteMessageTranscriptSegments()
+        deleteMessageInferenceTelemetry()
         deleteChatSummaries()
         deleteMessageFiles()
         deleteDocuments()
@@ -62,6 +63,9 @@ interface CleanupDao {
 
     @Query("DELETE FROM message_transcript_segment")
     suspend fun deleteMessageTranscriptSegments()
+
+    @Query("DELETE FROM message_inference_telemetry")
+    suspend fun deleteMessageInferenceTelemetry()
 
     @Query("DELETE FROM chat_summary")
     suspend fun deleteChatSummaries()

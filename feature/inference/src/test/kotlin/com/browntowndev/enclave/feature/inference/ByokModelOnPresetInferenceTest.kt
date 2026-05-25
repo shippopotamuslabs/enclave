@@ -58,6 +58,7 @@ class ByokModelOnPresetInferenceTest {
                 toolExecutorPort = mockk(relaxed = true),
                 toolEnvelopeParserPort = com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort(),
                 toolStreamGatePort = com.browntowndev.enclave.domain.util.FakeToolStreamGatePort(),
+                telemetrySupport = testInferenceTelemetrySupport(),
             )
     }
 

@@ -11,6 +11,8 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDependen
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncHydrationRecovery
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreVaultClient
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
@@ -80,6 +82,12 @@ class FirestoreDataSource
                 listenerCoordinator = listenerCoordinator,
                 syncMutex = syncMutex,
             )
+        private val hydrationRecovery =
+            FirestoreSyncHydrationRecovery(
+                chatDao = syncContext.daos.chatDao,
+                syncStateStore = syncStateStore,
+                loggingPort = syncContext.loggingPort,
+            )
 
         override fun startListening() {
             listenerCoordinator.startListening()
@@ -96,6 +104,7 @@ class FirestoreDataSource
                     throw IllegalStateException("Vault locked")
                 }
                 eventApplyMutex.withLock {
+                    hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
                     val lastApplied = syncStateStore.lastAppliedSequence(userId)
                     val page = syncEventFeedClient.fetchNextPage(userId, lastApplied)
                     var applied = 0
@@ -111,6 +120,11 @@ class FirestoreDataSource
                     if (newLast > lastApplied) {
                         syncStateStore.setLastAppliedSequence(userId, newLast)
                     }
+                    syncContext.loggingPort.debug(
+                        FirestoreSyncContext.TAG,
+                        "syncRemoteChangesFromCloud: replay from sequence > $lastApplied, " +
+                            "fetched=${page.size}, applied=$applied, lastApplied=$newLast",
+                    )
                     CloudSyncEventReplayResult(
                         eventsApplied = applied,
                         lastAppliedSequence = newLast,

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.apter.robolectric.junit5)
 }
 
 android {
@@ -84,8 +85,10 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testImplementation(libs.apter.junit5.robolectric.extension)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(project(":core:testing"))
+    testImplementation(testFixtures(project(":core:domain")))
     testImplementation(libs.turbine)
 }

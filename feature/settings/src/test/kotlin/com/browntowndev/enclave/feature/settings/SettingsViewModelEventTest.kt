@@ -16,6 +16,7 @@ import com.browntowndev.enclave.domain.usecase.media.*
 import com.browntowndev.enclave.domain.usecase.modelconfig.*
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -171,7 +172,9 @@ class SettingsViewModelEventTest {
                         mediaProviderAssetUiMapper,
                         ApiDiscoveryUiFilter(),
                         applyApiModelMetadataDefaultsUseCase,
+                        UsageSpendUiMapper(),
                     ),
+                observeUsageSpendSummaryUseCase = testUsageSpendSummaryUseCase(),
                 generalDelegate = generalDelegate,
                 memoriesDelegate = memoriesDelegate,
                 dataControlsDelegate = dataControlsDelegate,

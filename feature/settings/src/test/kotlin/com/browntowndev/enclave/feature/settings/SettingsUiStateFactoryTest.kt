@@ -8,8 +8,12 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.mockk
+import java.math.BigDecimal
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -29,6 +33,7 @@ class SettingsUiStateFactoryTest {
                 mediaProviderAssetUiMapper = mockk(relaxed = true),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper = UsageSpendUiMapper(),
             )
     }
 
@@ -230,6 +235,16 @@ class SettingsUiStateFactoryTest {
         isReindexing = false,
         reindexProgress = 0f,
         vaultReauthSheet = VaultReauthSheetState.Hidden,
+        usageSpendSummary =
+            UsageSpendSummary(
+                period = UsagePeriod.LIFETIME,
+                periodStartUtcMs = null,
+                periodEndUtcMs = null,
+                totalCostUsd = BigDecimal.ZERO,
+                telemetryBackedTurnCount = 0,
+                missingCostTurnCount = 0,
+                providerBreakdown = emptyList(),
+            ),
     )
 
     // endregion

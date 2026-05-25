@@ -15,8 +15,10 @@ import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.SettingsData
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -27,6 +29,7 @@ internal data class SheetVisibilityState(
     val dataControls: Boolean = false,
     val memories: Boolean = false,
     val feedback: Boolean = false,
+    val usageSpend: Boolean = false,
     val visionSettings: Boolean = false,
     val searchSkill: Boolean = false,
     val tos: Boolean = false,
@@ -142,6 +145,7 @@ internal data class SettingsUiStateSources(
     val isReindexing: Flow<Boolean>,
     val reindexProgress: Flow<Float>,
     val vaultReauthSheet: StateFlow<VaultReauthSheetState>,
+    val usageSpendSummary: Flow<UsageSpendSummary>,
 )
 
 class SettingsUiStateFactory
@@ -153,13 +157,15 @@ class SettingsUiStateFactory
         private val mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
         private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
         private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+        private val usageSpendUiMapper: UsageSpendUiMapper,
     ) {
         internal fun observeUiState(sources: SettingsUiStateSources): Flow<SettingsUiState> =
             combine(
                 observeRepositorySlice(sources),
                 observeEditorSlice(sources),
                 observeSearchAndVaultSlice(sources),
-            ) { repository, editor, searchAndVault ->
+                sources.usageSpendSummary,
+            ) { repository, editor, searchAndVault, usageSpendSummary ->
                 create(
                     persistedSettings = repository.persistedSettings,
                     localAssets = repository.localAssets,
@@ -187,6 +193,7 @@ class SettingsUiStateFactory
                     isReindexing = searchAndVault.isReindexing,
                     reindexProgress = searchAndVault.reindexProgress,
                     vaultReauthSheet = searchAndVault.vaultReauthSheet,
+                    usageSpendSummary = usageSpendSummary,
                 )
             }
 
@@ -218,6 +225,7 @@ class SettingsUiStateFactory
             isReindexing: Boolean,
             reindexProgress: Float,
             vaultReauthSheet: VaultReauthSheetState,
+            usageSpendSummary: UsageSpendSummary,
         ): SettingsUiState {
             val localModels = localAssets.map(localModelAssetUiMapper::map)
             val refreshedSelectedLocalAsset =
@@ -398,6 +406,7 @@ class SettingsUiStateFactory
                         isDataControlsSheetOpen = sheetVisibility.dataControls,
                         isMemoriesSheetOpen = sheetVisibility.memories,
                         isFeedbackSheetOpen = sheetVisibility.feedback,
+                        isUsageSpendSheetOpen = sheetVisibility.usageSpend,
                         isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                         isTtsProvidersSheetOpen = ttsState.isSheetOpen,
                         isMediaProvidersSheetOpen = mediaState.isSheetOpen,
@@ -434,6 +443,11 @@ class SettingsUiStateFactory
                     FeedbackUiState(
                         isSheetOpen = sheetVisibility.feedback,
                         feedbackText = feedbackText,
+                    ),
+                usageSpend =
+                    usageSpendUiMapper.mapUsageSpend(
+                        summary = usageSpendSummary,
+                        isVisible = sheetVisibility.usageSpend,
                     ),
                 localModelsSheet =
                     LocalModelsSheetUiState(

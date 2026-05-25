@@ -268,6 +268,7 @@ class FakeChatRepository : ChatRepository {
         generatedMediaTypes: List<String>,
         generatedMediaPrompts: List<String>,
         transcriptSegments: List<MessageTranscriptSegment>,
+        telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry>,
     ) {
         persistedMessageData.add(
             PersistedMessageData(
@@ -287,6 +288,7 @@ class FakeChatRepository : ChatRepository {
                 generatedMediaTypes = generatedMediaTypes,
                 generatedMediaPrompts = generatedMediaPrompts,
                 transcriptSegments = transcriptSegments,
+                telemetry = telemetry,
             ),
         )
     }
@@ -315,6 +317,7 @@ class FakeChatRepository : ChatRepository {
         val generatedMediaTypes: List<String> = emptyList(),
         val generatedMediaPrompts: List<String> = emptyList(),
         val transcriptSegments: List<com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment> = emptyList(),
+        val telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry> = emptyList(),
     )
 
     override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {

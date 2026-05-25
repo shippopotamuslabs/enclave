@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.chat.*
 import com.browntowndev.enclave.domain.model.config.*
 import com.browntowndev.enclave.domain.model.inference.*
 import com.google.firebase.firestore.DocumentSnapshot
+import kotlinx.coroutines.tasks.await
 
 internal class LocalModelConfigSyncHandler(
     private val ctx: FirestoreSyncContext,
@@ -82,12 +83,17 @@ internal class LocalModelConfigSyncHandler(
         doc: DocumentSnapshot,
         overwrite: Boolean,
     ) {
-        val existingById = ctx.daos.localModelConfigurationsDao.getById(entity.id)
-        val existingByKey = ctx.daos.localModelConfigurationsDao.getByModelIdAndName(entity.localModelId, entity.displayName)
+        val entityWithResolvedModel = entity.copy(localModelId = resolveLocalModelId(entity.localModelId))
+        val existingById = ctx.daos.localModelConfigurationsDao.getById(entityWithResolvedModel.id)
+        val existingByKey =
+            ctx.daos.localModelConfigurationsDao.getByModelIdAndName(
+                entityWithResolvedModel.localModelId,
+                entityWithResolvedModel.displayName,
+            )
         val existing = existingById ?: existingByKey
 
-        if (existing == null || existing.id != entity.id || entity.updatedAt >= existing.updatedAt) {
-            val newEntity = entity.copy(id = existing?.id ?: entity.id, pendingSync = 0)
+        if (existing == null || existing.id != entityWithResolvedModel.id || entityWithResolvedModel.updatedAt >= existing.updatedAt) {
+            val newEntity = entityWithResolvedModel.copy(id = existing?.id ?: entityWithResolvedModel.id, pendingSync = 0)
             ctx.daos.localModelConfigurationsDao.upsert(newEntity)
         } else {
             ctx.loggingPort.debug(
@@ -99,5 +105,27 @@ internal class LocalModelConfigSyncHandler(
 
     override suspend fun deleteLocal(id: String) {
         ctx.daos.localModelConfigurationsDao.softDeleteById(LocalModelConfigurationId(id))
+    }
+
+    /**
+     * After a data wipe this device may register a model under a new Room id (sha256 dedup)
+     * while Firestore configs still reference the cloud document id in [local_model_id].
+     */
+    private suspend fun resolveLocalModelId(cloudModelId: LocalModelId): LocalModelId {
+        if (cloudModelId.value.isBlank() || ctx.daos.localModelsDao.getById(cloudModelId) != null) {
+            return cloudModelId
+        }
+        val userId = ctx.userIdProvider() ?: return cloudModelId
+        val snapshot =
+            ctx.firestore
+                .document("users/$userId/local_models/${cloudModelId.value}")
+                .get()
+                .await()
+        val sha256 =
+            snapshot
+                .takeIf { it.exists() }
+                ?.getString("sha256")
+                ?.takeIf { it.isNotBlank() }
+        return sha256?.let { ctx.daos.localModelsDao.getBySha256(it)?.id } ?: cloudModelId
     }
 }

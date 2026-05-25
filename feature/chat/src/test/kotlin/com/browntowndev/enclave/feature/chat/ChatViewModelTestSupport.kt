@@ -19,7 +19,12 @@ import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
+import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
+import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
+import kotlinx.coroutines.flow.flowOf
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ToolExecutionBannerCoordinator
@@ -136,6 +141,16 @@ object ChatViewModelTestSupport {
                 loggingPort = loggingPort,
             )
         val chatShareCoordinator = ChatShareCoordinator(shareChatUseCase = shareChatUseCase)
+        val observeMessageTelemetryUseCase = mockk<ObserveMessageTelemetryUseCase>()
+        val observeChatTelemetryUseCase = mockk<ObserveChatTelemetryUseCase>()
+        io.mockk.every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
+        io.mockk.every { observeChatTelemetryUseCase.invoke(any()) } returns flowOf()
+        val chatTelemetryCoordinator =
+            ChatTelemetryCoordinator(
+                observeMessageTelemetryUseCase = observeMessageTelemetryUseCase,
+                observeChatTelemetryUseCase = observeChatTelemetryUseCase,
+                mapper = ChatTelemetryUiMapper(),
+            )
         val chatUiStateReducer = ChatUiStateReducer(chatMessageUiMapper = chatMessageUiMapper)
         val photoAttachmentPolicyResolver =
             PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
@@ -160,6 +175,7 @@ object ChatViewModelTestSupport {
             toolExecutionBannerCoordinator = toolExecutionBannerCoordinator,
             artifactExportCoordinator = artifactExportCoordinator,
             chatShareCoordinator = chatShareCoordinator,
+            chatTelemetryCoordinator = chatTelemetryCoordinator,
             chatUiStateReducer = chatUiStateReducer,
             chatMessageUiMapper = chatMessageUiMapper,
             photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,

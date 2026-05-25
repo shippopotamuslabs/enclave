@@ -27,6 +27,7 @@ import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
+import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
 import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
@@ -67,7 +68,7 @@ import javax.inject.Inject
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class ChatViewModel
     @Inject
     constructor(
@@ -87,6 +88,7 @@ class ChatViewModel
         private val toolExecutionBannerCoordinator: ToolExecutionBannerCoordinator,
         private val artifactExportCoordinator: ArtifactExportCoordinator,
         private val chatShareCoordinator: ChatShareCoordinator,
+        private val chatTelemetryCoordinator: ChatTelemetryCoordinator,
         private val chatUiStateReducer: ChatUiStateReducer,
         private val chatMessageUiMapper: ChatMessageUiMapper,
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
@@ -347,6 +349,8 @@ class ChatViewModel
                 artifactExportCoordinator.artifactExportSheet,
                 _modelDisplayNames,
                 activeChatIdFlow,
+                chatTelemetryCoordinator.responseStatsSheet,
+                chatTelemetryCoordinator.chatStatsSheet,
             ) { args: Array<Any?> ->
                 val inputsWithPolicy = args[0] as UiInputsWithPolicy
                 val isBlocked = args[1] as Boolean
@@ -360,6 +364,10 @@ class ChatViewModel
                 val artifactExportSheet = args[9] as ArtifactExportSheetState
                 val modelDisplayNames = args[10] as Map<ModelType, String>
                 val chatId = args[UI_STATE_CHAT_ID_INDEX] as ChatId?
+                val responseStatsSheet =
+                    args[UI_STATE_RESPONSE_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
+                val chatStatsSheet =
+                    args[UI_STATE_CHAT_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ChatStatsSheetUiState
 
                 val inputs = inputsWithPolicy.inputs
                 val reduceResult =
@@ -397,7 +405,10 @@ class ChatViewModel
                         onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
                     )
                 }
-                reduceResult.uiState
+                reduceResult.uiState.copy(
+                    responseStatsSheet = responseStatsSheet,
+                    chatStatsSheet = chatStatsSheet,
+                )
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
@@ -653,6 +664,31 @@ class ChatViewModel
 
         fun onDismissShareSheet() = chatShareCoordinator.onDismissShareSheet()
 
+        fun onResponseStatsClick(messageId: MessageId) {
+            val snapshot = activeTurnSnapshotStateFlow.value.snapshot
+            val inMemoryRows =
+                snapshot
+                    ?.messages
+                    ?.get(messageId)
+                    ?.telemetryRows
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: snapshot?.messages?.values?.flatMap { it.telemetryRows }.orEmpty()
+            chatTelemetryCoordinator.onResponseStatsClick(
+                messageId = messageId,
+                inMemoryTelemetryRows = inMemoryRows,
+                scope = viewModelScope,
+            )
+        }
+
+        fun onChatStatsClick() {
+            val chatId = inferenceOrchestrator.currentChatId.value ?: initialChatId ?: return
+            chatTelemetryCoordinator.onChatStatsClick(chatId, viewModelScope)
+        }
+
+        fun dismissResponseStatsSheet() = chatTelemetryCoordinator.dismissResponseStats()
+
+        fun dismissChatStatsSheet() = chatTelemetryCoordinator.dismissChatStats()
+
         fun onLoadSharedChat(
             shareId: String,
             decryptionKey: String? = null,
@@ -712,6 +748,8 @@ class ChatViewModel
             private const val TAG = "ChatViewModel"
             private const val SUBSCRIBE_TIMEOUT_MS = 5000L
             private const val UI_STATE_CHAT_ID_INDEX = 11
+            private const val UI_STATE_RESPONSE_STATS_INDEX = 12
+            private const val UI_STATE_CHAT_STATS_INDEX = 13
             private const val SAVED_STATE_CHAT_ID_KEY = "chatId"
         }
     }

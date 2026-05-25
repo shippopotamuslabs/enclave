@@ -114,6 +114,7 @@ class OssLicensesBottomSheetTest {
                     mediaProviderAssetUiMapper = mockk(relaxed = true),
                     apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                     applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                    usageSpendUiMapper = com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper(),
                 )
         }
 
@@ -297,6 +298,16 @@ private fun SettingsUiStateFactory.createMinimal(sheetVisibility: SheetVisibilit
         isReindexing = false,
         reindexProgress = 0f,
         vaultReauthSheet = VaultReauthSheetState.Hidden,
+        usageSpendSummary =
+            com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary(
+                period = com.browntowndev.enclave.domain.model.telemetry.UsagePeriod.LIFETIME,
+                periodStartUtcMs = null,
+                periodEndUtcMs = null,
+                totalCostUsd = java.math.BigDecimal.ZERO,
+                telemetryBackedTurnCount = 0,
+                missingCostTurnCount = 0,
+                providerBreakdown = emptyList(),
+            ),
     )
 
 /**
@@ -463,7 +474,10 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                 mediaProviderAssetUiMapper,
                 ApiDiscoveryUiFilter(),
                 ApplyApiModelMetadataDefaultsUseCase(),
+                com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper(),
             ),
+        observeUsageSpendSummaryUseCase =
+            com.browntowndev.enclave.feature.settings.testUsageSpendSummaryUseCase(),
         generalDelegate = generalDelegate,
         memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler),
         dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler),

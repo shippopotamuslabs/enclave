@@ -62,6 +62,7 @@ class LlamaInferenceServiceImpl
         private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
         @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
         private val toolStreamGatePort: ToolStreamGatePort,
+        private val telemetrySupport: com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport? = null,
     ) : RustCompatibleInferenceService {
         companion object {
             private const val TAG = "LlamaInferenceService"
@@ -316,10 +317,27 @@ class LlamaInferenceServiceImpl
                 }
             }
             val rawText = buffered.fullText
+            val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
+            val captureContext = telemetrySupport?.captureContext(turnOptions)
+            val outputTokenEstimate =
+                rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport.localTurnTelemetry(
+                        context = captureContext,
+                        providerLabel = "LiteRT",
+                        modelLabel = turnOptions.modelId ?: "local",
+                        timing = timing,
+                        outputTokens = outputTokenEstimate,
+                    )
+                } else {
+                    null
+                }
             return AgentModelTurnResult(
                 assistantText = rawText.takeIf { it.isNotBlank() },
                 toolCalls = emptyList(),
                 finishReason = AgentFinishReason.Stop,
+                telemetry = telemetry,
             )
         }
 

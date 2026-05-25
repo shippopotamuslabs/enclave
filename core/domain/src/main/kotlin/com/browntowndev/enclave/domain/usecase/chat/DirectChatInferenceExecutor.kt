@@ -209,6 +209,15 @@ class DirectChatInferenceExecutor
 
                             is InferenceEvent.ToolRepaired -> Unit
 
+                            is InferenceEvent.TelemetryCaptured -> {
+                                emit(
+                                    MessageGenerationState.TelemetryCaptured(
+                                        telemetry = event.telemetry,
+                                        modelType = event.modelType,
+                                    ),
+                                )
+                            }
+
                             is InferenceEvent.Finished -> {
                                 emit(MessageGenerationState.Finished(event.modelType))
                             }

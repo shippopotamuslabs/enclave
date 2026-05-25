@@ -29,6 +29,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
@@ -55,11 +56,16 @@ class AnthropicInferenceServiceImpl(
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
+    private val telemetrySupport: InferenceTelemetrySupport? = null,
 ) : RustCompatibleInferenceService {
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
         val toolUse: CapturedToolUse?,
         val stopReason: String?,
+        val inputTokens: Int? = null,
+        val outputTokens: Int? = null,
+        val reasoningTokens: Int? = null,
+        val cacheCreationInputTokens: Int? = null,
     )
 
     private data class CapturedToolUse(
@@ -182,6 +188,8 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
+        val captureContext = telemetrySupport?.captureContext(options)
         val lastUserIndex = sessionMessages.indexOfLast { msg ->
             msg.role == Role.USER && run {
                 val meta = msg.metadataJson
@@ -410,6 +418,7 @@ class AnthropicInferenceServiceImpl(
             streamMessages(builder.build()) { event ->
                 when (event) {
                     is InferenceEvent.PartialResponse -> {
+                        timing?.markFirstOutput()
                         accumulatedText.append(event.chunk)
                         onTextToken(event.chunk)
                     }
@@ -424,6 +433,22 @@ class AnthropicInferenceServiceImpl(
             } ?: emptyList()
         val bufferedText = accumulatedText.toString()
 
+        val telemetry =
+            if (telemetrySupport != null && timing != null && captureContext != null) {
+                telemetrySupport.anthropicTurnTelemetry(
+                    context = captureContext,
+                    modelId = modelId,
+                    modelLabel = modelId,
+                    timing = timing,
+                    inputTokens = response.inputTokens,
+                    outputTokens = response.outputTokens,
+                    reasoningTokens = response.reasoningTokens,
+                    cacheCreationInputTokens = response.cacheCreationInputTokens,
+                )
+            } else {
+                null
+            }
+
         return AgentModelTurnResult(
             assistantText = bufferedText.takeIf { it.isNotBlank() },
             toolCalls = toolCalls,
@@ -435,6 +460,7 @@ class AnthropicInferenceServiceImpl(
                         ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
                         ?: AgentFinishReason.Stop
                 },
+            telemetry = telemetry,
         )
     }
 
@@ -554,10 +580,22 @@ class AnthropicInferenceServiceImpl(
             var thinkingTextDeltaCount = 0
             var stopReason: String? = null
             var toolUseIndex: Long? = null
+            var inputTokens: Int? = null
+            var outputTokens: Int? = null
+            var reasoningTokens: Int? = null
+            var cacheCreationInputTokens: Int? = null
             val pendingToolUses = mutableMapOf<Long, PendingToolUse>()
 
             while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
                 val event = runInterruptible { iterator.next() }
+                if (event.messageStart().isPresent) {
+                    val usage = event.messageStart().get().message().usage()
+                    inputTokens = usage.inputTokens().toInt()
+                    outputTokens = usage.outputTokens().toInt()
+                    reasoningTokens = null
+                    cacheCreationInputTokens =
+                        usage.cacheCreationInputTokens().orElse(0L).toInt().takeIf { it > 0 }
+                }
                 val contentBlockStart = event.contentBlockStart()
                 if (contentBlockStart.isPresent) {
                     val startEvent = contentBlockStart.get()
@@ -657,6 +695,10 @@ class AnthropicInferenceServiceImpl(
                 emittedAny = emittedAny,
                 toolUse = capturedToolUse,
                 stopReason = stopReason,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                reasoningTokens = reasoningTokens,
+                cacheCreationInputTokens = cacheCreationInputTokens,
             )
         }
     }

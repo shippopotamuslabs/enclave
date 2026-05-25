@@ -92,6 +92,7 @@ class RustLoopInferenceService(
                 val config = buildAgentLoopConfig(options)
                 val assistantText = StringBuilder()
 
+                var telemetrySequenceIndex = 0
                 val host =
                     object : AgentLoopHostCallbacks {
                         override suspend fun completeModelTurn(
@@ -106,31 +107,43 @@ class RustLoopInferenceService(
                             cacheHints: List<String>,
                             onTextToken: suspend (String) -> Unit,
                             onThinkingToken: suspend (String) -> Unit,
-                        ): AgentModelTurnResult =
-                            inner.completeSingleTurn(
-                                sessionMessages = sessionMessages,
-                                systemPrompt = systemPrompt,
-                                contextSidecars = buildContextSidecars(
-                                    contextReferences = contextReferences,
-                                    stateLedgerJson = stateLedgerJson,
-                                    toolContextIndexJson = toolContextIndexJson,
-                                    fileContextIndexJson = fileContextIndexJson,
-                                    cacheHints = cacheHints,
-                                ),
-                                // Keep the full tool list in the request payload for cache stability;
-                                // outer allowToolCall still drives provider toolChoice/toolConfig NONE.
-                                availableTools =
-                                    toolsForRequest(
-                                        toolsSchemaJson = toolsSchemaJson,
+                        ): AgentModelTurnResult {
+                            val turnOptions =
+                                options.copy(
+                                    assistantMessageId = options.assistantMessageId,
+                                    chatId = options.chatId,
+                                )
+                            val result =
+                                inner.completeSingleTurn(
+                                    sessionMessages = sessionMessages,
+                                    systemPrompt = systemPrompt,
+                                    contextSidecars = buildContextSidecars(
+                                        contextReferences = contextReferences,
+                                        stateLedgerJson = stateLedgerJson,
                                         toolContextIndexJson = toolContextIndexJson,
-                                        eligibleTools = eligibleToolPool(options),
-                                        allowToolCall = true,
+                                        fileContextIndexJson = fileContextIndexJson,
+                                        cacheHints = cacheHints,
                                     ),
-                                allowToolCall = allowToolCall,
-                                onTextToken = onTextToken,
-                                onThinkingToken = onThinkingToken,
-                                options = options,
-                            )
+                                    // Keep the full tool list in the request payload for cache stability;
+                                    // outer allowToolCall still drives provider toolChoice/toolConfig NONE.
+                                    availableTools =
+                                        toolsForRequest(
+                                            toolsSchemaJson = toolsSchemaJson,
+                                            toolContextIndexJson = toolContextIndexJson,
+                                            eligibleTools = eligibleToolPool(options),
+                                            allowToolCall = true,
+                                        ),
+                                    allowToolCall = allowToolCall,
+                                    onTextToken = onTextToken,
+                                    onThinkingToken = onThinkingToken,
+                                    options = turnOptions,
+                                )
+                            result.telemetry?.let { telemetry ->
+                                send(InferenceEvent.TelemetryCaptured(telemetry, modelType))
+                            }
+                            telemetrySequenceIndex++
+                            return result
+                        }
 
                         override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
                             coroutineScope {
