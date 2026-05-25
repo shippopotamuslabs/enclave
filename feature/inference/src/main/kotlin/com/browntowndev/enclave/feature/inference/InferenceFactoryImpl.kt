@@ -232,7 +232,7 @@ class InferenceFactoryImpl
                                     )
                                 val sdkClient =
                                     GoogleGenAiSdkClientImpl(
-                                        modelsApiProvider = { client.models },
+                                        clientProvider = { client },
                                         modelType = modelType,
                                         loggingPort = loggingPort,
                                     )
@@ -357,7 +357,7 @@ class InferenceFactoryImpl
                                         )
                                     val sdkClient =
                                         GoogleGenAiSdkClientImpl(
-                                            modelsApiProvider = { client.models },
+                                            clientProvider = { client },
                                             modelType = modelType,
                                             loggingPort = loggingPort,
                                         )

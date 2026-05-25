@@ -89,9 +89,11 @@ abstract class BaseOpenAiSdkInferenceService(
         conversationHistory.clear()
     }
 
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
@@ -111,16 +113,28 @@ abstract class BaseOpenAiSdkInferenceService(
             imageUris = imageUris,
             imageTargetIndex = lastUserIndex,
         )
-        val messages =
-            if (systemPrompt.isNotBlank() && mappedMessages.none { it.isSystem() }) {
-                val systemMessage =
-                    ChatCompletionMessageParam.ofSystem(
-                        ChatCompletionSystemMessageParam.builder().content(systemPrompt).build(),
-                    )
-                listOf(systemMessage) + mappedMessages
+        
+        var messages = mappedMessages
+        if (systemPrompt.isNotBlank() && messages.none { it.isSystem() }) {
+            val systemMessage =
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam.builder().content(systemPrompt).build(),
+                )
+            messages = listOf(systemMessage) + messages
+        }
+
+        if (!contextSidecars.isNullOrBlank()) {
+            val sidecarMessage =
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam.builder().content(contextSidecars).build(),
+                )
+            messages = if (messages.isNotEmpty()) {
+                messages.subList(0, messages.size - 1) + listOf(sidecarMessage) + listOf(messages.last())
             } else {
-                mappedMessages
+                listOf(sidecarMessage)
             }
+        }
+
         val requestModelId = options.modelId ?: modelId
         val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
 
@@ -130,9 +144,17 @@ abstract class BaseOpenAiSdkInferenceService(
                 .model(requestModelId)
                 .messages(messages)
 
-        if (allowToolCall && availableTools.isNotEmpty() && supportsClientTools(requestModelId)) {
+        val toolsAvailable = availableTools.isNotEmpty() && supportsClientTools(requestModelId)
+        if (toolsAvailable) {
             availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
             builder.parallelToolCalls(false)
+            if (!allowToolCall) {
+                val noneChoice = com.openai.models.chat.completions
+                    .ChatCompletionToolChoiceOption.ofAuto(
+                        com.openai.models.chat.completions.ChatCompletionToolChoiceOption.Auto.NONE
+                    )
+                builder.toolChoice(noneChoice)
+            }
         }
 
         if (parameterSupport?.supportsReasoningEffort != false) {

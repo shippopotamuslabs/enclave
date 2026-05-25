@@ -27,6 +27,7 @@ interface RustCompatibleInferenceService : LlmInferencePort {
     suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String? = null,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,

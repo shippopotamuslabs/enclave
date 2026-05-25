@@ -12,6 +12,9 @@ import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
 import com.anthropic.models.messages.ToolResultBlockParam
 import com.anthropic.models.messages.ToolUseBlockParam
+import com.anthropic.models.messages.CacheControlEphemeral
+import com.anthropic.models.messages.ToolChoice
+import com.anthropic.models.messages.ToolChoiceNone
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
@@ -172,27 +175,13 @@ class AnthropicInferenceServiceImpl(
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val builder =
-            MessageCreateParams
-                .builder()
-                .model(modelId)
-                .maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
-
-        systemPrompt.takeIf { it.isNotBlank() }?.let { builder.system(it) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-
-        resolveThinkingBudget(options)?.let {
-            builder.thinking(ThinkingConfigEnabled.builder().budgetTokens(it).build())
-        }
-
-        val imageUris = options.imageUris.take(20)
         val lastUserIndex = sessionMessages.indexOfLast { msg ->
             msg.role == Role.USER && run {
                 val meta = msg.metadataJson
@@ -200,6 +189,47 @@ class AnthropicInferenceServiceImpl(
                 val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
                 obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
             }
+        }
+        val imageUris = options.imageUris.take(20)
+        val builder =
+            MessageCreateParams
+                .builder()
+                .model(options.modelId ?: modelId)
+
+        if (!options.maxTokensDisabled) {
+            options.maxTokens?.let { builder.maxTokens(it.toLong()) } ?: builder.maxTokens(DEFAULT_MAX_TOKENS)
+        } else {
+            builder.maxTokens(DEFAULT_MAX_TOKENS)
+        }
+
+        if (!options.temperatureDisabled) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.topKDisabled) {
+            options.topK?.let { builder.topK(it.toLong()) }
+        }
+
+        resolveThinkingBudget(options)?.let {
+            builder.thinking(
+                ThinkingConfigEnabled
+                    .builder()
+                    .budgetTokens(it)
+                    .build(),
+            )
+        }
+
+        val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
+        val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
+
+        if (systemPrompt.isNotBlank()) {
+            val systemBlockBuilder = TextBlockParam.builder().text(systemPrompt)
+            if (useCaching) {
+                systemBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+            }
+            builder.systemOfTextBlockParams(listOf(systemBlockBuilder.build()))
         }
 
         sessionMessages.forEachIndexed { index, msg ->
@@ -209,17 +239,30 @@ class AnthropicInferenceServiceImpl(
                 } else {
                     null
                 }
+            val attachCacheBreakpoint =
+                useCaching &&
+                    AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
+
+            val messageContent = if (index == lastUserIndex && !contextSidecars.isNullOrBlank()) {
+                "$contextSidecars\n\n${msg.content}"
+            } else {
+                msg.content
+            }
 
             when (msg.role) {
-                Role.SYSTEM -> {} // already in systemPrompt param
+                Role.SYSTEM -> {} // systemPrompt mapped above
                 Role.USER -> {
                     val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
                     if (!attachImages) {
+                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                        if (attachCacheBreakpoint) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
                         builder.addMessage(
                             MessageParam
                                 .builder()
                                 .role(MessageParam.Role.USER)
-                                .content(msg.content)
+                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
                                 .build(),
                         )
                     } else {
@@ -246,8 +289,12 @@ class AnthropicInferenceServiceImpl(
                                 ),
                             )
                         }
+                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                        if (attachCacheBreakpoint) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
                         contentBlocks.add(
-                            ContentBlockParam.ofText(TextBlockParam.builder().text(msg.content).build()),
+                            ContentBlockParam.ofText(textBlockBuilder.build()),
                         )
                         builder.addMessage(
                             MessageParam
@@ -260,30 +307,32 @@ class AnthropicInferenceServiceImpl(
                 }
                 Role.ASSISTANT -> {
                     if (msg.id.startsWith("compact-summary-")) {
+                        val textBlockBuilder = TextBlockParam.builder().text("[Conversation summary]\n$messageContent")
+                        if (attachCacheBreakpoint) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
                         builder.addMessage(
                             MessageParam
                                 .builder()
                                 .role(MessageParam.Role.USER)
-                                .content("[Conversation summary]\n${msg.content}")
+                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
                                 .build(),
                         )
                         return@forEachIndexed
                     }
                     val callId = metadata?.get("call_id")?.jsonPrimitive?.content
                     if (callId != null) {
+                        val toolResultBuilder = ToolResultBlockParam.builder().toolUseId(callId).content(messageContent)
+                        if (attachCacheBreakpoint) {
+                            toolResultBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
                         builder.addMessage(
                             MessageParam
                                 .builder()
                                 .role(MessageParam.Role.USER)
                                 .contentOfBlockParams(
                                     listOf(
-                                        ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam
-                                                .builder()
-                                                .toolUseId(callId)
-                                                .content(msg.content)
-                                                .build(),
-                                        ),
+                                        ContentBlockParam.ofToolResult(toolResultBuilder.build()),
                                     ),
                                 ).build(),
                         )
@@ -291,28 +340,39 @@ class AnthropicInferenceServiceImpl(
                     }
                     val rawCalls = metadata?.get("raw_tool_calls")
                     val contentBlocks = mutableListOf<ContentBlockParam>()
-                    if (msg.content.isNotBlank()) {
-                        contentBlocks.add(ContentBlockParam.ofText(TextBlockParam.builder().text(msg.content).build()))
+                    if (messageContent.isNotBlank()) {
+                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                        val isTextLastBlock =
+                            attachCacheBreakpoint &&
+                                (rawCalls == null || rawCalls !is JsonArray || rawCalls.isEmpty())
+                        if (isTextLastBlock) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
+                        contentBlocks.add(ContentBlockParam.ofText(textBlockBuilder.build()))
                     }
                     if (rawCalls is JsonArray) {
-                        rawCalls.forEach { tc ->
-                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
-                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
+                        rawCalls.forEachIndexed { tcIndex, tc ->
+                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEachIndexed
+                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEachIndexed
                             val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
                             val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-                            contentBlocks.add(
-                                ContentBlockParam.ofToolUse(
-                                    ToolUseBlockParam
+                            
+                            val toolUseBuilder = ToolUseBlockParam
+                                .builder()
+                                .id(rawCallId)
+                                .name(callName)
+                                .input(
+                                    ToolUseBlockParam.Input
                                         .builder()
-                                        .id(rawCallId)
-                                        .name(callName)
-                                        .input(
-                                            ToolUseBlockParam.Input
-                                                .builder()
-                                                .putAllAdditionalProperties(toolUseInputProperties(argsJson))
-                                                .build(),
-                                        ).build(),
-                                ),
+                                        .putAllAdditionalProperties(toolUseInputProperties(argsJson))
+                                        .build(),
+                                )
+                            val isToolUseLastBlock = attachCacheBreakpoint && (tcIndex == rawCalls.size - 1)
+                            if (isToolUseLastBlock) {
+                                toolUseBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            contentBlocks.add(
+                                ContentBlockParam.ofToolUse(toolUseBuilder.build()),
                             )
                         }
                     }
@@ -329,8 +389,20 @@ class AnthropicInferenceServiceImpl(
             }
         }
 
-        if (allowToolCall && availableTools.isNotEmpty()) {
-            availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        if (availableTools.isNotEmpty()) {
+            availableTools.forEachIndexed { idx, toolDef ->
+                val isLast = idx == availableTools.size - 1
+                val cacheControl =
+                    if (useCaching && isLast) {
+                        AnthropicPromptCacheSupport.ephemeralCacheControl()
+                    } else {
+                        null
+                    }
+                builder.addTool(toolDef.toAnthropicTool(cacheControl))
+            }
+            if (!allowToolCall) {
+                builder.toolChoice(ToolChoice.ofNone(ToolChoiceNone.builder().build()))
+            }
         }
 
         val accumulatedText = StringBuilder()

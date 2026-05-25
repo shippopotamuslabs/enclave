@@ -86,6 +86,15 @@ object ApiProviderModelPolicy {
 
     fun isOpenAiReasoningModel(modelId: String): Boolean = modelId.startsWith("o1") || modelId.startsWith("o3")
 
+    /**
+     * Anthropic ephemeral prompt-cache breakpoints are only valid on documented Claude 3.5+ / 3.7 / 4 families.
+     * Strips an optional `anthropic/` OpenRouter-style prefix before matching.
+     */
+    fun supportsAnthropicPromptCaching(modelId: String): Boolean {
+        val normalized = modelId.substringAfter('/').lowercase()
+        return ANTHROPIC_PROMPT_CACHE_MODEL_PREFIXES.any { normalized.startsWith(it) }
+    }
+
     fun parameterSupport(
         provider: ApiProvider,
         modelId: String,
@@ -215,4 +224,22 @@ object ApiProviderModelPolicy {
     private fun String.matchesXaiGrok420Family(): Boolean = startsWith("grok-4.20-")
 
     private fun String.matchesXaiChatReasoningContentModel(): Boolean = matchesXaiGrok3Mini() || startsWith("grok-code-fast-1")
+
+    /**
+     * Prefixes for model IDs that support Anthropic `cache_control` (see Anthropic prompt caching docs).
+     * Date-suffixed snapshot IDs (e.g. `claude-sonnet-4-20250514`) match via prefix.
+     */
+    private val ANTHROPIC_PROMPT_CACHE_MODEL_PREFIXES =
+        listOf(
+            "claude-sonnet-4-",
+            "claude-opus-4-",
+            "claude-haiku-4-",
+            "claude-3-7-sonnet-",
+            "claude-3-5-sonnet-",
+            "claude-3-5-haiku-",
+            "claude-3-opus-",
+            "claude-3-sonnet-20240229",
+            "claude-3-sonnet-20241022",
+            "claude-3-haiku-20240307",
+        )
 }

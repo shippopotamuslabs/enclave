@@ -109,20 +109,22 @@ class RustLoopInferenceService(
                         ): AgentModelTurnResult =
                             inner.completeSingleTurn(
                                 sessionMessages = sessionMessages,
-                                systemPrompt =
-                                    systemPrompt.withContextSidecars(
-                                        contextReferences = contextReferences,
-                                        stateLedgerJson = stateLedgerJson,
-                                        toolContextIndexJson = toolContextIndexJson,
-                                        fileContextIndexJson = fileContextIndexJson,
-                                        cacheHints = cacheHints,
-                                    ),
+                                systemPrompt = systemPrompt,
+                                contextSidecars = buildContextSidecars(
+                                    contextReferences = contextReferences,
+                                    stateLedgerJson = stateLedgerJson,
+                                    toolContextIndexJson = toolContextIndexJson,
+                                    fileContextIndexJson = fileContextIndexJson,
+                                    cacheHints = cacheHints,
+                                ),
+                                // Keep the full tool list in the request payload for cache stability;
+                                // outer allowToolCall still drives provider toolChoice/toolConfig NONE.
                                 availableTools =
                                     toolsForRequest(
                                         toolsSchemaJson = toolsSchemaJson,
                                         toolContextIndexJson = toolContextIndexJson,
                                         eligibleTools = eligibleToolPool(options),
-                                        allowToolCall = allowToolCall,
+                                        allowToolCall = true,
                                     ),
                                 allowToolCall = allowToolCall,
                                 onTextToken = onTextToken,
@@ -175,6 +177,7 @@ class RustLoopInferenceService(
                                             .completeSingleTurn(
                                                 sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
                                                 systemPrompt = "",
+                                                contextSidecars = null,
                                                 availableTools = emptyList(),
                                                 allowToolCall = false,
                                                 onTextToken = {},
@@ -271,6 +274,7 @@ class RustLoopInferenceService(
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
@@ -280,6 +284,7 @@ class RustLoopInferenceService(
         inner.completeSingleTurn(
             sessionMessages = sessionMessages,
             systemPrompt = systemPrompt,
+            contextSidecars = contextSidecars,
             availableTools = availableTools,
             allowToolCall = allowToolCall,
             onTextToken = onTextToken,
@@ -561,39 +566,36 @@ class RustLoopInferenceService(
             }
         }
 
-    private fun String.withContextSidecars(
+    private fun buildContextSidecars(
         contextReferences: List<AgentContextReference>,
         stateLedgerJson: String?,
         toolContextIndexJson: String?,
         fileContextIndexJson: String?,
         cacheHints: List<String>,
-    ): String {
+    ): String? {
         val jsonSidecars = listOfNotNull(stateLedgerJson, toolContextIndexJson, fileContextIndexJson)
         if (contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()) {
-            return this
+            return null
         }
 
-        val contextBlock =
-            buildString {
-                appendLine(this@withContextSidecars)
-                appendLine()
-                appendLine("Context management sidecars:")
-                if (contextReferences.isNotEmpty()) {
-                    appendLine("References:")
-                    contextReferences.forEach { reference ->
-                        appendLine(
-                            "- ${reference.kind} ${reference.id}: " +
-                                "${reference.title}. ${reference.retrievalHint}",
-                        )
-                    }
+        return buildString {
+            appendLine("Context management sidecars:")
+            if (contextReferences.isNotEmpty()) {
+                appendLine("References:")
+                contextReferences.forEach { reference ->
+                    appendLine(
+                        "- ${reference.kind} ${reference.id}: " +
+                            "${reference.title}. ${reference.retrievalHint}",
+                    )
                 }
-                stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
-                toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
-                fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
-                if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
             }
-        return contextBlock.trimEnd()
+            stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
+            toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
+            fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
+            if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
+        }.trimEnd()
     }
+
 
     private fun AgentLoopMessage.toChatMessage(): ChatMessage = ChatMessage(role = role, content = content)
 
