@@ -30,6 +30,7 @@ private data class XTweet(
     val text: String,
     val author_id: String? = null,
     val created_at: String? = null,
+    val conversation_id: String? = null,
     val public_metrics: XPublicMetrics? = null,
     val attachments: XAttachments? = null,
     val entities: XEntities? = null,
@@ -37,7 +38,7 @@ private data class XTweet(
 )
 
 @Serializable
-private data class XPublicMetrics(
+data class XPublicMetrics(
     val retweet_count: Int = 0,
     val reply_count: Int = 0,
     val like_count: Int = 0,
@@ -89,7 +90,7 @@ private data class XUser(
 )
 
 @Serializable
-private data class XMedia(
+data class XMedia(
     val media_key: String,
     val type: String,
     val url: String? = null,
@@ -103,7 +104,7 @@ private data class XMeta(
 )
 
 @Serializable
-private data class XPost(
+data class XPost(
     val id: String,
     val text: String,
     val author_id: String? = null,
@@ -115,6 +116,23 @@ private data class XPost(
     val urls: List<String>? = null,
     val type: String? = null,
     val impact_score: Double = 0.0,
+)
+
+@Serializable
+data class XTrendItem(
+    val trend_name: String,
+    val tweet_count: Int? = null,
+)
+
+@Serializable
+data class XTrendsResponse(
+    val data: List<XTrendItem>,
+)
+
+@Serializable
+data class XSearchPaginatedResult(
+    val data: List<XPost>,
+    val next_token: String? = null,
 )
 
 @Singleton
@@ -151,8 +169,8 @@ class XSearchRepository
             private const val MAX_HASHTAGS = 3
             private const val MAX_CASHTAGS = 2
             private const val MIN_TEXT_DEDUPE_LENGTH = 10
-            private const val MAX_POSTS_PER_AUTHOR = 2
-            private const val MAX_TOTAL_POSTS = 12
+            const val MAX_POSTS_PER_AUTHOR = 2
+            const val MAX_TOTAL_POSTS = 12
 
             private const val IMPRESSION_THRESHOLD = 1000
             private const val MIN_ENGAGEMENT_SCORE = 0.05
@@ -163,20 +181,12 @@ class XSearchRepository
             val timestamp: Long,
         )
 
-        fun search(
+        private fun fetchRecentSearchRaw(
             query: String,
             sortOrder: String = "relevancy",
+            nextToken: String? = null,
+            apiKey: String
         ): String {
-            val normalizedQuery = query.trim().lowercase()
-            val cached = cache[normalizedQuery]
-            if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) {
-                return mapResponse(cached.body)
-            }
-
-            val apiKey =
-                apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
-                    ?: throw IllegalStateException("X API key is required when X search is enabled")
-
             val filters = listOf("-is:retweet", "-is:nullcast")
             var refinedQuery = query
             filters.forEach { filter ->
@@ -185,37 +195,120 @@ class XSearchRepository
                 }
             }
 
-            val url =
-                SEARCH_URL
-                    .toHttpUrl()
-                    .newBuilder()
-                    .addQueryParameter("query", refinedQuery)
-                    .addQueryParameter("max_results", "100")
-                    .addQueryParameter("sort_order", sortOrder)
-                    .addQueryParameter("tweet.fields", "public_metrics,created_at,author_id,entities,referenced_tweets")
-                    .addQueryParameter("expansions", "author_id,attachments.media_keys")
-                    .addQueryParameter("user.fields", "name,username,verified,public_metrics")
-                    .addQueryParameter("media.fields", "type,url,alt_text")
-                    .build()
+            val urlBuilder = SEARCH_URL
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("query", refinedQuery)
+                .addQueryParameter("max_results", "100")
+                .addQueryParameter("sort_order", sortOrder)
+                .addQueryParameter("tweet.fields", "public_metrics,created_at,author_id,entities,referenced_tweets")
+                .addQueryParameter("expansions", "author_id,attachments.media_keys")
+                .addQueryParameter("user.fields", "name,username,verified,public_metrics")
+                .addQueryParameter("media.fields", "type,url,alt_text")
 
-            val request =
-                Request
-                    .Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $apiKey")
-                    .get()
-                    .build()
+            if (nextToken != null) {
+                urlBuilder.addQueryParameter("next_token", nextToken)
+            }
+
+            val request = Request.Builder()
+                .url(urlBuilder.build())
+                .header("Authorization", "Bearer $apiKey")
+                .get()
+                .build()
 
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val errorBody = response.body.string()
                     throw IOException("X request failed with HTTP ${response.code}: $errorBody")
                 }
-
-                val body = response.body.string()
-                cache[normalizedQuery] = CachedResponse(body, System.currentTimeMillis())
-                return mapResponse(body)
+                return response.body.string()
             }
+        }
+
+        fun searchPaginated(
+            query: String,
+            sortOrder: String = "relevancy",
+            maxPostsPerAuthor: Int = MAX_POSTS_PER_AUTHOR,
+            maxTotalPosts: Int = MAX_TOTAL_POSTS,
+            nextToken: String? = null,
+        ): XSearchPaginatedResult {
+            val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
+                ?: throw IllegalStateException("X API key is required when X search is enabled")
+
+            val cacheKey = "${query.trim().lowercase()}|$sortOrder|${nextToken ?: ""}"
+            val cached = cache[cacheKey]
+            val body = if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) {
+                cached.body
+            } else {
+                val responseBody = fetchRecentSearchRaw(query, sortOrder, nextToken, apiKey)
+                cache[cacheKey] = CachedResponse(responseBody, System.currentTimeMillis())
+                responseBody
+            }
+
+            val response = json.decodeFromString<XSearchResponse>(body)
+            val tweets = response.data ?: return XSearchPaginatedResult(emptyList(), null)
+
+            val usersMap = response.includes?.users?.associateBy { it.id } ?: emptyMap()
+            val mediaMap = response.includes?.media?.associateBy { it.media_key } ?: emptyMap()
+
+            val seenTexts = mutableSetOf<String>()
+            val now = Instant.now()
+
+            val posts = tweets.mapNotNull { tweet ->
+                val text = tweet.text
+                val metrics = tweet.public_metrics
+                val user = usersMap[tweet.author_id]
+
+                val engagementScore = calculateEngagementScore(metrics)
+
+                if (isSpam(text, metrics, engagementScore)) return@mapNotNull null
+
+                val normalized = normalizeText(text)
+                if (normalized.length >= MIN_TEXT_DEDUPE_LENGTH && !seenTexts.add(normalized)) {
+                    return@mapNotNull null
+                }
+
+                val impactScore = calculateImpactScore(tweet, user, engagementScore, now)
+
+                val media = tweet.attachments?.media_keys?.mapNotNull { mediaMap[it] }
+                val urls = tweet.entities?.urls?.map { it.expanded_url }
+                val type = tweet.referenced_tweets?.firstOrNull()?.type
+                val username = user?.username ?: "i"
+
+                XPost(
+                    id = tweet.id,
+                    text = tweet.text,
+                    author_id = tweet.author_id,
+                    user_name = user?.name ?: username,
+                    url = "https://x.com/$username/status/${tweet.id}",
+                    created_at = tweet.created_at,
+                    metrics = metrics,
+                    media = media,
+                    urls = urls,
+                    type = type,
+                    impact_score = impactScore,
+                )
+            }.sortedByDescending { it.impact_score }
+
+            val distinctPosts = mutableListOf<XPost>()
+            val authorCounts = mutableMapOf<String, Int>()
+
+            for (post in posts) {
+                val authorId = post.author_id ?: "unknown"
+                val count = authorCounts.getOrDefault(authorId, 0)
+                if (count < maxPostsPerAuthor) {
+                    distinctPosts.add(post)
+                    authorCounts[authorId] = count + 1
+                }
+                if (distinctPosts.size >= maxTotalPosts) break
+            }
+
+            return XSearchPaginatedResult(distinctPosts, response.meta?.next_token)
+        }
+
+        fun search(query: String, sortOrder: String = "relevancy"): String {
+            val result = searchPaginated(query, sortOrder, MAX_POSTS_PER_AUTHOR, MAX_TOTAL_POSTS, null)
+            return json.encodeToString(result.data)
         }
 
         private fun normalizeText(text: String): String {
@@ -361,4 +454,191 @@ class XSearchRepository
 
             return json.encodeToString(distinctPosts)
         }
+
+    fun getThread(tweetUrlOrId: String): String {
+        val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
+            ?: throw IllegalStateException("X API key is required when X search is enabled")
+
+        val tweetId = if (tweetUrlOrId.startsWith("http://") || tweetUrlOrId.startsWith("https://")) {
+            tweetUrlOrId.substringAfter("/status/").substringBefore("?").substringBefore("/")
+        } else {
+            tweetUrlOrId
+        }.trim()
+
+        val targetResponse = fetchTweetsByIds(listOf(tweetId), apiKey)
+        val targetTweet = targetResponse.data?.firstOrNull()
+            ?: throw IOException("Tweet not found or inaccessible")
+
+        val conversationId = targetTweet.conversation_id
+        val allTweets = mutableListOf<XTweet>()
+        val allUsers = mutableListOf<XUser>()
+        val allMedia = mutableListOf<XMedia>()
+
+        allTweets.add(targetTweet)
+        targetResponse.includes?.users?.let { allUsers.addAll(it) }
+        targetResponse.includes?.media?.let { allMedia.addAll(it) }
+
+        if (!conversationId.isNullOrEmpty()) {
+            val repliesBody = fetchRecentSearchRaw("conversation_id:$conversationId", "recency", null, apiKey)
+            val repliesResponse = json.decodeFromString<XSearchResponse>(repliesBody)
+            
+            repliesResponse.data?.let { replies ->
+                replies.forEach { reply ->
+                    if (reply.id != targetTweet.id) {
+                        allTweets.add(reply)
+                    }
+                }
+            }
+            repliesResponse.includes?.users?.let { allUsers.addAll(it) }
+            repliesResponse.includes?.media?.let { allMedia.addAll(it) }
+
+            if (tweetId != conversationId) {
+                val rootResponse = fetchTweetsByIds(listOf(conversationId), apiKey)
+                rootResponse.data?.firstOrNull()?.let { root ->
+                    if (root.id != targetTweet.id) {
+                        allTweets.add(root)
+                    }
+                }
+                rootResponse.includes?.users?.let { allUsers.addAll(it) }
+                rootResponse.includes?.media?.let { allMedia.addAll(it) }
+            }
+        }
+
+        val usersMap = allUsers.distinctBy { it.id }.associateBy { it.id }
+        val mediaMap = allMedia.distinctBy { it.media_key }.associateBy { it.media_key }
+        val now = Instant.now()
+
+        val seenTexts = mutableSetOf<String>()
+        val posts = allTweets.distinctBy { it.id }.mapNotNull { tweet ->
+            val text = tweet.text
+            val metrics = tweet.public_metrics
+            val user = usersMap[tweet.author_id]
+
+            val engagementScore = calculateEngagementScore(metrics)
+            if (isSpam(text, metrics, engagementScore)) return@mapNotNull null
+
+            val normalized = normalizeText(text)
+            if (normalized.length >= MIN_TEXT_DEDUPE_LENGTH && !seenTexts.add(normalized)) {
+                return@mapNotNull null
+            }
+
+            val impactScore = calculateImpactScore(tweet, user, engagementScore, now)
+            val media = tweet.attachments?.media_keys?.mapNotNull { mediaMap[it] }
+            val urls = tweet.entities?.urls?.map { it.expanded_url }
+            val type = tweet.referenced_tweets?.firstOrNull()?.type
+            val username = user?.username ?: "i"
+
+            XPost(
+                id = tweet.id,
+                text = tweet.text,
+                author_id = tweet.author_id,
+                user_name = user?.name ?: username,
+                url = "https://x.com/$username/status/${tweet.id}",
+                created_at = tweet.created_at,
+                metrics = metrics,
+                media = media,
+                urls = urls,
+                type = type,
+                impact_score = impactScore,
+            )
+        }.sortedWith(compareBy<XPost> {
+            it.created_at ?: ""
+        }.thenBy {
+            it.id
+        })
+
+        val rootCreatedAt = posts.firstOrNull { it.id == conversationId }?.created_at ?: targetTweet.created_at
+
+        val isOlderThan7Days =
+            rootCreatedAt?.let { createdAt ->
+                runCatching {
+                    Duration.between(Instant.parse(createdAt), now).toDays() > 7
+                }.getOrDefault(false)
+            } ?: false
+
+        val hasNoReplies = posts.size <= 1
+
+        val warning = if (isOlderThan7Days || hasNoReplies) {
+            "X recent search API is limited to the last 7 days. Replies older than 7 days or matching spam filters may not be returned."
+        } else {
+            null
+        }
+
+        return json.encodeToString(XThreadResponse(data = posts, warning = warning))
     }
+
+    private fun fetchTweetsByIds(ids: List<String>, apiKey: String): XSearchResponse {
+        if (ids.isEmpty()) return XSearchResponse()
+        val url = "https://api.x.com/2/tweets"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("ids", ids.joinToString(","))
+            .addQueryParameter("tweet.fields", "public_metrics,created_at,author_id,entities,referenced_tweets,conversation_id")
+            .addQueryParameter("expansions", "author_id,attachments.media_keys")
+            .addQueryParameter("user.fields", "name,username,verified,public_metrics")
+            .addQueryParameter("media.fields", "type,url,alt_text")
+            .build()
+
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                throw IOException("X request failed with HTTP ${response.code}: $errorBody")
+            }
+            val body = response.body.string()
+            return json.decodeFromString<XSearchResponse>(body)
+        }
+    }
+
+    fun getTrends(location: String): String {
+        val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
+            ?: throw IllegalStateException("X API key is required when X search is enabled")
+
+        val woeid = when (location.trim().lowercase()) {
+            "worldwide" -> "1"
+            "united states" -> "23424977"
+            "united kingdom" -> "23424975"
+            "canada" -> "23424960"
+            "australia" -> "23424900"
+            "germany" -> "23424901"
+            "france" -> "23424902"
+            "japan" -> "23424903"
+            "india" -> "23424904"
+            "brazil" -> "23424905"
+            else -> "1"
+        }
+
+        val url = "https://api.x.com/2/trends/by/woeid/$woeid"
+            .toHttpUrl()
+            .newBuilder()
+            .addQueryParameter("trend.fields", "tweet_count")
+            .build()
+
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                throw IOException("X request failed with HTTP ${response.code}: $errorBody")
+            }
+            val body = response.body.string()
+            val parsed = json.decodeFromString<XTrendsResponse>(body)
+            return json.encodeToString(parsed)
+        }
+    }
+}
+
+@Serializable
+data class XThreadResponse(
+    val data: List<XPost>,
+    val warning: String? = null
+)

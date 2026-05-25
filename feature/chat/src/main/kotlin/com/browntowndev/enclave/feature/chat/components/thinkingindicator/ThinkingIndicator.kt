@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.chat.components.thinkingindicator
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -24,20 +25,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.ShimmerText
+import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.DynamicThinkingAnimation
+import com.browntowndev.enclave.feature.chat.components.ToolCallBannerContent
 
 @Composable
 fun ThinkingIndicator(
-    modifier: Modifier = Modifier,
     elapsedSeconds: Int = 0,
     isExpanded: Boolean = false,
+    toolCallBanner: ToolCallBannerUi? = null,
     onToggleDetails: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 90f else 0f,
         animationSpec = tween(durationMillis = 200),
         label = "chevronRotation",
     )
+    val rowInteractionModifier =
+        if (toolCallBanner == null) {
+            Modifier.clickable { onToggleDetails() }
+        } else {
+            Modifier
+        }
 
     Column(
         modifier =
@@ -51,7 +61,7 @@ fun ThinkingIndicator(
                 Modifier
                     .fillMaxWidth()
                     .offset(x = (-11).dp)
-                    .clickable { onToggleDetails() },
+                    .then(rowInteractionModifier),
         ) {
             DynamicThinkingAnimation(
                 modifier = Modifier.size(46.dp),
@@ -59,43 +69,64 @@ fun ThinkingIndicator(
 
             Spacer(modifier = Modifier.width(5.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            AnimatedContent(
+                targetState = toolCallBanner,
                 modifier = Modifier.weight(1f),
-            ) {
-                val thinkingText =
-                    if (elapsedSeconds > 0) {
-                        "Thinking... • ${formatElapsedTime(elapsedSeconds)}"
-                    } else {
-                        "Thinking..."
-                    }
-
-                val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
-                val highlightColor = grayColor.copy(alpha = 0.3f)
-
-                ShimmerText(
-                    text = thinkingText,
-                    baseColor = grayColor,
-                    highlightColor = highlightColor,
-                    style =
-                        MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                        ),
-                )
-
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Expand thinking details",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier =
-                        Modifier
-                            .size(24.dp)
-                            .rotate(rotation),
-                )
+                label = "thinkingIndicatorStatus",
+            ) { banner ->
+                if (banner != null) {
+                    ToolCallBannerContent(banner = banner)
+                } else {
+                    ThinkingIndicatorLabel(
+                        elapsedSeconds = elapsedSeconds,
+                        rotation = rotation,
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ThinkingIndicatorLabel(
+    elapsedSeconds: Int,
+    rotation: Float,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        val thinkingText =
+            if (elapsedSeconds > 0) {
+                "Thinking... • ${formatElapsedTime(elapsedSeconds)}"
+            } else {
+                "Thinking..."
+            }
+
+        val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
+        val highlightColor = grayColor.copy(alpha = 0.3f)
+
+        ShimmerText(
+            text = thinkingText,
+            baseColor = grayColor,
+            highlightColor = highlightColor,
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                ),
+        )
+
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = "Expand thinking details",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .rotate(rotation),
+        )
     }
 }
 

@@ -153,7 +153,7 @@ class DirectChatInferenceExecutorTest {
         runTest {
             val mockClassifier = mockk<SearchIntentClassifierPort>()
             every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { mockClassifier.requiresSearch(any(), any()) } returns false
+            every { mockClassifier.requiresSearch(any(), any()) } returns true
 
             val factory = FakeInferenceFactory()
             factory.serviceMap[ModelType.FAST] =
@@ -166,7 +166,7 @@ class DirectChatInferenceExecutorTest {
                     inferenceFactory = factory,
                     activeModelProvider = activeModelProvider,
                     messageRepository = messageRepository,
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true, tavilyKeyPresent = true)),
                     memoriesRepository = memoriesRepository,
                     embeddingEnginePort =
                         mockk {

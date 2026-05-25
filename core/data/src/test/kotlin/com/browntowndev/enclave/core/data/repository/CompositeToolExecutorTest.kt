@@ -29,6 +29,10 @@ class CompositeToolExecutorTest {
     private lateinit var artifactToolExecutor: ArtifactToolExecutor
     private lateinit var searchArtifactToolExecutor: SearchArtifactToolExecutor
     private lateinit var xSearchToolExecutor: XSearchToolExecutorImpl
+    private lateinit var xGetThreadToolExecutor: XGetThreadToolExecutor
+    private lateinit var xTrendingToolExecutor: XTrendingToolExecutor
+    private lateinit var xUserTweetsToolExecutor: XUserTweetsToolExecutor
+    private lateinit var xMentionSearchToolExecutor: XMentionSearchToolExecutor
     private lateinit var mediaToolExecutor: MediaToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
@@ -45,6 +49,10 @@ class CompositeToolExecutorTest {
         artifactToolExecutor = mockk()
         searchArtifactToolExecutor = mockk()
         xSearchToolExecutor = mockk()
+        xGetThreadToolExecutor = mockk()
+        xTrendingToolExecutor = mockk()
+        xUserTweetsToolExecutor = mockk()
+        xMentionSearchToolExecutor = mockk()
         mediaToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor =
@@ -59,6 +67,10 @@ class CompositeToolExecutorTest {
                 artifactToolExecutor = artifactToolExecutor,
                 searchArtifactToolExecutor = searchArtifactToolExecutor,
                 xSearchToolExecutor = xSearchToolExecutor,
+                xGetThreadToolExecutor = xGetThreadToolExecutor,
+                xTrendingToolExecutor = xTrendingToolExecutor,
+                xUserTweetsToolExecutor = xUserTweetsToolExecutor,
+                xMentionSearchToolExecutor = xMentionSearchToolExecutor,
                 mediaToolExecutor = mediaToolExecutor,
                 eventBus = eventBus,
             )
@@ -246,6 +258,10 @@ class CompositeToolExecutorTest {
                     manageMemoriesToolExecutor,
                     artifactToolExecutor,
                     xSearchToolExecutor,
+                    xGetThreadToolExecutor,
+                    xTrendingToolExecutor,
+                    xUserTweetsToolExecutor,
+                    xMentionSearchToolExecutor,
                     mediaToolExecutor,
                 )
             executors.forEach {
@@ -274,5 +290,24 @@ class CompositeToolExecutorTest {
                     // Other exceptions are fine, they mean the routing worked but execution failed (expected)
                 }
             }
+        }
+
+    @Test
+    fun `SCENARIO_COMPOSITE_EXECUTOR_ROUTING`() =
+        runTest {
+            val getThreadRequest = ToolCallRequest(toolName = "x_get_thread", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val trendingRequest = ToolCallRequest(toolName = "x_trending", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val userTweetsRequest = ToolCallRequest(toolName = "x_user_tweets", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val mentionSearchRequest = ToolCallRequest(toolName = "x_mention_search", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+
+            coEvery { xGetThreadToolExecutor.execute(getThreadRequest) } returns ToolExecutionResult("x_get_thread", "thread_result")
+            coEvery { xTrendingToolExecutor.execute(trendingRequest) } returns ToolExecutionResult("x_trending", "trending_result")
+            coEvery { xUserTweetsToolExecutor.execute(userTweetsRequest) } returns ToolExecutionResult("x_user_tweets", "user_tweets_result")
+            coEvery { xMentionSearchToolExecutor.execute(mentionSearchRequest) } returns ToolExecutionResult("x_mention_search", "mention_search_result")
+
+            assertEquals("thread_result", compositeToolExecutor.execute(getThreadRequest).resultJson)
+            assertEquals("trending_result", compositeToolExecutor.execute(trendingRequest).resultJson)
+            assertEquals("user_tweets_result", compositeToolExecutor.execute(userTweetsRequest).resultJson)
+            assertEquals("mention_search_result", compositeToolExecutor.execute(mentionSearchRequest).resultJson)
         }
 }

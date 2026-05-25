@@ -26,6 +26,7 @@ import javax.inject.Singleton
  * - [ToolDefinition.APPEND_BLOCKS] → [ArtifactToolExecutor]
  * - [ToolDefinition.SEARCH_CURRENT_ARTIFACT] → [SearchArtifactToolExecutor]
  * - [ToolDefinition.X_SEARCH] → [XSearchToolExecutorImpl]
+ * - [ToolDefinition.DISCLOSE_TOOL_SCHEMAS] → no-op (handled by agent core)
  */
 @Singleton
 class CompositeToolExecutor
@@ -41,6 +42,10 @@ class CompositeToolExecutor
         private val artifactToolExecutor: ArtifactToolExecutor,
         private val searchArtifactToolExecutor: com.browntowndev.enclave.core.data.artifact.SearchArtifactToolExecutor,
         private val xSearchToolExecutor: XSearchToolExecutorImpl,
+        private val xGetThreadToolExecutor: XGetThreadToolExecutor,
+        private val xTrendingToolExecutor: XTrendingToolExecutor,
+        private val xUserTweetsToolExecutor: XUserTweetsToolExecutor,
+        private val xMentionSearchToolExecutor: XMentionSearchToolExecutor,
         private val mediaToolExecutor: MediaToolExecutor,
         private val eventBus: ToolExecutionEventBus,
     ) : ToolExecutorPort {
@@ -72,9 +77,15 @@ class CompositeToolExecutor
                         ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
                         ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
                         ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
+                        ToolDefinition.X_GET_THREAD.name -> xGetThreadToolExecutor.execute(request)
+                        ToolDefinition.X_TRENDING.name -> xTrendingToolExecutor.execute(request)
+                        ToolDefinition.X_USER_TWEETS.name -> xUserTweetsToolExecutor.execute(request)
+                        ToolDefinition.X_MENTION_SEARCH.name -> xMentionSearchToolExecutor.execute(request)
                         ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
                         ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
                         ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
+                        // Intercepted and fully handled by agent core before reaching this executor.
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name -> ToolExecutionResult(request.toolName, "{}")
                         else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
                     }
 

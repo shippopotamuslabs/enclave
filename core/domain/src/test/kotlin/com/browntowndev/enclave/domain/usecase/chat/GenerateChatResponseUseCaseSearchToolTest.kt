@@ -229,7 +229,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
     private fun mockSettingsRepository(searchEnabled: Boolean = true): SettingsRepository =
         mockk {
-            every { settingsFlow } returns flowOf(SettingsData(searchEnabled = searchEnabled))
+            every { settingsFlow } returns flowOf(SettingsData(searchEnabled = searchEnabled, tavilyKeyPresent = searchEnabled))
         }
 
     private fun mockPipelineExecutor(): PipelineExecutorPort =

@@ -139,3 +139,38 @@ data class ManageMemoriesParams(
     @ToolParam(description = "The ID of the memory (for 'update' or 'delete' only).", required = false)
     val id: String? = null,
 ) : ToolParameters
+
+@Serializable
+data class XGetThreadParams(
+    @ToolParam(description = "The URL or ID of the tweet to fetch the thread for.")
+    val tweet_url: String,
+) : ToolParameters
+
+@Serializable
+data class XTrendingParams(
+    @ToolParam(
+        description = "The location to get trending topics for (e.g. 'worldwide', 'united states'). Defaults to 'worldwide'.",
+        required = false,
+    )
+    val location: String = "worldwide",
+) : ToolParameters
+
+@Serializable
+data class XUserTweetsParams(
+    @ToolParam(description = "The user screen name (e.g. 'elonmusk' or '@elonmusk').")
+    val username: String,
+    @ToolParam(description = "Optional text query to filter the user's tweets.", required = false)
+    val search_text: String? = null,
+    @ToolParam(description = "Optional pagination token to retrieve subsequent pages.", required = false)
+    val next_token: String? = null,
+) : ToolParameters
+
+@Serializable
+data class XMentionSearchParams(
+    @ToolParam(description = "The user screen name whose mentions to search (e.g. 'elonmusk' or '@elonmusk').")
+    val username: String,
+    @ToolParam(description = "Keywords to search within the mentions.")
+    val search_text: String,
+    @ToolParam(description = "Optional pagination token to retrieve subsequent pages.", required = false)
+    val next_token: String? = null,
+) : ToolParameters

@@ -327,6 +327,42 @@ data class ToolDefinition(
                 displayName = "Generating Music...",
             )
 
+        val X_GET_THREAD =
+            ToolDefinition(
+                name = "x_get_thread",
+                description = "Fetch the conversation thread for a given tweet URL or ID.",
+                parametersClass = XGetThreadParams::class,
+                displayName = "Reading X Thread...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_TRENDING =
+            ToolDefinition(
+                name = "x_trending",
+                description = "Get trending topics for a specific location.",
+                parametersClass = XTrendingParams::class,
+                displayName = "Checking X Trends...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_USER_TWEETS =
+            ToolDefinition(
+                name = "x_user_tweets",
+                description = "Search or retrieve tweets from a specific user.",
+                parametersClass = XUserTweetsParams::class,
+                displayName = "Searching X User's Tweets...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_MENTION_SEARCH =
+            ToolDefinition(
+                name = "x_mention_search",
+                description = "Search mentions of a specific user.",
+                parametersClass = XMentionSearchParams::class,
+                displayName = "Searching X Mentions...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
         val ALL_TOOLS =
             listOf(
                 DISCLOSE_TOOL_SCHEMAS,
@@ -344,6 +380,10 @@ data class ToolDefinition(
                 GENERATE_IMAGE,
                 GENERATE_VIDEO,
                 GENERATE_MUSIC,
+                X_GET_THREAD,
+                X_TRENDING,
+                X_USER_TWEETS,
+                X_MENTION_SEARCH,
             )
 
         fun fromName(name: String): ToolDefinition? = ALL_TOOLS.find { it.name == name }
