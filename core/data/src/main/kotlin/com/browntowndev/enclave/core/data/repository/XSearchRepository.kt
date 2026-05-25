@@ -74,6 +74,11 @@ data class XTrendsResponse(
 data class XSearchPaginatedResult(
     val data: List<XPost>,
     val next_token: String? = null,
+    /**
+     * How this page was fetched: `timeline` (GET /users/:id/tweets) or `search`
+     * (recent search). Pass back with next_token so pagination uses the same API.
+     */
+    val pagination_source: String? = null,
 )
 
 @Singleton
@@ -189,6 +194,7 @@ class XSearchRepository
             maxTotalPosts: Int = MAX_TOTAL_POSTS,
             nextToken: String? = null,
             ordering: XPostOrdering = XPostOrdering.IMPACT,
+            skipDiscoveryFilters: Boolean = false,
         ): XSearchPaginatedResult {
             val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
                 ?: throw IllegalStateException("X API key is required when X search is enabled")
@@ -222,11 +228,13 @@ class XSearchRepository
 
                 val engagementScore = calculateEngagementScore(metrics)
 
-                if (isSpam(text, metrics, engagementScore)) return@mapNotNull null
+                if (!skipDiscoveryFilters) {
+                    if (isSpam(text, metrics, engagementScore)) return@mapNotNull null
 
-                val normalized = normalizeText(text)
-                if (normalized.length >= MIN_TEXT_DEDUPE_LENGTH && !seenTexts.add(normalized)) {
-                    return@mapNotNull null
+                    val normalized = normalizeText(text)
+                    if (normalized.length >= MIN_TEXT_DEDUPE_LENGTH && !seenTexts.add(normalized)) {
+                        return@mapNotNull null
+                    }
                 }
 
                 val impactScore = calculateImpactScore(tweet, user, engagementScore, now)
@@ -276,12 +284,16 @@ class XSearchRepository
                     }
                 }
 
-            return XSearchPaginatedResult(distinctPosts, response.meta?.next_token)
+            return XSearchPaginatedResult(
+                data = distinctPosts,
+                next_token = sanitizePaginationToken(response.meta?.next_token),
+                pagination_source = "search",
+            )
         }
 
         fun fetchUserTimeline(
             username: String,
-            maxResults: Int = 20,
+            maxResults: Int = 10,
             paginationToken: String? = null,
         ): XSearchPaginatedResult =
             userTimelineFetcher.fetchUserTimeline(
@@ -289,14 +301,15 @@ class XSearchRepository
                 maxResults = maxResults,
                 paginationToken = paginationToken,
                 mapPost = ::mapTweetToPost,
-                searchFallback = { cleanUser ->
+                searchFallback = { cleanUser, token ->
                     searchPaginated(
                         query = "from:$cleanUser",
                         sortOrder = "recency",
-                        maxPostsPerAuthor = 20,
-                        maxTotalPosts = 20,
-                        nextToken = null,
+                        maxPostsPerAuthor = maxResults,
+                        maxTotalPosts = maxResults,
+                        nextToken = token,
                         ordering = XPostOrdering.RECENCY,
+                        skipDiscoveryFilters = true,
                     )
                 },
             )

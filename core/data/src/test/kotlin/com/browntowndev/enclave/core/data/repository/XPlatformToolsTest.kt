@@ -22,6 +22,9 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -609,7 +612,8 @@ class XPlatformToolsTest {
 
         val timelineRequest = requestSlots.last()
         assertTrue(timelineRequest.url.toString().contains("/users/elon/tweets"))
-        assertTrue(timelineRequest.url.toString().contains("exclude=retweets"))
+        assertTrue(timelineRequest.url.toString().contains("max_results=10"))
+        assertTrue(!timelineRequest.url.toString().contains("exclude=retweets"))
 
         val expectedLiteral = """
             {
@@ -633,13 +637,310 @@ class XPlatformToolsTest {
                   "created_at": "2026-05-24T10:00:00.000Z"
                 }
               ],
-              "next_token": "tok123"
+              "next_token": "tok123",
+              "pagination_source": "timeline"
             }
         """.trimIndent()
 
         val expectedNormalized = expectedLiteral.replace(Regex("\\s+"), "")
         val actualNormalized = result.resultJson.replace(Regex("\\s+"), "")
         assertEquals(expectedNormalized, actualNormalized)
+    }
+
+    @Test
+    fun `SCENARIO_USER_TIMELINE_RETURNS_ALL_POSTS_AND_NEXT_TOKEN`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "u1",
+                "name": "Test User",
+                "username": "testuser"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
+            {
+              "data": [
+                {
+                  "id": "1",
+                  "text": "Whatsapp me for crypto signal",
+                  "author_id": "u1",
+                  "created_at": "2026-05-24T12:00:00.000Z"
+                },
+                {
+                  "id": "2",
+                  "text": "Normal timeline post",
+                  "author_id": "u1",
+                  "created_at": "2026-05-24T11:00:00.000Z"
+                },
+                {
+                  "id": "3",
+                  "text": "Older timeline post",
+                  "author_id": "u1",
+                  "created_at": "2026-05-24T10:00:00.000Z"
+                }
+              ],
+              "includes": {
+                "users": [
+                  {
+                    "id": "u1",
+                    "name": "Test User",
+                    "username": "testuser"
+                  }
+                ]
+              },
+              "meta": {
+                "result_count": 3,
+                "next_token": "older_page_token"
+              }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        every { okHttpClient.newCall(match { it.url.toString().contains("/users/by/username") }) } returns lookupCall
+        every { okHttpClient.newCall(match { it.url.toString().contains("/users/u1/tweets") }) } returns timelineCall
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/testuser", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/u1/tweets", 200, timelineJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_user_tweets",
+            argumentsJson = """{"username": "testuser"}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        val result = userTweetsExecutor.execute(request)
+        val payload = Json.parseToJsonElement(result.resultJson).jsonObject
+        val posts = payload["data"]!!.jsonArray
+
+        assertEquals(3, posts.size)
+        assertEquals("older_page_token", payload["next_token"]!!.jsonPrimitive.content)
+        assertEquals("timeline", payload["pagination_source"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_TIMELINE_400_FALLS_BACK_TO_SEARCH`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val searchJson = """
+            {
+              "data": [
+                {
+                  "id": "100",
+                  "text": "from search",
+                  "author_id": "elon",
+                  "created_at": "2026-05-24T10:00:00.000Z"
+                }
+              ],
+              "includes": {
+                "users": [
+                  {
+                    "id": "elon",
+                    "name": "Elon Musk",
+                    "username": "elonmusk"
+                  }
+                ]
+              },
+              "meta": {
+                "result_count": 1,
+                "next_token": "search_page_2"
+              }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val searchCall = mockk<Call>()
+        every { okHttpClient.newCall(match { it.url.toString().contains("/users/by/username") }) } returns lookupCall
+        every { okHttpClient.newCall(match { it.url.toString().contains("/users/elon/tweets") }) } returns timelineCall
+        every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns searchCall
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse(
+            "https://api.x.com/2/users/elon/tweets",
+            403,
+            """{"errors":[{"message":"Forbidden"}]}""",
+        )
+        every { searchCall.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+
+        val result = userTweetsExecutor.execute(
+            ToolCallRequest(
+                chatId = ChatId("chat-1"),
+                userMessageId = MessageId("msg-1"),
+                toolName = "x_user_tweets",
+                argumentsJson = """{"username": "elonmusk"}""",
+                provider = "x",
+                modelType = ModelType.FAST,
+            ),
+        )
+
+        val payload = Json.parseToJsonElement(result.resultJson).jsonObject
+        assertEquals("search", payload["pagination_source"]!!.jsonPrimitive.content)
+        assertEquals("search_page_2", payload["next_token"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_PAGINATION_RETRIES_SEARCH_ON_INVALID_TIMELINE_TOKEN`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val searchPageJson = """
+            {
+              "data": [
+                {
+                  "id": "200",
+                  "text": "page two",
+                  "author_id": "elon",
+                  "created_at": "2026-05-23T10:00:00.000Z"
+                }
+              ],
+              "includes": {
+                "users": [
+                  {
+                    "id": "elon",
+                    "name": "Elon Musk",
+                    "username": "elonmusk"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val searchCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } answers {
+            when {
+                firstArg<Request>().url.toString().contains("search/recent") -> searchCall
+                firstArg<Request>().url.toString().contains("/tweets") -> timelineCall
+                else -> lookupCall
+            }
+        }
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse(
+            "https://api.x.com/2/users/elon/tweets",
+            400,
+            """{"errors":[{"message":"Invalid pagination_token"}]}""",
+        )
+        every { searchCall.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchPageJson)
+
+        val result = userTweetsExecutor.execute(
+            ToolCallRequest(
+                chatId = ChatId("chat-1"),
+                userMessageId = MessageId("msg-1"),
+                toolName = "x_user_tweets",
+                argumentsJson = """{"username": "elonmusk", "next_token": "searchtok123"}""",
+                provider = "x",
+                modelType = ModelType.FAST,
+            ),
+        )
+
+        val searchUrl = requestSlots.last().url.toString()
+        assertTrue(searchUrl.contains("search/recent"))
+        assertTrue(searchUrl.contains("next_token=searchtok123"))
+
+        val payload = Json.parseToJsonElement(result.resultJson).jsonObject
+        assertEquals("search", payload["pagination_source"]!!.jsonPrimitive.content)
+        assertEquals("page two", payload["data"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_CUSTOM_MAX_RESULTS`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
+            {
+              "data": [],
+              "meta": { "result_count": 0 }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_user_tweets",
+            argumentsJson = """{"username": "elonmusk", "max_results": 25}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        userTweetsExecutor.execute(request)
+
+        assertTrue(requestSlots.last().url.toString().contains("max_results=25"))
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_MAX_RESULTS_CLAMPED`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
+            {
+              "data": [],
+              "meta": { "result_count": 0 }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_user_tweets",
+            argumentsJson = """{"username": "elonmusk", "max_results": 500}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        userTweetsExecutor.execute(request)
+
+        assertTrue(requestSlots.last().url.toString().contains("max_results=100"))
     }
 
     @Test
