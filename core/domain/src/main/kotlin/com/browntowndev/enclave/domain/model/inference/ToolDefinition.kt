@@ -330,7 +330,10 @@ data class ToolDefinition(
         val X_GET_THREAD =
             ToolDefinition(
                 name = "x_get_thread",
-                description = "Fetch the conversation thread for a given tweet URL or ID.",
+                description =
+                    "Fetch a tweet by URL or ID. Returns requested_post (the exact post from the link) and " +
+                        "ancestor_posts (the full chain of posts it replies to, oldest first). " +
+                        "data contains both in chronological order. anchor_tweet_id marks the linked post.",
                 parametersClass = XGetThreadParams::class,
                 displayName = "Reading X Thread...",
                 disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
@@ -348,7 +351,12 @@ data class ToolDefinition(
         val X_USER_TWEETS =
             ToolDefinition(
                 name = "x_user_tweets",
-                description = "Search or retrieve tweets from a specific user.",
+                description =
+                    "Retrieve a user's posts in reverse-chronological order from their timeline " +
+                        "(newest first). Omit next_token on the first call; pass the next_token " +
+                        "from the prior response to page through older posts. " +
+                        "When search_text is provided, filters that user's recent posts by keyword " +
+                        "(still ordered by recency, not popularity).",
                 parametersClass = XUserTweetsParams::class,
                 displayName = "Searching X User's Tweets...",
                 disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
@@ -408,13 +416,13 @@ private fun JsonArray.resolveArraySchemaType(): String? {
 }
 
 private fun JsonArray.resolveCompositeSchemaType(): String? =
-    mapNotNull { candidate ->
+    firstNotNullOfOrNull { candidate ->
         when (candidate) {
             is JsonObject -> candidate.resolveSchemaType()
             is JsonPrimitive -> candidate.content.takeIf { it != "null" }
             else -> null
         }
-    }.firstOrNull()
+    }
 
 private fun JsonObject.firstEnumValue(): JsonElement? = (this["enum"] as? JsonArray)?.firstOrNull()
 

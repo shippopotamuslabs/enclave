@@ -23,15 +23,22 @@ internal object ToolArgumentsJsonNormalizer {
             }.getOrElse {
                 return argumentsJson
             }
-        return normalizeObject(schema.properties, root).toString()
+        return normalizeObject(schema.properties, schema.required, root).toString()
     }
 
     private fun normalizeObject(
         properties: JsonObject,
+        required: List<String>,
         obj: JsonObject,
     ): JsonObject =
         buildJsonObject {
             obj.forEach { (key, value) ->
+                if (key !in required && value is JsonPrimitive && value.isString) {
+                    val content = value.content.trim()
+                    if (content.isEmpty() || content.equals("null", ignoreCase = true)) {
+                        return@forEach
+                    }
+                }
                 val propSchema = properties[key]?.jsonObject
                 put(key, normalizeValue(propSchema, value))
             }

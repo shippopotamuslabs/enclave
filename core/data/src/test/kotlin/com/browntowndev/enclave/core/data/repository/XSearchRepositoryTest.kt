@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.data.security.ApiKeyManager
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -10,11 +12,18 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class XSearchRepositoryTest {
+    private val apiKeyManager = mockk<ApiKeyManager>()
+
     private val repository =
         XSearchRepository(
             okHttpClient = mockk(),
-            apiKeyManager = mockk(),
+            apiKeyManager = apiKeyManager,
+            userTimelineFetcher = mockk(),
         )
+
+    init {
+        every { apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS) } returns null
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 
