@@ -44,7 +44,8 @@ cargo run --release --bin uniffi-bindgen generate \
     --library "$RUST_ROOT/target/$TARGET_ARCH/release/libdocgen_core.so" \
     --language kotlin \
     --out-dir "$PROJECT_ROOT/core/docgen/src/main/kotlin" \
-    --config "$PROJECT_ROOT/core/docgen/uniffi.toml"
+    --config "$PROJECT_ROOT/core/docgen/uniffi.toml" \
+    --no-format
 
 # Copy .so to jniLibs
 echo "Copying library to jniLibs..."
