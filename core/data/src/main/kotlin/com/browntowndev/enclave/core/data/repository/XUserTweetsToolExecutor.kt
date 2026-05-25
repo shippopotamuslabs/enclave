@@ -34,22 +34,28 @@ class XUserTweetsToolExecutor @Inject constructor(
 
         val params = request.parameters as XUserTweetsParams
         val cleanUser = params.username.removePrefix("@").trim()
-        val searchText = params.search_text
-        val query = if (searchText.isNullOrBlank()) {
-            "from:$cleanUser"
-        } else {
-            "from:$cleanUser ${searchText.trim()}"
-        }
+        val searchText = params.search_text?.trim()?.takeIf { it.isNotEmpty() }
 
-        loggingPort.info(TAG, "Executing X user tweets tool query=$query")
-
-        val result = xSearchRepository.searchPaginated(
-            query = query,
-            sortOrder = "recency",
-            maxPostsPerAuthor = 20,
-            maxTotalPosts = 20,
-            nextToken = params.next_token
-        )
+        val result =
+            if (searchText == null) {
+                loggingPort.info(TAG, "Executing X user tweets timeline username=$cleanUser")
+                xSearchRepository.fetchUserTimeline(
+                    username = cleanUser,
+                    maxResults = 20,
+                    paginationToken = params.next_token?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            } else {
+                val query = "from:$cleanUser $searchText"
+                loggingPort.info(TAG, "Executing X user tweets search query=$query")
+                xSearchRepository.searchPaginated(
+                    query = query,
+                    sortOrder = "recency",
+                    maxPostsPerAuthor = 20,
+                    maxTotalPosts = 20,
+                    nextToken = params.next_token,
+                    ordering = XPostOrdering.RECENCY,
+                )
+            }
 
         return ToolExecutionResult(
             toolName = request.toolName,

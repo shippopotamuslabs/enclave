@@ -21,12 +21,16 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class XPlatformToolsTest {
+    private val threadTestJson = Json { ignoreUnknownKeys = true }
+
     private val okHttpClient = mockk<OkHttpClient>()
     private val apiKeyManager = mockk<ApiKeyManager>()
     private val settingsRepository = mockk<SettingsRepository>()
@@ -40,7 +44,12 @@ class XPlatformToolsTest {
 
     @BeforeEach
     fun setup() {
-        xSearchRepository = XSearchRepository(okHttpClient, apiKeyManager)
+        xSearchRepository =
+            XSearchRepository(
+                okHttpClient,
+                apiKeyManager,
+                XUserTimelineFetcher(okHttpClient, apiKeyManager),
+            )
         getThreadExecutor = XGetThreadToolExecutor(loggingPort, settingsRepository, xSearchRepository)
         trendingExecutor = XTrendingToolExecutor(loggingPort, settingsRepository, xSearchRepository)
         userTweetsExecutor = XUserTweetsToolExecutor(loggingPort, settingsRepository, xSearchRepository)
@@ -127,33 +136,13 @@ class XPlatformToolsTest {
 
         val result = getThreadExecutor.execute(request)
 
-        val expectedLiteral = """
-            {
-              "data": [
-                {
-                  "id": "20",
-                  "text": "just setting up my twttr",
-                  "author_id": "12",
-                  "user_name": "jack",
-                  "url": "https://x.com/jack/status/20",
-                  "created_at": "2006-03-21T20:50:14.000Z"
-                },
-                {
-                  "id": "25",
-                  "text": "cool project!",
-                  "author_id": "15",
-                  "user_name": "biz",
-                  "url": "https://x.com/biz/status/25",
-                  "created_at": "2006-03-21T20:55:00.000Z"
-                }
-              ],
-              "warning": "X recent search API is limited to the last 7 days. Replies older than 7 days or matching spam filters may not be returned."
-            }
-        """.trimIndent()
-
-        val expectedNormalized = expectedLiteral.replace(Regex("\\s+"), "")
-        val actualNormalized = result.resultJson.replace(Regex("\\s+"), "")
-        assertEquals(expectedNormalized, actualNormalized)
+        val thread = threadTestJson.decodeFromString<XThreadResponse>(result.resultJson)
+        assertEquals("20", thread.anchor_tweet_id)
+        assertEquals("20", thread.requested_post?.id)
+        assertTrue(thread.requested_post?.is_anchor == true)
+        assertTrue(thread.ancestor_posts.isEmpty())
+        assertEquals(1, thread.data.size)
+        assertEquals("20", thread.data.single().id)
     }
 
     @Test
@@ -166,7 +155,13 @@ class XPlatformToolsTest {
                   "text": "cool project!",
                   "conversation_id": "20",
                   "author_id": "15",
-                  "created_at": "2006-03-21T20:55:00.000Z"
+                  "created_at": "2006-03-21T20:55:00.000Z",
+                  "referenced_tweets": [
+                    {
+                      "type": "replied_to",
+                      "id": "20"
+                    }
+                  ]
                 }
               ],
               "includes": {
@@ -251,33 +246,203 @@ class XPlatformToolsTest {
 
         val result = getThreadExecutor.execute(request)
 
-        val expectedLiteral = """
+        val thread = threadTestJson.decodeFromString<XThreadResponse>(result.resultJson)
+        assertEquals("25", thread.anchor_tweet_id)
+        assertEquals("25", thread.requested_post?.id)
+        assertTrue(thread.requested_post?.is_anchor == true)
+        assertEquals(1, thread.ancestor_posts.size)
+        assertEquals("20", thread.ancestor_posts.single().id)
+        assertFalse(thread.ancestor_posts.single().is_anchor)
+        assertEquals(2, thread.data.size)
+        assertEquals(listOf("20", "25"), thread.data.map { it.id })
+    }
+
+    @Test
+    fun `SCENARIO_GET_THREAD_FETCHES_MISSING_AUTHOR`() = runTest {
+        val targetTweetJson = """
+            {
+              "data": [
+                {
+                  "id": "25",
+                  "text": "reply text",
+                  "conversation_id": "20",
+                  "author_id": "15",
+                  "created_at": "2006-03-21T20:55:00.000Z",
+                  "referenced_tweets": [
+                    {
+                      "type": "replied_to",
+                      "id": "20"
+                    }
+                  ]
+                }
+              ],
+              "includes": {
+                "users": [
+                  {
+                    "id": "15",
+                    "name": "Biz Stone",
+                    "username": "biz"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val parentTweetJson = """
+            {
+              "data": [
+                {
+                  "id": "20",
+                  "text": "parent text",
+                  "conversation_id": "20",
+                  "author_id": "99",
+                  "created_at": "2006-03-21T20:50:14.000Z"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parentUserJson = """
+            {
+              "data": [
+                {
+                  "id": "99",
+                  "name": "Antigravity User",
+                  "username": "antigravity_dev"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val repliesJson = """
+            {
+              "data": []
+            }
+        """.trimIndent()
+
+        val callTarget = mockk<Call>()
+        val callParent = mockk<Call>()
+        val callParentUser = mockk<Call>()
+        val callReplies = mockk<Call>()
+
+        every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "25" }) } returns callTarget
+        every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=25", 200, targetTweetJson)
+
+        every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "20" }) } returns callParent
+        every { callParent.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=20", 200, parentTweetJson)
+
+        every {
+            okHttpClient.newCall(match { it.url.toString().contains("/2/users") && it.url.queryParameter("ids") == "99" })
+        } returns callParentUser
+        every { callParentUser.execute() } returns httpResponse("https://api.x.com/2/users?ids=99", 200, parentUserJson)
+
+        every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
+        every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_get_thread",
+            argumentsJson = """{"tweet_url": "https://x.com/biz/status/25"}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        val result = getThreadExecutor.execute(request)
+        val thread = threadTestJson.decodeFromString<XThreadResponse>(result.resultJson)
+
+        assertEquals("antigravity_dev", thread.ancestor_posts.single().username)
+        assertEquals("Antigravity User", thread.ancestor_posts.single().user_name)
+        assertTrue(thread.ancestor_posts.single().user_name != "i")
+    }
+
+    @Test
+    fun `SCENARIO_GET_THREAD_PHOTO_URL_USES_REPLY_ID`() = runTest {
+        val targetTweetJson = """
+            {
+              "data": [
+                {
+                  "id": "25",
+                  "text": "cool project!",
+                  "conversation_id": "20",
+                  "author_id": "15",
+                  "created_at": "2006-03-21T20:55:00.000Z",
+                  "referenced_tweets": [
+                    {
+                      "type": "replied_to",
+                      "id": "20"
+                    }
+                  ]
+                }
+              ],
+              "includes": {
+                "users": [
+                  {
+                    "id": "15",
+                    "name": "biz",
+                    "username": "biz"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val parentTweetJson = """
             {
               "data": [
                 {
                   "id": "20",
                   "text": "just setting up my twttr",
+                  "conversation_id": "20",
                   "author_id": "12",
-                  "user_name": "jack",
-                  "url": "https://x.com/jack/status/20",
                   "created_at": "2006-03-21T20:50:14.000Z"
-                },
-                {
-                  "id": "25",
-                  "text": "cool project!",
-                  "author_id": "15",
-                  "user_name": "biz",
-                  "url": "https://x.com/biz/status/25",
-                  "created_at": "2006-03-21T20:55:00.000Z"
                 }
               ],
-              "warning": "X recent search API is limited to the last 7 days. Replies older than 7 days or matching spam filters may not be returned."
+              "includes": {
+                "users": [
+                  {
+                    "id": "12",
+                    "name": "jack",
+                    "username": "jack"
+                  }
+                ]
+              }
             }
         """.trimIndent()
 
-        val expectedNormalized = expectedLiteral.replace(Regex("\\s+"), "")
-        val actualNormalized = result.resultJson.replace(Regex("\\s+"), "")
-        assertEquals(expectedNormalized, actualNormalized)
+        val repliesJson = """
+            {
+              "data": []
+            }
+        """.trimIndent()
+
+        val callTarget = mockk<Call>()
+        val callParent = mockk<Call>()
+        val callReplies = mockk<Call>()
+
+        every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "25" }) } returns callTarget
+        every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=25", 200, targetTweetJson)
+
+        every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "20" }) } returns callParent
+        every { callParent.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=20", 200, parentTweetJson)
+
+        every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
+        every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_get_thread",
+            argumentsJson = """{"tweet_url": "https://x.com/biz/status/25/photo/1"}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        val result = getThreadExecutor.execute(request)
+
+        assertTrue(result.resultJson.contains("\"requested_post\""))
+        assertTrue(result.resultJson.contains("\"anchor_tweet_id\":\"25\""))
+        assertTrue(result.resultJson.contains("\"id\":\"25\",\"text\":\"cool project!\""))
     }
 
     @Test
@@ -330,7 +495,10 @@ class XPlatformToolsTest {
         )
 
         val result = getThreadExecutor.execute(request)
-        assertTrue(result.resultJson.contains("\"warning\":\"X recent search API is limited to the last 7 days. Replies older than 7 days or matching spam filters may not be returned.\""))
+        assertTrue(result.resultJson.contains("\"requested_post\""))
+        assertTrue(result.resultJson.contains("\"anchor_tweet_id\":\"20\""))
+        assertTrue(result.resultJson.contains("\"is_anchor\":true"))
+        assertTrue(result.resultJson.contains("\"ancestor_posts\":[]"))
     }
 
     @Test
@@ -379,20 +547,30 @@ class XPlatformToolsTest {
 
     @Test
     fun `SCENARIO_USER_TWEETS_SUCCESS`() = runTest {
-        val searchJson = """
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
             {
               "data": [
-                {
-                  "id": "100",
-                  "text": "first tweet",
-                  "author_id": "elon",
-                  "created_at": "2026-05-24T10:00:00.000Z"
-                },
                 {
                   "id": "101",
                   "text": "second tweet",
                   "author_id": "elon",
                   "created_at": "2026-05-24T10:05:00.000Z"
+                },
+                {
+                  "id": "100",
+                  "text": "first tweet",
+                  "author_id": "elon",
+                  "created_at": "2026-05-24T10:00:00.000Z"
                 }
               ],
               "includes": {
@@ -411,10 +589,12 @@ class XPlatformToolsTest {
             }
         """.trimIndent()
 
-        val call = mockk<Call>()
-        val requestSlot = slot<Request>()
-        every { okHttpClient.newCall(capture(requestSlot)) } returns call
-        every { call.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
 
         val request = ToolCallRequest(
             chatId = ChatId("chat-1"),
@@ -427,26 +607,30 @@ class XPlatformToolsTest {
 
         val result = userTweetsExecutor.execute(request)
 
-        assertTrue(requestSlot.captured.url.toString().contains("query=from%3Aelonmusk"))
+        val timelineRequest = requestSlots.last()
+        assertTrue(timelineRequest.url.toString().contains("/users/elon/tweets"))
+        assertTrue(timelineRequest.url.toString().contains("exclude=retweets"))
 
         val expectedLiteral = """
             {
               "data": [
                 {
-                  "id": "100",
-                  "text": "first tweet",
-                  "author_id": "elon",
-                  "user_name": "Elon Musk",
-                  "url": "https://x.com/elonmusk/status/100",
-                  "created_at": "2026-05-24T10:00:00.000Z"
-                },
-                {
                   "id": "101",
                   "text": "second tweet",
                   "author_id": "elon",
                   "user_name": "Elon Musk",
+                  "username": "elonmusk",
                   "url": "https://x.com/elonmusk/status/101",
                   "created_at": "2026-05-24T10:05:00.000Z"
+                },
+                {
+                  "id": "100",
+                  "text": "first tweet",
+                  "author_id": "elon",
+                  "user_name": "Elon Musk",
+                  "username": "elonmusk",
+                  "url": "https://x.com/elonmusk/status/100",
+                  "created_at": "2026-05-24T10:00:00.000Z"
                 }
               ],
               "next_token": "tok123"
@@ -460,6 +644,94 @@ class XPlatformToolsTest {
 
     @Test
     fun `SCENARIO_USER_TWEETS_PAGINATION`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
+            {
+              "data": [],
+              "meta": {
+                "result_count": 0
+              }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_user_tweets",
+            argumentsJson = """{"username": "elonmusk", "search_text": null, "next_token": "tok123"}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        userTweetsExecutor.execute(request)
+
+        val url = requestSlots.last().url.toString()
+        assertTrue(url.contains("/users/elon/tweets"))
+        assertTrue(url.contains("pagination_token=tok123"))
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_BLANK_NEXT_TOKEN_OMITTED`() = runTest {
+        val userLookupJson = """
+            {
+              "data": {
+                "id": "elon",
+                "name": "Elon Musk",
+                "username": "elonmusk"
+              }
+            }
+        """.trimIndent()
+
+        val timelineJson = """
+            {
+              "data": [],
+              "meta": {
+                "result_count": 0
+              }
+            }
+        """.trimIndent()
+
+        val lookupCall = mockk<Call>()
+        val timelineCall = mockk<Call>()
+        val requestSlots = mutableListOf<Request>()
+        every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
+        every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
+        every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-1"),
+            userMessageId = MessageId("msg-1"),
+            toolName = "x_user_tweets",
+            argumentsJson = """{"username": "elonmusk", "search_text": null, "next_token": ""}""",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+
+        userTweetsExecutor.execute(request)
+
+        val timelineUrl = requestSlots.last().url.toString()
+        assertTrue(timelineUrl.contains("/users/elon/tweets"))
+        assertTrue(!timelineUrl.contains("pagination_token"))
+    }
+
+    @Test
+    fun `SCENARIO_USER_TWEETS_KEYWORD_SEARCH`() = runTest {
         val searchJson = """
             {
               "data": [],
@@ -487,6 +759,7 @@ class XPlatformToolsTest {
 
         val url = requestSlot.captured.url.toString()
         assertTrue(url.contains("query=from%3Aelonmusk%20tesla"))
+        assertTrue(url.contains("sort_order=recency"))
         assertTrue(url.contains("next_token=tok123"))
     }
 

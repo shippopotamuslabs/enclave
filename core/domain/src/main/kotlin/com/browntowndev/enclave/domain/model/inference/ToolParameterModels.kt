@@ -142,7 +142,11 @@ data class ManageMemoriesParams(
 
 @Serializable
 data class XGetThreadParams(
-    @ToolParam(description = "The URL or ID of the tweet to fetch the thread for.")
+    @ToolParam(
+        description =
+            "The URL or ID of the tweet to fetch. Response includes requested_post for this exact post, " +
+                "not the parent it replies to.",
+    )
     val tweet_url: String,
 ) : ToolParameters
 
@@ -159,9 +163,19 @@ data class XTrendingParams(
 data class XUserTweetsParams(
     @ToolParam(description = "The user screen name (e.g. 'elonmusk' or '@elonmusk').")
     val username: String,
-    @ToolParam(description = "Optional text query to filter the user's tweets.", required = false)
+    @ToolParam(
+        description =
+            "Optional keyword filter. When omitted, returns the user's timeline " +
+                "newest-first. When set, searches that user's recent posts for the keyword.",
+        required = false,
+    )
     val search_text: String? = null,
-    @ToolParam(description = "Optional pagination token to retrieve subsequent pages.", required = false)
+    @ToolParam(
+        description =
+            "Pagination token from a prior x_user_tweets response (next_token field). " +
+                "Omit entirely on the first request — do not pass null or an empty string.",
+        required = false,
+    )
     val next_token: String? = null,
 ) : ToolParameters
 
