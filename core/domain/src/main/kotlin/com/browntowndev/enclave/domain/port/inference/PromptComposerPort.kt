@@ -18,5 +18,6 @@ interface PromptComposerPort {
         coreMemories: List<Memory> = emptyList(),
         retrievedMemories: List<Memory> = emptyList(),
         retrievedSearchResults: String? = null,
+        retrievedXSearchResults: String? = null,
     ): String
 }

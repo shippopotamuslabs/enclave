@@ -169,6 +169,21 @@ class SearchToolPromptComposerTest {
         assertFalse(prompt.contains("tool_names\":[\"start_artifact\"]"))
     }
 
+    @Test
+    fun `compose formats retrieved X search results correctly`() {
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                retrievedXSearchResults = "Mock X Search Result Data",
+            )
+
+        assertTrue(composed.contains("# RELEVANT X SEARCH RESULTS:"))
+        assertTrue(composed.contains("The following X search results were automatically retrieved based on the user's query:"))
+        assertTrue(composed.contains("Mock X Search Result Data"))
+    }
+
     private fun catalogEntry(
         name: String,
         disclosureMode: ToolDisclosureMode,
