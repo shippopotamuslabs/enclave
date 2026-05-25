@@ -27,15 +27,21 @@ class ToolArgumentsJsonNormalizerTest {
     }
 
     @Test
-    fun `drops blank optional next_token for x_user_tweets`() {
-        val json = """{"username":"elonmusk","next_token":""}"""
-        val normalized =
-            ToolArgumentsJsonNormalizer.normalize(
-                ToolDefinition.X_USER_TWEETS.schema,
-                json,
-            )
+    fun `x_user_tweets schema treats only username as required`() {
+        assertEquals(listOf("username"), ToolDefinition.X_USER_TWEETS.schema.required)
+    }
 
-        val decoded: XUserTweetsParams = ToolDefinition.X_USER_TWEETS.decodeArguments(normalized)
+    @Test
+    fun `x_user_tweets defaults max_results to 10`() {
+        val decoded: XUserTweetsParams =
+            ToolDefinition.X_USER_TWEETS.decodeArguments("""{"username":"elonmusk"}""")
+        assertEquals(10, decoded.max_results)
+    }
+
+    @Test
+    fun `drops blank optional next_token for x_user_tweets`() {
+        val decoded: XUserTweetsParams =
+            ToolDefinition.X_USER_TWEETS.decodeArguments("""{"username":"elonmusk","next_token":""}""")
         assertEquals(null, decoded.next_token)
     }
 

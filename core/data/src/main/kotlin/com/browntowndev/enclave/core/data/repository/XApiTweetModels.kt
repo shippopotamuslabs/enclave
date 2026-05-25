@@ -88,13 +88,26 @@ internal val xApiJson = Json { ignoreUnknownKeys = true }
 internal fun sanitizePaginationToken(token: String?): String? =
     token
         ?.trim()
+        ?.trim('"', '\'')
         ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+
+/** Timeline tokens use `pagination_token`; recent search uses `next_token` — not interchangeable. */
+internal fun isInvalidPaginationTokenError(error: IOException): Boolean {
+    val message = error.message.orEmpty().lowercase()
+    return message.contains("http 400") &&
+        (
+            message.contains("pagination") ||
+                message.contains("next_token") ||
+                message.contains("pagination_token")
+        )
+}
 
 internal fun shouldFallbackTimelineToSearch(error: IOException): Boolean {
     val message = error.message.orEmpty().lowercase()
     if (message.contains("pagination")) return false
+    // Do not treat generic HTTP 400 as timeline-unavailable; that returns a search token
+    // that will fail when the model retries via the timeline endpoint.
     return message.contains("http 403") ||
         message.contains("http 401") ||
-        message.contains("http 400") ||
         message.contains("unsupported authentication")
 }

@@ -352,11 +352,10 @@ data class ToolDefinition(
             ToolDefinition(
                 name = "x_user_tweets",
                 description =
-                    "Retrieve a user's posts in reverse-chronological order from their timeline " +
-                        "(newest first). Omit next_token on the first call; pass the next_token " +
-                        "from the prior response to page through older posts. " +
-                        "When search_text is provided, filters that user's recent posts by keyword " +
-                        "(still ordered by recency, not popularity).",
+                    "Retrieve a user's posts in reverse-chronological order (newest first). " +
+                        "Use max_results for page size (5–100, default 10). For page 2+, pass both " +
+                        "next_token and pagination_source from the prior response (timeline or search). " +
+                        "A null next_token means no further pages. search_text filters by keyword (search API).",
                 parametersClass = XUserTweetsParams::class,
                 displayName = "Searching X User's Tweets...",
                 disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,

@@ -34,17 +34,19 @@ class XUserTimelineFetcher
             maxResults: Int,
             paginationToken: String?,
             mapPost: XTweetPostMapper,
-            searchFallback: (String) -> XSearchPaginatedResult,
+            searchFallback: (String, String?) -> XSearchPaginatedResult,
         ): XSearchPaginatedResult {
             val cleanUsername = username.removePrefix("@").trim()
             val sanitizedToken = sanitizePaginationToken(paginationToken)
             return try {
                 fetchUserTimelineInternal(cleanUsername, maxResults, sanitizedToken, mapPost)
             } catch (e: IOException) {
-                if (sanitizedToken == null && shouldFallbackTimelineToSearch(e)) {
-                    searchFallback(cleanUsername.lowercase())
-                } else {
-                    throw e
+                when {
+                    sanitizedToken != null && isInvalidPaginationTokenError(e) ->
+                        searchFallback(cleanUsername.lowercase(), sanitizedToken)
+                    sanitizedToken == null && shouldFallbackTimelineToSearch(e) ->
+                        searchFallback(cleanUsername.lowercase(), null)
+                    else -> throw e
                 }
             }
         }
@@ -67,7 +69,6 @@ class XUserTimelineFetcher
                     .toHttpUrl()
                     .newBuilder()
                     .addQueryParameter("max_results", cappedMax.toString())
-                    .addQueryParameter("exclude", "retweets")
                     .addQueryParameter("tweet.fields", "public_metrics,created_at,author_id,entities,referenced_tweets")
                     .addQueryParameter("expansions", "author_id,attachments.media_keys")
                     .addQueryParameter("user.fields", "name,username,verified,public_metrics")
@@ -101,12 +102,14 @@ class XUserTimelineFetcher
                 val posts =
                     tweets
                         .mapNotNull { tweet ->
-                            mapPost(tweet, usersMap, mediaMap, now, null, seenTexts, false, false)
+                            // Timeline is author-owned content; skip discovery spam/dedupe filters.
+                            mapPost(tweet, usersMap, mediaMap, now, null, seenTexts, false, true)
                         }.sortedByDescending { it.created_at ?: "" }
 
                 return XSearchPaginatedResult(
-                    posts,
-                    sanitizePaginationToken(parsed.meta?.next_token),
+                    data = posts,
+                    next_token = sanitizePaginationToken(parsed.meta?.next_token),
+                    pagination_source = "timeline",
                 )
             }
         }

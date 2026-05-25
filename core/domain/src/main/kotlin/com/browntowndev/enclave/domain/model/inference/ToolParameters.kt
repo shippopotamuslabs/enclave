@@ -12,8 +12,10 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlin.reflect.KClass
+import kotlin.reflect.KProperty
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
+import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.javaField
 import kotlin.reflect.jvm.jvmErasure
 
@@ -110,10 +112,18 @@ object ToolSchemaGenerator {
     fun <T : ToolParameters> generateSchema(klass: KClass<T>): ToolSchema =
         ToolSchema(JsonObject(generateProperties(klass)), getRequired(klass))
 
+    internal fun toolParamFor(klass: KClass<*>, prop: KProperty<*>): ToolParam? =
+        prop.findAnnotation<ToolParam>()
+            ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+            ?: klass.primaryConstructor
+                ?.parameters
+                ?.firstOrNull { it.name == prop.name }
+                ?.findAnnotation<ToolParam>()
+
     private fun generateProperties(klass: KClass<*>): Map<String, JsonElement> {
         val properties = mutableMapOf<String, JsonElement>()
         klass.memberProperties.forEach { prop ->
-            val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+            val toolParam = toolParamFor(klass, prop)
             val name =
                 prop.findAnnotation<SerialName>()?.value
                     ?: prop.javaField?.getAnnotation(SerialName::class.java)?.value
@@ -235,7 +245,7 @@ object ToolSchemaGenerator {
     private fun getRequired(klass: KClass<*>): List<String> =
         klass.memberProperties
             .filter { prop ->
-                val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+                val toolParam = toolParamFor(klass, prop)
                 toolParam?.required != false
             }.map { prop ->
                 prop.findAnnotation<SerialName>()?.value

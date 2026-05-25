@@ -177,6 +177,18 @@ data class XUserTweetsParams(
         required = false,
     )
     val next_token: String? = null,
+    @ToolParam(
+        description =
+            "Must match the prior response pagination_source (timeline or search). " +
+                "Pass through unchanged when using next_token.",
+        required = false,
+    )
+    val pagination_source: String? = null,
+    @ToolParam(
+        description = "Maximum posts to return for this page (5–100). Defaults to 10.",
+        required = false,
+    )
+    val max_results: Int = 10,
 ) : ToolParameters
 
 @Serializable

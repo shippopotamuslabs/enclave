@@ -21,6 +21,8 @@ class XUserTweetsToolExecutor @Inject constructor(
 ) : ToolExecutorPort {
     companion object {
         private const val TAG = "XUserTweetsToolExecutor"
+        private const val MIN_MAX_RESULTS = 5
+        private const val MAX_MAX_RESULTS = 100
         private val json = Json { ignoreUnknownKeys = true }
     }
 
@@ -35,26 +37,45 @@ class XUserTweetsToolExecutor @Inject constructor(
         val params = request.parameters as XUserTweetsParams
         val cleanUser = params.username.removePrefix("@").trim()
         val searchText = params.search_text?.trim()?.takeIf { it.isNotEmpty() }
+        val maxResults = params.max_results.coerceIn(MIN_MAX_RESULTS, MAX_MAX_RESULTS)
+
+        val nextToken = params.next_token?.trim()?.takeIf { it.isNotEmpty() }
+        val pageSource = params.pagination_source?.trim()?.lowercase()
 
         val result =
-            if (searchText == null) {
-                loggingPort.info(TAG, "Executing X user tweets timeline username=$cleanUser")
-                xSearchRepository.fetchUserTimeline(
-                    username = cleanUser,
-                    maxResults = 20,
-                    paginationToken = params.next_token?.trim()?.takeIf { it.isNotEmpty() },
-                )
-            } else {
-                val query = "from:$cleanUser $searchText"
-                loggingPort.info(TAG, "Executing X user tweets search query=$query")
-                xSearchRepository.searchPaginated(
-                    query = query,
-                    sortOrder = "recency",
-                    maxPostsPerAuthor = 20,
-                    maxTotalPosts = 20,
-                    nextToken = params.next_token,
-                    ordering = XPostOrdering.RECENCY,
-                )
+            when {
+                pageSource == "search" || searchText != null -> {
+                    val query =
+                        if (searchText.isNullOrBlank()) {
+                            "from:${cleanUser.lowercase()}"
+                        } else {
+                            "from:${cleanUser.lowercase()} $searchText"
+                        }
+                    loggingPort.info(
+                        TAG,
+                        "Executing X user tweets search query=$query maxResults=$maxResults",
+                    )
+                    xSearchRepository.searchPaginated(
+                        query = query,
+                        sortOrder = "recency",
+                        maxPostsPerAuthor = maxResults,
+                        maxTotalPosts = maxResults,
+                        nextToken = nextToken,
+                        ordering = XPostOrdering.RECENCY,
+                        skipDiscoveryFilters = true,
+                    )
+                }
+                else -> {
+                    loggingPort.info(
+                        TAG,
+                        "Executing X user tweets timeline username=$cleanUser maxResults=$maxResults",
+                    )
+                    xSearchRepository.fetchUserTimeline(
+                        username = cleanUser,
+                        maxResults = maxResults,
+                        paginationToken = nextToken,
+                    )
+                }
             }
 
         return ToolExecutionResult(
