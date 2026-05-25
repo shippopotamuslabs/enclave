@@ -12,6 +12,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 
+import com.google.genai.Client
+import com.google.genai.Caches
+import com.google.genai.types.CreateCachedContentConfig
+import com.google.genai.types.DeleteCachedContentConfig
+
 data class GoogleSdkResult(
     val emittedAny: Boolean,
     val functionCall: FunctionCall?,
@@ -27,10 +32,20 @@ interface GoogleGenAiSdkClient {
         allowToolCall: Boolean = false,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ): GoogleSdkResult
+
+    suspend fun createCachedContent(
+        modelId: String,
+        contents: List<Content>,
+        systemInstruction: Content?,
+        tools: List<com.google.genai.types.Tool>?,
+        ttlSeconds: Long,
+    ): String
+
+    suspend fun deleteCachedContent(name: String)
 }
 
 internal class GoogleGenAiSdkClientImpl(
-    private val modelsApiProvider: () -> Models,
+    private val clientProvider: () -> Client,
     private val modelType: ModelType,
     private val loggingPort: LoggingPort,
 ) : GoogleGenAiSdkClient {
@@ -38,7 +53,57 @@ internal class GoogleGenAiSdkClientImpl(
         private const val TAG = "GoogleGenAiSdkClient"
     }
 
-    private val modelsApi: Models get() = modelsApiProvider()
+    // Secondary constructor to maintain compatibility with existing tests
+    constructor(
+        modelsApiProvider: () -> Models,
+        modelType: ModelType,
+        loggingPort: LoggingPort,
+        @Suppress("UnusedPrivateParameter", "UnusedPrivateProperty") dummy: Unit = Unit
+    ) : this(
+        clientProvider = { throw UnsupportedOperationException("Caches require Client, but only Models provider was supplied") },
+        modelType = modelType,
+        loggingPort = loggingPort,
+    ) {
+        _modelsApiOverride = modelsApiProvider
+    }
+
+    private var _modelsApiOverride: (() -> Models)? = null
+
+    private val client: Client get() = clientProvider()
+    private val modelsApi: Models get() = _modelsApiOverride?.invoke() ?: client.models
+    private val cachesApi: Caches get() = client.caches
+
+    override suspend fun createCachedContent(
+        modelId: String,
+        contents: List<Content>,
+        systemInstruction: Content?,
+        tools: List<com.google.genai.types.Tool>?,
+        ttlSeconds: Long,
+    ): String {
+        return runInterruptible(Dispatchers.IO) {
+            val builder = CreateCachedContentConfig.builder()
+                .contents(contents)
+                .ttl(java.time.Duration.ofSeconds(ttlSeconds))
+
+            if (systemInstruction != null) {
+                builder.systemInstruction(systemInstruction)
+            }
+            if (!tools.isNullOrEmpty()) {
+                builder.tools(tools)
+            }
+
+            val result = cachesApi.create(modelId, builder.build())
+            result.name().orElseThrow {
+                IllegalStateException("CachedContent creation failed to return resource name")
+            }
+        }
+    }
+
+    override suspend fun deleteCachedContent(name: String) {
+        runInterruptible(Dispatchers.IO) {
+            cachesApi.delete(name, DeleteCachedContentConfig.builder().build())
+        }
+    }
 
     @Suppress("NestedBlockDepth")
     override suspend fun generateContentStream(

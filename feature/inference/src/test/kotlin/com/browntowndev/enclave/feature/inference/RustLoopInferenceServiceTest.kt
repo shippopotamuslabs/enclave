@@ -394,6 +394,38 @@ class RustLoopInferenceServiceTest {
         }
 
     @Test
+    fun completeModelTurn_keepsFullToolListWhenAllowToolCallFalseForCacheStability() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = serializeToolNames(listOf("web_search", "append_blocks")),
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service
+                .sendPrompt(
+                    prompt = "no tools this turn",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
+                        ),
+                ).toList()
+
+            assertEquals(
+                listOf("web_search", "append_blocks"),
+                inner.lastAvailableTools.map { it.name },
+            )
+        }
+
+    @Test
     fun completeModelTurn_forwardsContextSidecarsToProviderPrompt() =
         runTest {
             val inner = RecordingRustCompatibleService()
@@ -424,9 +456,9 @@ class RustLoopInferenceServiceTest {
 
             service.sendPrompt("sidecars").toList()
 
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("Context management sidecars"))
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("file-outline-src/Main.kt"))
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("File context index JSON"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("Context management sidecars"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("file-outline-src/Main.kt"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("File context index JSON"))
         }
 
     @Test
@@ -817,6 +849,7 @@ class RustLoopInferenceServiceTest {
         private val responses: List<AgentModelTurnResult> = emptyList(),
     ) : RustCompatibleInferenceService {
         var lastSystemPrompt: String? = null
+        var lastContextSidecars: String? = null
         var lastAvailableTools: List<ToolDefinition> = emptyList()
         var completeSingleTurnCallCount = 0
 
@@ -838,6 +871,7 @@ class RustLoopInferenceServiceTest {
         override suspend fun completeSingleTurn(
             sessionMessages: List<AgentLoopMessage>,
             systemPrompt: String,
+            contextSidecars: String?,
             availableTools: List<ToolDefinition>,
             allowToolCall: Boolean,
             onTextToken: suspend (String) -> Unit,
@@ -846,6 +880,7 @@ class RustLoopInferenceServiceTest {
         ): AgentModelTurnResult {
             completeSingleTurnCallCount += 1
             lastSystemPrompt = systemPrompt
+            lastContextSidecars = contextSidecars
             lastAvailableTools = availableTools
             responses.getOrNull(completeSingleTurnCallCount - 1)?.let { return it }
             return AgentModelTurnResult(

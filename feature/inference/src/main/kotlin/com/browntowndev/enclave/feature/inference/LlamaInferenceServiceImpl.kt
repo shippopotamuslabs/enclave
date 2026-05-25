@@ -267,6 +267,7 @@ class LlamaInferenceServiceImpl
         override suspend fun completeSingleTurn(
             sessionMessages: List<AgentLoopMessage>,
             systemPrompt: String,
+            contextSidecars: String?,
             availableTools: List<ToolDefinition>,
             allowToolCall: Boolean,
             onTextToken: suspend (String) -> Unit,
@@ -277,11 +278,16 @@ class LlamaInferenceServiceImpl
             if (options.imageUris.isNotEmpty()) {
                 loggingPort.warning(TAG, "Images are not supported in Llama agent loop turns; imageUris will be ignored")
             }
+            val mergedSystemPrompt = if (!contextSidecars.isNullOrBlank()) {
+                "$systemPrompt\n\n$contextSidecars"
+            } else {
+                systemPrompt
+            }
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
                     activeTools = availableTools,
-                    systemPrompt = systemPrompt.ifBlank { options.systemPrompt },
+                    systemPrompt = mergedSystemPrompt.ifBlank { options.systemPrompt },
                 )
             val domainHistory = sessionMessages.map(::toLlamaDomainMessage)
 

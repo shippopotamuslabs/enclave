@@ -9,6 +9,7 @@ import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
 import com.anthropic.models.messages.Tool
+import com.anthropic.models.messages.CacheControlEphemeral
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
@@ -22,6 +23,7 @@ object AnthropicRequestMapper {
     private const val THINKING_BUDGET_MEDIUM = 1536L
     private const val THINKING_BUDGET_XHIGH = 3072L
 
+    @Suppress("CyclomaticComplexMethod")
     fun mapToMessageParams(
         modelId: String,
         prompt: String,
@@ -67,24 +69,56 @@ object AnthropicRequestMapper {
             )
         }
 
-        buildSystemPrompt(history, options.systemPrompt)
-            .takeIf { it.isNotBlank() }
-            ?.let { builder.system(it) }
+        val systemPromptStr = buildSystemPrompt(history, options.systemPrompt)
+        val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(modelId)
+        if (systemPromptStr.isNotBlank()) {
+            if (useCaching) {
+                val systemBlock = TextBlockParam.builder()
+                    .text(systemPromptStr)
+                    .cacheControl(CacheControlEphemeral.builder().build())
+                    .build()
+                builder.systemOfTextBlockParams(listOf(systemBlock))
+            } else {
+                builder.system(systemPromptStr)
+            }
+        }
 
-        history
-            .filterNot(::isSyntheticAssistantError)
-            .forEach { message ->
-                val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
+        val activeHistory = history.filterNot(::isSyntheticAssistantError)
+        activeHistory.forEachIndexed { index, message ->
+            val isLast = index == activeHistory.size - 1
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
+            if (useCaching && isLast) {
+                val textBlockBuilder = TextBlockParam.builder().text(sanitizedContent)
+                    .cacheControl(CacheControlEphemeral.builder().build())
+                val role = when (message.role) {
+                    Role.USER -> MessageParam.Role.USER
+                    Role.ASSISTANT -> MessageParam.Role.ASSISTANT
+                    Role.SYSTEM -> null
+                }
+                if (role != null) {
+                    builder.addMessage(
+                        MessageParam.builder()
+                            .role(role)
+                            .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                            .build()
+                    )
+                }
+            } else {
                 when (message.role) {
                     Role.SYSTEM -> Unit
                     Role.USER -> builder.addUserMessage(sanitizedContent)
                     Role.ASSISTANT -> builder.addAssistantMessage(sanitizedContent)
                 }
             }
+        }
 
         builder.addMessage(buildUserMessage(prompt, options.imageUris))
-        if (options.toolingEnabled) {
-            options.activeTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        if (options.toolingEnabled && options.activeTools.isNotEmpty()) {
+            options.activeTools.forEachIndexed { idx, toolDef ->
+                val isLast = idx == options.activeTools.size - 1
+                val cacheControl = if (useCaching && isLast) CacheControlEphemeral.builder().build() else null
+                builder.addTool(toolDef.toAnthropicTool(cacheControl))
+            }
         }
 
         return builder.build()
@@ -176,8 +210,8 @@ object AnthropicRequestMapper {
         }
 }
 
-internal fun ToolDefinition.toAnthropicTool(): Tool =
-    Tool
+internal fun ToolDefinition.toAnthropicTool(cacheControl: CacheControlEphemeral? = null): Tool {
+    val builder = Tool
         .builder()
         .name(name)
         .description(description)
@@ -189,7 +223,11 @@ internal fun ToolDefinition.toAnthropicTool(): Tool =
                 .required(schema.required)
                 .build(),
         ).strict(true)
-        .build()
+    if (cacheControl != null) {
+        builder.cacheControl(cacheControl)
+    }
+    return builder.build()
+}
 
 private fun ToolDefinition.anthropicToolProperties(): Tool.InputSchema.Properties {
     val builder = Tool.InputSchema.Properties.builder()
