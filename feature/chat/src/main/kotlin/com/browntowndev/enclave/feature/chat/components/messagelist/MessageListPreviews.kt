@@ -857,7 +857,7 @@ fun PreviewMessageListWithToolCall() {
                         formattedTimestamp = "10:30 AM",
                     ),
                     ChatMessage(
-                        id = MessageId("2"),
+                        id = messageId,
                         chatId = ChatId("1"),
                         role = MessageRole.Assistant,
                         content = ContentUi(text = ""),

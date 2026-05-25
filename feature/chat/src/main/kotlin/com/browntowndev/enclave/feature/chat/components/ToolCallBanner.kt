@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.XIcon
@@ -42,21 +43,23 @@ fun ToolCallBanner(
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
         ) {
             if (banner != null) {
-                BannerContent(banner)
+                ToolCallBannerContent(banner)
             }
         }
     }
 }
 
 @Composable
-private fun BannerContent(banner: ToolCallBannerUi) {
+internal fun ToolCallBannerContent(
+    banner: ToolCallBannerUi,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Icon Box
         Box(
             modifier = Modifier.size(32.dp),
             contentAlignment = Alignment.Center,
@@ -92,15 +95,17 @@ private fun BannerContent(banner: ToolCallBannerUi) {
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Label
         Text(
             text = banner.label,
+            modifier = Modifier.weight(1f, fill = false),
             style =
                 MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.2.sp,
                 ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

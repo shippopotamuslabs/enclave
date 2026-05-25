@@ -813,4 +813,52 @@ class ChatInferenceRequestPreparerTest {
             coVerify(exactly = 0) { mockExecutor.execute(any()) }
             verify(exactly = 0) { mockClassifier.getSearchIntentProbability(any()) }
         }
+
+    @Test
+    fun `SCENARIO_PREPARER_ELIGIBLE_TOOLS`() =
+        runTest {
+            val preparer =
+                ChatInferenceRequestPreparer(
+                    activeModelProvider =
+                        mockActiveModelProvider(
+                            fastConfig = fastTextConfig(),
+                            visionConfig = null,
+                        ),
+                    settingsRepository =
+                        mockSettingsRepository(
+                            SettingsData(xSearchEnabled = true, xApiKeyPresent = true),
+                        ),
+                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = mockMemoriesRepository(),
+                    embeddingEnginePort = mockEmbeddingEngine(),
+                    promptComposer = SearchToolPromptComposer(),
+                    defaultModelRepository = mockk(relaxed = true),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    mediaToolDefinitionFactory = mockk(relaxed = true),
+                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
+                    loggingPort = mockk(relaxed = true),
+                )
+
+            val request =
+                preparer(
+                    prompt = "Hello",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            val catalogNames = request.options.toolCatalog.map { it.name }
+            val activeNames = request.options.activeTools.map { it.name }
+
+            assertTrue(catalogNames.contains(ToolDefinition.X_GET_THREAD.name))
+            assertTrue(catalogNames.contains(ToolDefinition.X_TRENDING.name))
+            assertTrue(catalogNames.contains(ToolDefinition.X_USER_TWEETS.name))
+            assertTrue(catalogNames.contains(ToolDefinition.X_MENTION_SEARCH.name))
+
+            assertFalse(activeNames.contains(ToolDefinition.X_GET_THREAD.name))
+            assertFalse(activeNames.contains(ToolDefinition.X_TRENDING.name))
+            assertFalse(activeNames.contains(ToolDefinition.X_USER_TWEETS.name))
+            assertFalse(activeNames.contains(ToolDefinition.X_MENTION_SEARCH.name))
+        }
 }

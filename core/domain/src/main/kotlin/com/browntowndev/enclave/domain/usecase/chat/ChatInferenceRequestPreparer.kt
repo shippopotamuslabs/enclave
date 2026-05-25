@@ -252,6 +252,10 @@ class ChatInferenceRequestPreparer(
                 add(ToolDefinition.SEARCH_CURRENT_ARTIFACT)
                 if (xSearchConfigured) {
                     add(ToolDefinition.X_SEARCH)
+                    add(ToolDefinition.X_GET_THREAD)
+                    add(ToolDefinition.X_TRENDING)
+                    add(ToolDefinition.X_USER_TWEETS)
+                    add(ToolDefinition.X_MENTION_SEARCH)
                 }
                 imageTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }
                 videoTool?.takeIf { it.name.isNotBlank() }?.let { add(it) }

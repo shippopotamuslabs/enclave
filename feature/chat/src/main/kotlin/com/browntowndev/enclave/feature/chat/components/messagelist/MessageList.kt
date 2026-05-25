@@ -16,9 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,9 +40,13 @@ import kotlinx.coroutines.launch
 
 // ~2–3 message rows ahead/behind at typical density; avoids retaining ~30 screens off-screen.
 private val MessageListLazyCacheWindow = 360.dp
+private val MessageListTopContentPadding = 12.dp
 
 /** Test-visible alias for [MessageListLazyCacheWindow]. */
 internal val MessageListLazyCacheWindowDp = MessageListLazyCacheWindow
+
+/** Test-visible alias for [MessageListTopContentPadding]. */
+internal val MessageListTopContentPaddingDp = MessageListTopContentPadding
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -141,12 +145,13 @@ private fun MessageListContent(
     isPreview: Boolean,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val topContentPadding = MessageListTopContentPadding
         val bottomContentPadding = 16.dp
         val itemSpacing = 12.dp
         val activeInteractionMinHeight =
             activeInteractionMinHeight(
                 viewportHeight = maxHeight,
-                bottomContentPadding = bottomContentPadding,
+                bottomContentPadding = topContentPadding + bottomContentPadding,
             )
         val density = LocalDensity.current
         val targetMinHeightPx = with(density) { activeInteractionMinHeight.toPx() }
@@ -233,7 +238,7 @@ private fun MessageListContent(
             verticalArrangement = Arrangement.spacedBy(itemSpacing),
             contentPadding =
                 PaddingValues(
-                    top = 0.dp,
+                    top = topContentPadding,
                     bottom = bottomContentPadding,
                 ),
         ) {

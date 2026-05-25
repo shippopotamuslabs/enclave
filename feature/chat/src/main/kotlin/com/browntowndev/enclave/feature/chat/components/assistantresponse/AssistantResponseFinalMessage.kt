@@ -31,6 +31,7 @@ internal fun AssistantResponseFinalMessage(
     isPreview: Boolean,
     hasTtsProviderAssigned: Boolean,
     toolCallBanner: ToolCallBannerUi?,
+    trailingStatusIndicator: @Composable (() -> Unit)?,
     onPlayAudio: (String) -> Unit,
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
@@ -74,6 +75,7 @@ internal fun AssistantResponseFinalMessage(
         isStreaming = isStreaming,
         isPreview = isPreview,
         toolCallBanner = toolCallBanner,
+        trailingStatusIndicator = trailingStatusIndicator,
         onOpenThinkingSheet = openThinkingSheet,
     )
 
@@ -105,9 +107,11 @@ internal fun AssistantResponseFinalMessage(
     }
 
     val isComplete =
-        (message.indicatorState is IndicatorState.Complete ||
-            message.indicatorState is IndicatorState.None ||
-            isPreview) &&
+        (
+            message.indicatorState is IndicatorState.Complete ||
+                message.indicatorState is IndicatorState.None ||
+                isPreview
+        ) &&
             toolCallBanner == null
 
     AssistantResponseActionRow(

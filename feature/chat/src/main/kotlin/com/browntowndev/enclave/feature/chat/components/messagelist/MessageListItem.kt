@@ -20,6 +20,7 @@ import com.browntowndev.enclave.feature.chat.ChatModeUi
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.MessageRole
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
+import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
 import com.browntowndev.enclave.feature.chat.components.EngineLoadingIndicator
 import com.browntowndev.enclave.feature.chat.components.GeneratingIndicator
 import com.browntowndev.enclave.feature.chat.components.ProcessingIndicator
@@ -32,6 +33,11 @@ import kotlin.time.Duration.Companion.seconds
 
 /** Reserved height for [GeneratingIndicator] so completion does not collapse layout and shift scroll. */
 private val CrewGeneratingIndicatorReservedHeight = 62.dp
+
+private enum class MessageListIndicatorPlacement {
+    TopLevel,
+    TranscriptTrailing,
+}
 
 @Composable
 internal fun MessageListItem(
@@ -56,21 +62,25 @@ internal fun MessageListItem(
                 .fillMaxWidth()
                 .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
     ) {
-        MessageListItemIndicators(
-            modelDisplayName = message.modelDisplayName,
-            indicatorState = message.indicatorState,
-            chatMode = chatMode,
-            suppressDuplicateThoughtForHeader = message.transcriptSegments.isNotEmpty(),
-            reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
-            isPreview = isPreview,
-        )
-
-        val inlineToolCallBannerInTranscript = usesInlineToolCallBannerInTranscript(message)
-
-        StandaloneToolCallBannerRow(
-            message = message,
-            activeToolCallBanner = activeToolCallBanner,
-        )
+        val hasTranscriptSegments = message.transcriptSegments.isNotEmpty()
+        val hasStreamingThinkingSegment =
+            message.transcriptSegments.any { segment ->
+                (segment is TranscriptSegmentUi.ThinkingBlock) && segment.isStreaming
+            }
+        if (!hasTranscriptSegments) {
+            MessageListItemIndicators(
+                modelDisplayName = message.modelDisplayName,
+                indicatorState = message.indicatorState,
+                activeToolCallBanner = activeToolCallBanner,
+                chatMode = chatMode,
+                suppressDuplicateThoughtForHeader = false,
+                hasTranscriptSegments = false,
+                hasStreamingThinkingSegment = false,
+                placement = MessageListIndicatorPlacement.TopLevel,
+                reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
+                isPreview = isPreview,
+            )
+        }
 
         if (message.role == MessageRole.User) {
             MessageBubble(
@@ -82,7 +92,26 @@ internal fun MessageListItem(
                 message = message,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
-                toolCallBanner = if (inlineToolCallBannerInTranscript) activeToolCallBanner else null,
+                toolCallBanner = activeToolCallBanner,
+                trailingStatusIndicator =
+                    if (hasTranscriptSegments) {
+                        {
+                            MessageListItemIndicators(
+                                modelDisplayName = message.modelDisplayName,
+                                indicatorState = message.indicatorState,
+                                activeToolCallBanner = activeToolCallBanner,
+                                chatMode = chatMode,
+                                suppressDuplicateThoughtForHeader = true,
+                                hasTranscriptSegments = true,
+                                hasStreamingThinkingSegment = hasStreamingThinkingSegment,
+                                placement = MessageListIndicatorPlacement.TranscriptTrailing,
+                                reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
+                                isPreview = isPreview,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                 onPlayAudio = callbacks.onPlayAudio,
                 onArtifactCardClick = callbacks.onArtifactCardClick,
                 onNavigateToStudio = callbacks.onNavigateToStudio,
@@ -96,18 +125,22 @@ internal fun MessageListItem(
 private fun MessageListItemIndicators(
     modelDisplayName: String,
     indicatorState: IndicatorState?,
+    activeToolCallBanner: ToolCallBannerUi?,
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
+    hasTranscriptSegments: Boolean,
+    hasStreamingThinkingSegment: Boolean,
+    placement: MessageListIndicatorPlacement,
     reserveCrewGeneratingSlot: Boolean,
     isPreview: Boolean,
 ) {
-    if (indicatorState == null) return
+    if ((indicatorState == null) && (activeToolCallBanner == null)) return
 
     var isThinkingSheetVisible by remember { mutableStateOf(value = false) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
 
-    val startTime = indicatorThinkingStartTime(indicatorState)
-    val isThinkingActive = isIndicatorThinkingActive(indicatorState)
+    val startTime = indicatorState?.let(::indicatorThinkingStartTime) ?: 0L
+    val isThinkingActive = indicatorState?.let(::isIndicatorThinkingActive) ?: false
 
     if ((startTime > 0) && isThinkingActive) {
         LaunchedEffect(startTime) {
@@ -119,7 +152,7 @@ private fun MessageListItemIndicators(
     }
 
     LaunchedEffect(indicatorState) {
-        if (!isThinkingActive) {
+        if ((indicatorState != null) && !isThinkingActive) {
             elapsedSeconds = settledIndicatorElapsedSeconds(indicatorState)
         }
     }
@@ -127,9 +160,12 @@ private fun MessageListItemIndicators(
     MessageListIndicatorBody(
         modelDisplayName = modelDisplayName,
         indicatorState = indicatorState,
+        activeToolCallBanner = activeToolCallBanner,
         chatMode = chatMode,
         suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
-        hasTranscriptSegments = suppressDuplicateThoughtForHeader,
+        hasTranscriptSegments = hasTranscriptSegments,
+        hasStreamingThinkingSegment = hasStreamingThinkingSegment,
+        placement = placement,
         reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
         elapsedSeconds = elapsedSeconds,
         isThinkingSheetVisible = isThinkingSheetVisible,
@@ -137,7 +173,7 @@ private fun MessageListItemIndicators(
         isThinkingSheetVisible = !isThinkingSheetVisible
     }
 
-    if (isThinkingSheetVisible) {
+    if (isThinkingSheetVisible && (indicatorState != null)) {
         ThinkingDetailsBottomSheet(
             isVisible = true,
             thinkingRaw = indicatorThinkingRawForSheet(indicatorState),
@@ -153,23 +189,53 @@ private fun MessageListItemIndicators(
 @Composable
 private fun MessageListIndicatorBody(
     modelDisplayName: String,
-    indicatorState: IndicatorState,
+    indicatorState: IndicatorState?,
+    activeToolCallBanner: ToolCallBannerUi?,
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
     hasTranscriptSegments: Boolean,
+    hasStreamingThinkingSegment: Boolean,
+    placement: MessageListIndicatorPlacement,
     reserveCrewGeneratingSlot: Boolean,
     elapsedSeconds: Int,
     isThinkingSheetVisible: Boolean,
     onToggleThinkingSheet: () -> Unit,
 ) {
+    if (activeToolCallBanner != null) {
+        if (
+            (placement == MessageListIndicatorPlacement.TranscriptTrailing) &&
+            !showsTrailingActiveToolCall(hasStreamingThinkingSegment)
+        ) {
+            return
+        }
+        ActiveToolCallIndicator(
+            indicatorState = indicatorState,
+            activeToolCallBanner = activeToolCallBanner,
+            elapsedSeconds = elapsedSeconds,
+            isThinkingSheetVisible = isThinkingSheetVisible,
+            onToggleThinkingSheet = onToggleThinkingSheet,
+        )
+        return
+    }
+
     when (indicatorState) {
         is IndicatorState.EngineLoading -> {
-            if (messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)) {
+            if (
+                (placement == MessageListIndicatorPlacement.TopLevel) &&
+                messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)
+            ) {
                 EngineLoadingIndicator(modelDisplayName = modelDisplayName)
             }
         }
         is IndicatorState.Thinking -> {
-            if (transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)) {
+            val showThinkingIndicator =
+                when (placement) {
+                    MessageListIndicatorPlacement.TopLevel ->
+                        transcriptLayoutShowsTopThinkingIndicator(indicatorState, suppressDuplicateThoughtForHeader)
+                    MessageListIndicatorPlacement.TranscriptTrailing ->
+                        transcriptLayoutShowsTrailingStatusIndicator(indicatorState, hasStreamingThinkingSegment)
+                }
+            if (showThinkingIndicator) {
                 ThinkingIndicator(
                     elapsedSeconds = elapsedSeconds,
                     isExpanded = isThinkingSheetVisible,
@@ -178,31 +244,62 @@ private fun MessageListIndicatorBody(
             }
         }
         is IndicatorState.Processing -> {
-            if (messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)) {
+            val showProcessingIndicator =
+                when (placement) {
+                    MessageListIndicatorPlacement.TopLevel ->
+                        messageListShowsTopLevelStatusIndicator(indicatorState, hasTranscriptSegments)
+                    MessageListIndicatorPlacement.TranscriptTrailing ->
+                        transcriptLayoutShowsTrailingStatusIndicator(indicatorState, hasStreamingThinkingSegment)
+                }
+            if (showProcessingIndicator) {
                 ProcessingIndicator()
             }
         }
         is IndicatorState.Generating -> {
-            GeneratingIndicatorSection(
-                indicatorState = indicatorState,
-                chatMode = chatMode,
-                suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
-                elapsedSeconds = elapsedSeconds,
-                isThinkingSheetVisible = isThinkingSheetVisible,
-                onToggleThinkingSheet = onToggleThinkingSheet,
-            )
+            if (placement == MessageListIndicatorPlacement.TopLevel) {
+                GeneratingIndicatorSection(
+                    indicatorState = indicatorState,
+                    chatMode = chatMode,
+                    suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
+                    elapsedSeconds = elapsedSeconds,
+                    isThinkingSheetVisible = isThinkingSheetVisible,
+                    onToggleThinkingSheet = onToggleThinkingSheet,
+                )
+            }
         }
         is IndicatorState.Complete -> {
-            CompleteIndicatorSection(
-                indicatorState = indicatorState,
-                suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
-                reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
-                elapsedSeconds = elapsedSeconds,
-                isThinkingSheetVisible = isThinkingSheetVisible,
-                onToggleThinkingSheet = onToggleThinkingSheet,
-            )
+            if (placement == MessageListIndicatorPlacement.TopLevel) {
+                CompleteIndicatorSection(
+                    indicatorState = indicatorState,
+                    suppressDuplicateThoughtForHeader = suppressDuplicateThoughtForHeader,
+                    reserveCrewGeneratingSlot = reserveCrewGeneratingSlot,
+                    elapsedSeconds = elapsedSeconds,
+                    isThinkingSheetVisible = isThinkingSheetVisible,
+                    onToggleThinkingSheet = onToggleThinkingSheet,
+                )
+            }
         }
-        is IndicatorState.None -> Unit
+        is IndicatorState.None, null -> Unit
+    }
+}
+
+@Composable
+private fun ActiveToolCallIndicator(
+    indicatorState: IndicatorState?,
+    activeToolCallBanner: ToolCallBannerUi,
+    elapsedSeconds: Int,
+    isThinkingSheetVisible: Boolean,
+    onToggleThinkingSheet: () -> Unit,
+) {
+    if (indicatorState is IndicatorState.Thinking) {
+        ThinkingIndicator(
+            elapsedSeconds = elapsedSeconds,
+            isExpanded = isThinkingSheetVisible,
+            toolCallBanner = activeToolCallBanner,
+            onToggleDetails = onToggleThinkingSheet,
+        )
+    } else {
+        ProcessingIndicator(toolCallBanner = activeToolCallBanner)
     }
 }
 
