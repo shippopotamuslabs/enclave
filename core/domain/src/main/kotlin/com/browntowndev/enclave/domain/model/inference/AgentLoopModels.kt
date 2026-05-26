@@ -17,7 +17,6 @@ data class AgentLoopAgentConfig(
     val thresholdRatio: Float = 0.80f,
     val microKeepRecent: UInt = 4u,
     val toolRetryLimit: UInt = 3u,
-    val greedyAppendBlocks: Boolean = true,
     val toolResultBudgetCloudBytes: ULong = 16384uL,
     val toolResultBudgetRelaxedBytes: ULong = 131072uL,
     val toolResultTruncationPressureRatio: Float = 0.85f,
@@ -50,7 +49,8 @@ data class AgentLoopAgentConfig(
     val enableLoopHooks: Boolean = false,
     val enablePendingWorkGuard: Boolean = false,
     val longLoop: AgentLoopLongLoopPolicy = AgentLoopLongLoopPolicy(),
-    val toolSemantics: AgentLoopToolSemanticsConfig = AgentLoopToolSemanticsConfig.enclaveDefault(),
+    /** Full [`ToolSemanticsConfig`] JSON; catalog tool specs are merged from [AgentLoopSessionIoParams.toolCatalogJson]. */
+    val toolSemanticsJson: String = AgentLoopToolSemanticsResources.enclaveDefaultJson,
 )
 
 data class AgentLoopToolSemanticsConfig(

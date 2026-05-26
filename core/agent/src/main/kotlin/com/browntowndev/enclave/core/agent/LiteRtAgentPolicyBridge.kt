@@ -18,8 +18,12 @@ class LiteRtAgentPolicyBridge
         override fun repairTool(
             name: String,
             argsJson: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
         ): AgentPolicyRepairResult =
-            com.browntowndev.enclave.core.agent.repairTool(name, argsJson).let { result ->
+            com.browntowndev.enclave.core.agent
+                .repairTool(name, argsJson, toolSemanticsJson, toolCatalogJson)
+                .let { result ->
                 AgentPolicyRepairResult(
                     resolvedName = result.resolvedName,
                     argumentsJson = result.argumentsJson,

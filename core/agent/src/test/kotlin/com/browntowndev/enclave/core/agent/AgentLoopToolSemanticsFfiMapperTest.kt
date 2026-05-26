@@ -1,31 +1,34 @@
 package com.browntowndev.enclave.core.agent
 
 import com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig
-import com.browntowndev.enclave.domain.model.inference.AgentLoopToolSemanticsConfig
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolSemanticsResources
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AgentLoopToolSemanticsFfiMapperTest {
     @Test
-    fun ts030_domainEnclaveDefaultMapsConfiguredNames() {
-        val ffi = AgentLoopAgentConfig().toFfi().toolSemantics
+    fun ts030_domainEnclaveDefaultPassesSemanticsJson() {
+        val json = AgentLoopAgentConfig().toFfi().toolSemanticsJson
 
-        assertEquals("disclose_tool_schemas", ffi.disclosure?.toolName)
-        assertEquals("tool_names", ffi.disclosure?.requestFieldName)
-        assertEquals("append_blocks", ffi.artifact?.appendToolName)
-        assertEquals("isComplete", ffi.artifact?.completionField)
+        assertTrue(json.contains("disclose_tool_schemas"))
+        assertTrue(json.contains("append_blocks"))
+        assertTrue(json.contains("greedy_extension_tools"))
     }
 
     @Test
-    fun ts031_domainAgnosticConfigMapsEmptySemantics() {
-        val ffi =
+    fun ts031_domainAgnosticSemanticsJsonIsMinimal() {
+        val json =
             AgentLoopAgentConfig(
-                toolSemantics = AgentLoopToolSemanticsConfig.agnostic(),
-            ).toFfi().toolSemantics
+                toolSemanticsJson = """{"catalog":{"tools":[]}}""",
+            ).toFfi().toolSemanticsJson
 
-        assertNull(ffi.disclosure)
-        assertNull(ffi.artifact)
-        assertEquals(0, ffi.greedyExtensionTools.size)
+        assertFalse(json.contains("disclose_tool_schemas"))
+        assertFalse(json.contains("append_blocks"))
+    }
+
+    @Test
+    fun enclaveResourceLoads() {
+        assertTrue(AgentLoopToolSemanticsResources.enclaveDefaultJson.contains("start_artifact"))
     }
 }

@@ -376,7 +376,7 @@ internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfi
         thresholdRatio = thresholdRatio,
         microKeepRecent = microKeepRecent,
         toolRetryLimit = toolRetryLimit,
-        greedyAppendBlocks = greedyAppendBlocks,
+        toolSemanticsJson = toolSemanticsJson,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
         toolResultBudgetRelaxedBytes = toolResultBudgetRelaxedBytes,
         toolResultTruncationPressureRatio = toolResultTruncationPressureRatio,
@@ -409,7 +409,6 @@ internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfi
         enableLoopHooks = enableLoopHooks,
         enablePendingWorkGuard = enablePendingWorkGuard,
         longLoop = longLoop.toFfi(),
-        toolSemantics = toolSemantics.toFfi(),
     )
 
 private fun com.browntowndev.enclave.domain.model.inference.AgentLoopLongLoopPolicy.toFfi(): FfiLongLoopPolicy =

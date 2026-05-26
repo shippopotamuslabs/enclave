@@ -998,17 +998,17 @@ fun uniffi_agent_core_fn_init_callback_vtable_agenttoolexecutorcallback(`vtable`
 ): Unit
 fun uniffi_agent_core_fn_init_callback_vtable_agenttransportcallback(`vtable`: UniffiVTableCallbackInterfaceAgentTransportCallback,
 ): Unit
-fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_func_create_agent_engine(`transport`: Long,`executor`: Long,`summarizer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
 fun uniffi_agent_core_fn_func_create_tool_stream_gate(`allowToolCall`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
-fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
@@ -1142,7 +1142,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_agent_core_checksum_func_coerce_provider_arguments() != 63759.toShort()) {
+    if (lib.uniffi_agent_core_checksum_func_coerce_provider_arguments() != 17171.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_func_create_agent_engine() != 26990.toShort()) {
@@ -1151,19 +1151,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_agent_core_checksum_func_create_tool_stream_gate() != 53237.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_agent_core_checksum_func_has_local_tool_contract() != 30560.toShort()) {
+    if (lib.uniffi_agent_core_checksum_func_has_local_tool_contract() != 18850.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_agent_core_checksum_func_parse_tool_calls() != 55217.toShort()) {
+    if (lib.uniffi_agent_core_checksum_func_parse_tool_calls() != 15728.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_agent_core_checksum_func_repair_tool() != 55043.toShort()) {
+    if (lib.uniffi_agent_core_checksum_func_repair_tool() != 52864.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_func_result_json_looks_soft_failure() != 31729.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_agent_core_checksum_func_should_allow_tool() != 57147.toShort()) {
+    if (lib.uniffi_agent_core_checksum_func_should_allow_tool() != 24011.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_func_truncate_result() != 55220.toShort()) {
@@ -2425,7 +2425,10 @@ data class FfiAgentConfig (
     var `thresholdRatio`: kotlin.Float, 
     var `microKeepRecent`: kotlin.UInt, 
     var `toolRetryLimit`: kotlin.UInt, 
-    var `greedyAppendBlocks`: kotlin.Boolean, 
+    /**
+     * JSON-serialized [`crate::tool_semantics::ToolSemanticsConfig`]; catalog tools may be empty and merged from session IO.
+     */
+    var `toolSemanticsJson`: kotlin.String, 
     var `toolResultBudgetCloudBytes`: kotlin.ULong, 
     var `toolResultBudgetRelaxedBytes`: kotlin.ULong, 
     var `toolResultTruncationPressureRatio`: kotlin.Float, 
@@ -2457,49 +2460,7 @@ data class FfiAgentConfig (
     var `maxModelRequestsPerTurn`: kotlin.UInt, 
     var `enableLoopHooks`: kotlin.Boolean, 
     var `enablePendingWorkGuard`: kotlin.Boolean, 
-    var `longLoop`: FfiLongLoopPolicy,
-    var `toolSemantics`: FfiToolSemanticsConfig = FfiToolSemanticsConfig(
-        disclosure = null,
-        artifact = null,
-        greedyExtensionTools = emptyList(),
-    )
-) {
-    
-    companion object
-}
-
-data class FfiToolSemanticsConfig (
-    var `disclosure`: FfiToolDisclosureSemantics?,
-    var `artifact`: FfiArtifactToolSemantics?,
-    var `greedyExtensionTools`: kotlin.collections.List<FfiToolGreedyExtensionSemantics>
-) {
-    
-    companion object
-}
-
-data class FfiToolDisclosureSemantics (
-    var `toolName`: kotlin.String,
-    var `requestFieldName`: kotlin.String,
-    var `alwaysCallable`: kotlin.Boolean
-) {
-    
-    companion object
-}
-
-data class FfiArtifactToolSemantics (
-    var `startToolName`: kotlin.String,
-    var `appendToolName`: kotlin.String,
-    var `idField`: kotlin.String,
-    var `appendBlocksField`: kotlin.String,
-    var `completionField`: kotlin.String
-) {
-    
-    companion object
-}
-
-data class FfiToolGreedyExtensionSemantics (
-    var `toolName`: kotlin.String,
-    var `extraTurns`: kotlin.UInt
+    var `longLoop`: FfiLongLoopPolicy
 ) {
     
     companion object
@@ -2515,7 +2476,7 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
-            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterFloat.read(buf),
@@ -2556,7 +2517,7 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.allocationSize(value.`thresholdRatio`) +
             FfiConverterUInt.allocationSize(value.`microKeepRecent`) +
             FfiConverterUInt.allocationSize(value.`toolRetryLimit`) +
-            FfiConverterBoolean.allocationSize(value.`greedyAppendBlocks`) +
+            FfiConverterString.allocationSize(value.`toolSemanticsJson`) +
             FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`) +
             FfiConverterULong.allocationSize(value.`toolResultBudgetRelaxedBytes`) +
             FfiConverterFloat.allocationSize(value.`toolResultTruncationPressureRatio`) +
@@ -2596,7 +2557,7 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.write(value.`thresholdRatio`, buf)
             FfiConverterUInt.write(value.`microKeepRecent`, buf)
             FfiConverterUInt.write(value.`toolRetryLimit`, buf)
-            FfiConverterBoolean.write(value.`greedyAppendBlocks`, buf)
+            FfiConverterString.write(value.`toolSemanticsJson`, buf)
             FfiConverterULong.write(value.`toolResultBudgetCloudBytes`, buf)
             FfiConverterULong.write(value.`toolResultBudgetRelaxedBytes`, buf)
             FfiConverterFloat.write(value.`toolResultTruncationPressureRatio`, buf)
@@ -5382,11 +5343,11 @@ public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<
             FfiConverterTypeFfiCompactionTier.write(it, buf)
         }
     }
-} fun `coerceProviderArguments`(`toolName`: kotlin.String, `argsJson`: kotlin.String): FfiToolParseField {
+} fun `coerceProviderArguments`(`toolName`: kotlin.String, `argsJson`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): FfiToolParseField {
             return FfiConverterTypeFfiToolParseField.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_coerce_provider_arguments(
-        FfiConverterString.lower(`toolName`),FfiConverterString.lower(`argsJson`),_status)
+        FfiConverterString.lower(`toolName`),FfiConverterString.lower(`argsJson`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
 }
     )
     }
@@ -5415,29 +5376,29 @@ public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<
     )
     }
     
- fun `hasLocalToolContract`(`systemPrompt`: kotlin.String): kotlin.Boolean {
+ fun `hasLocalToolContract`(`systemPrompt`: kotlin.String, `toolCatalogJson`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_has_local_tool_contract(
-        FfiConverterString.lower(`systemPrompt`),_status)
+        FfiConverterString.lower(`systemPrompt`),FfiConverterString.lower(`toolCatalogJson`),_status)
 }
     )
     }
     
- fun `parseToolCalls`(`raw`: kotlin.String): FfiToolParseBatch {
+ fun `parseToolCalls`(`raw`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): FfiToolParseBatch {
             return FfiConverterTypeFfiToolParseBatch.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_parse_tool_calls(
-        FfiConverterString.lower(`raw`),_status)
+        FfiConverterString.lower(`raw`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
 }
     )
     }
     
- fun `repairTool`(`name`: kotlin.String, `argsJson`: kotlin.String): RepairResult {
+ fun `repairTool`(`name`: kotlin.String, `argsJson`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): RepairResult {
             return FfiConverterTypeRepairResult.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_repair_tool(
-        FfiConverterString.lower(`name`),FfiConverterString.lower(`argsJson`),_status)
+        FfiConverterString.lower(`name`),FfiConverterString.lower(`argsJson`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
 }
     )
     }
@@ -5451,10 +5412,7 @@ public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<
     )
     }
     
-
-        /**
-         * Mirrors Kotlin soft-failure streak guard (`consecutiveSoftFailureTurns < tool_retry_limit`).
-         */ fun `shouldAllowTool`(`softFailureStreak`: kotlin.UInt, `maxStreak`: kotlin.UInt): kotlin.Boolean {
+ fun `shouldAllowTool`(`softFailureStreak`: kotlin.UInt, `maxStreak`: kotlin.UInt): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_func_should_allow_tool(
@@ -5472,4 +5430,5 @@ public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<
     )
     }
     
+
 
