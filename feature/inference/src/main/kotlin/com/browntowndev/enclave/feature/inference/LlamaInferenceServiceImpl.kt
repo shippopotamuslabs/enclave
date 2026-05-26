@@ -279,18 +279,19 @@ class LlamaInferenceServiceImpl
             if (options.imageUris.isNotEmpty()) {
                 loggingPort.warning(TAG, "Images are not supported in Llama agent loop turns; imageUris will be ignored")
             }
-            val mergedSystemPrompt = if (!contextSidecars.isNullOrBlank()) {
-                "$systemPrompt\n\n$contextSidecars"
-            } else {
-                systemPrompt
-            }
+            val mergedSystemPrompt =
+                if (!contextSidecars.isNullOrBlank()) {
+                    "$systemPrompt\n\n$contextSidecars"
+                } else {
+                    systemPrompt
+                }
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
                     activeTools = availableTools,
                     systemPrompt = mergedSystemPrompt.ifBlank { options.systemPrompt },
                 )
-            val domainHistory = sessionMessages.map(::toLlamaDomainMessage)
+            val domainHistory = sessionMessages.map { message -> toLlamaDomainMessage(message) }
 
             mutex.withLock {
                 history = domainHistory
@@ -317,7 +318,11 @@ class LlamaInferenceServiceImpl
                 }
             }
             val rawText = buffered.fullText
-            val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
+            val timing =
+                telemetrySupport?.let {
+                    com.browntowndev.enclave.feature.inference.telemetry
+                        .InferenceTurnTiming()
+                }
             val captureContext = telemetrySupport?.captureContext(turnOptions)
             val outputTokenEstimate =
                 rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }

@@ -11,6 +11,5 @@ class ObserveUsageSpendSummaryUseCase
     constructor(
         private val repository: InferenceTelemetryRepositoryPort,
     ) {
-        operator fun invoke(period: UsagePeriod): Flow<UsageSpendSummary> =
-            repository.observeUsageSpendSummary(period)
+        operator fun invoke(period: UsagePeriod): Flow<UsageSpendSummary> = repository.observeUsageSpendSummary(period)
     }

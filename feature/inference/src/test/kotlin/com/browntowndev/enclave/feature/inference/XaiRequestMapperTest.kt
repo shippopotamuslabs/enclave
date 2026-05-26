@@ -446,10 +446,10 @@ class XaiRequestMapperTest {
         )
 
     @Test
-    fun `chat fallback is disabled only for multi agent models`() {
+    fun `chat fallback is disabled for grok 420 family`() {
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent"))
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent-0309"))
-        assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-reasoning"))
+        assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-reasoning"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.3"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-code-fast-1"))
     }

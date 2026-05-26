@@ -4,7 +4,7 @@ import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.MessageState
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -22,7 +22,6 @@ import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import javax.inject.Inject
 
 class ChatUiStateReducer

@@ -458,21 +458,22 @@ class MainViewModel
         }
 
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
-            val result = startCloudSyncListeningUseCase(
-                uploadLocalFirst = initialUpload,
-                onProgress = { progress ->
-                    _startupState.update { state ->
-                        if (state is AppStartupState.Ready) {
-                            state.copy(
-                                unlockSyncProgress = progress.progressFraction,
-                                unlockSyncStatus = progress.status
-                            )
-                        } else {
-                            state
+            val result =
+                startCloudSyncListeningUseCase(
+                    uploadLocalFirst = initialUpload,
+                    onProgress = { progress ->
+                        _startupState.update { state ->
+                            if (state is AppStartupState.Ready) {
+                                state.copy(
+                                    unlockSyncProgress = progress.progressFraction,
+                                    unlockSyncStatus = progress.status,
+                                )
+                            } else {
+                                state
+                            }
                         }
-                    }
-                }
-            )
+                    },
+                )
             if (result.isSuccess) {
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
@@ -480,7 +481,7 @@ class MainViewModel
                             cloudSyncDeferred = false,
                             vaultErrorMessage = null,
                             unlockSyncProgress = null,
-                            unlockSyncStatus = null
+                            unlockSyncStatus = null,
                         )
                     } else {
                         it
@@ -495,7 +496,7 @@ class MainViewModel
                         cloudSyncDeferred = true,
                         vaultErrorMessage = "Failed to start cloud sync",
                         unlockSyncProgress = null,
-                        unlockSyncStatus = null
+                        unlockSyncStatus = null,
                     )
                 } else {
                     it

@@ -1,14 +1,11 @@
 package com.browntowndev.enclave.feature.inference.conversation
 
 import android.util.Log
-import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.AppendBlocksParams
 import com.browntowndev.enclave.domain.model.inference.AttachedImageInspectParams
 import com.browntowndev.enclave.domain.model.inference.ExtractDepth
 import com.browntowndev.enclave.domain.model.inference.ExtractFormat
 import com.browntowndev.enclave.domain.model.inference.GetMessageContextParams
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SearchArtifactParams
 import com.browntowndev.enclave.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.enclave.domain.model.inference.SearchChatParams
@@ -17,18 +14,15 @@ import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.WebExtractParams
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.domain.util.NativeToolResultFormatter
-import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.ToolParam
+import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.Json as KJson
 import java.util.concurrent.CancellationException as JavaCancellationException
+import kotlinx.serialization.json.Json as KJson
 
 internal object LiteRtNativeToolsets {
     private const val TAG = "ConversationManager"
@@ -66,8 +60,7 @@ internal object LiteRtNativeToolsets {
     fun buildToolProviders(
         activeToolNames: List<String>,
         context: LiteRtToolContext,
-    ): List<com.google.ai.edge.litertlm.ToolProvider> =
-        buildToolList(activeToolNames, context).map { tool(it) }
+    ): List<com.google.ai.edge.litertlm.ToolProvider> = buildToolList(activeToolNames, context).map { tool(it) }
 
     @Suppress("FunctionNaming")
     internal class LocalDiscloseToolset(
@@ -98,16 +91,17 @@ internal object LiteRtNativeToolsets {
         @com.google.ai.edge.litertlm.Tool(description = "Search the web for information.")
         fun tavily_web_search(
             @ToolParam(description = "The search query.") query: String,
-        ): String = dispatchTool(context, ToolDefinition.WEB_SEARCH) {
-            ToolCallRequest(
-                toolName = ToolDefinition.WEB_SEARCH.name,
-                argumentsJson = ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query)),
-                provider = "LITERT",
-                modelType = context.modelType,
-                chatId = context.chatId,
-                userMessageId = context.userMessageId,
-            )
-        }
+        ): String =
+            dispatchTool(context, ToolDefinition.WEB_SEARCH) {
+                ToolCallRequest(
+                    toolName = ToolDefinition.WEB_SEARCH.name,
+                    argumentsJson = ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query)),
+                    provider = "LITERT",
+                    modelType = context.modelType,
+                    chatId = context.chatId,
+                    userMessageId = context.userMessageId,
+                )
+            }
     }
 
     @Suppress("FunctionNaming")

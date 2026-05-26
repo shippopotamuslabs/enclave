@@ -12,17 +12,12 @@ import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -122,7 +117,12 @@ class ChatViewModelSessionNavigationTest {
                 val loaded = awaitItem()
                 assertEquals(navigationChatId, loaded.chatId)
                 assertEquals(1, loaded.messages.size)
-                assertEquals("Hello from history", loaded.messages.first().content.text)
+                assertEquals(
+                    "Hello from history",
+                    loaded.messages
+                        .first()
+                        .content.text,
+                )
                 cancelAndIgnoreRemainingEvents()
             }
 
@@ -156,8 +156,9 @@ class ChatViewModelSessionNavigationTest {
         }
 
     private fun seedOrchestratorCurrentChatId(chatId: ChatId) {
-        val field = com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator::class.java
-            .getDeclaredField("_currentChatId")
+        val field =
+            com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator::class.java
+                .getDeclaredField("_currentChatId")
         field.isAccessible = true
         @Suppress("UNCHECKED_CAST")
         val flow = field.get(harness.inferenceOrchestrator) as MutableStateFlow<ChatId?>

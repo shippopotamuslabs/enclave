@@ -6,7 +6,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +19,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 @Composable
 fun NeoSegmentedControl(
@@ -39,8 +37,7 @@ fun NeoSegmentedControl(
                     backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .padding(2.dp),
+                ).padding(2.dp),
     ) {
         options.forEachIndexed { index, option ->
             val selected = index == selectedIndex
@@ -56,13 +53,11 @@ fun NeoSegmentedControl(
                             } else {
                                 Modifier
                             },
-                        )
-                        .clickable(
+                        ).clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = { onOptionSelected(index) },
-                        )
-                        .padding(horizontal = 8.dp),
+                        ).padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

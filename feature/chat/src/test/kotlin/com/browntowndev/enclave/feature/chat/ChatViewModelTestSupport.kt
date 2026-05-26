@@ -16,23 +16,23 @@ import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
-import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
-import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
-import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
-import kotlinx.coroutines.flow.flowOf
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.TtsController
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolver
+import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
 import io.mockk.mockk
 import io.mockk.spyk
+import kotlinx.coroutines.flow.flowOf
 
 object ChatViewModelTestSupport {
     data class Harness(
@@ -58,25 +58,26 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-    ): ChatViewModel = createHarness(
-        settingsUseCases = settingsUseCases,
-        chatUseCases = chatUseCases,
-        savedStateHandle = savedStateHandle,
-        cancelInferenceUseCase = cancelInferenceUseCase,
-        inferenceLockManager = inferenceLockManager,
-        modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-        activeModelProvider = activeModelProvider,
-        toolExecutionEventPort = toolExecutionEventPort,
-        errorHandler = errorHandler,
-        loggingPort = loggingPort,
-        activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
-        playbackController = playbackController,
-        studioRepository = studioRepository,
-        shareChatUseCase = shareChatUseCase,
-        chatRepository = chatRepository,
-        exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
-        stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-    ).viewModel
+    ): ChatViewModel =
+        createHarness(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+            playbackController = playbackController,
+            studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
+            chatRepository = chatRepository,
+            exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+        ).viewModel
 
     fun createHarness(
         settingsUseCases: SettingsUseCases,
@@ -159,26 +160,26 @@ object ChatViewModelTestSupport {
             inferenceOrchestrator = inferenceOrchestrator,
             viewModel =
                 ChatViewModel(
-            settingsUseCases = settingsUseCases,
-            chatUseCases = chatUseCases,
-            savedStateHandle = savedStateHandle,
-            inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-            activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
-            errorHandler = errorHandler,
-            loggingPort = loggingPort,
-            studioRepository = studioRepository,
-            inferenceOrchestrator = inferenceOrchestrator,
-            chatInputCoordinator = chatInputCoordinator,
-            speechInputCoordinator = speechInputCoordinator,
-            ttsController = ttsController,
-            toolExecutionBannerCoordinator = toolExecutionBannerCoordinator,
-            artifactExportCoordinator = artifactExportCoordinator,
-            chatShareCoordinator = chatShareCoordinator,
-            chatTelemetryCoordinator = chatTelemetryCoordinator,
-            chatUiStateReducer = chatUiStateReducer,
-            chatMessageUiMapper = chatMessageUiMapper,
-            photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = savedStateHandle,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    studioRepository = studioRepository,
+                    inferenceOrchestrator = inferenceOrchestrator,
+                    chatInputCoordinator = chatInputCoordinator,
+                    speechInputCoordinator = speechInputCoordinator,
+                    ttsController = ttsController,
+                    toolExecutionBannerCoordinator = toolExecutionBannerCoordinator,
+                    artifactExportCoordinator = artifactExportCoordinator,
+                    chatShareCoordinator = chatShareCoordinator,
+                    chatTelemetryCoordinator = chatTelemetryCoordinator,
+                    chatUiStateReducer = chatUiStateReducer,
+                    chatMessageUiMapper = chatMessageUiMapper,
+                    photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
                 ),
         )
     }

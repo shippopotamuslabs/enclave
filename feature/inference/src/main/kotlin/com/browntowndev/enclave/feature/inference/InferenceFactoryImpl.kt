@@ -10,10 +10,14 @@ import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -71,6 +75,8 @@ class InferenceFactoryImpl
         private val toolStreamGatePort: ToolStreamGatePort,
         private val inferenceFactoryProvider: Provider<InferenceFactoryPort>? = null,
         private val telemetrySupport: InferenceTelemetrySupport,
+        private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
+        private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -354,7 +360,7 @@ class InferenceFactoryImpl
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
                                         toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
+                                        telemetrySupport = telemetrySupport,
                                     )
                                 ApiProvider.GOOGLE -> {
                                     val client =
@@ -377,7 +383,7 @@ class InferenceFactoryImpl
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
                                         toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
+                                        telemetrySupport = telemetrySupport,
                                     )
                                 }
                                 ApiProvider.OPENROUTER ->
@@ -393,7 +399,7 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
+                                        telemetrySupport = telemetrySupport,
                                     )
                                 ApiProvider.XAI ->
                                     XaiInferenceServiceImpl(
@@ -408,7 +414,7 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
+                                        telemetrySupport = telemetrySupport,
                                     )
                                 else ->
                                     ApiInferenceServiceImpl(
@@ -424,7 +430,7 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
+                                        telemetrySupport = telemetrySupport,
                                     )
                             }
 
@@ -554,6 +560,8 @@ class InferenceFactoryImpl
                     rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
                     resolveCompactionSummaryModel =
                         ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter),
+                    committedInferencePrompts = committedInferencePrompts,
+                    committedInferenceTranscripts = committedInferenceTranscripts,
                 )
             } else {
                 service

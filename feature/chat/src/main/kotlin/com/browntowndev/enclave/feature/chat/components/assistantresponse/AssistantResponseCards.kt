@@ -79,16 +79,14 @@ internal fun CompletedStepRow(
                 .padding(
                     top = EnclaveNeoTokens.rowSpacing,
                     bottom = EnclaveNeoTokens.rowSpacing + shadowOffset,
-                )
-                .neoSurface(
+                ).neoSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = borderColor,
                     withShadow = true,
                     shadowColor = shadowColor,
                     shadowOffset = shadowOffset,
                     shape = EnclaveNeoTokens.shape,
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(16.dp),
     ) {
         Row(

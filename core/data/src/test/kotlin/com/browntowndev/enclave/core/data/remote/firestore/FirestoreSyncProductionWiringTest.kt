@@ -51,22 +51,23 @@ class FirestoreSyncProductionWiringTest {
                     firestore = firestore,
                     userIdProvider = { "alice" },
                     adapterLookup = mapOf("chats" to adapter),
-                    repairer = mockk<FirestoreSensitiveFieldRepairer>(relaxed = true) {
-                        every { repairInbound(any(), any(), any()) } answers { thirdArg() }
-                    },
+                    repairer =
+                        mockk<FirestoreSensitiveFieldRepairer>(relaxed = true) {
+                            every { repairInbound(any(), any(), any()) } answers { thirdArg() }
+                        },
                     embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true),
                     loggingPort = mockk<LoggingPort>(relaxed = true),
                     syncStateStore = stateStore,
-                    pendingSyncLookup = mockk(relaxed = true) {
-                        coEvery { pendingSync(any(), any()) } returns 0
-                    },
+                    pendingSyncLookup =
+                        mockk(relaxed = true) {
+                            coEvery { pendingSync(any(), any()) } returns 0
+                        },
                 )
             val applier =
                 FirestoreSyncEventApplier(
                     sourceDocuments =
                         object : FirestoreSyncSourceDocumentStore {
-                            override suspend fun getDocument(path: String): Map<String, Any?>? =
-                                mapOf("name" to "cipher")
+                            override suspend fun getDocument(path: String): Map<String, Any?>? = mapOf("name" to "cipher")
                         },
                     localStore = localStore,
                     stateStore = stateStore,

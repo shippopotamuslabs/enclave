@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,8 +21,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 @Composable
@@ -43,8 +43,7 @@ fun NeoPrimaryButton(
                     withShadow = enabled,
                     shadowColor = neoShadowColor(),
                     shadowOffset = neoButtonShadowOffset(),
-                )
-                .clickable(enabled = enabled, onClick = onClick)
+                ).clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,

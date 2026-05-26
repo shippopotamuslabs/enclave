@@ -25,12 +25,18 @@ class AgentEngineActionDriverTest {
         val mapped =
             driver.mapConfigToFfi(
                 AgentLoopAgentConfig(
+                    toolResultBudgetRelaxedBytes = 65536uL,
+                    preflightTokenThreshold = 150000u,
+                    retentionWindowTokens = 16384u,
                     maxModelRequestsPerTurn = 4u,
                     enableLoopHooks = true,
                     enablePendingWorkGuard = true,
                 ),
             )
 
+        assertEquals(65536uL, mapped.toolResultBudgetRelaxedBytes)
+        assertEquals(150000u, mapped.preflightTokenThreshold)
+        assertEquals(16384u, mapped.retentionWindowTokens)
         assertEquals(4u, mapped.maxModelRequestsPerTurn)
         assertTrue(mapped.enableLoopHooks)
         assertTrue(mapped.enablePendingWorkGuard)
@@ -180,6 +186,18 @@ class AgentEngineActionDriverTest {
                 toolContextIndexJson = null,
                 fileContextIndexJson = null,
                 cacheHints = emptyList(),
+                providerContext =
+                    FfiProviderContextSnapshot(
+                        transcriptRevision = 0u,
+                        sidecarGeneration = 0u,
+                        sidecarByteLen = 0u,
+                        compactionPassesThisTurn = 0u,
+                        destructiveTiersThisTurn = 0u,
+                        pressureRatioAtCallModelMillis = 0u,
+                    ),
+                stateLedgerDeltaJson = null,
+                toolContextIndexDeltaJson = null,
+                fileContextIndexDeltaJson = null,
             ),
         )
 
@@ -203,6 +221,7 @@ class AgentEngineActionDriverTest {
             toolContextIndexJson: String?,
             fileContextIndexJson: String?,
             cacheHints: List<String>,
+            transcriptRevision: Long,
             onTextToken: suspend (String) -> Unit,
             onThinkingToken: suspend (String) -> Unit,
         ): AgentModelTurnResult {

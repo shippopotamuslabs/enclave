@@ -18,7 +18,6 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
-import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

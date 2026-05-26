@@ -17,10 +17,11 @@ fun ResponseStatsBottomSheet(
     if (!state.isVisible) return
     NeoTelemetryStatsSheet(
         title = state.title,
-        subtitle = listOfNotNull(state.providerLabel, state.modelLabel)
-            .filter { it.isNotBlank() }
-            .joinToString(" · ")
-            .takeIf { it.isNotBlank() },
+        subtitle =
+            listOfNotNull(state.providerLabel, state.modelLabel)
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+                .takeIf { it.isNotBlank() },
         onDismiss = onDismiss,
         sheetTestTag = "response_stats_sheet",
         modifier = modifier,

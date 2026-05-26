@@ -124,6 +124,9 @@ class RustAgentEngineAdapter
                                                 toolContextIndexJson = action.request.toolContextIndexJson,
                                                 fileContextIndexJson = action.request.fileContextIndexJson,
                                                 cacheHints = action.request.cacheHints,
+                                                transcriptRevision =
+                                                    action.request.providerContext.transcriptRevision
+                                                        .toLong(),
                                                 onTextToken = { text ->
                                                     textGate.onProviderTextChunk(text) { emitted ->
                                                         channel.send(AgentLoopEvent.TextToken(emitted))
@@ -375,6 +378,8 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig
         toolRetryLimit = toolRetryLimit,
         greedyAppendBlocks = greedyAppendBlocks,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
+        toolResultBudgetRelaxedBytes = toolResultBudgetRelaxedBytes,
+        toolResultTruncationPressureRatio = toolResultTruncationPressureRatio,
         midTurnThresholdRatio = midTurnThresholdRatio,
         postToolResultThresholdRatio = postToolResultThresholdRatio,
         manualCompactThresholdRatio = manualCompactThresholdRatio,
@@ -392,9 +397,27 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig
         historySnapshotThresholdTokens = historySnapshotThresholdTokens,
         fileOutlineThresholdTokens = fileOutlineThresholdTokens,
         promptCacheAnchorThresholdTokens = promptCacheAnchorThresholdTokens,
+        outputReserveRatio = outputReserveRatio,
+        outputReserveFloorTokens = outputReserveFloorTokens,
+        outputReserveMaxTokens = outputReserveMaxTokens,
+        preflightTokenThreshold = preflightTokenThreshold,
+        midTurnTokenThreshold = midTurnTokenThreshold,
+        postToolResultTokenThreshold = postToolResultTokenThreshold,
+        messageThreshold = messageThreshold,
+        retentionWindowTokens = retentionWindowTokens,
         maxModelRequestsPerTurn = maxModelRequestsPerTurn,
         enableLoopHooks = enableLoopHooks,
         enablePendingWorkGuard = enablePendingWorkGuard,
+        longLoop = longLoop.toFfi(),
+    )
+
+private fun com.browntowndev.enclave.domain.model.inference.AgentLoopLongLoopPolicy.toFfi(): FfiLongLoopPolicy =
+    FfiLongLoopPolicy(
+        maxToolTurns = maxToolTurns,
+        sidecarByteBudgetPerCall = sidecarByteBudgetPerCall,
+        sidecarTotalByteBudget = sidecarTotalByteBudget,
+        summarizeAfterToolTurns = summarizeAfterToolTurns,
+        compactEveryNToolTurns = compactEveryNToolTurns,
     )
 
 private fun com.browntowndev.enclave.domain.model.inference.AgentLoopSessionCapabilities.toFfi(): FfiSessionCapabilities =

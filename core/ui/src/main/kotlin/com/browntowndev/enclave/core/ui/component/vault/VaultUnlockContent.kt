@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -41,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,7 +50,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.ShimmerText
 import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
@@ -222,7 +221,7 @@ fun VaultUnlockContent(
                         text = unlockSyncStatus ?: "Signing In...",
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag("unlock_sync_status_text")
+                        modifier = Modifier.testTag("unlock_sync_status_text"),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     if (unlockSyncProgress != null) {
@@ -232,18 +231,20 @@ fun VaultUnlockContent(
                             strokeCap = StrokeCap.Butt,
                             gapSize = 0.dp,
                             drawStopIndicator = {},
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(EnclaveNeoTokens.shape)
-                                .testTag("unlock_sync_progress_indicator")
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(EnclaveNeoTokens.shape)
+                                    .testTag("unlock_sync_progress_indicator"),
                         )
                     } else {
                         LinearProgressIndicator(
                             strokeCap = StrokeCap.Butt,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(EnclaveNeoTokens.shape)
-                                .testTag("unlock_sync_progress_indicator_indeterminate")
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(EnclaveNeoTokens.shape)
+                                    .testTag("unlock_sync_progress_indicator_indeterminate"),
                         )
                     }
                 }
@@ -283,8 +284,7 @@ fun VaultUnlockContent(
                                     backgroundColor = MaterialTheme.colorScheme.errorContainer,
                                     borderColor = MaterialTheme.colorScheme.error,
                                     withShadow = false,
-                                )
-                                .padding(16.dp),
+                                ).padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(

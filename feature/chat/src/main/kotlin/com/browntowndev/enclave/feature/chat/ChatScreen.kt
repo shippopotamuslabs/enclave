@@ -19,10 +19,10 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.components.InputBar
 import com.browntowndev.enclave.feature.chat.components.ShareBottomSheet
-import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
-import com.browntowndev.enclave.feature.chat.components.messagelist.MessageList
 import com.browntowndev.enclave.feature.chat.components.ShieldOverlay
 import com.browntowndev.enclave.feature.chat.components.StreamingResponseHapticEffect
+import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
+import com.browntowndev.enclave.feature.chat.components.messagelist.MessageList
 
 @Suppress("LongParameterList")
 @Composable
@@ -109,90 +109,89 @@ fun ChatScreen(
             )
 
             Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding())
-                    .imePadding(),
-        ) {
-            // Message area — shrinks via weight(1f) when keyboard opens
-            Box(modifier = Modifier.weight(1f)) {
-                MessageList(
-                    modifier = Modifier.fillMaxSize(),
-                    messages = uiState.messages,
-                    hasActiveIndicator = uiState.hasActiveIndicator,
-                    activeToolCallBanner = uiState.activeToolCallBanner,
-                    activeIndicatorMessageId = uiState.activeIndicatorMessageId,
-                    hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
-                    chatMode = uiState.selectedMode,
-                    onEditMessage = onEditMessage,
-                    onPlayAudio = onPlayAudio,
-                    onArtifactCardClick = onArtifactCardClick,
-                    onNavigateToStudio = onNavigateToStudio,
-                    onShareClick = onShareClick,
-                    onStatsClick = onStatsClick,
-                )
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = innerPadding.calculateTopPadding())
+                        .imePadding(),
+            ) {
+                // Message area — shrinks via weight(1f) when keyboard opens
+                Box(modifier = Modifier.weight(1f)) {
+                    MessageList(
+                        modifier = Modifier.fillMaxSize(),
+                        messages = uiState.messages,
+                        hasActiveIndicator = uiState.hasActiveIndicator,
+                        activeToolCallBanner = uiState.activeToolCallBanner,
+                        activeIndicatorMessageId = uiState.activeIndicatorMessageId,
+                        hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
+                        chatMode = uiState.selectedMode,
+                        onEditMessage = onEditMessage,
+                        onPlayAudio = onPlayAudio,
+                        onArtifactCardClick = onArtifactCardClick,
+                        onNavigateToStudio = onNavigateToStudio,
+                        onShareClick = onShareClick,
+                        onStatsClick = onStatsClick,
+                    )
 
-                if (uiState.shieldReason != null) {
-                    ShieldOverlay(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(16.dp),
-                        reason = uiState.shieldReason ?: "",
-                        onTap = onShieldTap,
+                    if (uiState.shieldReason != null) {
+                        ShieldOverlay(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(16.dp),
+                            reason = uiState.shieldReason ?: "",
+                            onTap = onShieldTap,
+                        )
+                    }
+                }
+
+                if (!uiState.isReadOnly) {
+                    InputBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        inputText = uiState.inputText,
+                        speechState = uiState.speechState,
+                        selectedImageUris = uiState.selectedImageUris,
+                        selectedFileName = uiState.selectedFileName,
+                        isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
+                        photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
+                        photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
+                        selectedMode = uiState.selectedMode,
+                        isGenerating = uiState.isGenerating,
+                        canStop = uiState.canStop,
+                        isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
+                        onInputChange = onInputChange,
+                        onModeChange = onModeChange,
+                        onSend = onSendMessage,
+                        onStopGenerating = onStopGenerating,
+                        onImageAttach = {
+                            if (uiState.photoAttachmentMaxItems > 1) {
+                                multipleImagePickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            } else {
+                                singleImagePickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            }
+                        },
+                        onFileAttach = {
+                            filePickerLauncher.launch(
+                                arrayOf(
+                                    "text/*",
+                                    "application/json",
+                                    "application/xml",
+                                    "application/javascript",
+                                    "application/x-yaml",
+                                    "application/toml",
+                                ),
+                            )
+                        },
+                        onClearImage = onRemoveImage,
+                        onClearFile = onClearFile,
+                        onMicClick = onMicClick,
                     )
                 }
             }
-
-            if (!uiState.isReadOnly) {
-                InputBar(
-                    modifier = Modifier.fillMaxWidth(),
-                    inputText = uiState.inputText,
-                    speechState = uiState.speechState,
-                    selectedImageUris = uiState.selectedImageUris,
-                    selectedFileName = uiState.selectedFileName,
-                    isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
-                    photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
-                    photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
-                    selectedMode = uiState.selectedMode,
-                    isGenerating = uiState.isGenerating,
-                    canStop = uiState.canStop,
-                    isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
-                    onInputChange = onInputChange,
-                    onModeChange = onModeChange,
-                    onSend = onSendMessage,
-                    onStopGenerating = onStopGenerating,
-                    onImageAttach = {
-                        if (uiState.photoAttachmentMaxItems > 1) {
-                            multipleImagePickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        } else {
-                            singleImagePickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        }
-                    },
-                    onFileAttach = {
-                        filePickerLauncher.launch(
-                            arrayOf(
-                                "text/*",
-                                "application/json",
-                                "application/xml",
-                                "application/javascript",
-                                "application/x-yaml",
-                                "application/toml",
-                            ),
-                        )
-                    },
-                    onClearImage = onRemoveImage,
-                    onClearFile = onClearFile,
-                    onMicClick = onMicClick,
-                )
-            }
-        }
         }
     }
 }
-

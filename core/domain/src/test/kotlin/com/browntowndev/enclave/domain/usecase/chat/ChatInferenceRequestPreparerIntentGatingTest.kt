@@ -12,7 +12,6 @@ import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -50,7 +49,9 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             assertTrue(request.options.activeTools.any { it.name == "search_x_recent" })
             assertEquals(
                 ToolDisclosureMode.INTENT_ACTIVATED,
-                request.options.toolCatalog.single { it.name == "search_x_recent" }.disclosureMode,
+                request.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode,
             )
         }
 
@@ -105,6 +106,7 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                 request.options.systemPrompt == null ||
                     !request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"),
             )
+            assertTrue(request.options.volatileTurnContext.isNullOrBlank())
         }
 
     @Test
@@ -133,8 +135,9 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             val activeNames = request.options.activeTools.map { it.name }
             assertTrue(activeNames.contains("start_artifact"))
             assertTrue(activeNames.contains("search_x_recent"))
-            assertTrue(request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
-            assertTrue(request.options.systemPrompt!!.contains("Fixture search body"))
+            assertFalse(request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
+            assertTrue(request.options.volatileTurnContext!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
+            assertTrue(request.options.volatileTurnContext!!.contains("Fixture search body"))
         }
 
     @Test
@@ -301,7 +304,8 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             assertTrue(request.options.activeTools.any { it.name == "web_search" })
             assertFalse(request.options.activeTools.any { it.name == "search_x_recent" })
             assertFalse(request.options.toolCatalog.any { it.name == "search_x_recent" })
-            assertTrue(request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
+            assertFalse(request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
+            assertTrue(request.options.volatileTurnContext!!.contains("# RELEVANT WEB SEARCH RESULTS:"))
         }
 
     @Test

@@ -3,6 +3,8 @@ package com.browntowndev.enclave.feature.inference.openai
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.completions.CompletionUsage
 import com.openai.models.completions.CompletionUsage.PromptTokensDetails
+import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseUsage
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -30,5 +32,51 @@ class OpenAiStreamUsageAccumulatorTest {
         assertEquals(12_000, state.inputTokens)
         assertEquals(50, state.outputTokens)
         assertEquals(9_500, state.cacheReadInputTokens)
+    }
+
+    @Test
+    fun accumulateResponseStreamUsage_mapsInputOutputCacheAndReasoning() {
+        val state = OpenAiStreamUsageAccumulator()
+        val usage = mockk<ResponseUsage>()
+        val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
+        val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
+
+        every { usage.inputTokens() } returns 12_000L
+        every { usage.outputTokens() } returns 50L
+        every { usage.inputTokensDetails() } returns inputDetails
+        every { usage.outputTokensDetails() } returns outputDetails
+        every { inputDetails.cachedTokens() } returns 9_500L
+        every { outputDetails.reasoningTokens() } returns 12L
+
+        accumulateResponseStreamUsage(usage, state)
+
+        assertEquals(12_000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9_500, state.cacheReadInputTokens)
+        assertEquals(12, state.reasoningTokens)
+    }
+
+    @Test
+    fun accumulateResponseStreamUsage_readsUsageFromCompletedResponse() {
+        val state = OpenAiStreamUsageAccumulator()
+        val response = mockk<Response>()
+        val usage = mockk<ResponseUsage>()
+        val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
+        val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
+
+        every { response.usage() } returns Optional.of(usage)
+        every { usage.inputTokens() } returns 1_000L
+        every { usage.outputTokens() } returns 200L
+        every { usage.inputTokensDetails() } returns inputDetails
+        every { usage.outputTokensDetails() } returns outputDetails
+        every { inputDetails.cachedTokens() } returns 400L
+        every { outputDetails.reasoningTokens() } returns 0L
+
+        accumulateResponseStreamUsage(response, state)
+
+        assertEquals(1_000, state.inputTokens)
+        assertEquals(200, state.outputTokens)
+        assertEquals(400, state.cacheReadInputTokens)
+        assertEquals(null, state.reasoningTokens)
     }
 }

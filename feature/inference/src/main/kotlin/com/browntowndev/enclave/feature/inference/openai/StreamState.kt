@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.openai
 
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.openai.models.responses.Response
 
 /**
  * Tracks the mutable accumulator for an OpenAI Responses API streaming session.
@@ -25,7 +26,19 @@ data class StreamState(
     val refusalTextByPart: MutableMap<String, StringBuilder> = mutableMapOf(),
     val streamedAssistantMessage: StringBuilder = StringBuilder(),
     val capturedFunctionCallByKey: MutableMap<String, CapturedFunctionCall> = mutableMapOf(),
-)
+) {
+    private val usageAccumulator = OpenAiStreamUsageAccumulator()
+
+    val inputTokens: Int? get() = usageAccumulator.inputTokens
+    val outputTokens: Int? get() = usageAccumulator.outputTokens
+    val reasoningTokens: Int? get() = usageAccumulator.reasoningTokens
+    val cacheReadInputTokens: Int? get() = usageAccumulator.cacheReadInputTokens
+    val cacheWriteInputTokens: Int? get() = usageAccumulator.cacheWriteInputTokens
+
+    fun applyResponseUsage(response: Response) {
+        accumulateResponseStreamUsage(response, usageAccumulator)
+    }
+}
 
 /**
  * Captured function-call metadata from output_item_added and output_item_done events.

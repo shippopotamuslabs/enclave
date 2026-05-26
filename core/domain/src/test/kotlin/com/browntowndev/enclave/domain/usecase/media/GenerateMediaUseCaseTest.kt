@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.media
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
@@ -186,7 +185,13 @@ class GenerateMediaUseCaseTest {
                     ),
                 )
 
-            assertTrue(result.getOrThrow().first().id.startsWith("chat_media_"))
+            assertTrue(
+                result
+                    .getOrThrow()
+                    .first()
+                    .id
+                    .startsWith("chat_media_"),
+            )
         }
 
     @Test

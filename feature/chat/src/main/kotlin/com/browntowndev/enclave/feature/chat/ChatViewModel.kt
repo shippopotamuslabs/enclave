@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.chat
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,12 +25,13 @@ import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.domain.util.throttleLatest
+import com.browntowndev.enclave.feature.chat.BuildConfig
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
-import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ToolExecutionBannerCoordinator
@@ -38,9 +40,7 @@ import com.browntowndev.enclave.feature.chat.delegates.maybeAcknowledgeCompleted
 import com.browntowndev.enclave.feature.chat.delegates.resolveActiveTurnSnapshotObserveKey
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolver
-import com.browntowndev.enclave.feature.chat.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.util.Log
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +58,6 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -352,63 +351,7 @@ class ChatViewModel
                 chatTelemetryCoordinator.responseStatsSheet,
                 chatTelemetryCoordinator.chatStatsSheet,
             ) { args: Array<Any?> ->
-                val inputsWithPolicy = args[0] as UiInputsWithPolicy
-                val isBlocked = args[1] as Boolean
-                val dbMessages = args[2] as List<Message>
-                val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
-                val ttsPlayback = args[4] as Triple<*, *, *>
-                val studioMediaMap = args[5] as Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>
-                val shareState = args[6] as ShareState
-                val isReadOnly = args[7] as Boolean
-                val sharedMessages = args[8] as List<Message>
-                val artifactExportSheet = args[9] as ArtifactExportSheetState
-                val modelDisplayNames = args[10] as Map<ModelType, String>
-                val chatId = args[UI_STATE_CHAT_ID_INDEX] as ChatId?
-                val responseStatsSheet =
-                    args[UI_STATE_RESPONSE_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
-                val chatStatsSheet =
-                    args[UI_STATE_CHAT_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ChatStatsSheetUiState
-
-                val inputs = inputsWithPolicy.inputs
-                val reduceResult =
-                    chatUiStateReducer.reduce(
-                        ChatUiStateReducer.ReduceParams(
-                            settings = inputs.settings,
-                            inputText = inputs.inputText,
-                            selectedMode = inputs.selectedMode,
-                            selectedImageUris = inputs.selectedImageUris,
-                            selectedFileName = inputs.selectedFileName,
-                            speechState = inputs.speechState,
-                            attachmentPolicy = inputsWithPolicy.attachmentPolicy,
-                            isGlobalInferenceBlocked = isBlocked,
-                            dbMessages = dbMessages,
-                            activeTurnKey = activeTurnSnapshotState.key,
-                            activeTurnSnapshot = activeTurnSnapshotState.snapshot,
-                            activeToolCallBanner = ttsPlayback.first as ToolCallBannerUi?,
-                            hasTtsProviderAssigned = ttsPlayback.second as Boolean,
-                            isPlayingTts = ttsPlayback.third as Boolean,
-                            studioMediaMap = studioMediaMap,
-                            shareState = shareState,
-                            isReadOnly = isReadOnly,
-                            sharedMessages = sharedMessages,
-                            artifactExportSheet = artifactExportSheet,
-                            chatId = chatId,
-                            modelDisplayNames = modelDisplayNames,
-                        ),
-                    )
-                reduceResult.acknowledgedTurnKey?.let { key ->
-                    maybeAcknowledgeCompletedTurn(
-                        key = key,
-                        dbMessages = dbMessages,
-                        activeSnapshot = activeTurnSnapshotState.snapshot,
-                        acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
-                        onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
-                    )
-                }
-                reduceResult.uiState.copy(
-                    responseStatsSheet = responseStatsSheet,
-                    chatStatsSheet = chatStatsSheet,
-                )
+                reduceChatUiStateFromArgs(args, chatUiStateReducer, inferenceOrchestrator)
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
@@ -486,8 +429,7 @@ class ChatViewModel
 
         fun dismissArtifactExportSheet() = artifactExportCoordinator.dismissArtifactExportSheet()
 
-        fun onArtifactExportSelectFormat(format: WizardExportFormat) =
-            artifactExportCoordinator.onArtifactExportSelectFormat(format)
+        fun onArtifactExportSelectFormat(format: WizardExportFormat) = artifactExportCoordinator.onArtifactExportSelectFormat(format)
 
         fun onArtifactExportSelectDestination(destination: WizardExportDestination) =
             artifactExportCoordinator.onArtifactExportSelectDestination(destination)
@@ -578,8 +520,11 @@ class ChatViewModel
             val activeTurnKey = activeTurnKeyFlow.value ?: currentUiState.activeTurnKeyFromIndicator()
             val finalContent =
                 activeTurnKey
-                    ?.let { key -> activeTurnSnapshotStateFlow.value.snapshot?.messages?.get(key.assistantMessageId) }
-                    ?.content
+                    ?.let { key ->
+                        activeTurnSnapshotStateFlow.value.snapshot
+                            ?.messages
+                            ?.get(key.assistantMessageId)
+                    }?.content
             inferenceOrchestrator.stopInference(
                 scope = viewModelScope,
                 activeTurnKey = activeTurnKey,
@@ -672,7 +617,11 @@ class ChatViewModel
                     ?.get(messageId)
                     ?.telemetryRows
                     ?.takeIf { it.isNotEmpty() }
-                    ?: snapshot?.messages?.values?.flatMap { it.telemetryRows }.orEmpty()
+                    ?: snapshot
+                        ?.messages
+                        ?.values
+                        ?.flatMap { it.telemetryRows }
+                        .orEmpty()
             chatTelemetryCoordinator.onResponseStatsClick(
                 messageId = messageId,
                 inMemoryTelemetryRows = inMemoryRows,
@@ -700,8 +649,7 @@ class ChatViewModel
             speechInputCoordinator.onMicClick(viewModelScope, chatInputCoordinator.inputText.value)
         }
 
-        internal fun mapToChatMessageForTesting(message: Message): ChatMessage =
-            chatMessageUiMapper.map(message, _modelDisplayNames.value)
+        internal fun mapToChatMessageForTesting(message: Message): ChatMessage = chatMessageUiMapper.map(message, _modelDisplayNames.value)
 
         private fun markWebSearchSourceExtracted(url: String) {
             val key = activeTurnKeyFlow.value ?: return
@@ -719,40 +667,106 @@ class ChatViewModel
             speechInputCoordinator.stopListening()
         }
 
-        private data class UiInputs(
-            val settings: SettingsData,
-            val inputText: String,
-            val selectedMode: ChatModeUi,
-            val selectedImageUris: List<String>,
-            val selectedFileName: String?,
-            val speechState: SpeechState,
-        )
-
-        private data class UiInputsWithPolicy(
-            val inputs: UiInputs,
-            val attachmentPolicy: com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy,
-        )
-
-        private data class ActiveTurnCandidate(
-            val chatId: ChatId?,
-            val messages: List<Message>,
-            val key: ActiveChatTurnKey?,
-        )
-
-        private data class ActiveTurnSnapshotState(
-            val key: ActiveChatTurnKey?,
-            val snapshot: AccumulatedMessages?,
-        )
-
         private companion object {
             private const val TAG = "ChatViewModel"
             private const val SUBSCRIBE_TIMEOUT_MS = 5000L
-            private const val UI_STATE_CHAT_ID_INDEX = 11
-            private const val UI_STATE_RESPONSE_STATS_INDEX = 12
-            private const val UI_STATE_CHAT_STATS_INDEX = 13
             private const val SAVED_STATE_CHAT_ID_KEY = "chatId"
         }
     }
+
+private const val UI_STATE_CHAT_ID_INDEX = 11
+private const val UI_STATE_RESPONSE_STATS_INDEX = 12
+private const val UI_STATE_CHAT_STATS_INDEX = 13
+
+@Suppress("LongMethod")
+private fun reduceChatUiStateFromArgs(
+    args: Array<Any?>,
+    chatUiStateReducer: ChatUiStateReducer,
+    inferenceOrchestrator: InferenceOrchestrator,
+): ChatUiState {
+    val inputsWithPolicy = args[0] as UiInputsWithPolicy
+    val isBlocked = args[1] as Boolean
+    val dbMessages = args[2] as List<Message>
+    val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
+    val ttsPlayback = args[4] as Triple<*, *, *>
+    val studioMediaMap = args[5] as Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>
+    val shareState = args[6] as ShareState
+    val isReadOnly = args[7] as Boolean
+    val sharedMessages = args[8] as List<Message>
+    val artifactExportSheet = args[9] as ArtifactExportSheetState
+    val modelDisplayNames = args[10] as Map<ModelType, String>
+    val chatId = args[UI_STATE_CHAT_ID_INDEX] as ChatId?
+    val responseStatsSheet =
+        args[UI_STATE_RESPONSE_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
+    val chatStatsSheet =
+        args[UI_STATE_CHAT_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ChatStatsSheetUiState
+
+    val inputs = inputsWithPolicy.inputs
+    val reduceResult =
+        chatUiStateReducer.reduce(
+            ChatUiStateReducer.ReduceParams(
+                settings = inputs.settings,
+                inputText = inputs.inputText,
+                selectedMode = inputs.selectedMode,
+                selectedImageUris = inputs.selectedImageUris,
+                selectedFileName = inputs.selectedFileName,
+                speechState = inputs.speechState,
+                attachmentPolicy = inputsWithPolicy.attachmentPolicy,
+                isGlobalInferenceBlocked = isBlocked,
+                dbMessages = dbMessages,
+                activeTurnKey = activeTurnSnapshotState.key,
+                activeTurnSnapshot = activeTurnSnapshotState.snapshot,
+                activeToolCallBanner = ttsPlayback.first as ToolCallBannerUi?,
+                hasTtsProviderAssigned = ttsPlayback.second as Boolean,
+                isPlayingTts = ttsPlayback.third as Boolean,
+                studioMediaMap = studioMediaMap,
+                shareState = shareState,
+                isReadOnly = isReadOnly,
+                sharedMessages = sharedMessages,
+                artifactExportSheet = artifactExportSheet,
+                chatId = chatId,
+                modelDisplayNames = modelDisplayNames,
+            ),
+        )
+    reduceResult.acknowledgedTurnKey?.let { key ->
+        maybeAcknowledgeCompletedTurn(
+            key = key,
+            dbMessages = dbMessages,
+            activeSnapshot = activeTurnSnapshotState.snapshot,
+            acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
+            onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
+        )
+    }
+    return reduceResult.uiState.copy(
+        responseStatsSheet = responseStatsSheet,
+        chatStatsSheet = chatStatsSheet,
+    )
+}
+
+private data class UiInputs(
+    val settings: SettingsData,
+    val inputText: String,
+    val selectedMode: ChatModeUi,
+    val selectedImageUris: List<String>,
+    val selectedFileName: String?,
+    val speechState: SpeechState,
+)
+
+private data class UiInputsWithPolicy(
+    val inputs: UiInputs,
+    val attachmentPolicy: com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy,
+)
+
+private data class ActiveTurnCandidate(
+    val chatId: ChatId?,
+    val messages: List<Message>,
+    val key: ActiveChatTurnKey?,
+)
+
+private data class ActiveTurnSnapshotState(
+    val key: ActiveChatTurnKey?,
+    val snapshot: AccumulatedMessages?,
+)
 
 private fun ChatUiState.activeTurnKeyFromIndicator(): ActiveChatTurnKey? {
     val chatId = chatId ?: return null

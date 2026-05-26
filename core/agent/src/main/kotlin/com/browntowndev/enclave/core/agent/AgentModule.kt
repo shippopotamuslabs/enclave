@@ -2,9 +2,9 @@ package com.browntowndev.enclave.core.agent
 
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

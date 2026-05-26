@@ -5,9 +5,9 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
-import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
 import com.google.ai.edge.litertlm.Message as LiteRtMessage
+import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 
 internal object ConversationHistoryHandler {
     private const val TAG = "ConversationManager"

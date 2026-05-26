@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.Base64ImageSource
+import com.anthropic.models.messages.CacheControlEphemeral
 import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.ImageBlockParam
 import com.anthropic.models.messages.MessageCreateParams
@@ -9,7 +10,6 @@ import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
 import com.anthropic.models.messages.Tool
-import com.anthropic.models.messages.CacheControlEphemeral
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
@@ -73,10 +73,12 @@ object AnthropicRequestMapper {
         val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(modelId)
         if (systemPromptStr.isNotBlank()) {
             if (useCaching) {
-                val systemBlock = TextBlockParam.builder()
-                    .text(systemPromptStr)
-                    .cacheControl(CacheControlEphemeral.builder().build())
-                    .build()
+                val systemBlock =
+                    TextBlockParam
+                        .builder()
+                        .text(systemPromptStr)
+                        .cacheControl(CacheControlEphemeral.builder().build())
+                        .build()
                 builder.systemOfTextBlockParams(listOf(systemBlock))
             } else {
                 builder.system(systemPromptStr)
@@ -88,19 +90,24 @@ object AnthropicRequestMapper {
             val isLast = index == activeHistory.size - 1
             val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
             if (useCaching && isLast) {
-                val textBlockBuilder = TextBlockParam.builder().text(sanitizedContent)
-                    .cacheControl(CacheControlEphemeral.builder().build())
-                val role = when (message.role) {
-                    Role.USER -> MessageParam.Role.USER
-                    Role.ASSISTANT -> MessageParam.Role.ASSISTANT
-                    Role.SYSTEM -> null
-                }
+                val textBlockBuilder =
+                    TextBlockParam
+                        .builder()
+                        .text(sanitizedContent)
+                        .cacheControl(CacheControlEphemeral.builder().build())
+                val role =
+                    when (message.role) {
+                        Role.USER -> MessageParam.Role.USER
+                        Role.ASSISTANT -> MessageParam.Role.ASSISTANT
+                        Role.SYSTEM -> null
+                    }
                 if (role != null) {
                     builder.addMessage(
-                        MessageParam.builder()
+                        MessageParam
+                            .builder()
                             .role(role)
                             .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                            .build()
+                            .build(),
                     )
                 }
             } else {
@@ -211,18 +218,19 @@ object AnthropicRequestMapper {
 }
 
 internal fun ToolDefinition.toAnthropicTool(cacheControl: CacheControlEphemeral? = null): Tool {
-    val builder = Tool
-        .builder()
-        .name(name)
-        .description(description)
-        .inputSchema(
-            Tool.InputSchema
-                .builder()
-                .type(JsonValue.from("object"))
-                .properties(anthropicToolProperties())
-                .required(schema.required)
-                .build(),
-        ).strict(true)
+    val builder =
+        Tool
+            .builder()
+            .name(name)
+            .description(description)
+            .inputSchema(
+                Tool.InputSchema
+                    .builder()
+                    .type(JsonValue.from("object"))
+                    .properties(anthropicToolProperties())
+                    .required(schema.required)
+                    .build(),
+            ).strict(true)
     if (cacheControl != null) {
         builder.cacheControl(cacheControl)
     }

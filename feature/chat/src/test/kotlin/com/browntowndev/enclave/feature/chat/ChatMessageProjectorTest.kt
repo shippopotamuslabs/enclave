@@ -232,7 +232,12 @@ class ChatMessageProjectorTest {
 
         val orphanOnly = projector.project(emptyList(), thinkingSnapshot, newKey)
         assertEquals(MessageState.PROCESSING, orphanOnly.messages.single().messageState)
-        assertTrue(orphanOnly.messages.single().transcriptSegments.isEmpty())
+        assertTrue(
+            orphanOnly.messages
+                .single()
+                .transcriptSegments
+                .isEmpty(),
+        )
 
         val withDbRow =
             projector.project(
@@ -285,7 +290,12 @@ class ChatMessageProjectorTest {
         val second = projector.project(listOf(updatedDb), null, null)
 
         assertNotSame(first.messages.single(), second.messages.single())
-        assertEquals("visible answer", second.messages.single().content.text)
+        assertEquals(
+            "visible answer",
+            second.messages
+                .single()
+                .content.text,
+        )
     }
 
     @Test
@@ -323,8 +333,25 @@ class ChatMessageProjectorTest {
         val result = projector.project(dbMessages, snapshot, key)
 
         assertEquals(1, result.messages.size)
-        assertEquals(2, result.messages.single().content.artifacts.size)
-        assertEquals("Doc 1", result.messages.single().content.artifacts[0].title)
-        assertEquals("Doc 2", result.messages.single().content.artifacts[1].title)
+        assertEquals(
+            2,
+            result.messages
+                .single()
+                .content.artifacts.size,
+        )
+        assertEquals(
+            "Doc 1",
+            result.messages
+                .single()
+                .content.artifacts[0]
+                .title,
+        )
+        assertEquals(
+            "Doc 2",
+            result.messages
+                .single()
+                .content.artifacts[1]
+                .title,
+        )
     }
 }

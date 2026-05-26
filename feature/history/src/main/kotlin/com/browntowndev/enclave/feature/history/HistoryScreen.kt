@@ -59,12 +59,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -356,12 +356,10 @@ private fun HistoryChatItem(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .combinedClickable(
+                ).combinedClickable(
                     onClick = onClick,
                     onLongClick = onShowOptions,
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -408,8 +406,7 @@ private fun HistoryChatSkeletonItem(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -565,4 +562,3 @@ private fun BottomSheetOption(
         Icon(imageVector = icon, contentDescription = null)
     }
 }
-

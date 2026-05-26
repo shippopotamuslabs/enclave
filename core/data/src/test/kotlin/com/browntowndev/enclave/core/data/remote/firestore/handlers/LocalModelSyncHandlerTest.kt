@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.robolectric.annotation.Config as RobolectricConfig
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.concurrent.atomic.AtomicBoolean
+import org.robolectric.annotation.Config as RobolectricConfig
 
 @ExtendWith(RobolectricExtension::class)
 @RobolectricConfig(sdk = [34])
@@ -52,23 +52,23 @@ class LocalModelSyncHandlerTest {
     @Test
     fun `SCN-SYNC-001 toFirestore writes display_name`() =
         runTest {
-        val entity =
-            LocalModelEntity(
-                id = LocalModelId("model-1"),
-                modelFileFormat = ModelFileFormat.GGUF,
-                displayName = "Qwen 3.5 2B",
-                huggingFaceModelName = "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
-                remoteFilename = "model.gguf",
-                localFilename = "model.gguf",
-                sha256 = "qwen-sha",
-                sizeInBytes = 100L,
-                updatedAt = 1_700_000_000_000L,
-                deleted = false,
-            )
+            val entity =
+                LocalModelEntity(
+                    id = LocalModelId("model-1"),
+                    modelFileFormat = ModelFileFormat.GGUF,
+                    displayName = "Qwen 3.5 2B",
+                    huggingFaceModelName = "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
+                    remoteFilename = "model.gguf",
+                    localFilename = "model.gguf",
+                    sha256 = "qwen-sha",
+                    sizeInBytes = 100L,
+                    updatedAt = 1_700_000_000_000L,
+                    deleted = false,
+                )
 
-        val payload = handler.toFirestore(entity)
+            val payload = handler.toFirestore(entity)
 
-        assertEquals("Qwen 3.5 2B", payload["display_name"])
+            assertEquals("Qwen 3.5 2B", payload["display_name"])
         }
 
     @Test

@@ -9,8 +9,10 @@ import com.browntowndev.enclave.domain.model.chat.Role
  *
  * @property role The role of the message sender
  * @property content The text content of the message
+ * @property metadataJson Provider/agent metadata used only by inference rehydration.
  */
 data class ChatMessage(
     val role: Role,
     val content: String,
+    val metadataJson: String = "null",
 )

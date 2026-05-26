@@ -45,8 +45,7 @@ fun NeoChevronCard(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

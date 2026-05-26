@@ -36,9 +36,10 @@ object WebSearchResultParser {
                         postObj["text"]?.jsonPrimitive?.content
                             ?: postObj["content"]?.jsonPrimitive?.content
                     val url = postObj["url"]?.jsonPrimitive?.content
-                    val title = postObj["user_name"]?.jsonPrimitive?.content
-                        ?: postObj["username"]?.jsonPrimitive?.content
-                        ?: "X Post"
+                    val title =
+                        postObj["user_name"]?.jsonPrimitive?.content
+                            ?: postObj["username"]?.jsonPrimitive?.content
+                            ?: "X Post"
 
                     if (!content.isNullOrBlank() && !url.isNullOrBlank()) {
                         sources.add(
@@ -64,13 +65,15 @@ object WebSearchResultParser {
                             item["text"]?.jsonPrimitive?.content
                                 ?: item["content"]?.jsonPrimitive?.content
                         val url = item["url"]?.jsonPrimitive?.content
-                        val title = item["user_name"]?.jsonPrimitive?.content
-                            ?: item["username"]?.jsonPrimitive?.content
-                            ?: item["title"]?.jsonPrimitive?.content
-                            ?: "Source"
-                        val score = item["impact_score"]?.jsonPrimitive?.double
-                            ?: item["score"]?.jsonPrimitive?.double
-                            ?: 0.0
+                        val title =
+                            item["user_name"]?.jsonPrimitive?.content
+                                ?: item["username"]?.jsonPrimitive?.content
+                                ?: item["title"]?.jsonPrimitive?.content
+                                ?: "Source"
+                        val score =
+                            item["impact_score"]?.jsonPrimitive?.double
+                                ?: item["score"]?.jsonPrimitive?.double
+                                ?: 0.0
 
                         if (!url.isNullOrBlank() && !content.isNullOrBlank()) {
                             sources.add(

@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.inference.openai
 
 import com.openai.models.chat.completions.ChatCompletionChunk
+import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseUsage
 
 /**
  * Mutable usage fields collected from OpenAI-compatible streaming chunks (xAI, OpenRouter, OpenAI).
@@ -36,4 +38,25 @@ internal fun accumulateOpenAiStreamUsage(
             state.cacheReadInputTokens = details.cachedTokens().get().toInt()
         }
     }
+}
+
+internal fun accumulateResponseStreamUsage(
+    response: Response,
+    state: OpenAiStreamUsageAccumulator,
+) {
+    if (!response.usage().isPresent) return
+    accumulateResponseStreamUsage(response.usage().get(), state)
+}
+
+internal fun accumulateResponseStreamUsage(
+    usage: ResponseUsage,
+    state: OpenAiStreamUsageAccumulator,
+) {
+    state.inputTokens = usage.inputTokens().toInt()
+    state.outputTokens = usage.outputTokens().toInt()
+    val reasoning = usage.outputTokensDetails().reasoningTokens()
+    if (reasoning > 0L) {
+        state.reasoningTokens = reasoning.toInt()
+    }
+    state.cacheReadInputTokens = usage.inputTokensDetails().cachedTokens().toInt()
 }

@@ -23,7 +23,7 @@ internal fun buildLyriaPrompt(
         } else {
             settings.duration
         }
-    return "Create a ${durationSeconds}-second track at ${settings.tempo} BPM. $userPrompt"
+    return "Create a $durationSeconds-second track at ${settings.tempo} BPM. $userPrompt"
 }
 
 open class GoogleMusicGenerationAdapter

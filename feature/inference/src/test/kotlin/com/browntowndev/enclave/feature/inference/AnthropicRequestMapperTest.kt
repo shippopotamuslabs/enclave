@@ -207,5 +207,4 @@ class AnthropicRequestMapperTest {
         file.writeBytes(byteArrayOf(1, 2, 3, 4))
         return file.toURI().toString()
     }
-
 }

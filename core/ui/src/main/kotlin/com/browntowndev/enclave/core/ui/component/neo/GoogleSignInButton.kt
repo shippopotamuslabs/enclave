@@ -52,8 +52,7 @@ fun GoogleSignInButton(
                     withShadow = enabled,
                     shadowColor = neoShadowColor(),
                     shadowOffset = neoButtonShadowOffset(),
-                )
-                .clickable(enabled = enabled, onClick = onClick)
+                ).clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,

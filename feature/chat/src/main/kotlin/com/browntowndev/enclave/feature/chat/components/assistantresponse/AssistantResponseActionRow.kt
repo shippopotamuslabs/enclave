@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material3.Icon
@@ -27,13 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.ChatMessage
-import com.browntowndev.enclave.feature.chat.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -141,7 +140,7 @@ internal fun AssistantResponseActionRow(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Share,
+                                imageVector = Icons.Filled.Link,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                             )

@@ -3,7 +3,6 @@ package com.browntowndev.enclave.domain.mapper
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelConfiguration
-import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

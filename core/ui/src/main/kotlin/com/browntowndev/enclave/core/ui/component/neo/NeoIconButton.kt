@@ -5,6 +5,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -19,8 +21,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
@@ -110,8 +110,7 @@ private fun NeoIconButtonSurface(
                         } else {
                             Modifier
                         },
-                    )
-                    .size(size)
+                    ).size(size)
                     .semantics { role = Role.Button }
                     .neoSurface(
                         backgroundColor = backgroundColor,
@@ -119,8 +118,7 @@ private fun NeoIconButtonSurface(
                         withShadow = showShadow,
                         shadowColor = shadowColor,
                         shadowOffset = shadowOffset,
-                    )
-                    .clickable(
+                    ).clickable(
                         enabled = enabled,
                         interactionSource = interactionSource,
                         indication = null,

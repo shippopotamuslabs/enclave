@@ -105,7 +105,23 @@ class SearchToolPromptComposerTest {
     }
 
     @Test
-    fun `compose formats retrieved memories correctly`() {
+    fun `composeVolatileTurnContext formats retrieved memories correctly`() {
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.FACTS, content = "The sky is blue."),
+            )
+        val composed =
+            composer.composeVolatileTurnContext(
+                retrievedMemories = memories,
+            )
+
+        assertTrue(composed!!.contains("# RELEVANT FACTS & CONTEXT:"))
+        assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
+        assertTrue(composed.contains("- The sky is blue."))
+    }
+
+    @Test
+    fun `compose omits retrieved memories from stable system prompt`() {
         val memories =
             listOf(
                 Memory(category = MemoryCategory.FACTS, content = "The sky is blue."),
@@ -118,9 +134,7 @@ class SearchToolPromptComposerTest {
                 retrievedMemories = memories,
             )
 
-        assertTrue(composed.contains("# RELEVANT FACTS & CONTEXT:"))
-        assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
-        assertTrue(composed.contains("- The sky is blue."))
+        assertFalse(composed.contains("# RELEVANT FACTS & CONTEXT:"))
     }
 
     @Test
@@ -170,16 +184,13 @@ class SearchToolPromptComposerTest {
     }
 
     @Test
-    fun `compose formats retrieved X search results correctly`() {
+    fun `composeVolatileTurnContext formats retrieved X search results correctly`() {
         val composed =
-            composer.compose(
-                baseSystemPrompt = "Base",
-                toolCatalog = emptyList(),
-                activeTools = emptyList(),
+            composer.composeVolatileTurnContext(
                 retrievedXSearchResults = "Mock X Search Result Data",
             )
 
-        assertTrue(composed.contains("# RELEVANT X SEARCH RESULTS:"))
+        assertTrue(composed!!.contains("# RELEVANT X SEARCH RESULTS:"))
         assertTrue(composed.contains("The following X search results were automatically retrieved based on the user's query:"))
         assertTrue(composed.contains("Mock X Search Result Data"))
     }

@@ -13,14 +13,16 @@ data class AgentLoopConfig(
 )
 
 data class AgentLoopAgentConfig(
-    val maxTurns: UInt = 50u,
+    val maxTurns: UInt = 20u,
     val thresholdRatio: Float = 0.80f,
-    val microKeepRecent: UInt = 2u,
+    val microKeepRecent: UInt = 4u,
     val toolRetryLimit: UInt = 3u,
     val greedyAppendBlocks: Boolean = true,
-    val toolResultBudgetCloudBytes: ULong = 4096uL,
-    val midTurnThresholdRatio: Float = 0.90f,
-    val postToolResultThresholdRatio: Float = 0.85f,
+    val toolResultBudgetCloudBytes: ULong = 16384uL,
+    val toolResultBudgetRelaxedBytes: ULong = 131072uL,
+    val toolResultTruncationPressureRatio: Float = 0.85f,
+    val midTurnThresholdRatio: Float = 0.93f,
+    val postToolResultThresholdRatio: Float = 0.92f,
     val manualCompactThresholdRatio: Float = 0.80f,
     val allowFifoOnPreflight: Boolean = true,
     val allowFifoOnMidTurn: Boolean = false,
@@ -35,10 +37,27 @@ data class AgentLoopAgentConfig(
     val terminalSpillThresholdBytes: ULong = 8192uL,
     val historySnapshotThresholdTokens: UInt = 1024u,
     val fileOutlineThresholdTokens: UInt = 2048u,
-    val promptCacheAnchorThresholdTokens: UInt = 4096u,
+    val promptCacheAnchorThresholdTokens: UInt = 0u,
+    val outputReserveRatio: Float = 0.05f,
+    val outputReserveFloorTokens: UInt = 4096u,
+    val outputReserveMaxTokens: UInt = 16384u,
+    val preflightTokenThreshold: UInt? = null,
+    val midTurnTokenThreshold: UInt? = null,
+    val postToolResultTokenThreshold: UInt? = null,
+    val messageThreshold: UInt? = null,
+    val retentionWindowTokens: UInt = 0u,
     val maxModelRequestsPerTurn: UInt = 1u,
     val enableLoopHooks: Boolean = false,
     val enablePendingWorkGuard: Boolean = false,
+    val longLoop: AgentLoopLongLoopPolicy = AgentLoopLongLoopPolicy(),
+)
+
+data class AgentLoopLongLoopPolicy(
+    val maxToolTurns: UInt = 40u,
+    val sidecarByteBudgetPerCall: ULong = 8192uL,
+    val sidecarTotalByteBudget: ULong = 16384uL,
+    val summarizeAfterToolTurns: UInt = 0u,
+    val compactEveryNToolTurns: UInt = 0u,
 )
 
 data class AgentLoopSessionCapabilities(
@@ -165,6 +184,7 @@ interface AgentLoopHostCallbacks {
         toolContextIndexJson: String? = null,
         fileContextIndexJson: String? = null,
         cacheHints: List<String> = emptyList(),
+        transcriptRevision: Long = 0L,
         onTextToken: suspend (String) -> Unit = {},
         onThinkingToken: suspend (String) -> Unit = {},
     ): AgentModelTurnResult
@@ -192,6 +212,6 @@ fun List<ChatMessage>.toAgentLoopMessages(): List<AgentLoopMessage> =
             id = "chat-$index",
             role = message.role,
             content = message.content,
-            metadataJson = "null",
+            metadataJson = message.metadataJson,
         )
     }

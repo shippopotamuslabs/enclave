@@ -21,6 +21,12 @@ data class GenerationOptions(
     val apiProvider: ApiProvider? = null,
     val apiModelPricing: ApiModelSavedPricing? = null,
     val systemPrompt: String? = null,
+    /**
+     * Per-turn RAG and pre-retrieval payloads (memories, web/X search). Never merged into
+     * [systemPrompt]. OpenAI/xAI/OpenRouter deliver this as a frozen system sidecar before the
+     * user anchor; Anthropic/Google prepend it on the live user message instead.
+     */
+    val volatileTurnContext: String? = null,
     val imageUris: List<String> = emptyList(),
     val reasoningEffort: ApiReasoningEffort? = null,
     val temperature: Float? = null,
@@ -47,6 +53,7 @@ data class GenerationOptions(
     /** Monotonic index for each provider HTTP request within one assistant turn (tool loops). */
     val telemetrySequenceIndex: Int = 0,
     val includedFiles: List<AgentIncludedFile> = emptyList(),
+    val transcriptRevision: Long? = null,
 )
 
 data class AgentIncludedFile(

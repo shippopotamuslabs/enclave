@@ -41,7 +41,11 @@
 | `AOC-15` | Happy Path | xAI tool-continuation message order: sidecar before tool-result tail, not after system. |
 | `AOC-16` | Regression | OpenRouter: prior stable USER (not tool-result) still receives `cache_control` after tail sidecar insertion (`anthropic/claude-3.5-sonnet`). |
 | `AOC-17` | Happy Path | `toolsFingerprint` change between two `ensureStablePrefix` calls increments `StablePrefixSnapshot.version`. |
+| `AOC-18` | Fix verification | Post-tool third `completeSingleTurn`: `messages[0..4]` prefix bytes match second call (xAI cache regression). |
+| `AOC-19` | Fix verification | Frozen sidecar replay at original mapped index, not front-prepend to index 1. |
+| `AOC-20` | Fix verification | Cap-at-2 does not swap index-1 sidecar text on turn 4+. |
 | `PC-01` | Regression (updated) | OpenAI tail-volatile order replaces prior index-1 expectation. |
+| `PC-XAI-01`–`04` | Cross-ref | See `plans/prompt-caching/spec.md` § Regression (2026-05-26). |
 
 **Task → scenario mapping**
 

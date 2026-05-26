@@ -17,14 +17,15 @@ class VaultUnlockContentTddRedTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val authenticatedUser = VaultAuthUiState.Authenticated(
-        VaultUserUiState(
-            uid = "user-1",
-            displayName = "Ada",
-            email = "ada@example.com",
-            photoUrl = null,
-        ),
-    )
+    private val authenticatedUser =
+        VaultAuthUiState.Authenticated(
+            VaultUserUiState(
+                uid = "user-1",
+                displayName = "Ada",
+                email = "ada@example.com",
+                photoUrl = null,
+            ),
+        )
 
     @Test
     fun `SCENARIO-18 LinearProgressIndicator renders with visual purity and correct test tags`() {

@@ -25,16 +25,25 @@ class SearchToolPromptComposer
             listOfNotNull(
                 formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-                formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
-                formatRetrievedSearchResults(retrievedSearchResults).takeIf(String::isNotEmpty),
-                formatRetrievedXSearchResults(retrievedXSearchResults).takeIf(String::isNotEmpty),
                 catalogToolContract(
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
                     currentChatId = currentChatId,
                     strategy = strategy,
+                    includeActiveExamples = true,
                 ).takeIf(String::isNotEmpty),
             ).joinToString(separator = "\n\n")
+
+        override fun composeVolatileTurnContext(
+            retrievedMemories: List<Memory>,
+            retrievedSearchResults: String?,
+            retrievedXSearchResults: String?,
+        ): String? =
+            listOfNotNull(
+                formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
+                formatRetrievedSearchResults(retrievedSearchResults).takeIf(String::isNotEmpty),
+                formatRetrievedXSearchResults(retrievedXSearchResults).takeIf(String::isNotEmpty),
+            ).joinToString(separator = "\n\n").takeIf { it.isNotBlank() }
 
         companion object {
             private fun formatCoreMemories(memories: List<Memory>): String {
@@ -73,7 +82,7 @@ class SearchToolPromptComposer
 # RELEVANT WEB SEARCH RESULTS:
 The following search results were automatically retrieved based on the user's query:
 $results
-                """.trimIndent()
+                    """.trimIndent()
             }
 
             private fun formatRetrievedXSearchResults(results: String?): String {
@@ -82,7 +91,7 @@ $results
 # RELEVANT X SEARCH RESULTS:
 The following X search results were automatically retrieved based on the user's query:
 $results
-                """.trimIndent()
+                    """.trimIndent()
             }
 
             @Suppress("MaxLineLength")
@@ -115,11 +124,28 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                 }
 
             @Suppress("MaxLineLength")
+            private fun formatActiveToolExamples(
+                activeTools: List<ToolDefinition>,
+                strategy: ToolCallStrategy,
+            ): String =
+                buildString {
+                    val activeNonDisclosure =
+                        activeTools.filter { it.name != ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name }
+                    if (activeNonDisclosure.isEmpty()) return@buildString
+                    append("# ACTIVE TOOL EXAMPLES:\n")
+                    activeNonDisclosure.forEachIndexed { index, tool ->
+                        if (index > 0) append("\n")
+                        append(tool.toExample(strategy))
+                        append("\n")
+                    }
+                }.trimEnd()
+
             private fun catalogToolContract(
                 toolCatalog: List<ToolCatalogEntry>,
                 activeTools: List<ToolDefinition>,
                 currentChatId: String?,
                 strategy: ToolCallStrategy,
+                includeActiveExamples: Boolean,
             ): String {
                 if (toolCatalog.isEmpty()) return ""
                 if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
@@ -136,9 +162,10 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         append("# TOOL CATALOG:\n")
                         toolCatalog.forEach { entry ->
                             val args =
-                                (entry.requiredArguments.map { it.name to "required" } +
-                                    entry.optionalArguments.map { it.name to "optional" })
-                                    .joinToString(", ") { (name, kind) -> "$name:$kind" }
+                                (
+                                    entry.requiredArguments.map { it.name to "required" } +
+                                        entry.optionalArguments.map { it.name to "optional" }
+                                ).joinToString(", ") { (name, kind) -> "$name:$kind" }
                             val disclosureTag =
                                 when (entry.disclosureMode) {
                                     ToolDisclosureMode.PRELOADED -> "preloaded"
@@ -176,17 +203,11 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     }.trimEnd()
 
                 val activeExamplesBlock =
-                    buildString {
-                        val activeNonDisclosure =
-                            activeTools.filter { it.name != ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name }
-                        if (activeNonDisclosure.isEmpty()) return@buildString
-                        append("# ACTIVE TOOL EXAMPLES:\n")
-                        activeNonDisclosure.forEachIndexed { index, tool ->
-                            if (index > 0) append("\n")
-                            append(tool.toExample(strategy))
-                            append("\n")
-                        }
-                    }.trimEnd()
+                    if (includeActiveExamples) {
+                        formatActiveToolExamples(activeTools = activeTools, strategy = strategy)
+                    } else {
+                        ""
+                    }
 
                 return buildString {
                     append(metadataRules())

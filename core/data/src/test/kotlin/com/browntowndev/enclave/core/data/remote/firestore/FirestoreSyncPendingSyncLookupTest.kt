@@ -2,8 +2,8 @@ package com.browntowndev.enclave.core.data.remote.firestore
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.enclave.core.data.local.UtilityModelEntity
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.UtilityModelEntity
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat

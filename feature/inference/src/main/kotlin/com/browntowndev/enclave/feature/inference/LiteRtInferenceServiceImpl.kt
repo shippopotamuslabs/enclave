@@ -10,6 +10,8 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -17,8 +19,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
-import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import javax.inject.Inject
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
 import java.util.concurrent.CancellationException as JavaCancellationException

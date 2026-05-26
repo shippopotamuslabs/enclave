@@ -169,7 +169,8 @@ class ApiModelRepositoryImplTest {
             assertTrue(id.value.isNotEmpty())
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.OPENAI,baseUrl = "https://api.openai.com/v1",
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = "https://api.openai.com/v1",
                     apiKey = "sk-test",
                 )
             coVerify {
@@ -334,7 +335,8 @@ class ApiModelRepositoryImplTest {
             val credId = ApiCredentialsId("11")
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.XAI,baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                    provider = ApiProvider.XAI,
+                    baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -349,7 +351,8 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = ApiProvider.XAI,baseUrl = null,
+                    provider = ApiProvider.XAI,
+                    baseUrl = null,
                     apiKey = "xai-key",
                 )
 
@@ -366,7 +369,8 @@ class ApiModelRepositoryImplTest {
             val defaultBaseUrl = provider.defaultBaseUrl()
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = provider,baseUrl = defaultBaseUrl,
+                    provider = provider,
+                    baseUrl = defaultBaseUrl,
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -381,7 +385,8 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = provider,baseUrl = "  ",
+                    provider = provider,
+                    baseUrl = "  ",
                     apiKey = "xai-key",
                 )
 

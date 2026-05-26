@@ -28,26 +28,28 @@ class StartCloudSyncListeningUseCase
                 }
             }
 
-            val totalEstimate: Long? = runCatching {
-                cloudSyncPort.getRemainingEventsCount().getOrNull()?.takeIf { it > 0L }
-            }.getOrNull()
+            val totalEstimate: Long? =
+                runCatching {
+                    cloudSyncPort.getRemainingEventsCount().getOrNull()?.takeIf { it > 0L }
+                }.getOrNull()
 
             // Report initial progress state
-            val initialProgress = if (totalEstimate != null) {
-                CloudSyncReplayProgress(
-                    appliedCount = 0L,
-                    totalEstimate = totalEstimate,
-                    progressFraction = 0f,
-                    status = "Syncing updates (0/$totalEstimate)..."
-                )
-            } else {
-                CloudSyncReplayProgress(
-                    appliedCount = 0L,
-                    totalEstimate = null,
-                    progressFraction = null,
-                    status = "Checking for updates..."
-                )
-            }
+            val initialProgress =
+                if (totalEstimate != null) {
+                    CloudSyncReplayProgress(
+                        appliedCount = 0L,
+                        totalEstimate = totalEstimate,
+                        progressFraction = 0f,
+                        status = "Syncing updates (0/$totalEstimate)...",
+                    )
+                } else {
+                    CloudSyncReplayProgress(
+                        appliedCount = 0L,
+                        totalEstimate = null,
+                        progressFraction = null,
+                        status = "Checking for updates...",
+                    )
+                }
             onProgress?.invoke(initialProgress)
 
             var safety = 0
@@ -62,32 +64,35 @@ class StartCloudSyncListeningUseCase
                 val replay = replayResult.getOrThrow()
                 cumulativeApplied += replay.eventsApplied
 
-                val currentEstimate = if (totalEstimate != null) {
-                    maxOf(totalEstimate, cumulativeApplied)
-                } else {
-                    null
-                }
+                val currentEstimate =
+                    if (totalEstimate != null) {
+                        maxOf(totalEstimate, cumulativeApplied)
+                    } else {
+                        null
+                    }
 
-                val fraction = if (currentEstimate != null && currentEstimate > 0) {
-                    val f = cumulativeApplied.toFloat() / currentEstimate
-                    if (f > 1.0f) 1.0f else f
-                } else {
-                    null
-                }
+                val fraction =
+                    if (currentEstimate != null && currentEstimate > 0) {
+                        val f = cumulativeApplied.toFloat() / currentEstimate
+                        if (f > 1.0f) 1.0f else f
+                    } else {
+                        null
+                    }
 
-                val status = if (currentEstimate != null) {
-                    "Syncing updates ($cumulativeApplied/$currentEstimate)..."
-                } else {
-                    "Syncing updates..."
-                }
+                val status =
+                    if (currentEstimate != null) {
+                        "Syncing updates ($cumulativeApplied/$currentEstimate)..."
+                    } else {
+                        "Syncing updates..."
+                    }
 
                 onProgress?.invoke(
                     CloudSyncReplayProgress(
                         appliedCount = cumulativeApplied,
                         totalEstimate = currentEstimate,
                         progressFraction = fraction,
-                        status = status
-                    )
+                        status = status,
+                    ),
                 )
 
                 if (!replay.hasMore) break

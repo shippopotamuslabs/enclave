@@ -4,8 +4,8 @@ import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySourceKind
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test

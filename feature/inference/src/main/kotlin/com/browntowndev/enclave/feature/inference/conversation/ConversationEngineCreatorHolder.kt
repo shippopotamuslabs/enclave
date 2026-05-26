@@ -13,6 +13,7 @@ internal class ConversationEngineCreatorHolder {
         contextWindow: Int,
         cacheDir: String?,
         defaultCreator: LiteRtEngineCreator,
-    ): Engine = override?.invoke(modelPath, backend, visionBackend, contextWindow, cacheDir)
-        ?: defaultCreator(modelPath, backend, visionBackend, contextWindow, cacheDir)
+    ): Engine =
+        override?.invoke(modelPath, backend, visionBackend, contextWindow, cacheDir)
+            ?: defaultCreator(modelPath, backend, visionBackend, contextWindow, cacheDir)
 }

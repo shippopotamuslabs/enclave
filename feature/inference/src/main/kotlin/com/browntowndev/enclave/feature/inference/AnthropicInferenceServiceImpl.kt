@@ -10,11 +10,10 @@ import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
-import com.anthropic.models.messages.ToolResultBlockParam
-import com.anthropic.models.messages.ToolUseBlockParam
-import com.anthropic.models.messages.CacheControlEphemeral
 import com.anthropic.models.messages.ToolChoice
 import com.anthropic.models.messages.ToolChoiceNone
+import com.anthropic.models.messages.ToolResultBlockParam
+import com.anthropic.models.messages.ToolUseBlockParam
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
@@ -29,6 +28,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -92,6 +92,8 @@ class AnthropicInferenceServiceImpl(
     }
 
     private val conversationHistory = mutableListOf<ChatMessage>()
+
+    private var appendOnlyContext: ProviderAppendOnlyContext? = null
 
     override fun sendPrompt(
         prompt: String,
@@ -171,10 +173,22 @@ class AnthropicInferenceServiceImpl(
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
         conversationHistory.addAll(messages)
+        resetAppendOnlyForNewPrompt()
+    }
+
+    internal fun clearAppendOnlyOnRustCompactionBoundary() {
+        appendOnlyContext?.clearOnRustCompactionBoundary()
+    }
+
+    internal fun resetAppendOnlyForNewPrompt() {
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     override suspend fun closeSession() {
         conversationHistory.clear()
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     @Suppress("CyclomaticComplexMethod")
@@ -188,16 +202,22 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
-        val captureContext = telemetrySupport?.captureContext(options)
-        val lastUserIndex = sessionMessages.indexOfLast { msg ->
-            msg.role == Role.USER && run {
-                val meta = msg.metadataJson
-                if (meta == "null" || meta.isBlank()) return@run true
-                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+        val timing =
+            telemetrySupport?.let {
+                com.browntowndev.enclave.feature.inference.telemetry
+                    .InferenceTurnTiming()
             }
-        }
+        val captureContext = telemetrySupport?.captureContext(options)
+        val lastUserIndex =
+            sessionMessages.indexOfLast { msg ->
+                msg.role == Role.USER &&
+                    run {
+                        val meta = msg.metadataJson
+                        if (meta == "null" || meta.isBlank()) return@run true
+                        val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                        obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+                    }
+            }
         val imageUris = options.imageUris.take(20)
         val builder =
             MessageCreateParams
@@ -251,11 +271,17 @@ class AnthropicInferenceServiceImpl(
                 useCaching &&
                     AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
 
-            val messageContent = if (index == lastUserIndex && !contextSidecars.isNullOrBlank()) {
-                "$contextSidecars\n\n${msg.content}"
-            } else {
-                msg.content
-            }
+            val messageContent =
+                if (index == lastUserIndex) {
+                    VolatileTurnContextWireSupport
+                        .combinedLatestUserPrepends(
+                            volatileTurnContext = null, // already in msg.content via Rust history
+                            contextSidecars = contextSidecars,
+                        )?.let { prepended -> "$prepended\n\n${msg.content}" }
+                        ?: msg.content
+                } else {
+                    msg.content
+                }
 
             when (msg.role) {
                 Role.SYSTEM -> {} // systemPrompt mapped above
@@ -364,17 +390,18 @@ class AnthropicInferenceServiceImpl(
                             val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEachIndexed
                             val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
                             val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-                            
-                            val toolUseBuilder = ToolUseBlockParam
-                                .builder()
-                                .id(rawCallId)
-                                .name(callName)
-                                .input(
-                                    ToolUseBlockParam.Input
-                                        .builder()
-                                        .putAllAdditionalProperties(toolUseInputProperties(argsJson))
-                                        .build(),
-                                )
+
+                            val toolUseBuilder =
+                                ToolUseBlockParam
+                                    .builder()
+                                    .id(rawCallId)
+                                    .name(callName)
+                                    .input(
+                                        ToolUseBlockParam.Input
+                                            .builder()
+                                            .putAllAdditionalProperties(toolUseInputProperties(argsJson))
+                                            .build(),
+                                    )
                             val isToolUseLastBlock = attachCacheBreakpoint && (tcIndex == rawCalls.size - 1)
                             if (isToolUseLastBlock) {
                                 toolUseBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
@@ -590,12 +617,21 @@ class AnthropicInferenceServiceImpl(
             while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
                 val event = runInterruptible { iterator.next() }
                 if (event.messageStart().isPresent) {
-                    val usage = event.messageStart().get().message().usage()
+                    val usage =
+                        event
+                            .messageStart()
+                            .get()
+                            .message()
+                            .usage()
                     inputTokens = usage.inputTokens().toInt()
                     outputTokens = usage.outputTokens().toInt()
                     reasoningTokens = null
                     cacheCreationInputTokens =
-                        usage.cacheCreationInputTokens().orElse(0L).toInt().takeIf { it > 0 }
+                        usage
+                            .cacheCreationInputTokens()
+                            .orElse(0L)
+                            .toInt()
+                            .takeIf { it > 0 }
                 }
                 val contentBlockStart = event.contentBlockStart()
                 if (contentBlockStart.isPresent) {

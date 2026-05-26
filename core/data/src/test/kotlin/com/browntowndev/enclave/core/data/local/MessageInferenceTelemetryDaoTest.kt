@@ -15,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.Date
-import java.util.UUID
 
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])

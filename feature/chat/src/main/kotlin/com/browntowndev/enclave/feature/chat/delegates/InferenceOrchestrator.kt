@@ -34,8 +34,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
-import kotlin.time.Duration.Companion.milliseconds
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 
 class InferenceOrchestrator
     @Inject

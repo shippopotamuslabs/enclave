@@ -7,8 +7,10 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -20,6 +22,7 @@ import java.util.Locale
  * Responsibilities (AGENT-037):
  *  - Filter out the active user + assistant message pair
  *  - Apply the summary pointer to slice the DB result set
+ *  - Prefer committed inference prompt content for prior USER messages when present
  *  - Attach vision-analysis text and file content
  *  - Prepend the saved summary as a SYSTEM message
  *  - Append timestamp metadata to USER messages
@@ -30,6 +33,7 @@ import java.util.Locale
 class ChatHistoryRehydrator(
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
+    private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
 ) {
     private val dateTimeFormatter =
         DateTimeFormatter
@@ -74,7 +78,18 @@ class ChatHistoryRehydrator(
         val messagesWithMetadata =
             chatMessages.map { message ->
                 if (message.role == Role.USER) {
-                    val original = filteredMessages.firstOrNull { it.content.text == message.content.substringBefore("\n\n[Metadata:") }
+                    val isCommittedPrompt =
+                        filteredMessages.any { filteredMessage ->
+                            committedInferencePrompt(filteredMessage) == message.content
+                        }
+                    val original =
+                        if (isCommittedPrompt) {
+                            null
+                        } else {
+                            filteredMessages.firstOrNull {
+                                it.content.text == message.content.substringBefore("\n\n[Metadata:")
+                            }
+                        }
                     if (original != null && original.createdAt != null) {
                         val formattedTime = dateTimeFormatter.format(java.time.Instant.ofEpochMilli(original.createdAt))
                         message.copy(content = "${message.content}\n\n[Metadata: Sent at $formattedTime]")
@@ -114,6 +129,8 @@ class ChatHistoryRehydrator(
         message: Message,
         visionAnalyses: List<MessageVisionAnalysis>,
     ): String {
+        committedInferencePrompt(message)?.let { return it }
+
         val fileContent =
             if (message.content.fileAttachments.isNotEmpty()) {
                 message.content.fileAttachments.joinToString(separator = "\n\n") { file ->
@@ -141,6 +158,13 @@ class ChatHistoryRehydrator(
                 if (message.content.imageUris.isNotEmpty()) "[User attached one or more images]" else ""
             }
     }
+
+    private fun committedInferencePrompt(message: Message): String? =
+        if (message.role == Role.USER) {
+            committedInferencePrompts.get(message.id)?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
 
     private companion object {
         private const val TAG = "ChatHistoryRehydrator"

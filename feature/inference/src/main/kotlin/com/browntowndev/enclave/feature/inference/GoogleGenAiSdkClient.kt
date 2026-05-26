@@ -3,19 +3,18 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.google.genai.Caches
+import com.google.genai.Client
 import com.google.genai.Models
 import com.google.genai.types.Content
+import com.google.genai.types.CreateCachedContentConfig
+import com.google.genai.types.DeleteCachedContentConfig
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.GenerateContentConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
-
-import com.google.genai.Client
-import com.google.genai.Caches
-import com.google.genai.types.CreateCachedContentConfig
-import com.google.genai.types.DeleteCachedContentConfig
 
 data class GoogleSdkResult(
     val emittedAny: Boolean,
@@ -58,7 +57,7 @@ internal class GoogleGenAiSdkClientImpl(
         modelsApiProvider: () -> Models,
         modelType: ModelType,
         loggingPort: LoggingPort,
-        @Suppress("UnusedPrivateParameter", "UnusedPrivateProperty") dummy: Unit = Unit
+        @Suppress("UnusedPrivateParameter", "UnusedPrivateProperty") dummy: Unit = Unit,
     ) : this(
         clientProvider = { throw UnsupportedOperationException("Caches require Client, but only Models provider was supplied") },
         modelType = modelType,
@@ -79,11 +78,13 @@ internal class GoogleGenAiSdkClientImpl(
         systemInstruction: Content?,
         tools: List<com.google.genai.types.Tool>?,
         ttlSeconds: Long,
-    ): String {
-        return runInterruptible(Dispatchers.IO) {
-            val builder = CreateCachedContentConfig.builder()
-                .contents(contents)
-                .ttl(java.time.Duration.ofSeconds(ttlSeconds))
+    ): String =
+        runInterruptible(Dispatchers.IO) {
+            val builder =
+                CreateCachedContentConfig
+                    .builder()
+                    .contents(contents)
+                    .ttl(java.time.Duration.ofSeconds(ttlSeconds))
 
             if (systemInstruction != null) {
                 builder.systemInstruction(systemInstruction)
@@ -97,7 +98,6 @@ internal class GoogleGenAiSdkClientImpl(
                 IllegalStateException("CachedContent creation failed to return resource name")
             }
         }
-    }
 
     override suspend fun deleteCachedContent(name: String) {
         runInterruptible(Dispatchers.IO) {

@@ -41,8 +41,7 @@ fun NeoNavRow(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
