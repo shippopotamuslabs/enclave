@@ -15,16 +15,19 @@ import kotlinx.serialization.json.jsonPrimitive
  * tool results, assistant tool calls, summaries, and multimodal user turns.
  */
 internal object GoogleAgentLoopContentMapper {
-    private val toolArgsMapper = com.fasterxml.jackson.databind.ObjectMapper()
+    private val toolArgsMapper =
+        com.fasterxml.jackson.databind
+            .ObjectMapper()
 
     fun lastNonToolResultUserIndex(sessionMessages: List<AgentLoopMessage>): Int =
         sessionMessages.indexOfLast { msg ->
-            msg.role == Role.USER && run {
-                val meta = msg.metadataJson
-                if (meta == "null" || meta.isBlank()) return@run true
-                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-            }
+            msg.role == Role.USER &&
+                run {
+                    val meta = msg.metadataJson
+                    if (meta == "null" || meta.isBlank()) return@run true
+                    val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                    obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+                }
         }
 
     fun mapMessage(
@@ -73,7 +76,11 @@ internal object GoogleAgentLoopContentMapper {
                     }
                 }
             }
-        return Content.builder().role("user").parts(parts).build()
+        return Content
+            .builder()
+            .role("user")
+            .parts(parts)
+            .build()
     }
 
     private fun mapAssistantMessage(
@@ -117,7 +124,11 @@ internal object GoogleAgentLoopContentMapper {
         if (parts.isEmpty()) {
             return null
         }
-        return Content.builder().role("model").parts(parts).build()
+        return Content
+            .builder()
+            .role("model")
+            .parts(parts)
+            .build()
     }
 
     private fun buildFunctionResponsePart(

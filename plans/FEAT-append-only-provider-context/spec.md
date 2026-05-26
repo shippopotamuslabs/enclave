@@ -40,6 +40,8 @@ Enclave remote BYOK inference (OpenAI, xAI, OpenRouter, Anthropic, Google GenAI)
 
 Each `completeModelTurn` in a tool loop may add another frozen SYSTEM sidecar on the wire (see `AOC-04`). Bytes in the provider prefix **before** each snapshot stay cache-stable, but total token cost grows **O(turns)** with one additional sidecar message per turn. This is **accepted for v1**. An optional future compaction hook may collapse or drop older frozen sidecars; that hook is escalation-only and **not in scope** for this ticket.
 
+**Regression (2026-05-26):** The Kotlin cap-at-2 + `priorFrozenSidecarsForWire` front-prepend mitigation **breaks** xAI/OpenAI prefix cache (see § Regression). Wire cap must not swap index-1 sidecar content; see tasks `AOC-18`–`AOC-20` / `PC-XAI-*`.
+
 ---
 
 ## 2. Architecture Flow
@@ -293,3 +295,53 @@ All types live under `feature.inference.appendonly` as internal implementation d
 5. Anthropic and Google tests `PC-02`–`PC-08` pass without placement changes (`AOC-07`, `AOC-08`).
 6. `./gradlew :feature:inference:testDebugUnitTest` passes.
 7. `PC-01` multi-turn tail indices match fixed `test_spec.md` order: stable SYSTEM, USER Hello, SYSTEM sidecar, USER Follow up (`messages[2]` sidecar, `messages[3]` last USER).
+
+---
+
+## Regression: xAI cache hits (2026-05-26)
+
+### Symptom
+Production xAI sessions report **~0 prompt cache reads** after append-only wire assembly + sidecar mitigations (cap-at-2, `ContextSidecarCompaction`, digest clear). Header routing (`x-grok-conv-id`) is correct; the **messages array prefix** is not stable.
+
+### Root cause
+`BaseOpenAiSdkInferenceService` (lines ~196–233) prepends `priorFrozenSidecarsForWire()` **before all mapped history**. That contradicts both:
+
+- `plans/prompt-caching/spec.md` tail-volatile rule (sidecars immediately before live tail, not at fixed index 1 on later turns), and
+- The append-only spec §5.4 `AOC-03` slice rule beyond the first tool-loop hop.
+
+**Failure mode A — tail → front replay:** Sidecar frozen at tail-adjacent index on turn *N* (e.g. index 4 before tool result per `AOC-15`) is replayed at index 1 on turn *N+1*. Same UTF-8 text, different prefix position → xAI cache miss on every post-tool model call (including final assistant synthesis).
+
+**Failure mode B — cap-at-2 prefix swap:** `ProviderAppendOnlyContext.priorFrozenSidecarsForWire` + `trimFrozenSidecarsToCap` drop the oldest frozen sidecar from the wire prefix on turn 3+ (`takeLast(1)` when current sidecar present). Index 1 content changes from `s1` to `s2` — guaranteed miss. Test `wire_caps_frozen_sidecars_at_two_on_third_tool_loop_turn` validates cap behavior but **not** prefix stability.
+
+**Scope note:** `ContextSidecarCompaction` and `syncMessages` digest clear are **not** implicated in routine cache misses (compaction is deterministic; digest clear only on rewrite/compaction with `WARN` log).
+
+### Fix tasks
+
+| Priority | Task ID | Description | Files |
+|---|---|---|---|
+| **P0** | `AOC-18` | Add `FrozenSidecarSnapshot(text, mappedInsertIndex)`; record index in `endTurnFreezeSidecar` from `OpenAiCompatibleVolatilePlacement.insertIndex(sessionLastIndexAtFreeze)`. | `ProviderAppendOnlyContext.kt`, `OpenAiCompatibleVolatilePlacement.kt` |
+| **P0** | `AOC-19` | Replace `priorFrozenSidecarsForWire` front-prepend with interleaved replay: merge frozen snapshots into `mappedBody` at stored indices (ascending), then insert current sidecar before live tail. | `BaseOpenAiSdkInferenceService.kt` |
+| **P0** | `AOC-20` | Fix cap-at-2: cap may trim **storage** for memory bounds, but wire assembly must **not** replace prefix-slot sidecar text via `takeLast`. Options: (a) omit dropped sidecars from wire entirely, (b) keep all prefix-committed sidecars on wire until session `invalidate()`. Prefer (a) + rely on current tail sidecar for latest ledger. | `ProviderAppendOnlyContext.kt` |
+| **P1** | `AOC-21` | Add failing-then-green tests: `AOC-18`/`PC-XAI-01` post-tool third call prefix; `AOC-20`/`PC-XAI-02` turn-4 cap behavior. | `AppendOnlyOpenAiSidecarPlacementTest.kt` |
+| **P1** | `AOC-22` | Update §1.5 sidecar accumulation note: cap-at-2 wire eviction is **not** escalation-only — it breaks xAI/OpenAI prefix cache; defer wire cap until position-aware replay lands or cap drops off-wire only. | This spec §1.5 |
+
+### Test scenarios (add to `test_spec.md`)
+
+| ID | Type | Description |
+|---|---|---|
+| `AOC-18` | Fix verification | Three-call tool loop (pre-tool → post-tool → post-tool assistant): `messages[0..4]` byte-equal between calls 2 and 3. |
+| `AOC-19` | Fix verification | Frozen sidecar `s1` stays at original mapped index after `s2` appended (not moved to index 1 on call 3). |
+| `AOC-20` | Fix verification | Fourth call with cap: index 1 sidecar text unchanged vs call 3 (no `takeLast` prefix swap). |
+| `AOC-21` | Fix verification | With trailing `agent_tool_budget` session message, volatile sidecar stays before tool result (mapped tail anchor). |
+| `PC-XAI-01`–`04` | Cross-ref | See `plans/prompt-caching/spec.md` § Regression (2026-05-26). |
+
+### Implementation note (wire assembly target)
+
+```
+[stable SYSTEM]
++ interleave frozen sidecars into mappedBody at each snapshot.mappedInsertIndex
++ insert currentSidecar before mappedBody[tailInsertIndex]
++ mappedBody[tailInsertIndex..]
+```
+
+Remove the block that prepends `priorFrozenSidecars.forEach { add(system…) }` before `mappedBody.take(tailInsertIndex)`.

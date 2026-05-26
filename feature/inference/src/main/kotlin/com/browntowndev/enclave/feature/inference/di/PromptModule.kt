@@ -1,6 +1,12 @@
 package com.browntowndev.enclave.feature.inference.di
 
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferencePromptStore
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferenceTranscriptStore
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
 import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
 import dagger.Binds
 import dagger.Module
@@ -14,4 +20,18 @@ internal abstract class PromptModule {
     @Binds
     @Singleton
     abstract fun bindPromptComposer(impl: SearchToolPromptComposer): PromptComposerPort
+
+    @Binds
+    @Singleton
+    abstract fun bindMonotonicToolActivation(impl: InMemoryMonotonicToolActivationStore): MonotonicToolActivationPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCommittedInferencePrompt(impl: InMemoryCommittedInferencePromptStore): CommittedInferencePromptPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCommittedInferenceTranscript(
+        impl: InMemoryCommittedInferenceTranscriptStore,
+    ): CommittedInferenceTranscriptPort
 }

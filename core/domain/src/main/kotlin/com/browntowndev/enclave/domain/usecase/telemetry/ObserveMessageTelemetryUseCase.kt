@@ -11,6 +11,5 @@ class ObserveMessageTelemetryUseCase
     constructor(
         private val repository: InferenceTelemetryRepositoryPort,
     ) {
-        operator fun invoke(messageId: MessageId): Flow<MessageTelemetrySummary> =
-            repository.observeMessageTelemetry(messageId)
+        operator fun invoke(messageId: MessageId): Flow<MessageTelemetrySummary> = repository.observeMessageTelemetry(messageId)
     }

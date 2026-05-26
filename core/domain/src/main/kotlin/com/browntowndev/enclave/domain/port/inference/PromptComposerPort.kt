@@ -20,4 +20,13 @@ interface PromptComposerPort {
         retrievedSearchResults: String? = null,
         retrievedXSearchResults: String? = null,
     ): String
+
+    /**
+     * Query-specific memories and pre-retrieval search payloads. Must not be folded into [compose].
+     */
+    fun composeVolatileTurnContext(
+        retrievedMemories: List<Memory> = emptyList(),
+        retrievedSearchResults: String? = null,
+        retrievedXSearchResults: String? = null,
+    ): String? = null
 }

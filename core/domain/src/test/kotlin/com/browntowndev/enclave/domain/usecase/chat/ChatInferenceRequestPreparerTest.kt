@@ -447,7 +447,11 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.toolCatalog.map { it.name }.contains(ToolDefinition.GET_MESSAGE_CONTEXT.name))
+            assertTrue(
+                request.options.toolCatalog
+                    .map { it.name }
+                    .contains(ToolDefinition.GET_MESSAGE_CONTEXT.name),
+            )
         }
 
     @Test
@@ -503,9 +507,10 @@ class ChatInferenceRequestPreparerTest {
 
             assertTrue(request.options.systemPrompt?.contains("User is a developer.") == true)
             assertTrue(request.options.systemPrompt?.contains("User likes dark mode.") == true)
-            assertTrue(request.options.systemPrompt?.contains("User has a cat.") == true)
             assertTrue(request.options.systemPrompt?.contains("# ABOUT THE USER:") == true)
-            assertTrue(request.options.systemPrompt?.contains("# RELEVANT FACTS & CONTEXT:") == true)
+            assertFalse(request.options.systemPrompt?.contains("# RELEVANT FACTS & CONTEXT:") == true)
+            assertTrue(request.options.volatileTurnContext?.contains("User has a cat.") == true)
+            assertTrue(request.options.volatileTurnContext?.contains("# RELEVANT FACTS & CONTEXT:") == true)
         }
 
     @Test
@@ -723,10 +728,11 @@ class ChatInferenceRequestPreparerTest {
 
             every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
             every { mockClassifier.requiresSearch(any(), any()) } returns true
-            coEvery { mockExecutor.execute(any()) } returns com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
-                toolName = ToolDefinition.WEB_SEARCH.name,
-                resultJson = """{"results":[{"title":"Search Title","content":"Search result content"}]}"""
-            )
+            coEvery { mockExecutor.execute(any()) } returns
+                com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
+                    toolName = ToolDefinition.WEB_SEARCH.name,
+                    resultJson = """{"results":[{"title":"Search Title","content":"Search result content"}]}""",
+                )
 
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -762,8 +768,10 @@ class ChatInferenceRequestPreparerTest {
                 )
 
             val systemPrompt = request.options.systemPrompt
-            assertTrue(systemPrompt != null && systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
-            assertTrue(systemPrompt != null && systemPrompt.contains("Search result content"))
+            val volatileTurnContext = request.options.volatileTurnContext
+            assertTrue(systemPrompt == null || !systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
+            assertTrue(volatileTurnContext != null && volatileTurnContext.contains("RELEVANT WEB SEARCH RESULTS"))
+            assertTrue(volatileTurnContext!!.contains("Search result content"))
         }
 
     @Test
@@ -861,4 +869,5 @@ class ChatInferenceRequestPreparerTest {
             assertFalse(activeNames.contains(ToolDefinition.X_USER_TWEETS.name))
             assertFalse(activeNames.contains(ToolDefinition.X_MENTION_SEARCH.name))
         }
+
 }

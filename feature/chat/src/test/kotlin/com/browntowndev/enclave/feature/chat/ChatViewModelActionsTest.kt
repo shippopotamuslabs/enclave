@@ -447,5 +447,4 @@ class ChatViewModelActionsTest {
             )
             collectJob.cancel()
         }
-
 }

@@ -18,13 +18,11 @@ object InferenceTelemetryModule {
 
     @Provides
     @Singleton
-    fun provideProviderCostEstimator(
-        savedPricingEstimator: SavedApiModelPricingEstimator,
-    ): ProviderCostEstimator = ProviderCostEstimator(savedPricingEstimator)
+    fun provideProviderCostEstimator(savedPricingEstimator: SavedApiModelPricingEstimator): ProviderCostEstimator =
+        ProviderCostEstimator(savedPricingEstimator)
 
     @Provides
     @Singleton
-    fun provideProviderTelemetryNormalizer(
-        costEstimator: ProviderCostEstimator,
-    ): ProviderTelemetryNormalizer = ProviderTelemetryNormalizer(costEstimator)
+    fun provideProviderTelemetryNormalizer(costEstimator: ProviderCostEstimator): ProviderTelemetryNormalizer =
+        ProviderTelemetryNormalizer(costEstimator)
 }

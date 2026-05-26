@@ -3,19 +3,20 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
-import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.model.inference.XSearchParams
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
-import com.browntowndev.enclave.domain.util.SearchIntentPolicy
-import com.browntowndev.enclave.domain.util.ToolIntentActivationPolicy
-import com.browntowndev.enclave.domain.util.isWebSearchSkillConfigured
-import com.browntowndev.enclave.domain.util.isXSearchSkillConfigured
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
@@ -24,19 +25,17 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
-import kotlinx.coroutines.flow.first
+import com.browntowndev.enclave.domain.util.SearchIntentPolicy
+import com.browntowndev.enclave.domain.util.ToolIntentActivationPolicy
+import com.browntowndev.enclave.domain.util.WebSearchResultParser
+import com.browntowndev.enclave.domain.util.isWebSearchSkillConfigured
+import com.browntowndev.enclave.domain.util.isXSearchSkillConfigured
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import com.browntowndev.enclave.domain.model.inference.XSearchParams
-import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonArray
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -55,6 +54,7 @@ class ChatInferenceRequestPreparer(
     private val loggingPort: LoggingPort,
     private val searchIntentClassifier: SearchIntentClassifierPort = DummySearchIntentClassifier,
     private val toolExecutor: ToolExecutorPort = DummyToolExecutor,
+    private val monotonicToolActivation: MonotonicToolActivationPort = NoopMonotonicToolActivationPort,
 ) {
     private val dateTimeFormatter =
         DateTimeFormatter
@@ -120,127 +120,136 @@ class ChatInferenceRequestPreparer(
 
         var preRetrievalSources = emptyList<WebSearchSource>()
 
-        val (retrievedSearchResults, retrievedXSearchResults) = coroutineScope {
-            val webDeferred = async {
-                if (intentDecision.runWebPreRetrieval) {
-                    val probability = searchIntentClassifier.getSearchIntentProbability(embedding!!)
-                    loggingPort.info(
-                        TAG,
-                        "Search intent classification decision: requiresSearch=true " +
-                            "(probability=$probability, threshold=${SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD}) " +
-                            "for prompt: \"$prompt\"",
-                    )
-                    loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
-                    try {
-                        val argumentsJson =
-                            Json.encodeToString(
-                                buildJsonObject {
-                                    put("query", prompt)
-                                },
+        val (retrievedSearchResults, retrievedXSearchResults) =
+            coroutineScope {
+                val webDeferred =
+                    async {
+                        if (intentDecision.runWebPreRetrieval) {
+                            val probability = searchIntentClassifier.getSearchIntentProbability(embedding!!)
+                            loggingPort.info(
+                                TAG,
+                                "Search intent classification decision: requiresSearch=true " +
+                                    "(probability=$probability, threshold=${SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD}) " +
+                                    "for prompt: \"$prompt\"",
                             )
-                        val searchRequest =
-                            ToolCallRequest(
-                                toolName = ToolDefinition.WEB_SEARCH.name,
-                                argumentsJson = argumentsJson,
-                                provider = config?.apiProvider?.name ?: "local",
-                                modelType = modelType,
-                                chatId = chatId,
-                                userMessageId = userMessageId,
-                                assistantMessageId = assistantMessageId,
-                            )
-                        val searchResult = toolExecutor.execute(searchRequest)
-                        val webSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
-                        loggingPort.info(
-                            TAG,
-                            "Retrieved ${webSources.size} results from search tool for query: \"$prompt\"",
-                        )
-                        webSources to searchResult.resultJson
-                    } catch (e: Exception) {
-                        loggingPort.error(TAG, "Pre-retrieval search execution failed: ${e.message}", e)
-                        emptyList<WebSearchSource>() to null
-                    }
-                } else {
-                    loggingPort.info(
-                        TAG,
-                        "Skipping search intent classification: embeddingIsNull=${embedding == null}, " +
-                            "webSearchConfigured=$webSearchConfigured",
-                    )
-                    emptyList<WebSearchSource>() to null
-                }
-            }
-
-            val xDeferred = async {
-                if (!xSearchConfigured) return@async emptyList<WebSearchSource>() to null
-
-                val tokens = prompt.split(Regex("\\s+"))
-                val matchedUrl = tokens.firstOrNull { X_STATUS_URL_REGEX.containsMatchIn(it) }?.trimEnd('.', ',', ';', '?', '!')
-
-                val heuristicNonSearch = SearchIntentPolicy.isHeuristicNonSearchPrompt(prompt)
-                val researchBypass = SearchIntentPolicy.hasConcurrentResearchIntent(prompt)
-                val classifierSaysSearch = embedding != null &&
-                    searchIntentClassifier.requiresSearch(embedding, SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD)
-                val requiresXSearch = xSearchConfigured && classifierSaysSearch && !(heuristicNonSearch && !researchBypass)
-
-                if (matchedUrl != null) {
-                    try {
-                        val argumentsJson = Json.encodeToString(
-                            buildJsonObject {
-                                put("tweet_url", matchedUrl)
+                            loggingPort.info(TAG, "Search intent detected for prompt: $prompt")
+                            try {
+                                val argumentsJson =
+                                    Json.encodeToString(
+                                        buildJsonObject {
+                                            put("query", prompt)
+                                        },
+                                    )
+                                val searchRequest =
+                                    ToolCallRequest(
+                                        toolName = ToolDefinition.WEB_SEARCH.name,
+                                        argumentsJson = argumentsJson,
+                                        provider = config?.apiProvider?.name ?: "local",
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                        assistantMessageId = assistantMessageId,
+                                    )
+                                val searchResult = toolExecutor.execute(searchRequest)
+                                val webSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
+                                loggingPort.info(
+                                    TAG,
+                                    "Retrieved ${webSources.size} results from search tool for query: \"$prompt\"",
+                                )
+                                webSources to searchResult.resultJson
+                            } catch (e: Exception) {
+                                loggingPort.error(TAG, "Pre-retrieval search execution failed: ${e.message}", e)
+                                emptyList<WebSearchSource>() to null
                             }
-                        )
-                        val threadRequest = ToolCallRequest(
-                            toolName = ToolDefinition.X_GET_THREAD.name,
-                            argumentsJson = argumentsJson,
-                            provider = config?.apiProvider?.name ?: "local",
-                            modelType = modelType,
-                            chatId = chatId,
-                            userMessageId = userMessageId,
-                            assistantMessageId = assistantMessageId,
-                        )
-                        val threadResult = toolExecutor.execute(threadRequest)
-                        val xSources = WebSearchResultParser.parse(assistantMessageId, threadResult.resultJson)
-                        xSources to threadResult.resultJson
-                    } catch (e: Exception) {
-                        loggingPort.error(TAG, "Pre-retrieval X thread retrieval failed: ${e.message}", e)
-                        emptyList<WebSearchSource>() to null
-                    }
-                } else if (intentDecision.activateSearchX || requiresXSearch) {
-                    try {
-                        val deriveUseCase = com.browntowndev.enclave.domain.usecase.inference.DeriveXSearchParamsFromPromptUseCase()
-                        val deriveResult = deriveUseCase(prompt)
-                        val params = deriveResult.params
-                        if (params != null) {
-                            val argumentsJson = Json.encodeToString(XSearchParams.serializer(), params)
-                            val searchRequest = ToolCallRequest(
-                                toolName = ToolDefinition.X_SEARCH.name,
-                                argumentsJson = argumentsJson,
-                                provider = config?.apiProvider?.name ?: "local",
-                                modelType = modelType,
-                                chatId = chatId,
-                                userMessageId = userMessageId,
-                                assistantMessageId = assistantMessageId,
-                            )
-                            val searchResult = toolExecutor.execute(searchRequest)
-                            val xSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
-                            xSources to searchResult.resultJson
                         } else {
-                            loggingPort.info(TAG, "Skipping X search, reason: ${deriveResult.skipReason}")
+                            loggingPort.info(
+                                TAG,
+                                "Skipping search intent classification: embeddingIsNull=${embedding == null}, " +
+                                    "webSearchConfigured=$webSearchConfigured",
+                            )
                             emptyList<WebSearchSource>() to null
                         }
-                    } catch (e: Exception) {
-                        loggingPort.error(TAG, "Pre-retrieval X search execution failed: ${e.message}", e)
-                        emptyList<WebSearchSource>() to null
                     }
-                } else {
-                    emptyList<WebSearchSource>() to null
-                }
-            }
 
-            val webRes = webDeferred.await()
-            val xRes = xDeferred.await()
-            preRetrievalSources = webRes.first + xRes.first
-            webRes.second to xRes.second
-        }
+                val xDeferred =
+                    async {
+                        if (!xSearchConfigured) return@async emptyList<WebSearchSource>() to null
+
+                        val tokens = prompt.split(Regex("\\s+"))
+                        val matchedUrl = tokens.firstOrNull { X_STATUS_URL_REGEX.containsMatchIn(it) }?.trimEnd('.', ',', ';', '?', '!')
+
+                        val heuristicNonSearch = SearchIntentPolicy.isHeuristicNonSearchPrompt(prompt)
+                        val researchBypass = SearchIntentPolicy.hasConcurrentResearchIntent(prompt)
+                        val classifierSaysSearch =
+                            embedding != null &&
+                                searchIntentClassifier.requiresSearch(embedding, SearchIntentPolicy.PRE_RETRIEVAL_THRESHOLD)
+                        val requiresXSearch = xSearchConfigured && classifierSaysSearch && !(heuristicNonSearch && !researchBypass)
+
+                        if (matchedUrl != null) {
+                            try {
+                                val argumentsJson =
+                                    Json.encodeToString(
+                                        buildJsonObject {
+                                            put("tweet_url", matchedUrl)
+                                        },
+                                    )
+                                val threadRequest =
+                                    ToolCallRequest(
+                                        toolName = ToolDefinition.X_GET_THREAD.name,
+                                        argumentsJson = argumentsJson,
+                                        provider = config?.apiProvider?.name ?: "local",
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                        assistantMessageId = assistantMessageId,
+                                    )
+                                val threadResult = toolExecutor.execute(threadRequest)
+                                val xSources = WebSearchResultParser.parse(assistantMessageId, threadResult.resultJson)
+                                xSources to threadResult.resultJson
+                            } catch (e: Exception) {
+                                loggingPort.error(TAG, "Pre-retrieval X thread retrieval failed: ${e.message}", e)
+                                emptyList<WebSearchSource>() to null
+                            }
+                        } else if (intentDecision.activateSearchX || requiresXSearch) {
+                            try {
+                                val deriveUseCase =
+                                    com.browntowndev.enclave.domain.usecase.inference
+                                        .DeriveXSearchParamsFromPromptUseCase()
+                                val deriveResult = deriveUseCase(prompt)
+                                val params = deriveResult.params
+                                if (params != null) {
+                                    val argumentsJson = Json.encodeToString(XSearchParams.serializer(), params)
+                                    val searchRequest =
+                                        ToolCallRequest(
+                                            toolName = ToolDefinition.X_SEARCH.name,
+                                            argumentsJson = argumentsJson,
+                                            provider = config?.apiProvider?.name ?: "local",
+                                            modelType = modelType,
+                                            chatId = chatId,
+                                            userMessageId = userMessageId,
+                                            assistantMessageId = assistantMessageId,
+                                        )
+                                    val searchResult = toolExecutor.execute(searchRequest)
+                                    val xSources = WebSearchResultParser.parse(assistantMessageId, searchResult.resultJson)
+                                    xSources to searchResult.resultJson
+                                } else {
+                                    loggingPort.info(TAG, "Skipping X search, reason: ${deriveResult.skipReason}")
+                                    emptyList<WebSearchSource>() to null
+                                }
+                            } catch (e: Exception) {
+                                loggingPort.error(TAG, "Pre-retrieval X search execution failed: ${e.message}", e)
+                                emptyList<WebSearchSource>() to null
+                            }
+                        } else {
+                            emptyList<WebSearchSource>() to null
+                        }
+                    }
+
+                val webRes = webDeferred.await()
+                val xRes = xDeferred.await()
+                preRetrievalSources = webRes.first + xRes.first
+                webRes.second to xRes.second
+            }
 
         loggingPort.debug(
             TAG,
@@ -301,7 +310,7 @@ class ChatInferenceRequestPreparer(
                 null
             }
 
-        val intentActivatedNames =
+        val rawIntentActivatedNames =
             buildSet {
                 if (intentDecision.activateArtifactTools) {
                     add(ToolDefinition.START_ARTIFACT.name)
@@ -312,6 +321,8 @@ class ChatInferenceRequestPreparer(
                     add(ToolDefinition.X_SEARCH.name)
                 }
             }
+
+        val intentActivatedNames = monotonicToolActivation.union(chatId, rawIntentActivatedNames)
 
         val eligibleTools =
             buildList {
@@ -360,22 +371,19 @@ class ChatInferenceRequestPreparer(
                 tool.name in activeToolNames
             }
 
-        val systemPrompt =
-            if (toolingEnabled) {
-                promptComposer.compose(
-                    baseSystemPrompt = config?.systemPrompt,
-                    toolCatalog = toolCatalog,
-                    activeTools = activeTools,
-                    currentChatId = chatId.value,
-                    strategy = strategy,
-                    coreMemories = coreMemories,
-                    retrievedMemories = retrievedMemories,
-                    retrievedSearchResults = retrievedSearchResults,
-                    retrievedXSearchResults = retrievedXSearchResults,
-                )
-            } else {
-                config?.systemPrompt
-            }
+        val composedPrompts =
+            composeInferencePrompts(
+                toolingEnabled = toolingEnabled,
+                configSystemPrompt = config?.systemPrompt,
+                toolCatalog = toolCatalog,
+                activeTools = activeTools,
+                chatId = chatId.value,
+                strategy = strategy,
+                coreMemories = coreMemories,
+                retrievedMemories = retrievedMemories,
+                retrievedSearchResults = retrievedSearchResults,
+                retrievedXSearchResults = retrievedXSearchResults,
+            )
 
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
         val promptWithMetadata = "$prompt\n\n[Metadata: Current Time: $formattedTime]"
@@ -397,7 +405,8 @@ class ChatInferenceRequestPreparer(
                     modelId = config?.modelId,
                     apiProvider = config?.apiProvider,
                     apiModelPricing = config?.apiModelPricing,
-                    systemPrompt = systemPrompt,
+                    systemPrompt = composedPrompts.systemPrompt,
+                    volatileTurnContext = composedPrompts.volatileTurnContext,
                     imageUris =
                         if (imageHandling == ChatImageHandling.DIRECT) {
                             resolvedImageTarget?.imageUris.orEmpty()
@@ -428,6 +437,46 @@ class ChatInferenceRequestPreparer(
         )
     }
 
+    private fun composeInferencePrompts(
+        toolingEnabled: Boolean,
+        configSystemPrompt: String?,
+        toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+        activeTools: List<ToolDefinition>,
+        chatId: String,
+        strategy: ToolCallStrategy,
+        coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
+        retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
+        retrievedSearchResults: String?,
+        retrievedXSearchResults: String?,
+    ): ComposedInferencePrompts {
+        val volatileTurnContext =
+            promptComposer.composeVolatileTurnContext(
+                retrievedMemories = retrievedMemories,
+                retrievedSearchResults = retrievedSearchResults,
+                retrievedXSearchResults = retrievedXSearchResults,
+            )
+        val systemPrompt =
+            if (toolingEnabled) {
+                promptComposer.compose(
+                    baseSystemPrompt = configSystemPrompt,
+                    toolCatalog = toolCatalog,
+                    activeTools = activeTools,
+                    currentChatId = chatId,
+                    strategy = strategy,
+                    coreMemories = coreMemories,
+                    retrievedMemories = emptyList(),
+                    retrievedSearchResults = null,
+                    retrievedXSearchResults = null,
+                )
+            } else {
+                configSystemPrompt
+            }
+        return ComposedInferencePrompts(
+            systemPrompt = systemPrompt,
+            volatileTurnContext = volatileTurnContext,
+        )
+    }
+
     private fun logLocalPrompt(
         prompt: String,
         modelType: ModelType,
@@ -453,6 +502,11 @@ class ChatInferenceRequestPreparer(
         private const val TAG = "GenerateChatResponse"
         private const val PROMPT_LOG_CHUNK_SIZE = 2_000
 
+        private object NoopMonotonicToolActivationPort : MonotonicToolActivationPort {
+            override fun union(chatId: ChatId, newNames: Set<String>): Set<String> = newNames
+            override fun clearSession(chatId: ChatId) = Unit
+        }
+
         private val PRELOADED_TOOL_NAMES =
             setOf(
                 ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name,
@@ -461,10 +515,11 @@ class ChatInferenceRequestPreparer(
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
             )
 
-        private val X_STATUS_URL_REGEX = Regex(
-            """https?://(?:www\.)?(?:x|twitter)\.com/[a-zA-Z0-9_]+/status/(\d+)""",
-            RegexOption.IGNORE_CASE
-        )
+        private val X_STATUS_URL_REGEX =
+            Regex(
+                """https?://(?:www\.)?(?:x|twitter)\.com/[a-zA-Z0-9_]+/status/(\d+)""",
+                RegexOption.IGNORE_CASE,
+            )
 
         fun parseTweetIdFromUrl(tweetUrlOrId: String): String {
             val match = X_STATUS_URL_REGEX.find(tweetUrlOrId)
@@ -483,6 +538,11 @@ data class PreparedChatInferenceRequest(
     val options: GenerationOptions,
     val preRetrievalSources: List<WebSearchSource> = emptyList(),
     val preRetrievalXResultJson: String? = null,
+)
+
+private data class ComposedInferencePrompts(
+    val systemPrompt: String?,
+    val volatileTurnContext: String?,
 )
 
 internal enum class ChatImageHandling {
@@ -544,12 +604,14 @@ internal fun prepareChatPrompt(
 }
 
 private object DummySearchIntentClassifier : SearchIntentClassifierPort {
-    override fun requiresSearch(embedding: FloatArray, threshold: Float): Boolean = false
+    override fun requiresSearch(
+        embedding: FloatArray,
+        threshold: Float,
+    ): Boolean = false
+
     override fun getSearchIntentProbability(embedding: FloatArray): Float = 0.0f
 }
 
 private object DummyToolExecutor : ToolExecutorPort {
-    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
-        return ToolExecutionResult(request.toolName, "{}")
-    }
+    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult = ToolExecutionResult(request.toolName, "{}")
 }

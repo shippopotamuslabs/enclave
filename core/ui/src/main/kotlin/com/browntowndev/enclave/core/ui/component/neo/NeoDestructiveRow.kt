@@ -55,8 +55,7 @@ fun NeoDestructiveRow(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .clickable(enabled = enabled, onClick = onClick)
+                ).clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

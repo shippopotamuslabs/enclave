@@ -4,8 +4,8 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
-import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
@@ -14,7 +14,6 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
@@ -95,6 +94,7 @@ class DirectChatInferenceExecutorTest {
                         retrievedSearchResults = any(),
                     )
                 } returns ""
+                every { composeVolatileTurnContext(any(), any(), any()) } returns null
             }
         defaultModelRepository = mockk<com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort>(relaxed = true)
         mediaProviderRepository = mockk<com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort>(relaxed = true)

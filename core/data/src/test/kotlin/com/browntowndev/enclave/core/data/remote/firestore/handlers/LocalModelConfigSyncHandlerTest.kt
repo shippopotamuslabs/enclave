@@ -26,9 +26,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.robolectric.annotation.Config as RobolectricConfig
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.concurrent.atomic.AtomicBoolean
+import org.robolectric.annotation.Config as RobolectricConfig
 
 @ExtendWith(RobolectricExtension::class)
 @RobolectricConfig(sdk = [34])

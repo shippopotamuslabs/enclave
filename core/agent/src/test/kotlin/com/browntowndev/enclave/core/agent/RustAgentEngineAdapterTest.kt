@@ -49,6 +49,7 @@ class RustAgentEngineAdapterTest {
                                     toolContextIndexJson: String?,
                                     fileContextIndexJson: String?,
                                     cacheHints: List<String>,
+                                    transcriptRevision: Long,
                                     onTextToken: suspend (String) -> Unit,
                                     onThinkingToken: suspend (String) -> Unit,
                                 ): AgentModelTurnResult {
@@ -90,6 +91,7 @@ class RustAgentEngineAdapterTest {
                                     toolContextIndexJson: String?,
                                     fileContextIndexJson: String?,
                                     cacheHints: List<String>,
+                                    transcriptRevision: Long,
                                     onTextToken: suspend (String) -> Unit,
                                     onThinkingToken: suspend (String) -> Unit,
                                 ): AgentModelTurnResult {
@@ -151,6 +153,7 @@ class RustAgentEngineAdapterTest {
                                     toolContextIndexJson: String?,
                                     fileContextIndexJson: String?,
                                     cacheHints: List<String>,
+                                    transcriptRevision: Long,
                                     onTextToken: suspend (String) -> Unit,
                                     onThinkingToken: suspend (String) -> Unit,
                                 ): AgentModelTurnResult =

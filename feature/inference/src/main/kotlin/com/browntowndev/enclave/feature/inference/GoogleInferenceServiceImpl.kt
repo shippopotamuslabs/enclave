@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.Content
@@ -48,6 +49,9 @@ class GoogleInferenceServiceImpl(
     }
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
+
+    private var appendOnlyContext: ProviderAppendOnlyContext? = null
+
     private val promptCacheSession =
         GooglePromptCacheSession(
             modelId = modelId,
@@ -141,11 +145,23 @@ class GoogleInferenceServiceImpl(
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
         conversationHistory.addAll(messages)
+        resetAppendOnlyForNewPrompt()
+    }
+
+    internal fun clearAppendOnlyOnRustCompactionBoundary() {
+        appendOnlyContext?.clearOnRustCompactionBoundary()
+    }
+
+    internal fun resetAppendOnlyForNewPrompt() {
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     override suspend fun closeSession() {
         conversationHistory.clear()
         promptCacheSession.close()
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     @Suppress("CyclomaticComplexMethod")
@@ -159,7 +175,11 @@ class GoogleInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val timing = telemetrySupport?.let { com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming() }
+        val timing =
+            telemetrySupport?.let {
+                com.browntowndev.enclave.feature.inference.telemetry
+                    .InferenceTurnTiming()
+            }
         val captureContext = telemetrySupport?.captureContext(options)
         val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
         val imageUris = options.imageUris.take(3600)
@@ -170,10 +190,12 @@ class GoogleInferenceServiceImpl(
                 ?: throw IllegalArgumentException("sessionMessages cannot be empty")
         val latestIndex = sessionMessages.lastIndex
 
+        val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
+
         fun mapAtIndex(
             message: AgentLoopMessage,
             index: Int,
-            prependSidecars: Boolean,
+            prependVolatile: Boolean,
             attachImages: Boolean,
         ): Content? =
             GoogleAgentLoopContentMapper.mapMessage(
@@ -181,7 +203,7 @@ class GoogleInferenceServiceImpl(
                 index = index,
                 lastUserIndex = if (attachImages) lastUserIndex else -1,
                 imageUris = if (attachImages) imageUris else emptyList(),
-                prependedText = if (prependSidecars) contextSidecars else null,
+                prependedText = if (prependVolatile) latestUserPrepends else null,
             )
 
         val activeCacheName =
@@ -191,7 +213,7 @@ class GoogleInferenceServiceImpl(
                 availableTools = availableTools,
                 mapToContent = { msg ->
                     val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                    mapAtIndex(msg, index, prependSidecars = false, attachImages = false)
+                    mapAtIndex(msg, index, prependVolatile = false, attachImages = false)
                 },
             )
 
@@ -233,12 +255,12 @@ class GoogleInferenceServiceImpl(
             buildList {
                 deltaHistory.forEach { msg ->
                     val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                    mapAtIndex(msg, index, prependSidecars = false, attachImages = false)?.let(::add)
+                    mapAtIndex(msg, index, prependVolatile = false, attachImages = false)?.let(::add)
                 }
                 mapAtIndex(
                     latestMessage,
                     latestIndex,
-                    prependSidecars = !contextSidecars.isNullOrBlank(),
+                    prependVolatile = !latestUserPrepends.isNullOrBlank(),
                     attachImages = true,
                 )?.let(::add)
             }

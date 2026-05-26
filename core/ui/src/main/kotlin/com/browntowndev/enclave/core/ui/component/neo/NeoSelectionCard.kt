@@ -41,8 +41,7 @@ fun NeoSelectionCard(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(16.dp),
     ) {
         Text(

@@ -13,22 +13,23 @@ import com.openai.models.chat.completions.ChatCompletionCreateParams
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
  * xAI prompt cache via [XaiRequestMapper.XAI_CONVERSATION_ID_HEADER] requires a stable
- * message prefix across tool-loop turns. Context sidecars must not slide before the volatile tail.
+ * message prefix across tool-loop turns. Volatile sidecars belong before the live tail.
  */
 class XaiPromptCacheSidecarPlacementTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
 
     @Test
-    fun completeSingleTurn_toolContinuation_keepsSidecarAfterSystemPrompt() =
+    fun AOC_15_completeSingleTurn_toolContinuation_placesSidecarBeforeToolResult() =
         runTest {
             val capturedParams = mutableListOf<ChatCompletionCreateParams>()
             val service = xaiSingleTurnService(capturedParams)
-            val sidecars = "State ledger JSON: {\"turn\":1}"
+            val sidecars = """State ledger JSON: {"turn":1}"""
 
             service.completeSingleTurn(
                 sessionMessages =
@@ -63,16 +64,16 @@ class XaiPromptCacheSidecarPlacementTest {
             assertEquals(5, messages.size)
             assertTrue(messages[0].isSystem())
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
-            assertTrue(messages[1].isSystem())
-            assertEquals(sidecars, messages[1].asSystem().content().asText())
-            assertTrue(messages[2].isUser())
-            assertEquals("Search for cats", messages[2].asUser().content().asText())
+            assertTrue(messages[1].isUser())
+            assertEquals("Search for cats", messages[1].asUser().content().asText())
+            assertTrue(messages[2].isAssistant())
+            assertTrue(messages[3].isSystem())
+            assertEquals(sidecars, messages[3].asSystem().content().asText())
             assertTrue(messages[4].isTool())
+            assertFalse(messages[1].isSystem())
         }
 
-    private fun xaiSingleTurnService(
-        capturedParams: MutableList<ChatCompletionCreateParams>,
-    ): BaseOpenAiSdkInferenceService =
+    private fun xaiSingleTurnService(capturedParams: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
         object : BaseOpenAiSdkInferenceService(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",

@@ -6,20 +6,23 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCompletedEvent
+import com.openai.models.responses.ResponseUsage
 import com.openai.models.responses.ResponseErrorEvent
 import com.openai.models.responses.ResponseFailedEvent
 import com.openai.models.responses.ResponseIncompleteEvent
-import com.openai.models.responses.ResponseTextDeltaEvent
-import com.openai.models.responses.ResponseTextDoneEvent
 import com.openai.models.responses.ResponseReasoningTextDeltaEvent
 import com.openai.models.responses.ResponseReasoningTextDoneEvent
 import com.openai.models.responses.ResponseRefusalDeltaEvent
 import com.openai.models.responses.ResponseRefusalDoneEvent
 import com.openai.models.responses.ResponseStreamEvent
+import com.openai.models.responses.ResponseTextDeltaEvent
+import com.openai.models.responses.ResponseTextDoneEvent
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,7 +31,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.test.runTest
 
 class OpenAiResponseStreamHandlerTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
@@ -313,8 +315,18 @@ class OpenAiResponseStreamHandlerTest {
             val state = StreamState()
             val event = mockk<ResponseStreamEvent>(relaxed = true)
             val completed = mockk<ResponseCompletedEvent>()
-            val response = mockk<com.openai.models.responses.Response>()
+            val response = mockk<Response>()
+            val usage = mockk<ResponseUsage>()
+            val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
+            val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
             every { response.id() } returns "resp_done"
+            every { response.usage() } returns Optional.of(usage)
+            every { usage.inputTokens() } returns 1_000L
+            every { usage.outputTokens() } returns 200L
+            every { usage.inputTokensDetails() } returns inputDetails
+            every { usage.outputTokensDetails() } returns outputDetails
+            every { inputDetails.cachedTokens() } returns 400L
+            every { outputDetails.reasoningTokens() } returns 0L
             every { completed.response() } returns response
             every { event.isCompleted() } returns true
             every { event.completed() } returns Optional.of(completed)
@@ -322,6 +334,10 @@ class OpenAiResponseStreamHandlerTest {
             handler.handleEvent(event, state)
 
             assertEquals("resp_done", state.responseId)
+            val streamed = handler.toStreamedResponse(state)
+            assertEquals(1_000, streamed.inputTokens)
+            assertEquals(200, streamed.outputTokens)
+            assertEquals(400, streamed.cacheReadInputTokens)
             verify { loggingPort.debug("TestHandler", any()) }
         }
 
@@ -332,8 +348,9 @@ class OpenAiResponseStreamHandlerTest {
             val state = StreamState()
             val event = mockk<ResponseStreamEvent>(relaxed = true)
             val incomplete = mockk<ResponseIncompleteEvent>()
-            val response = mockk<com.openai.models.responses.Response>()
+            val response = mockk<Response>()
             every { response.id() } returns "resp_partial"
+            every { response.usage() } returns Optional.empty()
             every { response.incompleteDetails() } returns Optional.empty()
             every { incomplete.response() } returns response
             every { event.isIncomplete() } returns true

@@ -107,7 +107,8 @@ class SaveApiProviderDraftUseCase
             existingAliases: Set<String>,
         ): String {
             val baseSlug =
-                provider.lowercase()
+                provider
+                    .lowercase()
                     .replace(Regex("[^a-z0-9]"), "-")
                     .replace(Regex("-+"), "-")
                     .trim('-')

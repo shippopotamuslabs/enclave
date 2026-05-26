@@ -7,7 +7,6 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
@@ -56,8 +55,12 @@ class ByokModelOnPresetInferenceTest {
                 toolExecutionEventPort = mockk(relaxed = true),
                 agentLoopPort = mockk(relaxed = true),
                 toolExecutorPort = mockk(relaxed = true),
-                toolEnvelopeParserPort = com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort(),
-                toolStreamGatePort = com.browntowndev.enclave.domain.util.FakeToolStreamGatePort(),
+                toolEnvelopeParserPort =
+                    com.browntowndev.enclave.domain.util
+                        .FakeToolEnvelopeParserPort(),
+                toolStreamGatePort =
+                    com.browntowndev.enclave.domain.util
+                        .FakeToolStreamGatePort(),
                 telemetrySupport = testInferenceTelemetrySupport(),
             )
     }
@@ -168,7 +171,8 @@ class ByokModelOnPresetInferenceTest {
         resolvedBaseUrl: String?,
     ): Any {
         val method =
-            InferenceFactoryImpl::class.declaredFunctions
+            InferenceFactoryImpl::class
+                .declaredFunctions
                 .first { it.name == "createApiIdentity" }
         method.isAccessible = true
         return requireNotNull(

@@ -7,7 +7,6 @@ import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryEntity
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
-import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.chat.MessageState

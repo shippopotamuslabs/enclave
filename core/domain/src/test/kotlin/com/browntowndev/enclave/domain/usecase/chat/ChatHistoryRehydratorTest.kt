@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
+import com.browntowndev.enclave.domain.usecase.FakeMessageRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -21,6 +22,69 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ChatHistoryRehydratorTest {
+    @Test
+    fun `rehydrator uses committed inference prompt for prior user message`() =
+        runTest {
+            val priorUser =
+                Message(
+                    id = MessageId("prior-user"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = "search query"),
+                    role = Role.USER,
+                )
+            val priorAssistant =
+                Message(
+                    id = MessageId("prior-assistant"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = "Previous answer"),
+                    role = Role.ASSISTANT,
+                )
+            val currentUser =
+                Message(
+                    id = MessageId("current-user"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = "follow up"),
+                    role = Role.USER,
+                )
+            val activeAssistant =
+                Message(
+                    id = MessageId("active-assistant"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = ""),
+                    role = Role.ASSISTANT,
+                )
+            val committedPrompt =
+                "# RELEVANT WEB SEARCH RESULTS:\nresult-text-abc\n\n" +
+                    "search query\n\n[Metadata: Current Time: Tuesday, May 26, 2026 at 3:44 PM]"
+            val committedPrompts = InMemoryCommittedInferencePromptStore()
+            committedPrompts.commit(
+                userMessageId = priorUser.id,
+                content = committedPrompt,
+            )
+            val repository =
+                FakeMessageRepository().apply {
+                    setMessagesForChat(listOf(priorUser, priorAssistant, currentUser, activeAssistant))
+                }
+            val service = FakeInferenceService()
+            val rehydrator =
+                ChatHistoryRehydrator(
+                    messageRepository = repository,
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    committedInferencePrompts = committedPrompts,
+                )
+
+            rehydrator(
+                chatId = ChatId("chat"),
+                userMessageId = currentUser.id,
+                assistantMessageId = activeAssistant.id,
+                service = service,
+            )
+
+            val history = service.getHistory()
+            assertEquals(committedPrompt, history.first().content)
+            assertFalse(history.first().content == priorUser.content.text)
+        }
+
     @Test
     fun `rehydrator excludes active messages and formats saved vision analyses`() =
         runTest {

@@ -196,7 +196,9 @@ internal class ConversationCancellationGate {
     @Volatile
     var isCurrentGenerationCancelled: Boolean = false
 
-    val cancellationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
+    val cancellationEpoch =
+        java.util.concurrent.atomic
+            .AtomicInteger(0)
 
     fun cancelCurrentGeneration() {
         isCurrentGenerationCancelled = true

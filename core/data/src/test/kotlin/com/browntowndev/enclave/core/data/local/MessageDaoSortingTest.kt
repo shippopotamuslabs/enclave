@@ -1,9 +1,9 @@
 package com.browntowndev.enclave.core.data.local
 
-import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayload
-import com.browntowndev.enclave.core.data.local.dao.message.MessageWithFiles
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayload
+import com.browntowndev.enclave.core.data.local.dao.message.MessageWithFiles
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState

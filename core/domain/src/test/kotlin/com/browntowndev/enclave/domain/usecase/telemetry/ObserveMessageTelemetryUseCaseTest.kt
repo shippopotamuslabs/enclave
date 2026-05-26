@@ -69,7 +69,9 @@ class ObserveMessageTelemetryUseCaseTest {
                                     listOf(
                                         TelemetryTestFixtures.telAgent1,
                                         TelemetryTestFixtures.telAnthropic1.copy(
-                                            id = com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId("tel-agent-mix"),
+                                            id =
+                                                com.browntowndev.enclave.domain.model.telemetry
+                                                    .TurnTelemetryId("tel-agent-mix"),
                                             messageId = TelemetryTestFixtures.mAgent1,
                                             sequenceIndex = 1,
                                         ),

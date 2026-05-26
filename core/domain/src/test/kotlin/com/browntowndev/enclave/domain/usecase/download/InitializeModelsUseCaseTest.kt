@@ -17,9 +17,9 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
+import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
-import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

@@ -153,3 +153,61 @@ No database schema or persistence changes are required.
 ## 7. Drift and Escalation Rules
 * **Drift Rule:** If the Anthropic SDK is updated and the `CacheControlEphemeral` model class signature changes, update `AnthropicRequestMapper` immediately to match the new builder name.
 * **Escalation Rule:** If Google GenAI cache creation fails on the server side with a resource limit error or permission issue, catch the exception, log a warning, and fallback gracefully to standard non-cached generation by setting `cachedContent` to null. Do not block prompt generation.
+
+---
+
+## Regression: xAI cache hits (2026-05-26)
+
+### Symptom
+After `FEAT-append-only-provider-context` landed with sidecar mitigations (`priorFrozenSidecarsForWire`, cap-at-2 frozen sidecars, `ContextSidecarCompaction`, digest-based log clear), xAI telemetry shows **near-zero `cacheReadInputTokens`** even when `x-grok-conv-id` is set via `GenerationOptions.chatId`.
+
+### Root cause (wire contract violation)
+xAI prompt cache (like OpenAI `prompt_cache_key`) requires the **messages-array prefix** to be byte-identical turn-over-turn for a given `x-grok-conv-id`.
+
+`BaseOpenAiSdkInferenceService.completeSingleTurn` currently builds:
+
+```
+[stable SYSTEM] + priorFrozenSidecars (all prepended at index 1+) + history[..tail) + currentSidecar + history[tail..]
+```
+
+Two mechanisms break prefix stability for typical tool-heavy agent sessions:
+
+1. **Position drift:** Frozen sidecars are replayed at **fixed low indices** (after stable system) via `ProviderAppendOnlyContext.priorFrozenSidecarsForWire`, but they were originally emitted at **tail-adjacent indices** (before tool result / last session message). Example: after a tool loop, turn *N* ends with sidecar `s2` at wire index 4; turn *N+1* replays `s2` at index 1 — prefix mismatch at index 1 even though text is unchanged.
+2. **Cap-at-2 eviction:** `priorFrozenSidecarsForWire` uses `takeLast(maxPrior)` when `frozenSidecarTexts.size > MAX_FROZEN_SIDECARS_ON_WIRE (2)`. The oldest sidecar drops out of the prefix slot at index 1 on turn 3+, replacing it with a different sidecar text — guaranteed cache miss.
+
+Existing tests (`AOC-03`, `XaiPromptCacheSidecarPlacementTest`) only assert prefix stability for the **first two** `completeSingleTurn` calls of a tool loop (indices 0–2). They do **not** cover the post-tool final turn or turn 3+ cap behavior — the paths agents hit in production.
+
+**Not primary cause (verified):** `ContextSidecarCompaction` (deterministic `JsonObject.toString()`), missing `x-grok-conv-id` header when `chatId` is set (`ChatInferenceRequestPreparer` passes `chatId`), or `syncMessages` digest clear (only fires on in-place message rewrites; logs `WARN`).
+
+### Required wire rule (xAI / OpenAI)
+For remote prefix cache eligibility under `plans/FEAT-append-only-provider-context/spec.md`:
+
+- Volatile sidecars must stay **tail-adjacent only** — never re-home prior snapshots to index 1+ on later turns.
+- Each frozen sidecar must be replayed at its **original mapped insert index** (interleaved into `mappedBody`), or omitted from the wire when superseded by the current sidecar (state ledger is authoritative on the live tail).
+- **Tail anchor uses mapped indices**, not raw `sessionMessages.lastIndex` (mapping may drop or remap messages).
+- **Engine-internal tail messages** (`agent_tool_budget`, nudges) must not become the sidecar anchor — anchor the last real user/assistant/tool history entry (`AOC-21`).
+- **Digest/compaction log clear** must also clear frozen sidecar snapshots (stale indices otherwise poison replay).
+- **Cap-at-2 must not evict sidecars already committed to the provider-visible prefix.** Token caps may drop oldest sidecars only from non-prefix tail slots, or collapse sidecars off-wire entirely — not swap index-1 content.
+
+Cross-ref: `plans/FEAT-append-only-provider-context/spec.md` § Regression (2026-05-26) for implementation tasks.
+
+### Remaining prefix instability (P1, not fixed in Kotlin wire layer)
+- **`_agent` merged into tool result JSON** between tool batches mutates a committed history message in place — xAI prefix bytes change even when sidecar placement is correct. Mitigation belongs in `agent_core` (separate budget delivery) or provider-normalized digest exclusions.
+
+### Fix tasks
+
+| Priority | Task ID | Description | Files |
+|---|---|---|---|
+| **P0** | `PC-XAI-01` | Position-aware frozen sidecar replay: store `mappedInsertIndex` (or wire index) in `endTurnFreezeSidecar`; rebuild wire by interleaving frozen sidecars into `mappedBody` at recorded indices instead of `priorFrozenSidecarsForWire` front-prepend. | `ProviderAppendOnlyContext.kt`, `BaseOpenAiSdkInferenceService.kt` |
+| **P0** | `PC-XAI-02` | Rework or remove cap-at-2 wire eviction: never `takeLast` drop sidecars that occupy stable prefix slots; if cap needed, omit oldest sidecars from wire entirely (current tail sidecar carries latest ledger) rather than replace index 1. | `ProviderAppendOnlyContext.kt` |
+| **P1** | `PC-XAI-03` | Add multi-call prefix identity test: 3+ `completeSingleTurn` xAI calls simulating tool loop + post-tool assistant turn; assert `messages[0..K]` byte-equal to prior request for some K ≥ 4. | `AppendOnlyOpenAiSidecarPlacementTest.kt` or new `XaiPromptCachePrefixStabilityTest.kt` |
+| **P1** | `PC-XAI-04` | Document in §1 OpenAI/xAI bullet: tail anchor + frozen replay index rule (cross-ref FEAT-append-only regression fix). | `plans/prompt-caching/spec.md` §1 |
+
+### Test scenarios (Synthitect)
+
+| ID | Type | Description |
+|---|---|---|
+| `PC-XAI-01` | Fix verification | Third `completeSingleTurn` after tool loop: post-tool assistant turn preserves `messages[0..4]` prefix bytes vs second call. |
+| `PC-XAI-02` | Fix verification | Turn 4 user message: index 1 sidecar text unchanged vs turn 3 (no cap-at-2 prefix swap). |
+| `PC-XAI-03` | Regression | `x-grok-conv-id` header still set when `chatId` present (existing `XaiPromptCacheRoutingTest`). |
+| `PC-XAI-04` | Regression | `AOC-15` tool-result tail order unchanged after fix. |

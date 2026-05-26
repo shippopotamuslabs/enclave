@@ -1,11 +1,10 @@
 package com.browntowndev.enclave.core.data.remote.firestore
 
 import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
-import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSyncHandler
+import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
-import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore

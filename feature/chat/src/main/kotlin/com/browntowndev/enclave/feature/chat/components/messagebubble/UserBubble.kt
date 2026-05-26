@@ -15,10 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -29,8 +25,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,8 +47,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.feature.chat.ChatMessage
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
+import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
+import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.R
 import kotlinx.coroutines.launch
 
@@ -103,8 +103,7 @@ internal fun UserBubble(
                         .padding(
                             end = 2.dp,
                             bottom = EnclaveNeoTokens.userBubbleShadowOffset,
-                        )
-                        .zIndex(1f)
+                        ).zIndex(1f)
                         .neoSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             borderColor = neoBorderColor(),
@@ -112,8 +111,7 @@ internal fun UserBubble(
                             shadowColor = neoShadowColor(),
                             shadowOffset = EnclaveNeoTokens.userBubbleShadowOffset,
                             shape = EnclaveNeoTokens.userBubbleShape,
-                        )
-                        .clickable(
+                        ).clickable(
                             onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
                         ) { showActions = !showActions },
             ) {
@@ -190,9 +188,7 @@ private fun UserBubbleImagePreviews(
 }
 
 @Composable
-private fun UserBubbleFileAttachments(
-    attachments: List<FileAttachment>,
-) {
+private fun UserBubbleFileAttachments(attachments: List<FileAttachment>) {
     if (attachments.isEmpty()) return
 
     Row(

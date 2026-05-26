@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
@@ -23,6 +22,7 @@ import com.browntowndev.enclave.feature.chat.MessageRole
 import com.browntowndev.enclave.feature.chat.ThinkingDataUi
 import com.browntowndev.enclave.feature.chat.ToolCallBannerKind
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
+import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ProvideDetailBottomSheet
 import com.browntowndev.enclave.feature.chat.fakeLongMessages
 import com.browntowndev.enclave.feature.chat.typographyPreviewMessages
 

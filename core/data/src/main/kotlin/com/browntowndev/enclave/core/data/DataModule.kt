@@ -29,22 +29,21 @@ import com.browntowndev.enclave.core.data.local.ChatSummaryDao
 import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
-import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
-import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
-import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.SQLiteVecInstaller
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.media.AndroidAudioCapture
 import com.browntowndev.enclave.core.data.media.AndroidAudioPlayer
@@ -55,18 +54,15 @@ import com.browntowndev.enclave.core.data.media.AndroidStreamingAudioPlayer
 import com.browntowndev.enclave.core.data.media.AudioRecordFactory
 import com.browntowndev.enclave.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
-import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.enclave.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ChatRepositoryImpl
-import com.browntowndev.enclave.core.data.repository.InferenceTelemetryRepositoryImpl
-import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryRepositoryPort
 import com.browntowndev.enclave.core.data.repository.CompositeToolExecutor
 import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
+import com.browntowndev.enclave.core.data.repository.InferenceTelemetryRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.LocalModelRepositoryImpl
-import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MessageRepositoryImpl
@@ -77,6 +73,7 @@ import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
@@ -107,8 +104,8 @@ import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
+import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -120,6 +117,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
@@ -181,14 +179,12 @@ object DataModule {
     fun provideChatDao(database: EnclaveDatabase): ChatDao = database.chatDao()
 
     @Provides
-    fun provideMessageQueryDao(
-        database: EnclaveDatabase,
-    ): com.browntowndev.enclave.core.data.local.dao.message.MessageQueryDao = database.messageQueryDao()
+    fun provideMessageQueryDao(database: EnclaveDatabase): com.browntowndev.enclave.core.data.local.dao.message.MessageQueryDao =
+        database.messageQueryDao()
 
     @Provides
-    fun provideMessageCommandDao(
-        database: EnclaveDatabase,
-    ): com.browntowndev.enclave.core.data.local.dao.message.MessageCommandDao = database.messageCommandDao()
+    fun provideMessageCommandDao(database: EnclaveDatabase): com.browntowndev.enclave.core.data.local.dao.message.MessageCommandDao =
+        database.messageCommandDao()
 
     @Provides
     fun provideMessageSyncCommandDao(
@@ -196,8 +192,7 @@ object DataModule {
     ): com.browntowndev.enclave.core.data.local.dao.message.MessageSyncCommandDao = database.messageSyncCommandDao()
 
     @Provides
-    fun provideMessageTranscriptSegmentDao(database: EnclaveDatabase): MessageTranscriptSegmentDao =
-        database.messageTranscriptSegmentDao()
+    fun provideMessageTranscriptSegmentDao(database: EnclaveDatabase): MessageTranscriptSegmentDao = database.messageTranscriptSegmentDao()
 
     @Provides
     fun provideMessageFileDao(database: EnclaveDatabase): MessageFileDao = database.messageFileDao()
@@ -209,8 +204,7 @@ object DataModule {
     fun provideWebSearchSourceDao(database: EnclaveDatabase): WebSearchSourceDao = database.webSearchSourceDao()
 
     @Provides
-    fun provideFirestoreSyncPlaceholderDao(database: EnclaveDatabase): FirestoreSyncPlaceholderDao =
-        database.firestoreSyncPlaceholderDao()
+    fun provideFirestoreSyncPlaceholderDao(database: EnclaveDatabase): FirestoreSyncPlaceholderDao = database.firestoreSyncPlaceholderDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: EnclaveDatabase): MessageVisionAnalysisDao = database.messageVisionAnalysisDao()
@@ -226,8 +220,7 @@ object DataModule {
     fun provideUtilityModelsDao(database: EnclaveDatabase): UtilityModelsDao = database.utilityModelsDao()
 
     @Provides
-    fun provideLocalModelConfigurationsDao(database: EnclaveDatabase): LocalModelConfigurationsDao =
-        database.localModelConfigurationsDao()
+    fun provideLocalModelConfigurationsDao(database: EnclaveDatabase): LocalModelConfigurationsDao = database.localModelConfigurationsDao()
 
     @Provides
     fun provideApiModelConfigurationsDao(database: EnclaveDatabase): ApiModelConfigurationsDao = database.apiModelConfigurationsDao()
@@ -403,9 +396,7 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindInferenceTelemetryRepository(
-        impl: InferenceTelemetryRepositoryImpl,
-    ): InferenceTelemetryRepositoryPort
+    abstract fun bindInferenceTelemetryRepository(impl: InferenceTelemetryRepositoryImpl): InferenceTelemetryRepositoryPort
 
     @Binds
     @Singleton

@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
-import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
@@ -91,6 +90,12 @@ class GenerateChatResponseUseCaseTelemetryPersistenceTest {
                     transcriptSegments = any(),
                 )
             }
-            assertEquals("0.002500", telemetrySlot.captured.single().costUsd?.toPlainString())
+            assertEquals(
+                "0.002500",
+                telemetrySlot.captured
+                    .single()
+                    .costUsd
+                    ?.toPlainString(),
+            )
         }
 }

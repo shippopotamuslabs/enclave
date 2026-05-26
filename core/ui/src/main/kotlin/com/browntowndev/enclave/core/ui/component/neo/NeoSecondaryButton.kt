@@ -33,8 +33,7 @@ fun NeoSecondaryButton(
                     withShadow = enabled,
                     shadowColor = neoShadowColor(),
                     shadowOffset = neoButtonShadowOffset(),
-                )
-                .clickable(enabled = enabled, onClick = onClick)
+                ).clickable(enabled = enabled, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,

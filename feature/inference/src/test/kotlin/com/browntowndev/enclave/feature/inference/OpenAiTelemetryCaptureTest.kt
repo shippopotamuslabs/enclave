@@ -4,15 +4,15 @@ import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
-import java.math.BigDecimal
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.browntowndev.enclave.feature.inference.telemetry.OpenAiTelemetryUsageInput
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 
 class OpenAiTelemetryCaptureTest {
     private val normalizer =
@@ -116,9 +116,7 @@ class OpenAiTelemetryCaptureTest {
         assertEquals(20, captured.cacheWriteInputTokens)
     }
 
-    private fun TurnTelemetry.toOpenAiInput(
-        providerLabel: String,
-    ): OpenAiTelemetryUsageInput =
+    private fun TurnTelemetry.toOpenAiInput(providerLabel: String): OpenAiTelemetryUsageInput =
         OpenAiTelemetryUsageInput(
             rowId = id.value,
             messageId = messageId.value,

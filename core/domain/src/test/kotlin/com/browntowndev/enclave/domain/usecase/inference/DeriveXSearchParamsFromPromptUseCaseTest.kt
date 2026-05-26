@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DeriveXSearchParamsFromPromptUseCaseTest {
-
     private val useCase = DeriveXSearchParamsFromPromptUseCase()
 
     @Test
@@ -30,8 +29,10 @@ class DeriveXSearchParamsFromPromptUseCaseTest {
         assertEquals(listOf("sama"), params?.mentions)
         // keywords includes "news" and "breaking" (standard stop words filtered out)
         val keywords = params?.keywords ?: emptyList()
-        org.junit.jupiter.api.Assertions.assertTrue(keywords.contains("news"))
-        org.junit.jupiter.api.Assertions.assertTrue(keywords.contains("breaking"))
+        org.junit.jupiter.api.Assertions
+            .assertTrue(keywords.contains("news"))
+        org.junit.jupiter.api.Assertions
+            .assertTrue(keywords.contains("breaking"))
         assertNull(result.skipReason)
     }
 
@@ -43,7 +44,8 @@ class DeriveXSearchParamsFromPromptUseCaseTest {
         val params = result.params
         assertNotNull(params)
         val keywords = params?.keywords ?: emptyList()
-        org.junit.jupiter.api.Assertions.assertTrue(keywords.contains("news"))
+        org.junit.jupiter.api.Assertions
+            .assertTrue(keywords.contains("news"))
         // Check that non-status x.com/OpenAI doesn't trigger status check, just normal keywords
         assertNull(result.skipReason)
     }
@@ -73,7 +75,9 @@ class DeriveXSearchParamsFromPromptUseCaseTest {
         val result = useCase(prompt)
         val params = result.params
         assertNotNull(params)
-        val queryStr = com.browntowndev.enclave.domain.usecase.inference.BuildXQueryUseCase()(params!!)
+        val queryStr =
+            com.browntowndev.enclave.domain.usecase.inference
+                .BuildXQueryUseCase()(params!!)
         assertTrue(queryStr.length < 128)
     }
 

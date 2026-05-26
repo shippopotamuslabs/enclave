@@ -41,8 +41,7 @@ fun NeoSelectionMark(
                 .size(28.dp)
                 .semantics {
                     contentDescription = if (selected) "Selected" else "Not selected"
-                }
-                .neoSurface(
+                }.neoSurface(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = selected,

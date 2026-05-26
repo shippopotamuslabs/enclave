@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.history
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+
 @Preview(showBackground = true, name = "History — dark loaded")
 @Composable
 fun PreviewHistoryScreenDarkLoaded() {

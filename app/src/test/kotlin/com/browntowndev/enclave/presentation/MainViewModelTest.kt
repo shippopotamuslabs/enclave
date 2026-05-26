@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
@@ -21,7 +22,6 @@ import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliatio
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
-import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -217,10 +217,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
 
@@ -257,10 +257,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
 
@@ -305,10 +305,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password", enableBiometric = true)
@@ -341,10 +341,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             coEvery { detectVaultReconciliationStateUseCase("password") } coAnswers {
@@ -468,10 +468,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
@@ -533,10 +533,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
@@ -584,10 +584,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
@@ -635,10 +635,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
@@ -682,10 +682,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")
@@ -755,10 +755,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
 
@@ -822,7 +822,7 @@ class MainViewModelTest {
                         totalEstimate = 200L,
                         progressFraction = 0.5f,
                         status = "Syncing updates (100/200)...",
-                    )
+                    ),
                 )
                 Result.success(Unit)
             }
@@ -913,10 +913,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                realStartUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    realStartUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")
@@ -998,10 +998,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")
@@ -1052,10 +1052,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                realStartUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    realStartUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")
@@ -1102,10 +1102,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")
@@ -1142,10 +1142,10 @@ class MainViewModelTest {
                     unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
                 )
             advanceUntilIdle()
             viewModel.unlockVault("password")

@@ -92,8 +92,7 @@ class ToolSchemaDisclosureResolver {
         )
     }
 
-    private fun List<String>.toJsonStringArray(): JsonArray =
-        buildJsonArray { forEach { add(JsonPrimitive(it)) } }
+    private fun List<String>.toJsonStringArray(): JsonArray = buildJsonArray { forEach { add(JsonPrimitive(it)) } }
 
     private fun emptyJsonStringArray(): JsonArray = buildJsonArray {}
 

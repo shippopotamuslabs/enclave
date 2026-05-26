@@ -103,8 +103,7 @@ class ChatTelemetryUiMapper
             return metrics
         }
 
-        private fun TurnTelemetry.ttftMs(): Long? =
-            firstOutputTokenAtMs?.let { first -> first - requestStartedAtMs }
+        private fun TurnTelemetry.ttftMs(): Long? = firstOutputTokenAtMs?.let { first -> first - requestStartedAtMs }
 
         private fun TurnTelemetry.outputTokensPerSecond(): Double? {
             val output = outputTokens ?: return null

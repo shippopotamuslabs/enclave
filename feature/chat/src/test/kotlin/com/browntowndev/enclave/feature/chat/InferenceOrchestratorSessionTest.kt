@@ -5,8 +5,6 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
@@ -28,7 +26,11 @@ class InferenceOrchestratorSessionTest {
     fun setUp() {
         savedStateHandle = SavedStateHandle()
         val settingsUseCases = mockk<SettingsUseCases>()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(com.browntowndev.enclave.domain.port.repository.SettingsData())
+        every { settingsUseCases.getSettings() } returns
+            MutableStateFlow(
+                com.browntowndev.enclave.domain.port.repository
+                    .SettingsData(),
+            )
         orchestrator =
             InferenceOrchestrator(
                 chatUseCases = mockk(relaxed = true),

@@ -52,9 +52,10 @@ object ContextWindowPlanner {
                 val compactCatalogPayload =
                     options.toolCatalog.joinToString(separator = "\n") { entry ->
                         val args =
-                            (entry.requiredArguments.map { it.name to "required" } +
-                                entry.optionalArguments.map { it.name to "optional" })
-                                .joinToString(", ") { (n, k) -> "$n:$k" }
+                            (
+                                entry.requiredArguments.map { it.name to "required" } +
+                                    entry.optionalArguments.map { it.name to "optional" }
+                            ).joinToString(", ") { (n, k) -> "$n:$k" }
                         "TOOL CATALOG ${entry.name} ${entry.description} $args"
                     }
                 tokenCounter.countTokens(compactCatalogPayload, modelId)

@@ -11,6 +11,5 @@ class ObserveChatTelemetryUseCase
     constructor(
         private val repository: InferenceTelemetryRepositoryPort,
     ) {
-        operator fun invoke(chatId: ChatId): Flow<ChatTelemetrySummary> =
-            repository.observeChatTelemetry(chatId)
+        operator fun invoke(chatId: ChatId): Flow<ChatTelemetrySummary> = repository.observeChatTelemetry(chatId)
     }

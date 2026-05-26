@@ -7,12 +7,15 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -51,11 +54,14 @@ class DirectChatInferenceExecutor
         private val loggingPort: LoggingPort,
         private val searchIntentClassifier: SearchIntentClassifierPort,
         private val toolExecutor: ToolExecutorPort,
+        private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
             ChatHistoryRehydrator(
                 messageRepository = messageRepository,
                 loggingPort = loggingPort,
+                committedInferencePrompts = committedInferencePrompts,
             )
         private val inferenceRequestPreparer =
             ChatInferenceRequestPreparer(
@@ -72,6 +78,7 @@ class DirectChatInferenceExecutor
                 loggingPort = loggingPort,
                 searchIntentClassifier = searchIntentClassifier,
                 toolExecutor = toolExecutor,
+                monotonicToolActivation = monotonicToolActivation,
             )
 
         override fun execute(
@@ -142,8 +149,8 @@ class DirectChatInferenceExecutor
                     emit(
                         MessageGenerationState.WebSearchSourcesAttached(
                             preparedRequest.preRetrievalSources,
-                            modelType
-                        )
+                            modelType,
+                        ),
                     )
                 }
 

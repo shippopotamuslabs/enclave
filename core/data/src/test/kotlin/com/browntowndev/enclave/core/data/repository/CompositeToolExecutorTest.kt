@@ -295,15 +295,20 @@ class CompositeToolExecutorTest {
     @Test
     fun `SCENARIO_COMPOSITE_EXECUTOR_ROUTING`() =
         runTest {
-            val getThreadRequest = ToolCallRequest(toolName = "x_get_thread", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val getThreadRequest =
+                ToolCallRequest(toolName = "x_get_thread", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
             val trendingRequest = ToolCallRequest(toolName = "x_trending", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
-            val userTweetsRequest = ToolCallRequest(toolName = "x_user_tweets", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
-            val mentionSearchRequest = ToolCallRequest(toolName = "x_mention_search", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val userTweetsRequest =
+                ToolCallRequest(toolName = "x_user_tweets", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
+            val mentionSearchRequest =
+                ToolCallRequest(toolName = "x_mention_search", argumentsJson = "{}", provider = "x", modelType = ModelType.FAST)
 
             coEvery { xGetThreadToolExecutor.execute(getThreadRequest) } returns ToolExecutionResult("x_get_thread", "thread_result")
             coEvery { xTrendingToolExecutor.execute(trendingRequest) } returns ToolExecutionResult("x_trending", "trending_result")
-            coEvery { xUserTweetsToolExecutor.execute(userTweetsRequest) } returns ToolExecutionResult("x_user_tweets", "user_tweets_result")
-            coEvery { xMentionSearchToolExecutor.execute(mentionSearchRequest) } returns ToolExecutionResult("x_mention_search", "mention_search_result")
+            coEvery { xUserTweetsToolExecutor.execute(userTweetsRequest) } returns
+                ToolExecutionResult("x_user_tweets", "user_tweets_result")
+            coEvery { xMentionSearchToolExecutor.execute(mentionSearchRequest) } returns
+                ToolExecutionResult("x_mention_search", "mention_search_result")
 
             assertEquals("thread_result", compositeToolExecutor.execute(getThreadRequest).resultJson)
             assertEquals("trending_result", compositeToolExecutor.execute(trendingRequest).resultJson)

@@ -200,7 +200,8 @@ object XaiRequestMapper {
 
     fun isMultiAgentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
-    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean = !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
+    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean =
+        !modelId.startsWith("grok-4.20") && !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
     fun isChatReasoningContentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiChatReasoningContentModel(modelId)
 
