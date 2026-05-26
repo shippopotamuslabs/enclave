@@ -2457,7 +2457,49 @@ data class FfiAgentConfig (
     var `maxModelRequestsPerTurn`: kotlin.UInt, 
     var `enableLoopHooks`: kotlin.Boolean, 
     var `enablePendingWorkGuard`: kotlin.Boolean, 
-    var `longLoop`: FfiLongLoopPolicy
+    var `longLoop`: FfiLongLoopPolicy,
+    var `toolSemantics`: FfiToolSemanticsConfig = FfiToolSemanticsConfig(
+        disclosure = null,
+        artifact = null,
+        greedyExtensionTools = emptyList(),
+    )
+) {
+    
+    companion object
+}
+
+data class FfiToolSemanticsConfig (
+    var `disclosure`: FfiToolDisclosureSemantics?,
+    var `artifact`: FfiArtifactToolSemantics?,
+    var `greedyExtensionTools`: kotlin.collections.List<FfiToolGreedyExtensionSemantics>
+) {
+    
+    companion object
+}
+
+data class FfiToolDisclosureSemantics (
+    var `toolName`: kotlin.String,
+    var `requestFieldName`: kotlin.String,
+    var `alwaysCallable`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+data class FfiArtifactToolSemantics (
+    var `startToolName`: kotlin.String,
+    var `appendToolName`: kotlin.String,
+    var `idField`: kotlin.String,
+    var `appendBlocksField`: kotlin.String,
+    var `completionField`: kotlin.String
+) {
+    
+    companion object
+}
+
+data class FfiToolGreedyExtensionSemantics (
+    var `toolName`: kotlin.String,
+    var `extraTurns`: kotlin.UInt
 ) {
     
     companion object
@@ -5430,5 +5472,4 @@ public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<
     )
     }
     
-
 
