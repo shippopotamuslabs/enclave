@@ -50,6 +50,66 @@ data class AgentLoopAgentConfig(
     val enableLoopHooks: Boolean = false,
     val enablePendingWorkGuard: Boolean = false,
     val longLoop: AgentLoopLongLoopPolicy = AgentLoopLongLoopPolicy(),
+    val toolSemantics: AgentLoopToolSemanticsConfig = AgentLoopToolSemanticsConfig.enclaveDefault(),
+)
+
+data class AgentLoopToolSemanticsConfig(
+    val disclosure: AgentLoopToolDisclosureSemantics?,
+    val artifact: AgentLoopArtifactToolSemantics?,
+    val greedyExtensionTools: List<AgentLoopToolGreedyExtensionSemantics>,
+) {
+    companion object {
+        fun agnostic(): AgentLoopToolSemanticsConfig =
+            AgentLoopToolSemanticsConfig(
+                disclosure = null,
+                artifact = null,
+                greedyExtensionTools = emptyList(),
+            )
+
+        fun enclaveDefault(): AgentLoopToolSemanticsConfig =
+            AgentLoopToolSemanticsConfig(
+                disclosure =
+                    AgentLoopToolDisclosureSemantics(
+                        toolName = "disclose_tool_schemas",
+                        requestFieldName = "tool_names",
+                        alwaysCallable = true,
+                    ),
+                artifact =
+                    AgentLoopArtifactToolSemantics(
+                        startToolName = "start_artifact",
+                        appendToolName = "append_blocks",
+                        idField = "artifactId",
+                        appendBlocksField = "blocks",
+                        completionField = "isComplete",
+                    ),
+                greedyExtensionTools =
+                    listOf(
+                        AgentLoopToolGreedyExtensionSemantics(
+                            toolName = "append_blocks",
+                            extraTurns = 20u,
+                        ),
+                    ),
+            )
+    }
+}
+
+data class AgentLoopToolDisclosureSemantics(
+    val toolName: String,
+    val requestFieldName: String,
+    val alwaysCallable: Boolean,
+)
+
+data class AgentLoopArtifactToolSemantics(
+    val startToolName: String,
+    val appendToolName: String,
+    val idField: String,
+    val appendBlocksField: String,
+    val completionField: String,
+)
+
+data class AgentLoopToolGreedyExtensionSemantics(
+    val toolName: String,
+    val extraTurns: UInt,
 )
 
 data class AgentLoopLongLoopPolicy(

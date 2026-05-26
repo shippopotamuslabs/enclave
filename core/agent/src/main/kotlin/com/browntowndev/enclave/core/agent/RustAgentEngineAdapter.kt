@@ -370,7 +370,7 @@ private fun FfiManualCompactResult.toDomain(events: List<AgentLoopEvent> = empty
         events = events,
     )
 
-private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig.toFfi(): FfiAgentConfig =
+internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig.toFfi(): FfiAgentConfig =
     FfiAgentConfig(
         maxTurns = maxTurns,
         thresholdRatio = thresholdRatio,
@@ -409,6 +409,7 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig
         enableLoopHooks = enableLoopHooks,
         enablePendingWorkGuard = enablePendingWorkGuard,
         longLoop = longLoop.toFfi(),
+        toolSemantics = toolSemantics.toFfi(),
     )
 
 private fun com.browntowndev.enclave.domain.model.inference.AgentLoopLongLoopPolicy.toFfi(): FfiLongLoopPolicy =
