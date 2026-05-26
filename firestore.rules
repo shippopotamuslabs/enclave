@@ -21,6 +21,7 @@ service cloud.firestore {
         || collection == 'message_files'
         || collection == 'web_search_sources'
         || collection == 'message_transcript_segments'
+        || collection == 'message_inference_telemetry'
         || collection == 'documents'
         || collection == 'api_credentials'
         || collection == 'api_keys'
