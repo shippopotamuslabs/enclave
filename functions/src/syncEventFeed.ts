@@ -52,6 +52,7 @@ export const SYNC_FEED_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
     'message_files',
     'web_search_sources',
     'message_transcript_segments',
+    'message_inference_telemetry',
     'documents',
     'api_credentials',
     'api_keys',

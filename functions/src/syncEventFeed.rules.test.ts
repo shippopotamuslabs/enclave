@@ -74,6 +74,33 @@ describe('sync event feed (security rules)', () => {
         );
     });
 
+    it('allows owner writes to message_inference_telemetry', async () => {
+        const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
+
+        await assertSucceeds(
+            ownerFirestore.doc('users/alice/message_inference_telemetry/tel-1').set({
+                messageId: 'message-1',
+                chatId: 'chat-1',
+                sequenceIndex: 0,
+                providerKey: 'openai',
+                providerLabel: 'OpenAI',
+                modelId: 'gpt-4o',
+                modelLabel: 'GPT-4o',
+                sourceKind: 'chat',
+                requestStartedAtMs: 1700000000000,
+                completedAtMs: 1700000001000,
+                costStatus: 'estimated',
+                costSource: 'saved_pricing',
+                telemetrySchemaVersion: 1,
+                updated_at: 1700000001000,
+                deleted: false,
+                _sync_device_id: 'device-a',
+                _sync_client_mutation_id: 'mutation-a',
+                _sync_written_at: 1700000001000,
+            }),
+        );
+    });
+
     it('allows owner writes to utility_models', async () => {
         const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
 
