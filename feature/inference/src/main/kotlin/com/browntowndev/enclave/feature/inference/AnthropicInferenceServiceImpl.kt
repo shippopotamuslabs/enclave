@@ -444,6 +444,7 @@ class AnthropicInferenceServiceImpl(
                     outputTokens = response.outputTokens,
                     reasoningTokens = response.reasoningTokens,
                     cacheCreationInputTokens = response.cacheCreationInputTokens,
+                    savedPricing = options.apiModelPricing,
                 )
             } else {
                 null

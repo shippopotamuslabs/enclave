@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
@@ -8,7 +9,7 @@ import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.browntowndev.enclave.feature.inference.telemetry.OpenAiTelemetryUsageInput
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.ProviderPricingCatalog
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.Test
 class OpenAiTelemetryCaptureTest {
     private val normalizer =
         ProviderTelemetryNormalizer(
-            costEstimator = ProviderCostEstimator(ProviderPricingCatalog()),
+            costEstimator = ProviderCostEstimator(SavedApiModelPricingEstimator()),
         )
 
     @Test
@@ -35,7 +36,7 @@ class OpenAiTelemetryCaptureTest {
     }
 
     @Test
-    fun `xAI usage without provider cost estimates from local pricing when tokens present`() {
+    fun `xAI usage without saved pricing leaves cost unavailable when tokens present`() {
         val captured =
             normalizer.normalizeOpenAiUsage(
                 OpenAiTelemetryUsageInput(
@@ -60,11 +61,47 @@ class OpenAiTelemetryCaptureTest {
             )
 
         assertEquals(TelemetryProviderKey.XAI, captured.providerKey)
-        assertEquals(TelemetryCostStatus.ESTIMATED, captured.costStatus)
-        assertEquals(TelemetryCostSource.LOCAL_PRICING_TABLE, captured.costSource)
-        assertEquals(true, captured.costUsd != null && captured.costUsd!! > BigDecimal.ZERO)
+        assertEquals(TelemetryCostStatus.UNAVAILABLE, captured.costStatus)
+        assertEquals(TelemetryCostSource.NOT_AVAILABLE, captured.costSource)
+        assertEquals(null, captured.costUsd)
         assertEquals(400, captured.cacheReadInputTokens)
         assertEquals(80, captured.reasoningTokens)
+    }
+
+    @Test
+    fun `xAI usage estimates from saved model pricing when configured`() {
+        val captured =
+            normalizer.normalizeOpenAiUsage(
+                OpenAiTelemetryUsageInput(
+                    rowId = "tel-xai-saved",
+                    messageId = "msg-1",
+                    chatId = "chat-1",
+                    sequenceIndex = 0,
+                    providerLabel = "xAI",
+                    modelId = "grok-4.3",
+                    modelLabel = "grok-4.3",
+                    requestStartedAtMs = 1_000L,
+                    firstOutputTokenAtMs = 1_400L,
+                    completedAtMs = 5_000L,
+                    inputTokens = 1_000,
+                    outputTokens = 200,
+                    reasoningTokens = 80,
+                    cacheReadInputTokens = 400,
+                    cacheWriteInputTokens = null,
+                    costUsd = null,
+                    savedPricing =
+                        ApiModelSavedPricing(
+                            promptUsdPerMillion = 1.25,
+                            completionUsdPerMillion = 2.5,
+                            cachedPromptUsdPerMillion = 0.2,
+                        ),
+                    clientBuild = TelemetryTestFixtures.telOpenAi1.clientBuild,
+                ),
+            )
+
+        assertEquals(TelemetryCostStatus.ESTIMATED, captured.costStatus)
+        assertEquals(TelemetryCostSource.SAVED_MODEL_PRICING, captured.costSource)
+        assertEquals(true, captured.costUsd != null && captured.costUsd!! > BigDecimal.ZERO)
     }
 
     @Test

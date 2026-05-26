@@ -112,6 +112,7 @@ class RustLoopInferenceService(
                                 options.copy(
                                     assistantMessageId = options.assistantMessageId,
                                     chatId = options.chatId,
+                                    telemetrySequenceIndex = telemetrySequenceIndex,
                                 )
                             val result =
                                 inner.completeSingleTurn(

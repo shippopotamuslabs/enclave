@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference.telemetry
 
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryClientBuild
 import java.math.BigDecimal
 
@@ -20,6 +21,7 @@ data class OpenAiTelemetryUsageInput(
     val cacheReadInputTokens: Int?,
     val cacheWriteInputTokens: Int? = null,
     val costUsd: BigDecimal?,
+    val savedPricing: ApiModelSavedPricing? = null,
     val clientBuild: TelemetryClientBuild,
 )
 
@@ -37,5 +39,6 @@ data class AnthropicTelemetryUsageInput(
     val outputTokens: Int?,
     val reasoningTokens: Int?,
     val cacheCreationInputTokens: Int?,
+    val savedPricing: ApiModelSavedPricing? = null,
     val clientBuild: TelemetryClientBuild,
 )

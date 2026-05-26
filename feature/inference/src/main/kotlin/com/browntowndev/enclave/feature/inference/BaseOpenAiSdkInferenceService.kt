@@ -18,27 +18,30 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
-import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
 import com.browntowndev.enclave.feature.inference.openai.accumulateOpenAiStreamUsage
+import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
-import java.math.BigDecimal
 import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionStreamOptions
-import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
 import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import java.math.BigDecimal
+import java.util.Optional
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.isActive
@@ -49,10 +52,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.util.Optional
-import java.util.concurrent.CopyOnWriteArrayList
 
-@Suppress("LargeClass")
+@Suppress("LargeClass", "TooManyFunctions")
 abstract class BaseOpenAiSdkInferenceService(
     protected val client: OpenAIClient,
     protected val modelId: String,
@@ -66,6 +67,7 @@ abstract class BaseOpenAiSdkInferenceService(
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
+        private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
     }
 
     protected abstract val tag: String
@@ -108,26 +110,54 @@ abstract class BaseOpenAiSdkInferenceService(
         options: GenerationOptions,
     ): AgentModelTurnResult {
         val timing = telemetrySupport?.let { InferenceTurnTiming() }
-        val captureContext = telemetrySupport?.captureContext(options)
-        val lastUserIndex = sessionMessages.indexOfLast { msg ->
-            msg.role == Role.USER && run {
-                val meta = msg.metadataJson
-                if (meta == "null" || meta.isBlank()) return@run true
-                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+        val captureContext =
+            telemetrySupport?.captureContext(
+                options = options,
+                sequenceIndex = options.telemetrySequenceIndex,
+            )
+        val lastUserIndex =
+            sessionMessages.indexOfLast { msg ->
+                msg.role == Role.USER &&
+                    run {
+                        val meta = msg.metadataJson
+                        if (meta == "null" || meta.isBlank()) return@run true
+                        val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                        obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+                    }
             }
-        }
         val imageUris = options.imageUris.take(maxImages)
-        val mappedMessages = sessionMessages.toOpenAiChatParams(
-            imageUris = imageUris,
-            imageTargetIndex = lastUserIndex,
-        )
-        
+        val requestModelId = options.modelId ?: modelId
+        val requestProvider = provider.toApiProviderOrNull()
+        val useOpenRouterCacheControl =
+            if (requestProvider == ApiProvider.OPENROUTER) {
+                OpenRouterPromptCacheSupport.supportsExplicitCacheControl(requestModelId)
+            } else {
+                false
+            }
+        val cacheControlIndex =
+            if (useOpenRouterCacheControl) {
+                sessionMessages.dropLast(1).indexOfLast { it.role == Role.USER }.takeIf { it >= 0 }
+            } else {
+                null
+            }
+        val mappedMessages =
+            sessionMessages
+                .toOpenAiChatParams(
+                    imageUris = imageUris,
+                    imageTargetIndex = lastUserIndex,
+                    cacheControlIndex = cacheControlIndex,
+                )
+
         var messages = mappedMessages
-        if (systemPrompt.isNotBlank() && messages.none { it.isSystem() }) {
+        val systemPromptPrepended =
+            systemPrompt.isNotBlank() && messages.none { it.isSystem() }
+        if (systemPromptPrepended) {
             val systemMessage =
                 ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam.builder().content(systemPrompt).build(),
+                    buildSystemPromptMessage(
+                        content = systemPrompt,
+                        useCacheControl = useOpenRouterCacheControl,
+                    ),
                 )
             messages = listOf(systemMessage) + messages
         }
@@ -135,16 +165,18 @@ abstract class BaseOpenAiSdkInferenceService(
         if (!contextSidecars.isNullOrBlank()) {
             val sidecarMessage =
                 ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam.builder().content(contextSidecars).build(),
+                    ChatCompletionSystemMessageParam
+                        .builder()
+                        .content(contextSidecars)
+                        .build(),
                 )
-            messages = if (messages.isNotEmpty()) {
-                messages.subList(0, messages.size - 1) + listOf(sidecarMessage) + listOf(messages.last())
-            } else {
-                listOf(sidecarMessage)
-            }
+            // Keep sidecars at a fixed offset after the prepended system prompt so the
+            // conversation prefix stays stable when tool results append after the assistant turn.
+            val insertAt = if (systemPromptPrepended) 1 else 0
+            messages =
+                messages.take(insertAt) + listOf(sidecarMessage) + messages.drop(insertAt)
         }
 
-        val requestModelId = options.modelId ?: modelId
         val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
 
         val builder =
@@ -158,10 +190,11 @@ abstract class BaseOpenAiSdkInferenceService(
             availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
             builder.parallelToolCalls(false)
             if (!allowToolCall) {
-                val noneChoice = com.openai.models.chat.completions
-                    .ChatCompletionToolChoiceOption.ofAuto(
-                        com.openai.models.chat.completions.ChatCompletionToolChoiceOption.Auto.NONE
-                    )
+                val noneChoice =
+                    ChatCompletionToolChoiceOption
+                        .ofAuto(
+                            ChatCompletionToolChoiceOption.Auto.NONE,
+                        )
                 builder.toolChoice(noneChoice)
             }
         }
@@ -178,6 +211,7 @@ abstract class BaseOpenAiSdkInferenceService(
         if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
             options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
         }
+        applyPromptCacheRouting(builder = builder, options = options)
 
         builder.streamOptions(
             ChatCompletionStreamOptions.builder().includeUsage(true).build(),
@@ -222,7 +256,17 @@ abstract class BaseOpenAiSdkInferenceService(
                     cacheReadInputTokens = response.cacheReadInputTokens,
                     cacheWriteInputTokens = response.cacheWriteInputTokens,
                     costUsd = response.costUsd,
-                )
+                    savedPricing = options.apiModelPricing,
+                ).also { row ->
+                    if (provider.toApiProviderOrNull() == ApiProvider.XAI) {
+                        loggingPort.debug(
+                            tag,
+                            "xAI telemetry turn seq=${row.sequenceIndex} allowToolCall=$allowToolCall " +
+                                "toolCalls=${toolCalls.size} input=${row.inputTokens} " +
+                                "cacheRead=${row.cacheReadInputTokens} output=${row.outputTokens}",
+                        )
+                    }
+                }
             } else {
                 null
             }
@@ -258,9 +302,36 @@ abstract class BaseOpenAiSdkInferenceService(
         return requestProvider != ApiProvider.XAI || !ApiProviderModelPolicy.isXaiMultiAgentModel(requestModelId)
     }
 
+    private fun buildSystemPromptMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionSystemMessageParam =
+        if (useCacheControl) {
+            ChatCompletionSystemMessageParam
+                .builder()
+                .contentOfArrayOfContentParts(
+                    listOf(OpenRouterPromptCacheSupport.cachedSystemTextPart(content)),
+                ).build()
+        } else {
+            ChatCompletionSystemMessageParam.builder().content(content).build()
+        }
+
+    private fun applyPromptCacheRouting(
+        builder: ChatCompletionCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val conversationId = options.chatId?.value?.takeIf { it.isNotBlank() } ?: return
+        when (provider.toApiProviderOrNull()) {
+            ApiProvider.XAI -> builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+            ApiProvider.OPENAI -> builder.promptCacheKey(conversationId)
+            else -> Unit
+        }
+    }
+
     private fun List<AgentLoopMessage>.toOpenAiChatParams(
         imageUris: List<String>,
         imageTargetIndex: Int,
+        cacheControlIndex: Int?,
     ): List<ChatCompletionMessageParam> {
         val pendingToolCallIds = mutableSetOf<String>()
         return mapIndexedNotNull { index, message ->
@@ -269,6 +340,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 message.toOpenAiChatParam(
                     pendingToolCallIds = pendingToolCallIds,
                     imageUris = if (attachImages) imageUris else emptyList(),
+                    useCacheControl = index == cacheControlIndex && !attachImages,
                 )
             mappedMessage?.toolCallIds?.let { pendingToolCallIds.addAll(it) }
             mappedMessage?.param
@@ -278,6 +350,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun AgentLoopMessage.toOpenAiChatParam(
         pendingToolCallIds: MutableSet<String>,
         imageUris: List<String> = emptyList(),
+        useCacheControl: Boolean = false,
     ): MappedChatMessage? {
         val metadata = metadataJson.toMetadataJsonObject()
         if (metadata.isEngineInternalToolSidecar()) {
@@ -301,7 +374,10 @@ abstract class BaseOpenAiSdkInferenceService(
                 MappedChatMessage(
                     param =
                         ChatCompletionMessageParam.ofSystem(
-                            ChatCompletionSystemMessageParam.builder().content(content).build(),
+                            buildSystemPromptMessage(
+                                content = content,
+                                useCacheControl = useCacheControl,
+                            ),
                         ),
                 )
             Role.USER ->
@@ -309,7 +385,10 @@ abstract class BaseOpenAiSdkInferenceService(
                     param =
                         if (imageUris.isEmpty()) {
                             ChatCompletionMessageParam.ofUser(
-                                ChatCompletionUserMessageParam.builder().content(content).build(),
+                                buildUserMessage(
+                                    content = content,
+                                    useCacheControl = useCacheControl,
+                                ),
                             )
                         } else {
                             ChatCompletionMessageParam.ofUser(buildUserMessageWithImages(content, imageUris))
@@ -348,6 +427,20 @@ abstract class BaseOpenAiSdkInferenceService(
             }
         return ChatCompletionUserMessageParam.builder().contentOfArrayOfContentParts(parts).build()
     }
+
+    private fun buildUserMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionUserMessageParam =
+        if (useCacheControl) {
+            ChatCompletionUserMessageParam
+                .builder()
+                .contentOfArrayOfContentParts(
+                    listOf(OpenRouterPromptCacheSupport.cachedUserTextPart(content)),
+                ).build()
+        } else {
+            ChatCompletionUserMessageParam.builder().content(content).build()
+        }
 
     private fun String.toMetadataJsonObject() =
         if (this != "null" && isNotBlank()) {

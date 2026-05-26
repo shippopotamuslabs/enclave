@@ -21,6 +21,7 @@ import com.openai.models.responses.ResponseInputItem
 
 object XaiRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
+    private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
 
     private data class SanitizedXaiRequestOptions(
         val reasoningEffort: ApiReasoningEffort?,
@@ -103,6 +104,9 @@ object XaiRequestMapper {
             builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
+        options.chatId?.value?.takeIf { it.isNotBlank() }?.let { conversationId ->
+            builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+        }
         return builder.build()
     }
 
@@ -187,6 +191,10 @@ object XaiRequestMapper {
             builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let(builder::promptCacheKey)
         return builder.build()
     }
 

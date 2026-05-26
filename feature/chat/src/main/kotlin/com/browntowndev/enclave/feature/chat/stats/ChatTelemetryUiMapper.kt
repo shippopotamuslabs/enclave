@@ -96,10 +96,9 @@ class ChatTelemetryUiMapper
                     responseMetric("Cost", formatCost(summary.totalCostUsd, summary.costStatus)),
                     responseMetric("Cost status", formatCostStatus(summary.costStatus)),
                 )
-            val usesLocalPricing =
-                rows.singleOrNull()?.costSource == TelemetryCostSource.LOCAL_PRICING_TABLE
-            if (usesLocalPricing) {
-                metrics.add(responseMetric("Cost source", "Local pricing table"))
+            val costSource = rows.singleOrNull()?.costSource
+            if (costSource == TelemetryCostSource.SAVED_MODEL_PRICING) {
+                metrics.add(responseMetric("Cost source", "Saved model pricing"))
             }
             return metrics
         }

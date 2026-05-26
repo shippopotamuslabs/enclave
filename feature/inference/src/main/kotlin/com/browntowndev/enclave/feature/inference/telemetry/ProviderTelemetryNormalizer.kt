@@ -27,12 +27,11 @@ class ProviderTelemetryNormalizer
                     )
                 } else {
                     costEstimator.estimateOpenAiCompatible(
-                        providerKey = providerKey,
-                        modelId = input.modelId,
                         inputTokens = input.inputTokens,
                         outputTokens = input.outputTokens,
                         reasoningTokens = input.reasoningTokens,
                         cacheReadInputTokens = input.cacheReadInputTokens,
+                        savedPricing = input.savedPricing,
                     )
                 }
             return TurnTelemetry(
@@ -65,11 +64,11 @@ class ProviderTelemetryNormalizer
         fun normalizeAnthropicUsage(input: AnthropicTelemetryUsageInput): TurnTelemetry {
             val estimate =
                 costEstimator.estimateAnthropic(
-                    modelId = input.modelId,
                     inputTokens = input.inputTokens,
                     outputTokens = input.outputTokens,
                     reasoningTokens = input.reasoningTokens,
                     cacheCreationInputTokens = input.cacheCreationInputTokens,
+                    savedPricing = input.savedPricing,
                 )
             return TurnTelemetry(
                 id = TurnTelemetryId(input.rowId),

@@ -18,15 +18,16 @@ internal class GooglePromptCacheSession(
 ) {
     companion object {
         private const val MIN_CACHE_TTL_SECONDS = 300L
-        private const val CACHE_THRESHOLD_TOKENS = 1024
+        private const val FLASH_CACHE_THRESHOLD_TOKENS = 1024
+        private const val PRO_CACHE_THRESHOLD_TOKENS = 4096
     }
 
     private var activeCacheName: String? = null
-    private val cachedMessages = mutableListOf<AgentLoopMessage>()
+    private var cachedSignature: CacheSignature? = null
 
     fun clearLocalState() {
         activeCacheName = null
-        cachedMessages.clear()
+        cachedSignature = null
     }
 
     suspend fun close() {
@@ -59,30 +60,31 @@ internal class GooglePromptCacheSession(
                 tools = availableTools,
             )
 
-        if (stablePrefixTokens <= CACHE_THRESHOLD_TOKENS) {
+        val cacheThresholdTokens = cacheThresholdTokens()
+        if (stablePrefixTokens <= cacheThresholdTokens) {
             activeCacheName?.let { deleteCacheQuietly(it) }
             clearLocalState()
             return null
         }
 
         var reuseCache = false
+        val stableSignature =
+            CacheSignature.from(
+                systemPrompt = systemPrompt,
+                stableHistory = stableHistory,
+                availableTools = availableTools,
+            )
         if (activeCacheName != null) {
-            val matchesPrefix =
-                cachedMessages.size <= stableHistory.size &&
-                    cachedMessages.indices.all { i ->
-                        cachedMessages[i].id == stableHistory[i].id &&
-                            cachedMessages[i].role == stableHistory[i].role &&
-                            cachedMessages[i].content == stableHistory[i].content
-                    }
-            if (matchesPrefix) {
-                val delta = stableHistory.subList(cachedMessages.size, stableHistory.size)
+            val cached = cachedSignature
+            if (cached != null && stableSignature.startsWith(cached)) {
+                val delta = stableHistory.subList(cached.messages.size, stableHistory.size)
                 val deltaContents = delta.mapNotNull(mapToContent)
                 val deltaTokens =
                     GooglePromptCacheTokenEstimator.countContentsTokens(
                         modelId = modelId,
                         contents = deltaContents,
                     )
-                if (deltaTokens < CACHE_THRESHOLD_TOKENS) {
+                if (deltaTokens < cacheThresholdTokens) {
                     reuseCache = true
                 }
             }
@@ -113,8 +115,7 @@ internal class GooglePromptCacheSession(
                         ttlSeconds = MIN_CACHE_TTL_SECONDS,
                     )
                 activeCacheName = cacheName
-                cachedMessages.clear()
-                cachedMessages.addAll(stableHistory)
+                cachedSignature = stableSignature
             } catch (e: Exception) {
                 loggingPort.warning(
                     tag,
@@ -130,16 +131,67 @@ internal class GooglePromptCacheSession(
 
     fun deltaHistory(stableHistory: List<AgentLoopMessage>): List<AgentLoopMessage> =
         if (activeCacheName != null) {
-            stableHistory.subList(cachedMessages.size, stableHistory.size)
+            stableHistory.subList(cachedSignature?.messages?.size ?: 0, stableHistory.size)
         } else {
             stableHistory
         }
+
+    private fun cacheThresholdTokens(): Int {
+        val normalizedModelId = modelId.lowercase()
+        return if (normalizedModelId.contains("pro")) {
+            PRO_CACHE_THRESHOLD_TOKENS
+        } else {
+            FLASH_CACHE_THRESHOLD_TOKENS
+        }
+    }
 
     private suspend fun deleteCacheQuietly(name: String) {
         try {
             sdkClient.deleteCachedContent(name)
         } catch (e: Exception) {
             loggingPort.warning(tag, "Failed to delete cached content: ${e.message}")
+        }
+    }
+
+    private data class CacheSignature(
+        val systemPrompt: String,
+        val messages: List<MessageSignature>,
+        val toolNames: List<String>,
+    ) {
+        fun startsWith(cached: CacheSignature): Boolean =
+            systemPrompt == cached.systemPrompt &&
+                toolNames == cached.toolNames &&
+                cached.messages.size <= messages.size &&
+                messages.take(cached.messages.size) == cached.messages
+
+        companion object {
+            fun from(
+                systemPrompt: String,
+                stableHistory: List<AgentLoopMessage>,
+                availableTools: List<ToolDefinition>,
+            ): CacheSignature =
+                CacheSignature(
+                    systemPrompt = systemPrompt,
+                    messages = stableHistory.map(MessageSignature::from),
+                    toolNames = availableTools.map { it.name },
+                )
+        }
+    }
+
+    private data class MessageSignature(
+        val id: String,
+        val role: com.browntowndev.enclave.domain.model.chat.Role,
+        val content: String,
+        val metadataJson: String,
+    ) {
+        companion object {
+            fun from(message: AgentLoopMessage): MessageSignature =
+                MessageSignature(
+                    id = message.id,
+                    role = message.role,
+                    content = message.content,
+                    metadataJson = message.metadataJson,
+                )
         }
     }
 }

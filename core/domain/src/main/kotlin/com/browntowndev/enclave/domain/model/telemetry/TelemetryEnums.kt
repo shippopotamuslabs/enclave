@@ -23,6 +23,6 @@ enum class TelemetryCostStatus {
 
 enum class TelemetryCostSource {
     PROVIDER,
-    LOCAL_PRICING_TABLE,
+    SAVED_MODEL_PRICING,
     NOT_AVAILABLE,
 }

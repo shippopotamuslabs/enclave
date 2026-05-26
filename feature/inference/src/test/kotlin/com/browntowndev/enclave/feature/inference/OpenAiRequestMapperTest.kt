@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
@@ -113,6 +114,23 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
+    fun `mapToChatCompletionParams sets prompt cache key from chat id`() {
+        val params =
+            OpenAiRequestMapper.mapToChatCompletionParams(
+                modelId = "gpt-4o",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals("chat-123", params.promptCacheKey().orElse(null))
+    }
+
+    @Test
     fun `mapToResponseParams correctly maps model, prompt, and history`() {
         val history =
             listOf(
@@ -152,6 +170,23 @@ class OpenAiRequestMapperTest {
                 .toString()
                 .contains("role=system"),
         )
+    }
+
+    @Test
+    fun `mapToResponseParams sets prompt cache key from chat id`() {
+        val params =
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = "gpt-4o",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals("chat-123", params.promptCacheKey().orElse(null))
     }
 
     @Test

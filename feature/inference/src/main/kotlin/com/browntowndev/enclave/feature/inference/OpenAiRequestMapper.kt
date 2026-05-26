@@ -104,6 +104,10 @@ object OpenAiRequestMapper {
             builder.parallelToolCalls(false)
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let(builder::promptCacheKey)
         builder.messages(messages)
         return builder.build()
     }
@@ -162,6 +166,10 @@ object OpenAiRequestMapper {
             options.activeTools.forEach { builder.addTool(it.toResponsesTool()) }
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let(builder::promptCacheKey)
         return builder.build()
     }
 

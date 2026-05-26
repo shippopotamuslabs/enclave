@@ -19,7 +19,7 @@ class AnthropicRequestMapperTest {
     fun `mapToMessageParams maps system prompt history and reasoning budget`() {
         val params =
             AnthropicRequestMapper.mapToMessageParams(
-                modelId = "claude-sonnet-4-20250514",
+                modelId = "claude-2.1",
                 prompt = "How are you?",
                 history =
                     listOf(
@@ -40,7 +40,7 @@ class AnthropicRequestMapperTest {
                     ),
             )
 
-        assertEquals("claude-sonnet-4-20250514", params.model().toString())
+        assertEquals("claude-2.1", params.model().toString())
         assertEquals(
             listOf(MessageParam.Role.USER, MessageParam.Role.ASSISTANT, MessageParam.Role.USER),
             params.messages().map { message -> message.role() },
@@ -207,4 +207,5 @@ class AnthropicRequestMapperTest {
         file.writeBytes(byteArrayOf(1, 2, 3, 4))
         return file.toURI().toString()
     }
+
 }
