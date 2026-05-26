@@ -21,13 +21,14 @@ class EmbeddingRegenerationCoordinatorTest {
         coordinator = EmbeddingRegenerationCoordinator(workManager, testScope)
     }
 
-    private fun runCurrent() = testScope.testScheduler.runCurrent()
+    private fun advancePastDebounce() = testScope.testScheduler.advanceTimeBy(501)
 
     @Test
     fun `enqueueMessage adds to in-memory queue and triggers worker`() =
         runTest {
             coordinator.enqueueMessage("msg1")
-            runCurrent()
+            // The debounce delays worker scheduling by 500ms; advance past the window.
+            advancePastDebounce()
 
             val pending = coordinator.consumePending()
             assertTrue(pending.messageIds.contains("msg1"))
@@ -45,7 +46,8 @@ class EmbeddingRegenerationCoordinatorTest {
         runTest {
             coordinator.enqueueMessage("msg1")
             coordinator.enqueueMessage("msg1")
-            runCurrent()
+            // No need to advance time for this assertion — we just check in-memory deduplication.
+            advancePastDebounce()
 
             val pending = coordinator.consumePending()
             assertEquals(1, pending.messageIds.size)
@@ -57,7 +59,7 @@ class EmbeddingRegenerationCoordinatorTest {
         runTest {
             coordinator.enqueueMessage("msg1")
             coordinator.enqueueMemory("mem1")
-            runCurrent()
+            advancePastDebounce()
 
             val pending = coordinator.consumePending()
             assertEquals(listOf("msg1"), pending.messageIds)
@@ -68,7 +70,7 @@ class EmbeddingRegenerationCoordinatorTest {
     fun `consumePending clears the queue`() =
         runTest {
             coordinator.enqueueMessage("msg1")
-            runCurrent()
+            advancePastDebounce()
             coordinator.consumePending()
 
             val pendingAfter = coordinator.consumePending()
@@ -80,7 +82,8 @@ class EmbeddingRegenerationCoordinatorTest {
         runTest {
             val work = PendingWork(listOf("msg1"), listOf("mem1"), emptyList())
             coordinator.markFailed(work)
-            runCurrent()
+            // markFailed does NOT trigger a new debounce; items are just returned to the pending store.
+            // No advancement needed to test that items are re-queued.
 
             val pending = coordinator.consumePending()
             assertTrue(pending.messageIds.contains("msg1"))
@@ -91,7 +94,7 @@ class EmbeddingRegenerationCoordinatorTest {
     fun `enqueueFullRegeneration triggers worker and sets flag`() =
         runTest {
             coordinator.enqueueFullRegeneration()
-            runCurrent()
+            advancePastDebounce()
 
             val pending = coordinator.consumePending()
             assertTrue(pending.fullScanPending)
@@ -110,7 +113,7 @@ class EmbeddingRegenerationCoordinatorTest {
             coordinator.enqueueMessage("msg1")
             coordinator.enqueueMessage("msg2")
             coordinator.enqueueMemory("mem1")
-            runCurrent()
+            advancePastDebounce()
 
             verify(exactly = 1) {
                 workManager.enqueueUniqueWork(
@@ -122,10 +125,9 @@ class EmbeddingRegenerationCoordinatorTest {
 
             coordinator.consumePending()
             coordinator.onWorkerFinished()
-            runCurrent()
 
             coordinator.enqueueDocument("doc1")
-            runCurrent()
+            advancePastDebounce()
 
             verify(exactly = 2) {
                 workManager.enqueueUniqueWork(
@@ -141,7 +143,7 @@ class EmbeddingRegenerationCoordinatorTest {
         runTest {
             assertEquals(false, coordinator.hasPendingWork())
             coordinator.enqueueMessage("msg1")
-            runCurrent()
+            advancePastDebounce()
             assertEquals(true, coordinator.hasPendingWork())
             coordinator.consumePending()
             assertEquals(false, coordinator.hasPendingWork())

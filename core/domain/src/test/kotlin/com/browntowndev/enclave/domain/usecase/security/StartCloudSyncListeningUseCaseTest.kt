@@ -22,6 +22,7 @@ class StartCloudSyncListeningUseCaseTest {
     fun setUp() {
         useCase = StartCloudSyncListeningUseCase(cloudSyncPort)
         every { cloudSyncPort.startListening() } returns Unit
+        coEvery { cloudSyncPort.getRemainingEventsCount() } returns Result.success(0L)
     }
 
     @Test
@@ -51,6 +52,7 @@ class StartCloudSyncListeningUseCaseTest {
             assertTrue(result.isSuccess)
             coVerifySequence {
                 cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.getRemainingEventsCount()
                 cloudSyncPort.syncRemoteChangesFromCloud()
                 cloudSyncPort.syncRemoteChangesFromCloud()
                 cloudSyncPort.startListening()

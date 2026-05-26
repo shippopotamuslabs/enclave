@@ -58,6 +58,8 @@ sealed interface AppStartupState {
         val isBiometricEnrollmentPending: Boolean = false,
         val pendingVaultReconciliation: PendingReconciliation? = null,
         val cloudSyncDeferred: Boolean = false,
+        val unlockSyncProgress: Float? = null,
+        val unlockSyncStatus: String? = null,
     ) : AppStartupState {
         val initialRoute =
             if (initializationError != null ||
@@ -71,7 +73,7 @@ sealed interface AppStartupState {
 }
 
 @HiltViewModel
-@Suppress("MaxLineLength", "LongParameterList", "TooManyFunctions")
+@Suppress("MaxLineLength", "LongParameterList", "TooManyFunctions", "LargeClass")
 class MainViewModel
     @Inject
     constructor(
@@ -301,7 +303,15 @@ class MainViewModel
                     }
                 } finally {
                     _startupState.update {
-                        if (it is AppStartupState.Ready) it.copy(isUnlocking = false) else it
+                        if (it is AppStartupState.Ready) {
+                            it.copy(
+                                isUnlocking = false,
+                                unlockSyncProgress = null,
+                                unlockSyncStatus = null,
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
             }
@@ -448,10 +458,33 @@ class MainViewModel
         }
 
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
-            val result = startCloudSyncListeningUseCase(uploadLocalFirst = initialUpload)
+            val result = startCloudSyncListeningUseCase(
+                uploadLocalFirst = initialUpload,
+                onProgress = { progress ->
+                    _startupState.update { state ->
+                        if (state is AppStartupState.Ready) {
+                            state.copy(
+                                unlockSyncProgress = progress.progressFraction,
+                                unlockSyncStatus = progress.status
+                            )
+                        } else {
+                            state
+                        }
+                    }
+                }
+            )
             if (result.isSuccess) {
                 _startupState.update {
-                    if (it is AppStartupState.Ready) it.copy(cloudSyncDeferred = false, vaultErrorMessage = null) else it
+                    if (it is AppStartupState.Ready) {
+                        it.copy(
+                            cloudSyncDeferred = false,
+                            vaultErrorMessage = null,
+                            unlockSyncProgress = null,
+                            unlockSyncStatus = null
+                        )
+                    } else {
+                        it
+                    }
                 }
                 return true
             }
@@ -461,6 +494,8 @@ class MainViewModel
                     it.copy(
                         cloudSyncDeferred = true,
                         vaultErrorMessage = "Failed to start cloud sync",
+                        unlockSyncProgress = null,
+                        unlockSyncStatus = null
                     )
                 } else {
                     it

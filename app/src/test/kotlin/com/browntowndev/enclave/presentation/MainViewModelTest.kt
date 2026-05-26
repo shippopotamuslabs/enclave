@@ -21,6 +21,7 @@ import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliatio
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
+import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -125,7 +126,7 @@ class MainViewModelTest {
         coEvery { bootstrapCloudVaultFromLocalUseCase() } returns Result.success(Unit)
         coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
         every { cloudSyncPort.startListening() } returns Unit
-        coEvery { startCloudSyncListeningUseCase(any()) } returns Result.success(Unit)
+        coEvery { startCloudSyncListeningUseCase(any(), any()) } returns Result.success(Unit)
 
         viewModel =
             MainViewModel(
@@ -363,7 +364,7 @@ class MainViewModelTest {
             assertFalse(state.isVaultLocked)
             coVerifyOrder {
                 detectVaultReconciliationStateUseCase("password")
-                startCloudSyncListeningUseCase(uploadLocalFirst = true)
+                startCloudSyncListeningUseCase(eq(true), any())
             }
         }
 
@@ -485,7 +486,7 @@ class MainViewModelTest {
 
             coVerify(exactly = 1) { initializeModelsUseCase() }
             io.mockk.verify { cryptoManager.cacheDek(dek) }
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(eq(false), any()) }
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertFalse(state.isUnlocking, "isUnlocking should be false after biometric unlock")
             assertFalse(state.isVaultLocked)
@@ -544,7 +545,7 @@ class MainViewModelTest {
             coVerify(exactly = 1) { cloudSyncPort.getVaultVerificationData() }
             coVerify(exactly = 0) { vaultMetadataPort.getVaultVerificationData() }
             io.mockk.verify { cryptoManager.decrypt(ciphertextBytes, null) }
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(eq(false), any()) }
         }
 
     @Test
@@ -803,6 +804,59 @@ class MainViewModelTest {
             assertFalse(state.isBiometricUnlockPossible)
         }
 
+    @Test
+    @Suppress("UNCHECKED_CAST")
+    fun `SCENARIO-16 unlock sync progress is wired and cleared on completion`() =
+        runTest(testDispatcher) {
+            stubAuthenticatedExistingVaultUnlock()
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+
+            var capturedCallback: ((CloudSyncReplayProgress) -> Unit)? = null
+            coEvery { startCloudSyncListeningUseCase(any(), any()) } coAnswers {
+                capturedCallback =
+                    it.invocation.args[1] as? ((CloudSyncReplayProgress) -> Unit)
+                capturedCallback?.invoke(
+                    CloudSyncReplayProgress(
+                        appliedCount = 100L,
+                        totalEstimate = 200L,
+                        progressFraction = 0.5f,
+                        status = "Syncing updates (100/200)...",
+                    )
+                )
+                Result.success(Unit)
+            }
+
+            viewModel =
+                MainViewModel(
+                    getAuthStateUseCase,
+                    loginWithGoogleUseCase,
+                    initializeModelsUseCase,
+                    cryptoManager,
+                    cloudSyncPort,
+                    vaultMetadataPort,
+                    biometricPort,
+                    biometricManager,
+                    createVaultUseCase,
+                    unlockVaultUseCase,
+                    detectVaultReconciliationStateUseCase,
+                    adoptCloudVaultUseCase,
+                    bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase,
+                    loggingPort,
+                    errorHandler,
+                )
+            advanceUntilIdle()
+            viewModel.unlockVault("password")
+            advanceUntilIdle()
+
+            assertNotNull(capturedCallback, "VM must pass a non-null progress callback")
+            val state = viewModel.startupState.value as AppStartupState.Ready
+            assertFalse(state.isVaultLocked)
+            assertNull(state.unlockSyncProgress, "unlockSyncProgress must be null after sync completion")
+            assertNull(state.unlockSyncStatus, "unlockSyncStatus must be null after sync completion")
+        }
+
     /**
      * Stubs the unlock-existing-vault happy path so a unit test can drive the post-unlock
      * reconciliation branch. Authenticates the user so [reconcileWithCloudIfNeeded] runs.
@@ -885,7 +939,7 @@ class MainViewModelTest {
             stubAuthenticatedExistingVaultUnlock()
             coEvery { detectVaultReconciliationStateUseCase("password") } returns
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
-            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns
+            coEvery { startCloudSyncListeningUseCase(eq(true), any()) } returns
                 Result.failure(IllegalStateException("replay failed"))
 
             viewModel =
@@ -1099,7 +1153,7 @@ class MainViewModelTest {
 
             coVerifyOrder {
                 bootstrapCloudVaultFromLocalUseCase()
-                startCloudSyncListeningUseCase(uploadLocalFirst = true)
+                startCloudSyncListeningUseCase(eq(true), any())
             }
         }
 }

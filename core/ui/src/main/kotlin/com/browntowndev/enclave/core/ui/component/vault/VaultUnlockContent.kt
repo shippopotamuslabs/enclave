@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -87,6 +89,8 @@ fun VaultUnlockContent(
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
     onBiometricUnlockClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    unlockSyncProgress: Float? = null,
+    unlockSyncStatus: String? = null,
 ) {
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -185,7 +189,7 @@ fun VaultUnlockContent(
                         GoogleSignInButton(
                             onClick = onLoginClick,
                             enabled = authState !is VaultAuthUiState.Loading,
-                            text = if (authState is VaultAuthUiState.Loading) "Signing in..." else "Sign in with Google",
+                            text = if (authState is VaultAuthUiState.Loading) "Signing in..." else "Sign in with Google for sync",
                         )
                     }
                 }
@@ -214,12 +218,34 @@ fun VaultUnlockContent(
                         modifier = Modifier.size(48.dp),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    ShimmerText(
-                        text = "Signing In...",
-                        baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        highlightColor = MaterialTheme.colorScheme.primary,
+                    Text(
+                        text = unlockSyncStatus ?: "Signing In...",
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("unlock_sync_status_text")
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (unlockSyncProgress != null) {
+                        val progressValue = unlockSyncProgress
+                        LinearProgressIndicator(
+                            progress = { progressValue },
+                            strokeCap = StrokeCap.Butt,
+                            gapSize = 0.dp,
+                            drawStopIndicator = {},
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(EnclaveNeoTokens.shape)
+                                .testTag("unlock_sync_progress_indicator")
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            strokeCap = StrokeCap.Butt,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(EnclaveNeoTokens.shape)
+                                .testTag("unlock_sync_progress_indicator_indeterminate")
+                        )
+                    }
                 }
             } else {
                 Column(

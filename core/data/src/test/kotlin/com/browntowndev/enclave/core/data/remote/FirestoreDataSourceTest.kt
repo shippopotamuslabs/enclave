@@ -1174,7 +1174,9 @@ class FirestoreDataSourceTest {
             vaultUnlocked: Boolean,
             lastAppliedSequence: Long,
             chatDao: com.browntowndev.enclave.core.data.local.ChatDao =
-                mockk(relaxed = true),
+                mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true).also {
+                    coEvery { it.countActiveChats() } returns 1
+                },
             eventDispatcher: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher =
                 RecordOnlyDispatcher(),
             syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore =
