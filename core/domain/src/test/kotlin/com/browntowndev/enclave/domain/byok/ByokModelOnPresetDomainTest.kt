@@ -65,6 +65,7 @@ class ByokModelOnPresetDomainTest {
                     "customHeaders" -> emptyMap<String, String>()
                     "openRouterRouting" ->
                         com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration()
+                    "pricing" -> com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing()
                     else -> if (param.isOptional) null else error("Missing preset config arg: ${param.name}")
                 }
         }

@@ -16,6 +16,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
@@ -263,6 +264,9 @@ class ApiModelRepositoryImpl
                         openRouterRequireParameters = config.openRouterRouting.requireParameters,
                         openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
                         openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
+                        promptPriceUsdPerMillion = config.pricing.promptUsdPerMillion,
+                        completionPriceUsdPerMillion = config.pricing.completionUsdPerMillion,
+                        cachedPromptPriceUsdPerMillion = config.pricing.cachedPromptUsdPerMillion,
                         pendingSync = 1,
                     ),
                     healer,
@@ -327,6 +331,12 @@ class ApiModelRepositoryImpl
                         requireParameters = e.openRouterRequireParameters ?: false,
                         dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(e.openRouterDataCollectionPolicy),
                         zeroDataRetention = e.openRouterZeroDataRetention ?: false,
+                    ),
+                pricing =
+                    ApiModelSavedPricing(
+                        promptUsdPerMillion = e.promptPriceUsdPerMillion,
+                        completionUsdPerMillion = e.completionPriceUsdPerMillion,
+                        cachedPromptUsdPerMillion = e.cachedPromptPriceUsdPerMillion,
                     ),
             )
         }

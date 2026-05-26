@@ -29,4 +29,5 @@ data class ActiveModelConfiguration(
     val presencePenaltyDisabled: Boolean = false,
     val localModelFormat: ModelFileFormat? = null,
     val apiProvider: ApiProvider? = null,
+    val apiModelPricing: ApiModelSavedPricing? = null,
 )

@@ -81,7 +81,7 @@ object TelemetryTestFixtures {
             cacheCreationInputTokens = 300,
             costUsd = BigDecimal("0.003000"),
             costStatus = TelemetryCostStatus.ESTIMATED,
-            costSource = TelemetryCostSource.LOCAL_PRICING_TABLE,
+            costSource = TelemetryCostSource.SAVED_MODEL_PRICING,
             clientBuild = clientBuild,
         )
 

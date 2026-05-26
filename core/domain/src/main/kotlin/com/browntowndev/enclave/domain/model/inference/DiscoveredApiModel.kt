@@ -8,6 +8,7 @@ data class DiscoveredApiModel(
     val created: Long? = null,
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
+    val cachedPromptPrice: Double? = null,
     val isMultimodal: Boolean? = null,
     val isChatCapable: Boolean = true,
     val isImageGenerationCapable: Boolean = false,

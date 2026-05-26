@@ -68,6 +68,7 @@ private data class XaiModel(
     val prompt_token_price: Double? = null,
     val completion_text_token_price: Double? = null,
     val completion_token_price: Double? = null,
+    val cached_prompt_text_token_price: Double? = null,
     val image_price: Double? = null,
     val max_prompt_length: Int? = null,
     val context_length: Int? = null,
@@ -454,6 +455,7 @@ class ApiModelCatalogRepositoryImpl
                 .mapNotNull { model ->
                     val promptPrice = model.prompt_text_token_price ?: model.prompt_token_price
                     val completionPrice = model.completion_text_token_price ?: model.completion_token_price
+                    val cachedPromptPrice = model.cached_prompt_text_token_price
 
                     DiscoveredApiModel(
                         id = model.id,
@@ -461,6 +463,7 @@ class ApiModelCatalogRepositoryImpl
                         created = model.created,
                         promptPrice = promptPrice?.asUsdPerMillionFromXai(),
                         completionPrice = completionPrice?.asUsdPerMillionFromXai(),
+                        cachedPromptPrice = cachedPromptPrice?.asUsdPerMillionFromXai(),
                         contextWindowTokens = model.max_prompt_length,
                         isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
                     ).applyCapabilities(
@@ -487,6 +490,7 @@ class ApiModelCatalogRepositoryImpl
 
             val promptPrice = model.prompt_text_token_price ?: model.prompt_token_price
             val completionPrice = model.completion_text_token_price ?: model.completion_token_price
+            val cachedPromptPrice = model.cached_prompt_text_token_price
 
             return DiscoveredApiModel(
                 id = matchedAlias ?: requestedModelId.takeIf { it.isNotBlank() } ?: canonicalId,
@@ -494,6 +498,7 @@ class ApiModelCatalogRepositoryImpl
                 created = model.created,
                 promptPrice = promptPrice?.asUsdPerMillionFromXai(),
                 completionPrice = completionPrice?.asUsdPerMillionFromXai(),
+                cachedPromptPrice = cachedPromptPrice?.asUsdPerMillionFromXai(),
                 contextWindowTokens = model.max_prompt_length ?: model.context_length,
                 isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
             ).applyCapabilities(

@@ -896,6 +896,15 @@ fun PresetConfigurationForm(
             )
         }
 
+        ConfigurationHeader("Telemetry pricing")
+
+        ApiModelPricingConfiguration(
+            provider = provider,
+            config = config,
+            selectedModelMetadata = selectedModelMetadata,
+            onConfigChange = onConfigChange,
+        )
+
         ConfigurationHeader("Context")
 
         ContextConfiguration(

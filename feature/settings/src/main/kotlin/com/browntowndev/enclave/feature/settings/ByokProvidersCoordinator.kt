@@ -3,6 +3,8 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
@@ -502,6 +504,12 @@ internal class ByokProvidersCoordinator
                 reasoningEffort = reasoningEffort,
                 customHeaders = customHeaders.map { it.key to it.value },
                 openRouterRouting = openRouterRouting,
+                pricing =
+                    ApiModelSavedPricing(
+                        promptUsdPerMillion = ApiModelPricingFormat.parseUsdPerMillion(promptPriceUsdPerMillion),
+                        completionUsdPerMillion = ApiModelPricingFormat.parseUsdPerMillion(completionPriceUsdPerMillion),
+                        cachedPromptUsdPerMillion = ApiModelPricingFormat.parseUsdPerMillion(cachedPromptPriceUsdPerMillion),
+                    ),
             )
 
         private fun connectionFingerprint(
