@@ -14,47 +14,50 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XMentionSearchToolExecutor @Inject constructor(
-    private val loggingPort: LoggingPort,
-    private val settingsRepository: SettingsRepository,
-    private val xSearchRepository: XSearchRepository,
-) : ToolExecutorPort {
-    companion object {
-        private const val TAG = "XMentionSearchToolExecutor"
-        private val json = Json { ignoreUnknownKeys = true }
-    }
-
-    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
-        requireSupportedTool(request.toolName)
-        val settings = settingsRepository.settingsFlow.first()
-        if (!settings.xSearchEnabled) {
-            loggingPort.warning(TAG, "X Mention Search tool invoked but X search is disabled in settings")
-            throw IllegalStateException("X Search is disabled in settings")
+class XMentionSearchToolExecutor
+    @Inject
+    constructor(
+        private val loggingPort: LoggingPort,
+        private val settingsRepository: SettingsRepository,
+        private val xSearchRepository: XSearchRepository,
+    ) : ToolExecutorPort {
+        companion object {
+            private const val TAG = "XMentionSearchToolExecutor"
+            private val json = Json { ignoreUnknownKeys = true }
         }
 
-        val params = request.parameters as XMentionSearchParams
-        val cleanUser = params.username.removePrefix("@").trim()
-        val query = "@$cleanUser ${params.search_text.trim()}"
+        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            requireSupportedTool(request.toolName)
+            val settings = settingsRepository.settingsFlow.first()
+            if (!settings.xSearchEnabled) {
+                loggingPort.warning(TAG, "X Mention Search tool invoked but X search is disabled in settings")
+                throw IllegalStateException("X Search is disabled in settings")
+            }
 
-        loggingPort.info(TAG, "Executing X mention search tool query=$query")
+            val params = request.parameters as XMentionSearchParams
+            val cleanUser = params.username.removePrefix("@").trim()
+            val query = "@$cleanUser ${params.search_text.trim()}"
 
-        val result = xSearchRepository.searchPaginated(
-            query = query,
-            sortOrder = "recency",
-            maxPostsPerAuthor = 20,
-            maxTotalPosts = 20,
-            nextToken = params.next_token
-        )
+            loggingPort.info(TAG, "Executing X mention search tool query=$query")
 
-        return ToolExecutionResult(
-            toolName = request.toolName,
-            resultJson = json.encodeToString(result)
-        )
-    }
+            val result =
+                xSearchRepository.searchPaginated(
+                    query = query,
+                    sortOrder = "recency",
+                    maxPostsPerAuthor = 20,
+                    maxTotalPosts = 20,
+                    nextToken = params.next_token,
+                )
 
-    private fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.X_MENTION_SEARCH.name) {
-            "Unsupported tool: $toolName"
+            return ToolExecutionResult(
+                toolName = request.toolName,
+                resultJson = json.encodeToString(result),
+            )
+        }
+
+        private fun requireSupportedTool(toolName: String) {
+            require(toolName == ToolDefinition.X_MENTION_SEARCH.name) {
+                "Unsupported tool: $toolName"
+            }
         }
     }
-}
