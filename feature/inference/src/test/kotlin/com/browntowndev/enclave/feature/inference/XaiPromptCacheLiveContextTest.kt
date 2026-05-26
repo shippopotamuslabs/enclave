@@ -17,6 +17,7 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -174,6 +175,70 @@ class XaiPromptCacheLiveContextTest {
                         message.asSystem().content().asText().contains("advertised_tools")
                 },
                 "current-turn tool index sidecar must be present on the live wire tail",
+            )
+        }
+
+    @Test
+    fun PC_XAI_08_rag_pre_retrieval_sidecar_keeps_cache_eligible_user_bytes_stable() =
+        runTest {
+            val captured = mutableListOf<ChatCompletionCreateParams>()
+            val service = capturingXaiService(captured)
+            val stableSystem = "You are a helpful assistant."
+            val ragContext = "# RELEVANT WEB SEARCH RESULTS:\nfixture-result"
+            val turnOneUser =
+                AgentLoopMessage(id = "u1", role = Role.USER, content = "Question needing search?")
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(turnOneUser),
+                systemPrompt = stableSystem,
+                contextSidecars = null,
+                availableTools = stableTools,
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = chatOptions.copy(volatileTurnContext = ragContext),
+            )
+            val turnOneWire = captured.last().messages()
+            val turnOneEligible = turnOneWire.cacheEligibleWire()
+            assertEquals(
+                "Question needing search?",
+                turnOneWire.first { it.isUser() }.asUser().content().asText(),
+            )
+            assertTrue(
+                turnOneWire.any { message ->
+                    message.isSystem() &&
+                        PreRetrievalContextSidecar.isSidecarText(message.asSystem().content().asText())
+                },
+            )
+
+            service.resetAppendOnlyForNewPrompt()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        turnOneUser,
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "answer"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Follow-up question"),
+                    ),
+                systemPrompt = stableSystem,
+                contextSidecars = ledgerSidecar(2),
+                availableTools = stableTools,
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = chatOptions,
+            )
+            val turnTwoEligible = captured.last().messages().cacheEligibleWire()
+            assertTrue(turnTwoEligible.size > turnOneEligible.size)
+            for (index in turnOneEligible.indices) {
+                assertEquals(
+                    turnOneEligible[index],
+                    turnTwoEligible[index],
+                    "cache-eligible transcript must not embed RAG in USER bytes at index $index",
+                )
+            }
+            assertFalse(
+                turnTwoEligible.any { it.startsWith("USER:# RELEVANT WEB SEARCH RESULTS") },
             )
         }
 

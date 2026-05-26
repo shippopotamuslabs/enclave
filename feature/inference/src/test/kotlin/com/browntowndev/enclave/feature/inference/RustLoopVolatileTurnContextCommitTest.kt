@@ -206,7 +206,6 @@ class RustLoopVolatileTurnContextCommitTest {
     @Test
     fun CSPC_03a_web_rag_prefix_stored_in_rust_history_turn2_replays_identical_bytes() =
         runTest {
-            val capturing = CapturingRustCompatibleService()
             val providerCapture = captureOpenAiParams()
 
             val webRagPrefix = "# RELEVANT WEB SEARCH RESULTS:\nresult-text-abc"
@@ -402,16 +401,14 @@ class RustLoopVolatileTurnContextCommitTest {
     @Test
     fun CSPC_05_knn_memory_prefix_stored_in_rust_history_turn2_replays_turn1_user_content() =
         runTest {
-            val capturing = CapturingRustCompatibleService()
-
+            val providerCapture = captureOpenAiParams()
             val memoryPrefix = "# RELEVANT FACTS & CONTEXT:\n- User prefers concise answers\n- User is a developer"
-            val expectedContent =
-                "# RELEVANT FACTS & CONTEXT:\n- User prefers concise answers\n- User is a developer\n\nhelp me code"
+            val barePrompt = "help me code"
 
             val port1 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                     ),
                     systemPrompt = "",
                     toolsSchemaJson = "[]",
@@ -419,23 +416,17 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service1 = createService(agentLoopPort = port1, inner = capturing)
-
-            service1.sendPrompt(
-                prompt = "help me code",
+            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
+                prompt = barePrompt,
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = memoryPrefix),
             ).toList()
 
-            assertEquals(
-                expectedContent,
-                port1.capturedInitialMessages.last().content,
-                "CSPC-05 turn 1: initialMessages.last().content must contain memory prefix + prompt",
-            )
+            assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
             val port2 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                         AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
                         AgentLoopMessage(id = "u2", role = Role.USER, content = "more help"),
                     ),
@@ -445,18 +436,18 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service2 = createService(agentLoopPort = port2, inner = capturing)
-
-            service2.sendPrompt(
+            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
                 prompt = "more help",
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
             ).toList()
 
-            val turn2Messages = capturing.capturedTurnArgs.last()
+            val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
-                expectedContent,
-                turn2Messages[0].content,
-                "CSPC-05 turn 2: sessionMessages[0].content must equal turn 1 memory-prefixed content",
+                barePrompt,
+                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+            )
+            assertTrue(
+                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT FACTS & CONTEXT") },
             )
         }
 
