@@ -18,6 +18,7 @@ internal class FirestoreListenerCoordinator(
     private val syncStateStore: FirestoreSyncStateStore,
     private val eventApplyMutex: Mutex = Mutex(),
     private val externalScope: CoroutineScope,
+    private val cache: FirestoreSyncDocumentCache? = null,
 ) {
     private val listenerMutex = Mutex()
     private val pendingLiveEvents = TreeMap<Long, FirestoreSyncEvent>()
@@ -87,7 +88,24 @@ internal class FirestoreListenerCoordinator(
     ) {
         eventApplyMutex.withLock {
             bufferFutureEvents(userId, events)
-            drainContiguousEvents(userId)
+            
+            val lastApplied = syncStateStore.lastAppliedSequence(userId)
+            val contiguousEvents = mutableListOf<FirestoreSyncEvent>()
+            var seq = lastApplied + 1
+            while (true) {
+                val event = pendingLiveEvents[seq] ?: break
+                contiguousEvents.add(event)
+                seq++
+            }
+            if (contiguousEvents.isNotEmpty()) {
+                cache?.prefetch(userId, contiguousEvents)
+            }
+            
+            try {
+                drainContiguousEvents(userId)
+            } finally {
+                cache?.clear()
+            }
         }
     }
 

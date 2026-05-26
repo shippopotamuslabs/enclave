@@ -36,6 +36,7 @@ import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHeale
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -76,6 +77,9 @@ internal fun createTestFirestoreDataSource(
     syncEventFeedClient: FirestoreSyncEventFeedClient = FirestoreSyncEventFeedClient(),
     syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
     syncStateStore: FirestoreSyncStateStore = DeterministicTestSyncStateStore(),
+    // Default to a relaxed no-op mock so existing tests don't trigger live Firestore calls during
+    // cache prefetch in applyLiveEvents, which would cause UncompletedCoroutinesError.
+    documentCache: FirestoreSyncDocumentCache = mockk(relaxed = true),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
     val facade =
@@ -123,6 +127,7 @@ internal fun createTestFirestoreDataSource(
             syncEventFeedClient = syncEventFeedClient,
             syncEventApplier = syncEventApplier,
             syncStateStore = syncStateStore,
+            documentCache = documentCache,
         )
     return FirestoreDataSource(facade, externalScope)
 }

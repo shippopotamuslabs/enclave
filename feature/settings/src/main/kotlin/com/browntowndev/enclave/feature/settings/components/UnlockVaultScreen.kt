@@ -28,6 +28,8 @@ fun UnlockVaultScreen(
     onLoginClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit,
     onBiometricUnlockClick: (() -> Unit)? = null,
+    unlockSyncProgress: Float? = null,
+    unlockSyncStatus: String? = null,
 ) {
     Box(
         modifier = Modifier
@@ -44,6 +46,8 @@ fun UnlockVaultScreen(
             onLoginClick = onLoginClick,
             onSubmitVaultPassword = onSubmitVaultPassword,
             onBiometricUnlockClick = onBiometricUnlockClick,
+            unlockSyncProgress = unlockSyncProgress,
+            unlockSyncStatus = unlockSyncStatus,
             modifier =
                 Modifier
                     .fillMaxSize()
