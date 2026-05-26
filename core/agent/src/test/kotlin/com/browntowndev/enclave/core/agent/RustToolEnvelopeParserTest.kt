@@ -10,11 +10,11 @@ class RustToolEnvelopeParserTest {
     fun parse_whenRustParserFails_wrapsUnavailableError() {
         val cause = LinkageError("missing JNI symbol")
         val parser = RustToolEnvelopeParser()
-        parser.parseToolCallsDelegate = { throw cause }
+        parser.parseToolCallsDelegate = { _, _, _ -> throw cause }
 
         val error =
             assertFailsWith<IllegalStateException> {
-                parser.parse("<tool_call>{}</tool_call>")
+                parser.parse("<tool_call>{}</tool_call>", "{}", "[]")
             }
 
         assertEquals("Rust tool parser unavailable", error.message)

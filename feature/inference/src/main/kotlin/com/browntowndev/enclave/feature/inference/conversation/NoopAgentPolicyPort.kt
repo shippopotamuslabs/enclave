@@ -10,6 +10,8 @@ internal object NoopAgentPolicyPort : AgentPolicyPort {
     override fun repairTool(
         name: String,
         argsJson: String,
+        toolSemanticsJson: String,
+        toolCatalogJson: String,
     ): AgentPolicyRepairResult = AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
 
     override fun truncateResult(

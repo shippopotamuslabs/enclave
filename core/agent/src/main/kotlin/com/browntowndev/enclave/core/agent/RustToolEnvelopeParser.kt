@@ -8,14 +8,23 @@ import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private fun rustParseToolCalls(raw: String): FfiToolParseBatch = parseToolCalls(raw)
+private fun rustParseToolCalls(
+    raw: String,
+    toolSemanticsJson: String,
+    toolCatalogJson: String,
+): FfiToolParseBatch = parseToolCalls(raw, toolSemanticsJson, toolCatalogJson)
 
 private fun rustCoerceProviderArguments(
     toolName: String,
     argsJson: String,
-): FfiToolParseField = coerceProviderArguments(toolName, argsJson)
+    toolSemanticsJson: String,
+    toolCatalogJson: String,
+): FfiToolParseField = coerceProviderArguments(toolName, argsJson, toolSemanticsJson, toolCatalogJson)
 
-private fun rustHasLocalToolContract(systemPrompt: String): Boolean = hasLocalToolContract(systemPrompt)
+private fun rustHasLocalToolContract(
+    systemPrompt: String,
+    toolCatalogJson: String,
+): Boolean = hasLocalToolContract(systemPrompt, toolCatalogJson)
 
 /**
  * Hilt-injected adapter wiring [ToolEnvelopeParserPort] to the UniFFI-exported
@@ -25,23 +34,34 @@ private fun rustHasLocalToolContract(systemPrompt: String): Boolean = hasLocalTo
 class RustToolEnvelopeParser
     @Inject
     constructor() : ToolEnvelopeParserPort {
-        internal var parseToolCallsDelegate: (String) -> FfiToolParseBatch = ::rustParseToolCalls
-        internal var coerceProviderArgumentsDelegate: (String, String) -> FfiToolParseField = ::rustCoerceProviderArguments
-        internal var hasLocalToolContractDelegate: (String) -> Boolean = ::rustHasLocalToolContract
+        internal var parseToolCallsDelegate: (String, String, String) -> FfiToolParseBatch = ::rustParseToolCalls
+        internal var coerceProviderArgumentsDelegate: (String, String, String, String) -> FfiToolParseField =
+            ::rustCoerceProviderArguments
+        internal var hasLocalToolContractDelegate: (String, String) -> Boolean = ::rustHasLocalToolContract
 
-        override fun parse(raw: String): ToolEnvelopeBatch =
-            runCatching { parseToolCallsDelegate(raw).toDomain() }
+        override fun parse(
+            raw: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
+        ): ToolEnvelopeBatch =
+            runCatching { parseToolCallsDelegate(raw, toolSemanticsJson, toolCatalogJson).toDomain() }
                 .getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
 
         override fun coerceProviderArguments(
             toolName: String,
             argsJson: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
         ): ToolEnvelopeField =
-            runCatching { coerceProviderArgumentsDelegate(toolName, argsJson).toDomain() }
-                .getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
+            runCatching {
+                coerceProviderArgumentsDelegate(toolName, argsJson, toolSemanticsJson, toolCatalogJson).toDomain()
+            }.getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
 
-        override fun hasLocalToolContract(systemPrompt: String?): Boolean =
-            runCatching { hasLocalToolContractDelegate(systemPrompt.orEmpty()) }
+        override fun hasLocalToolContract(
+            systemPrompt: String?,
+            toolCatalogJson: String,
+        ): Boolean =
+            runCatching { hasLocalToolContractDelegate(systemPrompt.orEmpty(), toolCatalogJson) }
                 .getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
 
         override fun buildToolResultMessage(resultJson: String): String = "<tool_result>$resultJson</tool_result>"
