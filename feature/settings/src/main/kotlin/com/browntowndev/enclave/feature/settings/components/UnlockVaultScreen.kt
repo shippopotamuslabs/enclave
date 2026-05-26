@@ -32,9 +32,10 @@ fun UnlockVaultScreen(
     unlockSyncStatus: String? = null,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
     ) {
         VaultUnlockContent(
             authState = authState,

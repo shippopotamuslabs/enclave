@@ -79,8 +79,7 @@ private fun OssLicenseCard(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = neoBorderColor(),
                     withShadow = false,
-                )
-                .clickable { expanded = !expanded }
+                ).clickable { expanded = !expanded }
                 .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -108,8 +107,7 @@ private fun OssLicenseCard(
                             backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
                             borderColor = neoBorderColor(),
                             withShadow = false,
-                        )
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ).padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
         if (expanded) {

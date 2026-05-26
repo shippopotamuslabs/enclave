@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -337,116 +336,115 @@ private fun LocalModelAssetCard(
                         backgroundColor = MaterialTheme.colorScheme.surface,
                         borderColor = neoBorderColor(),
                         withShadow = false,
-                    )
-                    .clickable { onSelectAsset(asset) }
+                    ).clickable { onSelectAsset(asset) }
                     .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = asset.friendlyName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = asset.friendlyName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (asset.isMultimodal) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Vision capable",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (asset.isMultimodal) {
-                            Spacer(modifier = Modifier.width(4.dp))
+                    }
+                }
+                Text(
+                    text = "${asset.providerName} • ${asset.format}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                Text(
+                    text = "${(asset.sizeInBytes / (1024 * 1024 * 1024.0)).format(2)} GB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                if (onRequestDeleteAsset != null) {
+                    Text(
+                        text = "${asset.configurations.size} Preset(s)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+
+            if (onRequestDeleteAsset == null || reDownloadProgress != null || asset.isSoftDeleted) {
+                Box(
+                    modifier = Modifier.size(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (reDownloadProgress) {
+                        null, ReDownloadProgress.Idle -> {
+                            IconButton(
+                                onClick = onReDownloadClick,
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download Model ${asset.friendlyName}",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        is ReDownloadProgress.Preparing -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                strokeCap = StrokeCap.Round,
+                            )
+                        }
+                        is ReDownloadProgress.Downloading -> {
+                            CircularProgressIndicator(
+                                progress = { reDownloadProgress.progress },
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                strokeCap = StrokeCap.Round,
+                            )
+                        }
+                        is ReDownloadProgress.Complete -> {
                             Icon(
-                                imageVector = Icons.Default.Visibility,
-                                contentDescription = "Vision capable",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Download Complete",
+                                tint = SUCCESS_COLOR,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        is ReDownloadProgress.Failed -> {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Download Failed: ${reDownloadProgress.error}",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }
-                    Text(
-                        text = "${asset.providerName} • ${asset.format}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    Text(
-                        text = "${(asset.sizeInBytes / (1024 * 1024 * 1024.0)).format(2)} GB",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                    if (onRequestDeleteAsset != null) {
-                        Text(
-                            text = "${asset.configurations.size} Preset(s)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
                 }
+            }
 
-                if (onRequestDeleteAsset == null || reDownloadProgress != null || asset.isSoftDeleted) {
-                    Box(
-                        modifier = Modifier.size(24.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        when (reDownloadProgress) {
-                            null, ReDownloadProgress.Idle -> {
-                                IconButton(
-                                    onClick = onReDownloadClick,
-                                    modifier = Modifier.size(24.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = "Download Model ${asset.friendlyName}",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                            is ReDownloadProgress.Preparing -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = StrokeCap.Round,
-                                )
-                            }
-                            is ReDownloadProgress.Downloading -> {
-                                CircularProgressIndicator(
-                                    progress = { reDownloadProgress.progress },
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = StrokeCap.Round,
-                                )
-                            }
-                            is ReDownloadProgress.Complete -> {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Download Complete",
-                                    tint = SUCCESS_COLOR,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            is ReDownloadProgress.Failed -> {
-                                Icon(
-                                    imageVector = Icons.Default.Error,
-                                    contentDescription = "Download Failed: ${reDownloadProgress.error}",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (reDownloadProgress == null && onRequestDeleteAsset != null && !asset.isSoftDeleted) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "View details",
-                        modifier = Modifier.padding(start = 4.dp),
-                    )
-                }
+            if (reDownloadProgress == null && onRequestDeleteAsset != null && !asset.isSoftDeleted) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "View details",
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
         }
     }
 

@@ -23,12 +23,14 @@ class EmbeddingProgressManager
 
         init {
             externalScope.launch {
-                workManager.getWorkInfosForUniqueWorkFlow("enclave_embedding_regen")
+                workManager
+                    .getWorkInfosForUniqueWorkFlow("enclave_embedding_regen")
                     .collect { workInfos ->
                         val workInfo = workInfos.firstOrNull()
                         if (workInfo != null) {
                             val state = workInfo.state
-                            val active = state == androidx.work.WorkInfo.State.RUNNING ||
+                            val active =
+                                state == androidx.work.WorkInfo.State.RUNNING ||
                                     state == androidx.work.WorkInfo.State.ENQUEUED
                             _isReindexing.value = active
 

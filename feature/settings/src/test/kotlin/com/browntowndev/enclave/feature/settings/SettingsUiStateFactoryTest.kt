@@ -6,19 +6,19 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import com.browntowndev.enclave.domain.port.auth.AuthState
-import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
+import com.browntowndev.enclave.domain.port.auth.AuthState
+import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.mockk
-import java.math.BigDecimal
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 
 class SettingsUiStateFactoryTest {
     private lateinit var factory: SettingsUiStateFactory

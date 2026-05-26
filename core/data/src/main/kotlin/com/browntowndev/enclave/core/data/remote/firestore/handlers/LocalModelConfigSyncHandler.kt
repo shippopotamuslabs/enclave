@@ -126,6 +126,10 @@ internal class LocalModelConfigSyncHandler(
                 .takeIf { it.exists() }
                 ?.getString("sha256")
                 ?.takeIf { it.isNotBlank() }
-        return sha256?.let { ctx.daos.localModelsDao.getBySha256(it)?.id } ?: cloudModelId
+        return sha256?.let {
+            ctx.daos.localModelsDao
+                .getBySha256(it)
+                ?.id
+        } ?: cloudModelId
     }
 }

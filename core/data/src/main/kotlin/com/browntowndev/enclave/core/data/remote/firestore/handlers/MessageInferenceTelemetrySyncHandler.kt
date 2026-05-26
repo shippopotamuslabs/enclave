@@ -26,8 +26,7 @@ internal class MessageInferenceTelemetrySyncHandler(
     override suspend fun toFirestore(local: MessageInferenceTelemetryEntity): Map<String, Any?> =
         messageInferenceTelemetryToFirestoreMap(local)
 
-    override fun fromFirestore(doc: DocumentSnapshot): MessageInferenceTelemetryEntity? =
-        messageInferenceTelemetryFromFirestore(doc)
+    override fun fromFirestore(doc: DocumentSnapshot): MessageInferenceTelemetryEntity? = messageInferenceTelemetryFromFirestore(doc)
 
     override suspend fun upsertLocal(
         entity: MessageInferenceTelemetryEntity,

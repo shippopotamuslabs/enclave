@@ -153,5 +153,4 @@ interface MessageCommandDao {
         media_prompts_json: String? = null,
         timestamp: Long = System.currentTimeMillis(),
     )
-
 }

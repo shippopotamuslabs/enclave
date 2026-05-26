@@ -171,12 +171,13 @@ object ApiProviderModelPolicy {
         } else if (provider == ApiProvider.XAI && modelId.startsWith("grok-4.3")) {
             ApiReasoningPolicy(
                 controlStyle = ApiReasoningControlStyle.STANDARD,
-                supportedEfforts = listOf(
-                    ApiReasoningEffort.NONE,
-                    ApiReasoningEffort.LOW,
-                    ApiReasoningEffort.MEDIUM,
-                    ApiReasoningEffort.HIGH,
-                ),
+                supportedEfforts =
+                    listOf(
+                        ApiReasoningEffort.NONE,
+                        ApiReasoningEffort.LOW,
+                        ApiReasoningEffort.MEDIUM,
+                        ApiReasoningEffort.HIGH,
+                    ),
                 defaultEffort = ApiReasoningEffort.LOW,
             )
         } else {

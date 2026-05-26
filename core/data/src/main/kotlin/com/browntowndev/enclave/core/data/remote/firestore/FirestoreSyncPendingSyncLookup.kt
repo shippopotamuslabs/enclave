@@ -43,7 +43,11 @@ internal class FirestoreSyncPendingSyncLookup(
     ): Int? =
         when (collectionPath) {
             "messages" ->
-                database.messageQueryDao().getMessageById(MessageId(entityId))?.message?.pendingSync
+                database
+                    .messageQueryDao()
+                    .getMessageById(MessageId(entityId))
+                    ?.message
+                    ?.pendingSync
             "message_files" -> database.messageFileDao().getById(entityId)?.pendingSync
             "web_search_sources" -> database.webSearchSourceDao().getById(entityId)?.pendingSync
             "message_transcript_segments" ->

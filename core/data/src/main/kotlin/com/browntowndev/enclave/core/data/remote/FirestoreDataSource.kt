@@ -6,12 +6,12 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreCloudPurgeCl
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreListenerCoordinator
 import com.browntowndev.enclave.core.data.remote.firestore.FirestorePendingSyncEngine
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncAdapterRegistry
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDependencies
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
-import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncHydrationRecovery
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreVaultClient
@@ -146,9 +146,11 @@ class FirestoreDataSource
                 val userId = syncContext.userIdProvider() ?: throw IllegalStateException("Not signed in")
                 hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
                 val lastApplied = syncStateStore.lastAppliedSequence(userId)
-                val countQuery = syncContext.firestore.collection("users/$userId/sync_events")
-                    .whereGreaterThan("sequence", lastApplied)
-                    .count()
+                val countQuery =
+                    syncContext.firestore
+                        .collection("users/$userId/sync_events")
+                        .whereGreaterThan("sequence", lastApplied)
+                        .count()
                 val snapshot = countQuery.get(com.google.firebase.firestore.AggregateSource.SERVER).await()
                 snapshot.count
             }
@@ -196,8 +198,7 @@ class FirestoreDataSource
 
         override suspend fun getWrappedDek(): Result<String?> = vaultClient.getWrappedDek()
 
-        override suspend fun uploadVaultMetadata(metadata: VaultMetadata): Result<Unit> =
-            vaultClient.uploadVaultMetadata(metadata)
+        override suspend fun uploadVaultMetadata(metadata: VaultMetadata): Result<Unit> = vaultClient.uploadVaultMetadata(metadata)
 
         override suspend fun fetchVaultMetadata(): Result<VaultMetadata?> = vaultClient.fetchVaultMetadata()
 
@@ -296,7 +297,8 @@ class FirestoreSyncDependenciesFacade
             preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
             sharedStateStore: FirestoreSyncStateStore,
             cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
-                com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache(firestore),
+                com.browntowndev.enclave.core.data.remote.firestore
+                    .FirestoreSyncDocumentCache(firestore),
         ) : this(
             firestore = firestore,
             chatSyncDaos = chatSyncDaos,
@@ -448,7 +450,8 @@ class FirestoreSyncDependenciesFacade
                 syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
                 syncStateStore: FirestoreSyncStateStore = FirestoreSyncStateStore(),
                 documentCache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
-                    com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache(firestore),
+                    com.browntowndev.enclave.core.data.remote.firestore
+                        .FirestoreSyncDocumentCache(firestore),
             ): FirestoreSyncDependenciesFacade =
                 FirestoreSyncDependenciesFacade(
                     firestore = firestore,

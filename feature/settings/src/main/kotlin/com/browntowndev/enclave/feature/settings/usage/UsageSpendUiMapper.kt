@@ -50,8 +50,7 @@ class UsageSpendUiMapper
                 UsagePeriod.CURRENT_MONTH -> com.browntowndev.enclave.feature.settings.UsagePeriodUi.CURRENT_MONTH
             }
 
-        private fun formatTotal(value: BigDecimal): String =
-            "$" + value.setScale(6, RoundingMode.HALF_UP).toPlainString()
+        private fun formatTotal(value: BigDecimal): String = "$" + value.setScale(6, RoundingMode.HALF_UP).toPlainString()
 
         private fun formatProviderCost(value: BigDecimal?): String =
             if (value == null) {

@@ -11,6 +11,8 @@ import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.settings.AppTheme
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -29,30 +31,27 @@ import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
-import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
-import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import java.math.BigDecimal
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import java.math.BigDecimal
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -385,7 +384,8 @@ class SettingsViewModelTest {
             }
             assertEquals(
                 listOf("gemini-2.5-flash-preview-tts"),
-                viewModel.uiState.value.apiProviderEditor.discovery.models.map { it.modelId },
+                viewModel.uiState.value.apiProviderEditor.discovery.models
+                    .map { it.modelId },
             )
         }
 

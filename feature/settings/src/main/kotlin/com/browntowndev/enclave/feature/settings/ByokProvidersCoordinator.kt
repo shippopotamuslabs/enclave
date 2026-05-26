@@ -524,9 +524,7 @@ internal class ByokProvidersCoordinator
                 credentialAlias = credentialAlias,
             )
 
-        private fun ApiProvidersTransientState.connectionTestStatusForFingerprint(
-            fingerprint: String,
-        ): ApiConnectionTestStatus =
+        private fun ApiProvidersTransientState.connectionTestStatusForFingerprint(fingerprint: String): ApiConnectionTestStatus =
             if (connectionTestStatus == ApiConnectionTestStatus.SUCCESS && connectionTestFingerprint != fingerprint) {
                 ApiConnectionTestStatus.IDLE
             } else {
