@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.telemetry
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -76,6 +77,7 @@ class InferenceTelemetrySupport
             cacheReadInputTokens: Int?,
             cacheWriteInputTokens: Int? = null,
             costUsd: BigDecimal?,
+            savedPricing: ApiModelSavedPricing? = null,
         ): TurnTelemetry =
             normalizer.normalizeOpenAiUsage(
                 OpenAiTelemetryUsageInput(
@@ -95,6 +97,7 @@ class InferenceTelemetrySupport
                     cacheReadInputTokens = cacheReadInputTokens,
                     cacheWriteInputTokens = cacheWriteInputTokens,
                     costUsd = costUsd,
+                    savedPricing = savedPricing,
                     clientBuild = context.clientBuild,
                 ),
             )
@@ -108,6 +111,7 @@ class InferenceTelemetrySupport
             outputTokens: Int?,
             reasoningTokens: Int?,
             cacheCreationInputTokens: Int?,
+            savedPricing: ApiModelSavedPricing? = null,
         ): TurnTelemetry =
             normalizer.normalizeAnthropicUsage(
                 AnthropicTelemetryUsageInput(
@@ -124,6 +128,7 @@ class InferenceTelemetrySupport
                     outputTokens = outputTokens,
                     reasoningTokens = reasoningTokens,
                     cacheCreationInputTokens = cacheCreationInputTokens,
+                    savedPricing = savedPricing,
                     clientBuild = context.clientBuild,
                 ),
             )

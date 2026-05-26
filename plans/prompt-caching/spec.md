@@ -8,7 +8,7 @@ Additionally, to prevent cache invalidations between the first turn (where tool 
 
 * **OpenAI & xAI:** 
   * The stable system prompt is prepended as the first system message.
-  * The volatile context sidecars are appended as a separate system message at the very end of the history list, immediately preceding the latest user message.
+  * The volatile context sidecars are appended as a separate system message at the very end of the history list, immediately preceding the latest user message. For tool-loop tails where the last `sessionMessages` entry is a tool result, see `plans/FEAT-append-only-provider-context/spec.md` (`AOC-15`).
   * If `allowToolCall` is false, the tools list is still included in the request, but `tool_choice` is set to `"none"` (or `toolChoice` parameter none) to prevent cache invalidation from changing the payload structure.
   * This keeps the prefix (system prompt + tools list + entire conversation history up to the last turn) 100% stable and cache-hit eligible.
 * **Anthropic:** 

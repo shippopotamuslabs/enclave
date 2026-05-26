@@ -4,7 +4,7 @@ import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySourceKind
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.ProviderPricingCatalog
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -15,7 +15,7 @@ class LocalInferenceTelemetryTest {
     fun `TEL_002 local inference telemetry exposes timing and unavailable cost fields`() {
         val row = TelemetryTestFixtures.telLitert1
         val captured =
-            ProviderTelemetryNormalizer(ProviderCostEstimator(ProviderPricingCatalog()))
+            ProviderTelemetryNormalizer(ProviderCostEstimator(SavedApiModelPricingEstimator()))
                 .normalizeLocalGeneration(
                     rowId = row.id.value,
                     messageId = row.messageId.value,

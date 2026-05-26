@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryClientBuild
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.ProviderPricingCatalog
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
 import com.browntowndev.enclave.feature.inference.telemetry.TELEMETRY_SCHEMA_VERSION
 import com.browntowndev.enclave.feature.inference.telemetry.TelemetryClientBuildProvider
@@ -26,7 +26,7 @@ internal fun testInferenceTelemetrySupport(): InferenceTelemetrySupport {
     every { packageManager.getPackageInfo(any<String>(), any<Int>()) } returns packageInfo
     val buildProvider = TelemetryClientBuildProvider(context)
     return InferenceTelemetrySupport(
-        normalizer = ProviderTelemetryNormalizer(ProviderCostEstimator(ProviderPricingCatalog())),
+        normalizer = ProviderTelemetryNormalizer(ProviderCostEstimator(SavedApiModelPricingEstimator())),
         clientBuildProvider = buildProvider,
     )
 }

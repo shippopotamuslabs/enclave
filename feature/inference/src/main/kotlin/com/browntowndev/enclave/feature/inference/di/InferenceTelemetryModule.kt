@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.feature.inference.di
 
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.ProviderPricingCatalog
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -14,12 +14,13 @@ import javax.inject.Singleton
 object InferenceTelemetryModule {
     @Provides
     @Singleton
-    fun provideProviderPricingCatalog(): ProviderPricingCatalog = ProviderPricingCatalog()
+    fun provideSavedApiModelPricingEstimator(): SavedApiModelPricingEstimator = SavedApiModelPricingEstimator()
 
     @Provides
     @Singleton
-    fun provideProviderCostEstimator(catalog: ProviderPricingCatalog): ProviderCostEstimator =
-        ProviderCostEstimator(catalog)
+    fun provideProviderCostEstimator(
+        savedPricingEstimator: SavedApiModelPricingEstimator,
+    ): ProviderCostEstimator = ProviderCostEstimator(savedPricingEstimator)
 
     @Provides
     @Singleton

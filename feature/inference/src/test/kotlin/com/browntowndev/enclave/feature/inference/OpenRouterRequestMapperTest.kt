@@ -166,6 +166,48 @@ class OpenRouterRequestMapperTest {
     }
 
     @Test
+    fun `mapToChatCompletionParams adds cache control for Anthropic compatible model`() {
+        val params =
+            OpenRouterRequestMapper.mapToChatCompletionParams(
+                modelId = "anthropic/claude-sonnet-4",
+                prompt = "new turn",
+                history =
+                    listOf(
+                        ChatMessage(Role.SYSTEM, "Stable system prompt"),
+                        ChatMessage(Role.USER, "Stable user message"),
+                        ChatMessage(Role.ASSISTANT, "Stable assistant message"),
+                    ),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+        val requestBody = params.toString()
+        assertTrue(requestBody.contains("cache_control"), requestBody)
+        assertTrue(requestBody.contains("ephemeral"), requestBody)
+        assertFalse(params.promptCacheKey().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams adds cache control for Gemini compatible model`() {
+        val params =
+            OpenRouterRequestMapper.mapToResponseParams(
+                modelId = "google/gemini-2.5-pro",
+                prompt = "new turn",
+                history =
+                    listOf(
+                        ChatMessage(Role.SYSTEM, "Stable system prompt"),
+                        ChatMessage(Role.USER, "Stable user message"),
+                        ChatMessage(Role.ASSISTANT, "Stable assistant message"),
+                    ),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+        val requestBody = params.toString()
+        assertTrue(requestBody.contains("cache_control"), requestBody)
+        assertTrue(requestBody.contains("ephemeral"), requestBody)
+        assertFalse(params.promptCacheKey().isPresent)
+    }
+
+    @Test
     fun `mapToChatCompletionParams adds openrouter unified reasoning body`() {
         val params =
             OpenRouterRequestMapper.mapToChatCompletionParams(

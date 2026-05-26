@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference.telemetry
 
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
@@ -15,67 +16,73 @@ data class CostEstimate(
 class ProviderCostEstimator
     @Inject
     constructor(
-        private val catalog: ProviderPricingCatalog,
+        private val savedPricingEstimator: SavedApiModelPricingEstimator,
     ) {
         fun estimateAnthropic(
-            modelId: String,
             inputTokens: Int?,
             outputTokens: Int?,
             reasoningTokens: Int?,
             cacheCreationInputTokens: Int?,
-        ): CostEstimate {
-            val cost =
-                catalog.estimateAnthropicCostUsd(
-                    modelId = modelId,
-                    inputTokens = inputTokens,
-                    outputTokens = outputTokens,
-                    reasoningTokens = reasoningTokens,
-                    cacheCreationInputTokens = cacheCreationInputTokens,
-                )
-            return if (cost == null) {
-                CostEstimate(
-                    costUsd = null,
-                    costStatus = TelemetryCostStatus.UNAVAILABLE,
-                    costSource = TelemetryCostSource.NOT_AVAILABLE,
-                )
-            } else {
-                CostEstimate(
-                    costUsd = cost,
-                    costStatus = TelemetryCostStatus.ESTIMATED,
-                    costSource = TelemetryCostSource.LOCAL_PRICING_TABLE,
-                )
-            }
-        }
+            savedPricing: ApiModelSavedPricing? = null,
+        ): CostEstimate =
+            estimateFromSaved(
+                savedPricing = savedPricing,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                reasoningTokens = reasoningTokens,
+                cacheReadInputTokens = null,
+                cacheCreationInputTokens = cacheCreationInputTokens,
+            )
 
         fun estimateOpenAiCompatible(
-            providerKey: TelemetryProviderKey,
-            modelId: String,
             inputTokens: Int?,
             outputTokens: Int?,
             reasoningTokens: Int?,
             cacheReadInputTokens: Int?,
+            savedPricing: ApiModelSavedPricing? = null,
+        ): CostEstimate =
+            estimateFromSaved(
+                savedPricing = savedPricing,
+                inputTokens = inputTokens,
+                outputTokens = outputTokens,
+                reasoningTokens = reasoningTokens,
+                cacheReadInputTokens = cacheReadInputTokens,
+                cacheCreationInputTokens = null,
+            )
+
+        private fun estimateFromSaved(
+            savedPricing: ApiModelSavedPricing?,
+            inputTokens: Int?,
+            outputTokens: Int?,
+            reasoningTokens: Int?,
+            cacheReadInputTokens: Int?,
+            cacheCreationInputTokens: Int?,
         ): CostEstimate {
+            val pricing = savedPricing?.takeIf { it.hasPromptAndCompletionRates() } ?: return unavailable()
             val cost =
-                catalog.estimateOpenAiCompatibleCostUsd(
-                    providerKey = providerKey,
-                    modelId = modelId,
+                savedPricingEstimator.estimateCostUsd(
+                    pricing = pricing,
                     inputTokens = inputTokens,
                     outputTokens = outputTokens,
                     reasoningTokens = reasoningTokens,
                     cacheReadInputTokens = cacheReadInputTokens,
+                    cacheCreationInputTokens = cacheCreationInputTokens,
                 )
             return if (cost == null) {
-                CostEstimate(
-                    costUsd = null,
-                    costStatus = TelemetryCostStatus.UNAVAILABLE,
-                    costSource = TelemetryCostSource.NOT_AVAILABLE,
-                )
+                unavailable()
             } else {
                 CostEstimate(
                     costUsd = cost,
                     costStatus = TelemetryCostStatus.ESTIMATED,
-                    costSource = TelemetryCostSource.LOCAL_PRICING_TABLE,
+                    costSource = TelemetryCostSource.SAVED_MODEL_PRICING,
                 )
             }
         }
+
+        private fun unavailable(): CostEstimate =
+            CostEstimate(
+                costUsd = null,
+                costStatus = TelemetryCostStatus.UNAVAILABLE,
+                costSource = TelemetryCostSource.NOT_AVAILABLE,
+            )
     }

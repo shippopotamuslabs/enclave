@@ -23,6 +23,7 @@ import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
 
+@Suppress("TooManyFunctions")
 object OpenRouterRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
 
@@ -50,11 +51,25 @@ object OpenRouterRequestMapper {
         val messages = mutableListOf<ChatCompletionMessageParam>()
         val systemMessages = mutableListOf<String>()
 
+        val stableTailIndex =
+            history
+                .filterNot(::isSyntheticAssistantError)
+                .filter { it.role != Role.SYSTEM }
+                .indexOfLast { it.role == Role.USER }
+                .takeIf { it >= 0 }
+        val useCacheControl = OpenRouterPromptCacheSupport.supportsExplicitCacheControl(optModelId ?: modelId)
+        var nonSystemIndex = 0
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
             if (msg.role == Role.SYSTEM) {
                 systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
             } else {
-                messages.add(toContent(msg))
+                messages.add(
+                    toContent(
+                        message = msg,
+                        useCacheControl = useCacheControl && nonSystemIndex == stableTailIndex,
+                    ),
+                )
+                nonSystemIndex += 1
             }
         }
 
@@ -68,12 +83,7 @@ object OpenRouterRequestMapper {
         if (finalSystemPrompt != null) {
             messages.add(
                 0,
-                ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam
-                        .builder()
-                        .content(finalSystemPrompt)
-                        .build(),
-                ),
+                buildChatSystemMessage(finalSystemPrompt, useCacheControl = useCacheControl),
             )
         }
 
@@ -121,6 +131,10 @@ object OpenRouterRequestMapper {
         val messages = mutableListOf<ResponseInputItem>()
         val systemMessages = mutableListOf<String>()
 
+        val useCacheControl = OpenRouterPromptCacheSupport.supportsExplicitCacheControl(modelId)
+        val stableMessages = history.filterNot(::isSyntheticAssistantError).filter { it.role != Role.SYSTEM }
+        val stableTailIndex = OpenRouterPromptCacheSupport.stableHistoryTailIndex(stableMessages.size)
+        var nonSystemIndex = 0
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
             if (msg.role == Role.SYSTEM) {
                 systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
@@ -136,13 +150,14 @@ object OpenRouterRequestMapper {
                 }
             messages.add(
                 ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message
-                        .builder()
-                        .role(role)
-                        .addInputTextContent(sanitizedContent)
-                        .build(),
+                    buildResponseMessage(
+                        role = role,
+                        content = sanitizedContent,
+                        useCacheControl = useCacheControl && nonSystemIndex == stableTailIndex,
+                    ),
                 ),
             )
+            nonSystemIndex += 1
         }
 
         messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
@@ -151,7 +166,22 @@ object OpenRouterRequestMapper {
         systemMessages
             .joinToString(separator = "\n\n")
             .takeIf { it.isNotBlank() }
-            ?.let { builder.instructions(it) }
+            ?.let { instructions ->
+                if (useCacheControl) {
+                    builder.putAdditionalBodyProperty(
+                        "instructions",
+                        JsonValue.from(
+                            mapOf(
+                                "type" to "text",
+                                "text" to instructions,
+                                "cache_control" to mapOf("type" to "ephemeral"),
+                            ),
+                        ),
+                    )
+                } else {
+                    builder.instructions(instructions)
+                }
+            }
 
         options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
@@ -241,14 +271,17 @@ object OpenRouterRequestMapper {
         )
     }
 
-    private fun toContent(message: ChatMessage): ChatCompletionMessageParam =
+    private fun toContent(
+        message: ChatMessage,
+        useCacheControl: Boolean = false,
+    ): ChatCompletionMessageParam =
         when (message.role) {
             Role.USER ->
                 ChatCompletionMessageParam.ofUser(
-                    ChatCompletionUserMessageParam
-                        .builder()
-                        .content(ImagePayloads.stripBase64DataUris(message.content))
-                        .build(),
+                    buildChatUserMessage(
+                        content = ImagePayloads.stripBase64DataUris(message.content),
+                        useCacheControl = useCacheControl,
+                    ),
                 )
             Role.ASSISTANT ->
                 ChatCompletionMessageParam.ofAssistant(
@@ -258,13 +291,59 @@ object OpenRouterRequestMapper {
                         .build(),
                 )
             Role.SYSTEM ->
-                ChatCompletionMessageParam.ofSystem(
-                    ChatCompletionSystemMessageParam
-                        .builder()
-                        .content(ImagePayloads.stripBase64DataUris(message.content))
-                        .build(),
+                buildChatSystemMessage(
+                    content = ImagePayloads.stripBase64DataUris(message.content),
+                    useCacheControl = useCacheControl,
                 )
         }
+
+    private fun buildChatSystemMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionMessageParam =
+        ChatCompletionMessageParam.ofSystem(
+            if (useCacheControl) {
+                ChatCompletionSystemMessageParam
+                    .builder()
+                    .contentOfArrayOfContentParts(listOf(OpenRouterPromptCacheSupport.cachedSystemTextPart(content)))
+                    .build()
+            } else {
+                ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(content)
+                    .build()
+            },
+        )
+
+    private fun buildChatUserMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionUserMessageParam =
+        if (useCacheControl) {
+            ChatCompletionUserMessageParam
+                .builder()
+                .contentOfArrayOfContentParts(listOf(OpenRouterPromptCacheSupport.cachedUserTextPart(content)))
+                .build()
+        } else {
+            ChatCompletionUserMessageParam
+                .builder()
+                .content(content)
+                .build()
+        }
+
+    private fun buildResponseMessage(
+        role: ResponseInputItem.Message.Role,
+        content: String,
+        useCacheControl: Boolean,
+    ): ResponseInputItem.Message {
+        val builder = ResponseInputItem.Message.builder().role(role)
+        if (useCacheControl) {
+            builder.addContent(OpenRouterPromptCacheSupport.cachedResponseText(content))
+        } else {
+            builder.addInputTextContent(content)
+        }
+        return builder.build()
+    }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)

@@ -59,31 +59,15 @@ fun ChatRoute(
 
     val exportSheet = uiState.artifactExportSheet
 
-    if (uiState.responseStatsSheet.isVisible) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        NeoModalBottomSheet(
-            onDismissRequest = viewModel::dismissResponseStatsSheet,
-            sheetState = sheetState,
-        ) {
-            ResponseStatsBottomSheet(
-                state = uiState.responseStatsSheet,
-                onDismiss = viewModel::dismissResponseStatsSheet,
-            )
-        }
-    }
+    ResponseStatsBottomSheet(
+        state = uiState.responseStatsSheet,
+        onDismiss = viewModel::dismissResponseStatsSheet,
+    )
 
-    if (uiState.chatStatsSheet.isVisible) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        NeoModalBottomSheet(
-            onDismissRequest = viewModel::dismissChatStatsSheet,
-            sheetState = sheetState,
-        ) {
-            ChatStatsBottomSheet(
-                state = uiState.chatStatsSheet,
-                onDismiss = viewModel::dismissChatStatsSheet,
-            )
-        }
-    }
+    ChatStatsBottomSheet(
+        state = uiState.chatStatsSheet,
+        onDismiss = viewModel::dismissChatStatsSheet,
+    )
 
     if (exportSheet is ArtifactExportSheetState.Visible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
@@ -13,6 +14,40 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class XaiRequestMapperTest {
+    @Test
+    fun `mapToChatCompletionParams sets grok conversation header from chat id`() {
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals(listOf("chat-123"), params._headers().values("x-grok-conv-id"))
+    }
+
+    @Test
+    fun `mapToResponseParams sets prompt cache key from chat id`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals("chat-123", params.promptCacheKey().orElse(null))
+    }
+
     @Test
     fun `mapToResponseParams omits max output tokens for xai multi agent model`() {
         val params =

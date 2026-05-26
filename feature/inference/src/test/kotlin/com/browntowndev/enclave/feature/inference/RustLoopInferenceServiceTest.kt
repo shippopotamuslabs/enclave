@@ -697,6 +697,33 @@ class RustLoopInferenceServiceTest {
         }
 
     @Test
+    fun completeModelTurn_forwardsMonotonicTelemetrySequenceIndex() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("tool loop").toList()
+
+            assertEquals(listOf(0, 1), inner.telemetrySequenceIndices)
+        }
+
+    @Test
     fun `FB-K-007 RustLoop supports multiple complete model callbacks`() =
         runTest {
             val inner =
@@ -852,6 +879,7 @@ class RustLoopInferenceServiceTest {
         var lastContextSidecars: String? = null
         var lastAvailableTools: List<ToolDefinition> = emptyList()
         var completeSingleTurnCallCount = 0
+        val telemetrySequenceIndices = mutableListOf<Int>()
 
         override fun sendPrompt(
             prompt: String,
@@ -882,6 +910,7 @@ class RustLoopInferenceServiceTest {
             lastSystemPrompt = systemPrompt
             lastContextSidecars = contextSidecars
             lastAvailableTools = availableTools
+            telemetrySequenceIndices.add(options.telemetrySequenceIndex)
             responses.getOrNull(completeSingleTurnCallCount - 1)?.let { return it }
             return AgentModelTurnResult(
                 assistantText = "done",

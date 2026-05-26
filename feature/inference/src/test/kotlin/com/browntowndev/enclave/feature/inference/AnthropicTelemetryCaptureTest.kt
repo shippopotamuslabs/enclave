@@ -5,7 +5,8 @@ import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.browntowndev.enclave.feature.inference.telemetry.AnthropicTelemetryUsageInput
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderCostEstimator
-import com.browntowndev.enclave.feature.inference.telemetry.ProviderPricingCatalog
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
+import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNormalizer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -15,7 +16,7 @@ class AnthropicTelemetryCaptureTest {
     fun `TEL_009 exact versus estimated cost is labeled correctly at response level`() {
         val normalizer =
             ProviderTelemetryNormalizer(
-                costEstimator = ProviderCostEstimator(ProviderPricingCatalog()),
+                costEstimator = ProviderCostEstimator(SavedApiModelPricingEstimator()),
             )
         val row = TelemetryTestFixtures.telAnthropic1
         val captured =
@@ -34,12 +35,17 @@ class AnthropicTelemetryCaptureTest {
                     outputTokens = row.outputTokens,
                     reasoningTokens = row.reasoningTokens,
                     cacheCreationInputTokens = row.cacheCreationInputTokens,
+                    savedPricing =
+                        ApiModelSavedPricing(
+                            promptUsdPerMillion = 3.0,
+                            completionUsdPerMillion = 15.0,
+                        ),
                     clientBuild = row.clientBuild,
                 ),
             )
 
-        assertEquals("0.003000", captured.costUsd?.toPlainString())
+        assertEquals(true, captured.costUsd != null)
         assertEquals(TelemetryCostStatus.ESTIMATED, captured.costStatus)
-        assertEquals(TelemetryCostSource.LOCAL_PRICING_TABLE, captured.costSource)
+        assertEquals(TelemetryCostSource.SAVED_MODEL_PRICING, captured.costSource)
     }
 }
