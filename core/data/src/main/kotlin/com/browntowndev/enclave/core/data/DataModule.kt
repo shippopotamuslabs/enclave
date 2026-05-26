@@ -22,6 +22,7 @@ import com.browntowndev.enclave.core.data.download.UtilityModelFileResolver
 import com.browntowndev.enclave.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.enclave.core.data.download.remote.HttpFileDownloader
 import com.browntowndev.enclave.core.data.inference.MiniLMEmbeddingEngine
+import com.browntowndev.enclave.core.data.inference.RoomCommittedInferencePromptStore
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.ChatDao
@@ -38,6 +39,7 @@ import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
+import com.browntowndev.enclave.core.data.local.MessageCommittedInferencePromptDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.SQLiteVecInstaller
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
@@ -88,6 +90,7 @@ import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPo
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -254,6 +257,10 @@ object DataModule {
 
     @Provides
     fun provideCleanupDao(database: EnclaveDatabase): CleanupDao = database.cleanupDao()
+
+    @Provides
+    fun provideMessageCommittedInferencePromptDao(database: EnclaveDatabase): MessageCommittedInferencePromptDao =
+        database.messageCommittedInferencePromptDao()
 
     @Provides
     @Singleton
@@ -555,4 +562,10 @@ abstract class DataRepositoryModule {
     abstract fun bindEmbeddingProgressPort(
         impl: com.browntowndev.enclave.core.data.sync.EmbeddingProgressManager,
     ): com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCommittedInferencePromptPort(
+        impl: RoomCommittedInferencePromptStore,
+    ): CommittedInferencePromptPort
 }
