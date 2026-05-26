@@ -57,8 +57,9 @@ class XUserTimelineFetcher
             paginationToken: String?,
             mapPost: XTweetPostMapper,
         ): XSearchPaginatedResult {
-            val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
-                ?: throw IllegalStateException("X API key is required when X search is enabled")
+            val apiKey =
+                apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
+                    ?: throw IllegalStateException("X API key is required when X search is enabled")
 
             val cleanUsername = username.lowercase()
             val userId = resolveUserId(cleanUsername, apiKey)
@@ -79,7 +80,8 @@ class XUserTimelineFetcher
             }
 
             val request =
-                Request.Builder()
+                Request
+                    .Builder()
                     .url(urlBuilder.build())
                     .header("Authorization", "Bearer $apiKey")
                     .get()
@@ -114,7 +116,10 @@ class XUserTimelineFetcher
             }
         }
 
-        private fun resolveUserId(username: String, apiKey: String): String {
+        private fun resolveUserId(
+            username: String,
+            apiKey: String,
+        ): String {
             userIdCache[username]?.let { return it }
 
             val url =
@@ -125,7 +130,8 @@ class XUserTimelineFetcher
                     .build()
 
             val request =
-                Request.Builder()
+                Request
+                    .Builder()
                     .url(url)
                     .header("Authorization", "Bearer $apiKey")
                     .get()

@@ -345,8 +345,18 @@ class XSearchRepositoryTest {
         val posts = json.parseToJsonElement(mappedJson).jsonArray
 
         assertEquals(2, posts.size)
-        val post1Score = posts[0].jsonObject["impact_score"]?.jsonPrimitive?.content?.toDouble() ?: 0.0
-        val post2Score = posts[1].jsonObject["impact_score"]?.jsonPrimitive?.content?.toDouble() ?: 0.0
+        val post1Score =
+            posts[0]
+                .jsonObject["impact_score"]
+                ?.jsonPrimitive
+                ?.content
+                ?.toDouble() ?: 0.0
+        val post2Score =
+            posts[1]
+                .jsonObject["impact_score"]
+                ?.jsonPrimitive
+                ?.content
+                ?.toDouble() ?: 0.0
 
         // User Two is verified and has huge followers, should rank first with significantly higher score
         assertEquals("2", posts[0].jsonObject["id"]?.jsonPrimitive?.content)

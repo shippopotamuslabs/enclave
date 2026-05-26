@@ -12,36 +12,38 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XTrendingToolExecutor @Inject constructor(
-    private val loggingPort: LoggingPort,
-    private val settingsRepository: SettingsRepository,
-    private val xSearchRepository: XSearchRepository,
-) : ToolExecutorPort {
-    companion object {
-        private const val TAG = "XTrendingToolExecutor"
-    }
-
-    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
-        requireSupportedTool(request.toolName)
-        val settings = settingsRepository.settingsFlow.first()
-        if (!settings.xSearchEnabled) {
-            loggingPort.warning(TAG, "X Trending tool invoked but X search is disabled in settings")
-            throw IllegalStateException("X Search is disabled in settings")
+class XTrendingToolExecutor
+    @Inject
+    constructor(
+        private val loggingPort: LoggingPort,
+        private val settingsRepository: SettingsRepository,
+        private val xSearchRepository: XSearchRepository,
+    ) : ToolExecutorPort {
+        companion object {
+            private const val TAG = "XTrendingToolExecutor"
         }
 
-        val params = request.parameters as XTrendingParams
-        loggingPort.info(TAG, "Executing X trending tool location=${params.location}")
+        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            requireSupportedTool(request.toolName)
+            val settings = settingsRepository.settingsFlow.first()
+            if (!settings.xSearchEnabled) {
+                loggingPort.warning(TAG, "X Trending tool invoked but X search is disabled in settings")
+                throw IllegalStateException("X Search is disabled in settings")
+            }
 
-        val resultJson = xSearchRepository.getTrends(params.location)
-        return ToolExecutionResult(
-            toolName = request.toolName,
-            resultJson = resultJson
-        )
-    }
+            val params = request.parameters as XTrendingParams
+            loggingPort.info(TAG, "Executing X trending tool location=${params.location}")
 
-    private fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.X_TRENDING.name) {
-            "Unsupported tool: $toolName"
+            val resultJson = xSearchRepository.getTrends(params.location)
+            return ToolExecutionResult(
+                toolName = request.toolName,
+                resultJson = resultJson,
+            )
+        }
+
+        private fun requireSupportedTool(toolName: String) {
+            require(toolName == ToolDefinition.X_TRENDING.name) {
+                "Unsupported tool: $toolName"
+            }
         }
     }
-}
