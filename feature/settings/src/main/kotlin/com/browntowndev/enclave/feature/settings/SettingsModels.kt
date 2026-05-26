@@ -396,6 +396,9 @@ data class ApiModelConfigUi(
     val thinkingEnabled: Boolean = false,
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null,
+    val promptPriceUsdPerMillion: String = "",
+    val completionPriceUsdPerMillion: String = "",
+    val cachedPromptPriceUsdPerMillion: String = "",
 )
 
 @Immutable
@@ -407,6 +410,7 @@ data class DiscoveredApiModelUi(
     val created: Long? = null,
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
+    val cachedPromptPrice: Double? = null,
     val providerName: String? = null,
     val isMultimodal: Boolean? = null,
     val isChatCapable: Boolean = true,

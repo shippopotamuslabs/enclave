@@ -20,4 +20,13 @@ enum class ApiProvider(
             XAI -> "https://api.x.ai/v1"
             else -> null
         }
+
+    /** Model list/detail APIs that include per-million token pricing for telemetry estimates. */
+    val exposesDiscoveryModelPricing: Boolean
+        get() =
+            when (this) {
+                OPENROUTER, XAI -> true
+                ANTHROPIC, OPENAI, GOOGLE -> false
+            }
 }
+

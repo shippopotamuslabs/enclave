@@ -70,6 +70,9 @@ internal class ApiModelConfigSyncHandler(
             "openrouter_require_parameters" to local.openRouterRequireParameters,
             "openrouter_data_collection" to local.openRouterDataCollectionPolicy,
             "openrouter_zdr" to local.openRouterZeroDataRetention,
+            "prompt_price_usd_per_million" to local.promptPriceUsdPerMillion,
+            "completion_price_usd_per_million" to local.completionPriceUsdPerMillion,
+            "cached_prompt_price_usd_per_million" to local.cachedPromptPriceUsdPerMillion,
             "updated_at" to local.updatedAt,
             "deleted" to local.deleted,
         )
@@ -104,6 +107,9 @@ internal class ApiModelConfigSyncHandler(
             openRouterRequireParameters = doc.getBoolean("openrouter_require_parameters"),
             openRouterDataCollectionPolicy = doc.getString("openrouter_data_collection"),
             openRouterZeroDataRetention = doc.getBoolean("openrouter_zdr"),
+            promptPriceUsdPerMillion = doc.getDouble("prompt_price_usd_per_million"),
+            completionPriceUsdPerMillion = doc.getDouble("completion_price_usd_per_million"),
+            cachedPromptPriceUsdPerMillion = doc.getDouble("cached_prompt_price_usd_per_million"),
             updatedAt = doc.getLong("updated_at") ?: 0L,
             deleted = doc.getBoolean("deleted") ?: false,
         )

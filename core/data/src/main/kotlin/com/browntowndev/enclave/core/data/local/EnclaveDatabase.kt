@@ -28,7 +28,7 @@ import androidx.room.TypeConverters
         UtilityModelEntity::class,
         MessageInferenceTelemetryEntity::class,
     ],
-    version = 2,
+    version = 3,
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class EnclaveDatabase : RoomDatabase() {

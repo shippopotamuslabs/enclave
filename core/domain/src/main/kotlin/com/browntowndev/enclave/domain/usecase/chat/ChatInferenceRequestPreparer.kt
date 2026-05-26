@@ -396,6 +396,7 @@ class ChatInferenceRequestPreparer(
                     modelType = modelType,
                     modelId = config?.modelId,
                     apiProvider = config?.apiProvider,
+                    apiModelPricing = config?.apiModelPricing,
                     systemPrompt = systemPrompt,
                     imageUris =
                         if (imageHandling == ChatImageHandling.DIRECT) {

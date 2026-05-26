@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.model.inference
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -18,6 +19,7 @@ data class GenerationOptions(
     val modelType: ModelType? = null, // The requesting role (FAST, THINKING, etc.)
     val modelId: String? = null,
     val apiProvider: ApiProvider? = null,
+    val apiModelPricing: ApiModelSavedPricing? = null,
     val systemPrompt: String? = null,
     val imageUris: List<String> = emptyList(),
     val reasoningEffort: ApiReasoningEffort? = null,
@@ -42,6 +44,8 @@ data class GenerationOptions(
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
     val assistantMessageId: MessageId? = null,
+    /** Monotonic index for each provider HTTP request within one assistant turn (tool loops). */
+    val telemetrySequenceIndex: Int = 0,
     val includedFiles: List<AgentIncludedFile> = emptyList(),
 )
 

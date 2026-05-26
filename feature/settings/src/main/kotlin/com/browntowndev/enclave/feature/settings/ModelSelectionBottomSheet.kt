@@ -39,9 +39,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
-import java.util.Locale
+import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -282,8 +280,8 @@ private fun modelSelectionSubtitle(model: DiscoveredApiModelUi): String? {
         parts += model.modelId
     }
     model.contextWindowTokens?.let { parts += "Ctx: ${it / 1000}k" }
-    model.promptPrice?.formatUsdPerMillion()?.let { parts += "In: $$it/1M" }
-    model.completionPrice?.formatUsdPerMillion()?.let { parts += "Out: $$it/1M" }
+    model.promptPrice?.let { parts += "In: ${ApiModelPricingFormat.displayUsdPerMillion(it)}" }
+    model.completionPrice?.let { parts += "Out: ${ApiModelPricingFormat.displayUsdPerMillion(it)}" }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
@@ -371,14 +369,4 @@ fun PreviewModelSelectionBottomSheetFiltered() {
             onDismissRequest = {},
         )
     }
-}
-
-internal fun Double.formatUsdPerMillion(): String? {
-    if (!isFinite() || this < 0) return null
-    val formatter =
-        DecimalFormat("#,##0.####", DecimalFormatSymbols.getInstance(Locale.US)).apply {
-            minimumFractionDigits = 0
-            maximumFractionDigits = 4
-        }
-    return formatter.format(this)
 }

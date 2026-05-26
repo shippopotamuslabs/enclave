@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
@@ -119,6 +120,7 @@ data class ApiPresetDraft(
     val reasoningEffort: ApiReasoningEffort? = null,
     val customHeaders: List<Pair<String, String>> = emptyList(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    val pricing: ApiModelSavedPricing = ApiModelSavedPricing(),
 )
 
 data class ApiModelDiscoveryScope(
