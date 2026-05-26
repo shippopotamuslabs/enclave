@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Coerces common model output mistakes (e.g. `"false"` strings for boolean fields)
@@ -19,7 +18,9 @@ internal object ToolArgumentsJsonNormalizer {
     ): String {
         val root =
             runCatching {
-                kotlinx.serialization.json.Json.parseToJsonElement(argumentsJson).jsonObject
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(argumentsJson)
+                    .jsonObject
             }.getOrElse {
                 return argumentsJson
             }
@@ -67,7 +68,8 @@ internal object ToolArgumentsJsonNormalizer {
         return when (typeElement) {
             is JsonPrimitive -> typeElement.content
             is JsonArray ->
-                typeElement.mapNotNull { (it as? JsonPrimitive)?.content }
+                typeElement
+                    .mapNotNull { (it as? JsonPrimitive)?.content }
                     .firstOrNull { it != "null" }
             else -> null
         }

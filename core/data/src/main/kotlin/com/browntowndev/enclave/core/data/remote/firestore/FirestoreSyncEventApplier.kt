@@ -184,9 +184,8 @@ internal interface FirestoreSyncLocalStore {
 }
 
 private object ThrowingFirestoreSyncSourceDocumentStore : FirestoreSyncSourceDocumentStore {
-    override suspend fun getDocument(path: String): Map<String, Any?>? {
+    override suspend fun getDocument(path: String): Map<String, Any?>? =
         throw IllegalStateException("FirestoreSyncSourceDocumentStore not wired in this context")
-    }
 }
 
 private object ThrowingFirestoreSyncLocalStore : FirestoreSyncLocalStore {
@@ -195,18 +194,13 @@ private object ThrowingFirestoreSyncLocalStore : FirestoreSyncLocalStore {
         entityId: String,
         data: Map<String, Any?>,
         eventDeviceId: String?,
-    ) {
-        throw IllegalStateException("FirestoreSyncLocalStore not wired in this context")
-    }
+    ): Unit = throw IllegalStateException("FirestoreSyncLocalStore not wired in this context")
 
     override suspend fun delete(
         collectionPath: String,
         entityId: String,
-    ) {
-        throw IllegalStateException("FirestoreSyncLocalStore not wired in this context")
-    }
+    ): Unit = throw IllegalStateException("FirestoreSyncLocalStore not wired in this context")
 
-    override suspend fun withTransaction(block: suspend () -> Unit) {
+    override suspend fun withTransaction(block: suspend () -> Unit): Unit =
         throw IllegalStateException("FirestoreSyncLocalStore not wired in this context")
-    }
 }

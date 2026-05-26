@@ -114,7 +114,9 @@ class OssLicensesBottomSheetTest {
                     mediaProviderAssetUiMapper = mockk(relaxed = true),
                     apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                     applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
-                    usageSpendUiMapper = com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper(),
+                    usageSpendUiMapper =
+                        com.browntowndev.enclave.feature.settings.usage
+                            .UsageSpendUiMapper(),
                 )
         }
 
@@ -474,10 +476,12 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                 mediaProviderAssetUiMapper,
                 ApiDiscoveryUiFilter(),
                 ApplyApiModelMetadataDefaultsUseCase(),
-                com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper(),
+                com.browntowndev.enclave.feature.settings.usage
+                    .UsageSpendUiMapper(),
             ),
         observeUsageSpendSummaryUseCase =
-            com.browntowndev.enclave.feature.settings.testUsageSpendSummaryUseCase(),
+            com.browntowndev.enclave.feature.settings
+                .testUsageSpendSummaryUseCase(),
         generalDelegate = generalDelegate,
         memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler),
         dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler),

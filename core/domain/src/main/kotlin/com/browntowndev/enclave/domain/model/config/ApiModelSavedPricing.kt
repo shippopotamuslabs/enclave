@@ -8,6 +8,5 @@ data class ApiModelSavedPricing(
     val completionUsdPerMillion: Double? = null,
     val cachedPromptUsdPerMillion: Double? = null,
 ) {
-    fun hasPromptAndCompletionRates(): Boolean =
-        promptUsdPerMillion != null && completionUsdPerMillion != null
+    fun hasPromptAndCompletionRates(): Boolean = promptUsdPerMillion != null && completionUsdPerMillion != null
 }

@@ -13,11 +13,13 @@ internal class FirestoreSyncDocumentCache(
     private val firestore: FirebaseFirestore,
     private val maxConcurrency: Int = 4,
 ) : FirestoreSyncSourceDocumentStore {
-
     private val cache = mutableMapOf<String, DocumentSnapshot>()
     private val semaphore = Semaphore(maxConcurrency)
 
-    suspend fun prefetch(userId: String, events: List<FirestoreSyncEvent>) {
+    suspend fun prefetch(
+        userId: String,
+        events: List<FirestoreSyncEvent>,
+    ) {
         val upsertEvents = events.filter { it.operation != "delete" }
         if (upsertEvents.isEmpty()) return
 
@@ -76,17 +78,20 @@ internal class FirestoreSyncDocumentCache(
         }
     }
 
-    private suspend fun fetchDocumentsParallel(paths: Set<String>): Map<String, DocumentSnapshot?> = coroutineScope {
-        paths.map { path ->
-            async {
-                path to fetchDocumentWithSemaphore(path)
-            }
-        }.awaitAll().toMap()
-    }
+    private suspend fun fetchDocumentsParallel(paths: Set<String>): Map<String, DocumentSnapshot?> =
+        coroutineScope {
+            paths
+                .map { path ->
+                    async {
+                        path to fetchDocumentWithSemaphore(path)
+                    }
+                }.awaitAll()
+                .toMap()
+        }
 
     @Suppress("SwallowedException")
-    private suspend fun fetchDocumentWithSemaphore(path: String): DocumentSnapshot? {
-        return semaphore.withPermit {
+    private suspend fun fetchDocumentWithSemaphore(path: String): DocumentSnapshot? =
+        semaphore.withPermit {
             try {
                 val snapshot = firestore.document(path).get().await()
                 if (snapshot.exists()) snapshot else null
@@ -94,13 +99,11 @@ internal class FirestoreSyncDocumentCache(
                 null
             }
         }
-    }
 
-    fun getCachedSnapshot(path: String): DocumentSnapshot? {
-        return synchronized(cache) {
+    fun getCachedSnapshot(path: String): DocumentSnapshot? =
+        synchronized(cache) {
             cache[path]
         }
-    }
 
     fun invalidate(path: String) {
         synchronized(cache) {

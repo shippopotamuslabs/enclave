@@ -288,15 +288,14 @@ class RustLoopVolatileTurnContextCommitTest {
     @Test
     fun CSPC_03b_x_rag_prefix_stored_in_rust_history_turn2_replays_identical_bytes() =
         runTest {
-            val capturing = CapturingRustCompatibleService()
-
+            val providerCapture = captureOpenAiParams()
             val xRagPrefix = "# RELEVANT X SEARCH RESULTS:\ntweet-data-xyz"
-            val expectedContent = "# RELEVANT X SEARCH RESULTS:\ntweet-data-xyz\n\nx query"
+            val barePrompt = "x query"
 
             val port1 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                     ),
                     systemPrompt = "",
                     toolsSchemaJson = "[]",
@@ -304,23 +303,17 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service1 = createService(agentLoopPort = port1, inner = capturing)
-
-            service1.sendPrompt(
-                prompt = "x query",
+            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
+                prompt = barePrompt,
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = xRagPrefix),
             ).toList()
 
-            assertEquals(
-                expectedContent,
-                port1.capturedInitialMessages.last().content,
-                "CSPC-03b turn 1: merged X search prefix + prompt",
-            )
+            assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
             val port2 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                         AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
                         AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
                     ),
@@ -330,18 +323,18 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service2 = createService(agentLoopPort = port2, inner = capturing)
-
-            service2.sendPrompt(
+            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
                 prompt = "follow up",
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
             ).toList()
 
-            val turn2Messages = capturing.capturedTurnArgs.last()
+            val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
-                expectedContent,
-                turn2Messages[0].content,
-                "CSPC-03b turn 2: sessionMessages[0].content must equal turn 1 merged content",
+                barePrompt,
+                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+            )
+            assertTrue(
+                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT X SEARCH RESULTS") },
             )
         }
 
@@ -352,16 +345,14 @@ class RustLoopVolatileTurnContextCommitTest {
     @Test
     fun CSPC_03c_combined_web_x_rag_prefix_stored_in_rust_history_turn2_replays_it() =
         runTest {
-            val capturing = CapturingRustCompatibleService()
-
+            val providerCapture = captureOpenAiParams()
             val combinedRag = "# RELEVANT WEB SEARCH RESULTS:\nweb-results\n\n# RELEVANT X SEARCH RESULTS:\nx-results"
-            val expectedContent =
-                "# RELEVANT WEB SEARCH RESULTS:\nweb-results\n\n# RELEVANT X SEARCH RESULTS:\nx-results\n\ncombo query"
+            val barePrompt = "combo query"
 
             val port1 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                     ),
                     systemPrompt = "",
                     toolsSchemaJson = "[]",
@@ -369,23 +360,17 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service1 = createService(agentLoopPort = port1, inner = capturing)
-
-            service1.sendPrompt(
-                prompt = "combo query",
+            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
+                prompt = barePrompt,
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = combinedRag),
             ).toList()
 
-            assertEquals(
-                expectedContent,
-                port1.capturedInitialMessages.last().content,
-                "CSPC-03c turn 1: initialMessages.last().content must contain combined RAG prefix + prompt",
-            )
+            assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
             val port2 = FakeAgentLoopPort { host ->
                 host.completeModelTurn(
                     sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
                         AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
                         AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
                     ),
@@ -395,18 +380,18 @@ class RustLoopVolatileTurnContextCommitTest {
                 )
                 send(AgentLoopEvent.Finished)
             }
-            val service2 = createService(agentLoopPort = port2, inner = capturing)
-
-            service2.sendPrompt(
+            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
                 prompt = "follow up",
                 options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
             ).toList()
 
-            val turn2Messages = capturing.capturedTurnArgs.last()
+            val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
-                expectedContent,
-                turn2Messages[0].content,
-                "CSPC-03c turn 2: sessionMessages[0].content must equal turn 1 combined merged content",
+                barePrompt,
+                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+            )
+            assertTrue(
+                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT WEB SEARCH RESULTS") },
             )
         }
 

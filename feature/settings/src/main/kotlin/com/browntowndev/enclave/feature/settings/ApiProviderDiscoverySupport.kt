@@ -72,8 +72,7 @@ internal fun List<DiscoveredApiModel>.mergeSelectedModel(preset: ApiModelConfigU
         else -> listOf(DiscoveredApiModel(id = preset.modelId)) + this
     }
 
-internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
-    filter { it.id.isGoogleTtsModelCandidate() }
+internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> = filter { it.id.isGoogleTtsModelCandidate() }
 
 internal fun List<DiscoveredApiModel>.filterChatModels(): List<DiscoveredApiModel> = filter { it.isChatCapable }
 
@@ -100,5 +99,4 @@ internal fun apiConnectionFingerprint(
     baseUrl: String?,
     apiKey: String,
     credentialAlias: String?,
-): String =
-    "${provider.name}|${baseUrl.normalizedDiscoveryBaseUrl()}|${apiKey.ifBlank { credentialAlias.orEmpty() }}"
+): String = "${provider.name}|${baseUrl.normalizedDiscoveryBaseUrl()}|${apiKey.ifBlank { credentialAlias.orEmpty() }}"

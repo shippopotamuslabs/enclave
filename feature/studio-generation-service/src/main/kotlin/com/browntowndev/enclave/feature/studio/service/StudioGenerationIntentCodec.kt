@@ -59,8 +59,8 @@ object StudioGenerationIntentCodec {
         }
     }
 
-    fun readSettings(intent: Intent): GenerationSettings? {
-        return when (intent.getStringExtra(EXTRA_SETTINGS_KIND)) {
+    fun readSettings(intent: Intent): GenerationSettings? =
+        when (intent.getStringExtra(EXTRA_SETTINGS_KIND)) {
             KIND_IMAGE ->
                 ImageGenerationSettings(
                     aspectRatio = intent.getStringExtra(EXTRA_ASPECT_RATIO)?.toAspectRatio() ?: AspectRatio.ONE_ONE,
@@ -86,10 +86,8 @@ object StudioGenerationIntentCodec {
                 )
             else -> null
         }
-    }
 
-    private fun String.toAspectRatio(): AspectRatio =
-        runCatching { AspectRatio.valueOf(this) }.getOrDefault(AspectRatio.ONE_ONE)
+    private fun String.toAspectRatio(): AspectRatio = runCatching { AspectRatio.valueOf(this) }.getOrDefault(AspectRatio.ONE_ONE)
 
     private fun String.toGenerationQuality(): GenerationQuality =
         runCatching { GenerationQuality.valueOf(this) }.getOrDefault(GenerationQuality.SPEED)

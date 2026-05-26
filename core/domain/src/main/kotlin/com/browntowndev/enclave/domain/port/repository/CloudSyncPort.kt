@@ -125,4 +125,3 @@ interface CloudSyncPort {
      */
     suspend fun getRemainingEventsCount(): Result<Long> = Result.success(0L)
 }
-

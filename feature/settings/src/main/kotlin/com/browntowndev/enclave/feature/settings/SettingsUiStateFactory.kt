@@ -12,10 +12,10 @@ import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
@@ -601,11 +601,11 @@ class SettingsUiStateFactory
             with(sources) {
                 combine(
                     combine(persistedSettings, localAssets, apiAssets, ttsAssets, mediaAssets) {
-                            persistedSettings,
-                            localAssets,
-                            apiAssets,
-                            ttsAssets,
-                            mediaAssets,
+                        persistedSettings,
+                        localAssets,
+                        apiAssets,
+                        ttsAssets,
+                        mediaAssets,
                         ->
                         SettingsRepositoryAssetsSlice(
                             persistedSettings = persistedSettings,
@@ -638,11 +638,11 @@ class SettingsUiStateFactory
             with(sources) {
                 combine(
                     combine(sheetVisibility, memories, feedbackText, localModelsState, apiState) {
-                            sheetVisibility,
-                            memories,
-                            feedbackText,
-                            localModelsState,
-                            apiState,
+                        sheetVisibility,
+                        memories,
+                        feedbackText,
+                        localModelsState,
+                        apiState,
                         ->
                         SettingsEditorPrimarySlice(
                             sheetVisibility = sheetVisibility,
@@ -653,11 +653,11 @@ class SettingsUiStateFactory
                         )
                     },
                     combine(ttsState, mediaState, searchSkillState, assignmentsState, deletionState) {
-                            ttsState,
-                            mediaState,
-                            searchSkillState,
-                            assignmentsState,
-                            deletionState,
+                        ttsState,
+                        mediaState,
+                        searchSkillState,
+                        assignmentsState,
+                        deletionState,
                         ->
                         SettingsEditorSecondarySlice(
                             ttsState = ttsState,
@@ -695,10 +695,10 @@ class SettingsUiStateFactory
             with(sources) {
                 combine(
                     combine(currentTavilyApiKey, currentExaApiKey, currentXApiKey, xSearchState) {
-                            currentTavilyApiKey,
-                            currentExaApiKey,
-                            currentXApiKey,
-                            xSearchState,
+                        currentTavilyApiKey,
+                        currentExaApiKey,
+                        currentXApiKey,
+                        xSearchState,
                         ->
                         SettingsSearchKeysSlice(
                             currentTavilyApiKey = currentTavilyApiKey,

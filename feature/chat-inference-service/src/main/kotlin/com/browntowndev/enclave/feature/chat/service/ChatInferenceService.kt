@@ -21,11 +21,13 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -117,6 +119,12 @@ class ChatInferenceService : Service() {
     @Inject
     lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
 
+    @Inject
+    lateinit var monotonicToolActivation: MonotonicToolActivationPort
+
+    @Inject
+    lateinit var committedInferencePrompts: CommittedInferencePromptPort
+
     private lateinit var historyRehydrator: ChatHistoryRehydrator
     private lateinit var inferenceRequestPreparer: ChatInferenceRequestPreparer
 
@@ -133,7 +141,12 @@ class ChatInferenceService : Service() {
         super.onCreate()
         loggingPort.info(TAG, "onCreate")
         createNotificationChannels()
-        historyRehydrator = ChatHistoryRehydrator(messageRepository, loggingPort)
+        historyRehydrator =
+            ChatHistoryRehydrator(
+                messageRepository = messageRepository,
+                loggingPort = loggingPort,
+                committedInferencePrompts = committedInferencePrompts,
+            )
         inferenceRequestPreparer =
             ChatInferenceRequestPreparer(
                 activeModelProvider,
@@ -149,6 +162,7 @@ class ChatInferenceService : Service() {
                 loggingPort,
                 searchIntentClassifier = searchIntentClassifier,
                 toolExecutor = toolExecutor,
+                monotonicToolActivation = monotonicToolActivation,
             )
     }
 
@@ -328,10 +342,11 @@ class ChatInferenceService : Service() {
             publishState(
                 chatId = chatId,
                 assistantMessageId = assistantMessageId,
-                state = MessageGenerationState.WebSearchSourcesAttached(
-                    preparedRequest.preRetrievalSources,
-                    modelType
-                ),
+                state =
+                    MessageGenerationState.WebSearchSourcesAttached(
+                        preparedRequest.preRetrievalSources,
+                        modelType,
+                    ),
                 persistenceSession = persistenceSession,
             )
         }

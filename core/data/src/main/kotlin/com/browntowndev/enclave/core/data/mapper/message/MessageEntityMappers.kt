@@ -5,10 +5,8 @@ import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageFileEntity
 import com.browntowndev.enclave.core.data.local.WebSearchSourceEntity
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
-import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

@@ -88,7 +88,7 @@ internal class FirestoreListenerCoordinator(
     ) {
         eventApplyMutex.withLock {
             bufferFutureEvents(userId, events)
-            
+
             val lastApplied = syncStateStore.lastAppliedSequence(userId)
             val contiguousEvents = mutableListOf<FirestoreSyncEvent>()
             var seq = lastApplied + 1
@@ -100,7 +100,7 @@ internal class FirestoreListenerCoordinator(
             if (contiguousEvents.isNotEmpty()) {
                 cache?.prefetch(userId, contiguousEvents)
             }
-            
+
             try {
                 drainContiguousEvents(userId)
             } finally {

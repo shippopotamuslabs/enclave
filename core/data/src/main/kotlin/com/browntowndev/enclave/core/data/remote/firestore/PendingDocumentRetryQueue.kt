@@ -88,7 +88,9 @@ internal class PendingDocumentRetryQueue(
             EntryOutcome.SUCCESS
         } catch (cancel: CancellationException) {
             throw cancel
-        } catch (@Suppress("SwallowedException") fk: SQLiteConstraintException) {
+        } catch (
+            @Suppress("SwallowedException") fk: SQLiteConstraintException,
+        ) {
             EntryOutcome.FK_RETRY
         } catch (other: Exception) {
             onDrop(entry.key, other)

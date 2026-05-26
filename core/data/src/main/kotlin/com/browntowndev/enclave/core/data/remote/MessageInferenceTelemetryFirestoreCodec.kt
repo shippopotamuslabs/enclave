@@ -3,9 +3,7 @@ package com.browntowndev.enclave.core.data.remote
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryEntity
 import com.google.firebase.firestore.DocumentSnapshot
 
-internal fun messageInferenceTelemetryToFirestoreMap(
-    local: MessageInferenceTelemetryEntity,
-): Map<String, Any?> =
+internal fun messageInferenceTelemetryToFirestoreMap(local: MessageInferenceTelemetryEntity): Map<String, Any?> =
     mapOf(
         "id" to local.id,
         "messageId" to local.messageId,

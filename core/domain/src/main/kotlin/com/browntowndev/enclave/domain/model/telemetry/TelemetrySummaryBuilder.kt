@@ -13,6 +13,7 @@ object TelemetrySummaryBuilder {
     private const val MONTH_END_MINUTE = 59
     private const val MONTH_END_SECOND = 59
     private const val MONTH_END_NANOS = 999_000_000
+
     fun buildMessageSummary(
         messageId: MessageId,
         rows: List<TurnTelemetry>,
@@ -151,7 +152,12 @@ object TelemetrySummaryBuilder {
         when (period) {
             UsagePeriod.LIFETIME -> null
             UsagePeriod.CURRENT_MONTH ->
-                YearMonth.from(now.atZone(zoneId)).atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+                YearMonth
+                    .from(now.atZone(zoneId))
+                    .atDay(1)
+                    .atStartOfDay(zoneId)
+                    .toInstant()
+                    .toEpochMilli()
         }
 
     private fun periodEndMs(

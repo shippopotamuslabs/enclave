@@ -22,6 +22,5 @@ object ApiModelPricingFormat {
         return normalized.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
     }
 
-    fun displayUsdPerMillion(value: Double?): String =
-        value?.let(::formatUsdPerMillion)?.let { "$$it / 1M tokens" } ?: "—"
+    fun displayUsdPerMillion(value: Double?): String = value?.let(::formatUsdPerMillion)?.let { "$$it / 1M tokens" } ?: "—"
 }

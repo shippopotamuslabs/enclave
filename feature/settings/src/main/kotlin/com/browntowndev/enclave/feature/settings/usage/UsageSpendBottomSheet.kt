@@ -1,13 +1,11 @@
 package com.browntowndev.enclave.feature.settings.usage
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
 import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
 import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryBreakdownRow

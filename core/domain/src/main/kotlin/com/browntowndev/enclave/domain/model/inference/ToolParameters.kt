@@ -29,9 +29,7 @@ interface ToolParameters {
          * `oneOf`, `anyOf`, and `definitions` are intentionally excluded — the catalog
          * stays compact while full schemas live behind the disclosure tool.
          */
-        fun extractArgumentHints(
-            schema: ToolSchema,
-        ): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
+        fun extractArgumentHints(schema: ToolSchema): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
             val required = mutableListOf<ToolArgumentHint>()
             val optional = mutableListOf<ToolArgumentHint>()
             schema.properties.forEach { (name, element) ->
@@ -112,7 +110,10 @@ object ToolSchemaGenerator {
     fun <T : ToolParameters> generateSchema(klass: KClass<T>): ToolSchema =
         ToolSchema(JsonObject(generateProperties(klass)), getRequired(klass))
 
-    internal fun toolParamFor(klass: KClass<*>, prop: KProperty<*>): ToolParam? =
+    internal fun toolParamFor(
+        klass: KClass<*>,
+        prop: KProperty<*>,
+    ): ToolParam? =
         prop.findAnnotation<ToolParam>()
             ?: prop.javaField?.getAnnotation(ToolParam::class.java)
             ?: klass.primaryConstructor

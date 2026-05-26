@@ -77,11 +77,9 @@ internal open class FirestoreSyncStateStore(
 
     open fun currentTimeMillis(): Long = System.currentTimeMillis()
 
-    private fun lastAppliedSequenceKey(userId: String) =
-        longPreferencesKey("cloud_sync_last_applied_sequence_$userId")
+    private fun lastAppliedSequenceKey(userId: String) = longPreferencesKey("cloud_sync_last_applied_sequence_$userId")
 
-    private fun feedSchemaVersionKey(userId: String) =
-        longPreferencesKey("cloud_sync_feed_schema_version_$userId")
+    private fun feedSchemaVersionKey(userId: String) = longPreferencesKey("cloud_sync_feed_schema_version_$userId")
 
     private companion object {
         private val DEVICE_ID_KEY = stringPreferencesKey("cloud_sync_device_id")
