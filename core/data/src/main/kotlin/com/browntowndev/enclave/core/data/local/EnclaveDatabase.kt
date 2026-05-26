@@ -27,8 +27,9 @@ import androidx.room.TypeConverters
         DocumentEntity::class,
         UtilityModelEntity::class,
         MessageInferenceTelemetryEntity::class,
+        MessageCommittedInferencePromptEntity::class,
     ],
-    version = 3,
+    version = 4,
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class EnclaveDatabase : RoomDatabase() {
@@ -81,4 +82,6 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun messageInferenceTelemetryDao(): MessageInferenceTelemetryDao
 
     abstract fun firestoreSyncPlaceholderDao(): FirestoreSyncPlaceholderDao
+
+    abstract fun messageCommittedInferencePromptDao(): MessageCommittedInferencePromptDao
 }
