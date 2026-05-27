@@ -53,12 +53,11 @@ class RustToolEnvelopeParser
                         batch.failures.forEach { failure ->
                             loggingPort.warning(
                                 "RustToolEnvelopeParser",
-                                "Tool call envelope parsing failure: reason=${failure.reason} original=${failure.original}"
+                                "Tool call envelope parsing failure: reason=${failure.reason} original=${failure.original}",
                             )
                         }
                     }
-                }
-                .getOrElse { error ->
+                }.getOrElse { error ->
                     loggingPort.error("RustToolEnvelopeParser", "Failed to parse tool calls. raw=$raw", error)
                     throw IllegalStateException("Rust tool parser unavailable", error)
                 }
@@ -75,7 +74,7 @@ class RustToolEnvelopeParser
                 loggingPort.error(
                     "RustToolEnvelopeParser",
                     "Failed to coerce provider arguments toolName=$toolName argsJson=$argsJson",
-                    error
+                    error,
                 )
                 throw IllegalStateException("Rust tool parser unavailable", error)
             }

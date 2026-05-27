@@ -15,72 +15,76 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RoomCommittedInferencePromptStore @Inject constructor(
-    private val dao: MessageCommittedInferencePromptDao,
-    @param:ApplicationScope private val scope: CoroutineScope,
-    private val logger: LoggingPort,
-) : CommittedInferencePromptPort {
+class RoomCommittedInferencePromptStore
+    @Inject
+    constructor(
+        private val dao: MessageCommittedInferencePromptDao,
+        @param:ApplicationScope private val scope: CoroutineScope,
+        private val logger: LoggingPort,
+    ) : CommittedInferencePromptPort {
+        private val cache = ConcurrentHashMap<MessageId, String>()
 
-    private val cache = ConcurrentHashMap<MessageId, String>()
-
-    override fun commit(userMessageId: MessageId, content: String): Unit {
-        cache[userMessageId] = content
-        scope.launch(Dispatchers.IO) {
-            try {
-                dao.insertOrUpdate(
-                    MessageCommittedInferencePromptEntity(
-                        messageId = userMessageId,
-                        inferenceContent = content,
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                logger.error(
-                    "RoomCommittedInferencePromptStore",
-                    "Failed to commit prompt for message: $userMessageId",
-                    e,
-                )
-            }
-        }
-    }
-
-    override fun get(userMessageId: MessageId): String? {
-        val cached = cache[userMessageId]
-        if (cached != null) {
-            return cached
-        }
-        return try {
-            runBlocking(Dispatchers.IO) {
-                val entity = dao.getByMessageId(userMessageId)
-                if (entity != null) {
-                    cache[userMessageId] = entity.inferenceContent
-                    entity.inferenceContent
-                } else {
-                    null
+        override fun commit(
+            userMessageId: MessageId,
+            content: String,
+        ) {
+            cache[userMessageId] = content
+            scope.launch(Dispatchers.IO) {
+                try {
+                    dao.insertOrUpdate(
+                        MessageCommittedInferencePromptEntity(
+                            messageId = userMessageId,
+                            inferenceContent = content,
+                            updatedAt = System.currentTimeMillis(),
+                        ),
+                    )
+                } catch (e: Exception) {
+                    logger.error(
+                        "RoomCommittedInferencePromptStore",
+                        "Failed to commit prompt for message: $userMessageId",
+                        e,
+                    )
                 }
             }
-        } catch (e: Exception) {
-            logger.error(
-                "RoomCommittedInferencePromptStore",
-                "Failed to get prompt for message: $userMessageId",
-                e,
-            )
-            null
         }
-    }
 
-    override fun clear(userMessageId: MessageId): Unit {
-        cache.remove(userMessageId)
-        scope.launch(Dispatchers.IO) {
-            try {
-                dao.deleteByMessageId(userMessageId)
+        override fun get(userMessageId: MessageId): String? {
+            val cached = cache[userMessageId]
+            if (cached != null) {
+                return cached
+            }
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    val entity = dao.getByMessageId(userMessageId)
+                    if (entity != null) {
+                        cache[userMessageId] = entity.inferenceContent
+                        entity.inferenceContent
+                    } else {
+                        null
+                    }
+                }
             } catch (e: Exception) {
                 logger.error(
                     "RoomCommittedInferencePromptStore",
-                    "Failed to clear prompt for message: $userMessageId",
+                    "Failed to get prompt for message: $userMessageId",
                     e,
                 )
+                null
+            }
+        }
+
+        override fun clear(userMessageId: MessageId) {
+            cache.remove(userMessageId)
+            scope.launch(Dispatchers.IO) {
+                try {
+                    dao.deleteByMessageId(userMessageId)
+                } catch (e: Exception) {
+                    logger.error(
+                        "RoomCommittedInferencePromptStore",
+                        "Failed to clear prompt for message: $userMessageId",
+                        e,
+                    )
+                }
             }
         }
     }
-}

@@ -44,7 +44,7 @@ class XaiPromptCacheLiveContextTest {
             activeTools = stableTools,
         )
 
-  @Test
+    @Test
     fun PC_XAI_07_user_turn_tool_loop_then_new_user_turn_preserves_cache_eligible_transcript_prefix() =
         runTest {
             val captured = mutableListOf<ChatCompletionCreateParams>()
@@ -172,7 +172,11 @@ class XaiPromptCacheLiveContextTest {
             assertTrue(
                 turnTwoWire.any { message ->
                     message.isSystem() &&
-                        message.asSystem().content().asText().contains("advertised_tools")
+                        message
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("advertised_tools")
                 },
                 "current-turn tool index sidecar must be present on the live wire tail",
             )
@@ -202,7 +206,11 @@ class XaiPromptCacheLiveContextTest {
             val turnOneEligible = turnOneWire.cacheEligibleWire()
             assertEquals(
                 "Question needing search?",
-                turnOneWire.first { it.isUser() }.asUser().content().asText(),
+                turnOneWire
+                    .first { it.isUser() }
+                    .asUser()
+                    .content()
+                    .asText(),
             )
             assertTrue(
                 turnOneWire.any { message ->
@@ -375,7 +383,11 @@ class XaiPromptCacheLiveContextTest {
                 options = chatOptions,
             )
             val toolsCall1 =
-                captured.last().tools().get().map { it.asFunction().function().name() }
+                captured
+                    .last()
+                    .tools()
+                    .get()
+                    .map { it.asFunction().function().name() }
 
             service.completeSingleTurn(
                 sessionMessages =
@@ -398,7 +410,11 @@ class XaiPromptCacheLiveContextTest {
             )
             val call2Eligible = captured.last().messages().cacheEligibleWire()
             val toolsCall2 =
-                captured.last().tools().get().map { it.asFunction().function().name() }
+                captured
+                    .last()
+                    .tools()
+                    .get()
+                    .map { it.asFunction().function().name() }
 
             service.completeSingleTurn(
                 sessionMessages =
@@ -483,9 +499,7 @@ class XaiPromptCacheLiveContextTest {
             toolIndex?.let { appendLine("Tool context index JSON: $it") }
         }.trimEnd()
 
-    private fun capturingXaiService(
-        captured: MutableList<ChatCompletionCreateParams>,
-    ): BaseOpenAiSdkInferenceService =
+    private fun capturingXaiService(captured: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
         object : BaseOpenAiSdkInferenceService(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",

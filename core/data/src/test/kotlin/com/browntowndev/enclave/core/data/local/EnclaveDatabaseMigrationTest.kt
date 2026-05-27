@@ -266,23 +266,27 @@ class EnclaveDatabaseMigrationTest {
 
     @Test
     fun scnPersist001_committedInferencePromptTableStructure() {
-        val db = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            EnclaveDatabase::class.java
-        ).allowMainThreadQueries().build()
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
 
         try {
             val sqliteDb = db.openHelper.readableDatabase
             val cursor = sqliteDb.query("PRAGMA table_info('message_committed_inference_prompt')")
-            val columns = buildMap {
-                cursor.use {
-                    while (it.moveToNext()) {
-                        val name = it.getString(it.getColumnIndexOrThrow("name"))
-                        val type = it.getString(it.getColumnIndexOrThrow("type"))
-                        put(name, type)
+            val columns =
+                buildMap {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            val name = it.getString(it.getColumnIndexOrThrow("name"))
+                            val type = it.getString(it.getColumnIndexOrThrow("type"))
+                            put(name, type)
+                        }
                     }
                 }
-            }
 
             assertTrue(columns.containsKey("message_id"), "message_id column must exist")
             assertTrue(columns.containsKey("inference_content"), "inference_content column must exist")

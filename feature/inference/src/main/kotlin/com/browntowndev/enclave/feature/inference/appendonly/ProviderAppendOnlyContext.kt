@@ -62,8 +62,7 @@ internal class ProviderAppendOnlyContext(
 
     fun frozenSidecarsForWireReplay(): List<FrozenSidecarSnapshot> = frozenSidecarSnapshots.toList()
 
-    fun hasFrozenPreRetrievalSidecar(): Boolean =
-        frozenSidecarSnapshots.any { PreRetrievalContextSidecar.isSidecarText(it.text) }
+    fun hasFrozenPreRetrievalSidecar(): Boolean = frozenSidecarSnapshots.any { PreRetrievalContextSidecar.isSidecarText(it.text) }
 
     fun clearOnRustCompactionBoundary() {
         clearLogState(reason = "rust_compaction_boundary")

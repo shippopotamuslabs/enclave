@@ -27,16 +27,18 @@ import java.util.Date
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class RoomCommittedInferencePromptStoreTest {
-
     private lateinit var database: EnclaveDatabase
     private val logger = mockk<LoggingPort>(relaxed = true)
 
     @BeforeEach
     fun setup() {
-        database = Room.inMemoryDatabaseBuilder(
-            ApplicationProvider.getApplicationContext(),
-            EnclaveDatabase::class.java
-        ).allowMainThreadQueries().build()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
     }
 
     @AfterEach
@@ -52,160 +54,172 @@ class RoomCommittedInferencePromptStoreTest {
                 name = "Test Chat",
                 created = Date(),
                 lastModified = Date(),
-                pinned = false
-            )
+                pinned = false,
+            ),
         )
         database.messageCommandDao().upsert(
             MessageEntity(
                 id = messageId,
                 chatId = chatId,
                 role = Role.USER,
-                content = "Raw message content"
+                content = "Raw message content",
+            ),
+        )
+    }
+
+    @Test
+    fun scnPersist001_commitUpdatesCacheAndPersistsToDb() =
+        runTest {
+            // Given an empty RoomCommittedInferencePromptStore backed by an in-memory EnclaveDatabase
+            // And a user message with ID "msg-123" exists in the message table
+            val messageId = MessageId("msg-123")
+            insertMessage(messageId)
+
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
+
+            // When
+            store.commit(messageId, "Expanded user query with RAG contexts")
+
+            // Then the in-memory cache must return immediately when calling store.get()
+            assertEquals("Expanded user query with RAG contexts", store.get(messageId))
+
+            // And the database table must contain the record
+            val entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+            assertEquals("Expanded user query with RAG contexts", entity?.inferenceContent)
+        }
+
+    @Test
+    fun scnPersist002_getResolvesCacheMissFromDatabaseAndCachesIt() =
+        runTest {
+            // Given an in-memory EnclaveDatabase with a record in message_committed_inference_prompt
+            val messageId = MessageId("msg-abc")
+            insertMessage(messageId)
+            database.messageCommittedInferencePromptDao().insertOrUpdate(
+                MessageCommittedInferencePromptEntity(
+                    messageId = messageId,
+                    inferenceContent = "Prior RAG query turn",
+                    updatedAt = System.currentTimeMillis(),
+                ),
             )
-        )
-    }
+
+            // And a new RoomCommittedInferencePromptStore instance is instantiated (re-hydrating with empty cache to simulate app restart)
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
+
+            // When
+            val result = store.get(messageId)
+
+            // Then
+            assertEquals("Prior RAG query turn", result)
+
+            // And subsequent call resolves from cache
+            assertEquals("Prior RAG query turn", store.get(messageId))
+        }
 
     @Test
-    fun scnPersist001_commitUpdatesCacheAndPersistsToDb() = runTest {
-        // Given an empty RoomCommittedInferencePromptStore backed by an in-memory EnclaveDatabase
-        // And a user message with ID "msg-123" exists in the message table
-        val messageId = MessageId("msg-123")
-        insertMessage(messageId)
+    fun scnPersist003_clearRemovesFromCacheAndDeletesDbRecord() =
+        runTest {
+            // Given a RoomCommittedInferencePromptStore with a cached and persisted prompt for ID "msg-456"
+            val messageId = MessageId("msg-456")
+            insertMessage(messageId)
 
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
+            store.commit(messageId, "Stale prompt context")
 
-        // When
-        store.commit(messageId, "Expanded user query with RAG contexts")
+            // When
+            store.clear(messageId)
 
-        // Then the in-memory cache must return immediately when calling store.get()
-        assertEquals("Expanded user query with RAG contexts", store.get(messageId))
-
-        // And the database table must contain the record
-        val entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
-        assertEquals("Expanded user query with RAG contexts", entity?.inferenceContent)
-    }
+            // Then
+            assertNull(store.get(messageId))
+            assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
+        }
 
     @Test
-    fun scnPersist002_getResolvesCacheMissFromDatabaseAndCachesIt() = runTest {
-        // Given an in-memory EnclaveDatabase with a record in message_committed_inference_prompt
-        val messageId = MessageId("msg-abc")
-        insertMessage(messageId)
-        database.messageCommittedInferencePromptDao().insertOrUpdate(
-            MessageCommittedInferencePromptEntity(
-                messageId = messageId,
-                inferenceContent = "Prior RAG query turn",
-                updatedAt = System.currentTimeMillis()
+    fun scnPersist004_cascadeDeletionVerification() =
+        runTest {
+            // Given an in-memory EnclaveDatabase containing a message entity with ID "msg-to-delete"
+            // And an associated committed prompt in message_committed_inference_prompt
+            val messageId = MessageId("msg-to-delete")
+            insertMessage(messageId)
+            database.messageCommittedInferencePromptDao().insertOrUpdate(
+                MessageCommittedInferencePromptEntity(
+                    messageId = messageId,
+                    inferenceContent = "Prompt context to delete",
+                    updatedAt = System.currentTimeMillis(),
+                ),
             )
-        )
 
-        // And a new RoomCommittedInferencePromptStore instance is instantiated (re-hydrating with empty cache to simulate app restart)
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
 
-        // When
-        val result = store.get(messageId)
+            // When the message entity is deleted from the message table
+            database.openHelper.writableDatabase.execSQL("DELETE FROM message WHERE id = 'msg-to-delete'")
 
-        // Then
-        assertEquals("Prior RAG query turn", result)
-
-        // And subsequent call resolves from cache
-        assertEquals("Prior RAG query turn", store.get(messageId))
-    }
+            // Then the record in message_committed_inference_prompt must be automatically deleted by SQLite cascade trigger
+            assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
+            // And calling store.get() (with empty cache) must return null
+            assertNull(store.get(messageId))
+        }
 
     @Test
-    fun scnPersist003_clearRemovesFromCacheAndDeletesDbRecord() = runTest {
-        // Given a RoomCommittedInferencePromptStore with a cached and persisted prompt for ID "msg-456"
-        val messageId = MessageId("msg-456")
-        insertMessage(messageId)
+    fun scnPersist006_nonExistentIdQueries() =
+        runTest {
+            // Given a RoomCommittedInferencePromptStore backing an empty message_committed_inference_prompt table
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
 
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
-        store.commit(messageId, "Stale prompt context")
+            // When
+            val result = store.get(MessageId("non-existent-msg-id"))
 
-        // When
-        store.clear(messageId)
-
-        // Then
-        assertNull(store.get(messageId))
-        assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
-    }
+            // Then
+            assertNull(result)
+        }
 
     @Test
-    fun scnPersist004_cascadeDeletionVerification() = runTest {
-        // Given an in-memory EnclaveDatabase containing a message entity with ID "msg-to-delete"
-        // And an associated committed prompt in message_committed_inference_prompt
-        val messageId = MessageId("msg-to-delete")
-        insertMessage(messageId)
-        database.messageCommittedInferencePromptDao().insertOrUpdate(
-            MessageCommittedInferencePromptEntity(
-                messageId = messageId,
-                inferenceContent = "Prompt context to delete",
-                updatedAt = System.currentTimeMillis()
-            )
-        )
+    fun scnPersist007_distinctKeysSeparation() =
+        runTest {
+            // Given a RoomCommittedInferencePromptStore
+            // And user messages with IDs "msg-x" and "msg-y" exist in the database
+            val msgX = MessageId("msg-x")
+            val msgY = MessageId("msg-y")
+            insertMessage(msgX)
+            insertMessage(msgY)
 
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
+            val store =
+                RoomCommittedInferencePromptStore(
+                    dao = database.messageCommittedInferencePromptDao(),
+                    scope = this,
+                    logger = logger,
+                )
 
-        // When the message entity is deleted from the message table
-        database.openHelper.writableDatabase.execSQL("DELETE FROM message WHERE id = 'msg-to-delete'")
+            // When
+            store.commit(msgX, "Prompt Content X")
+            store.commit(msgY, "Prompt Content Y")
 
-        // Then the record in message_committed_inference_prompt must be automatically deleted by SQLite cascade trigger
-        assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
-        // And calling store.get() (with empty cache) must return null
-        assertNull(store.get(messageId))
-    }
-
-    @Test
-    fun scnPersist006_nonExistentIdQueries() = runTest {
-        // Given a RoomCommittedInferencePromptStore backing an empty message_committed_inference_prompt table
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
-
-        // When
-        val result = store.get(MessageId("non-existent-msg-id"))
-
-        // Then
-        assertNull(result)
-    }
-
-    @Test
-    fun scnPersist007_distinctKeysSeparation() = runTest {
-        // Given a RoomCommittedInferencePromptStore
-        // And user messages with IDs "msg-x" and "msg-y" exist in the database
-        val msgX = MessageId("msg-x")
-        val msgY = MessageId("msg-y")
-        insertMessage(msgX)
-        insertMessage(msgY)
-
-        val store = RoomCommittedInferencePromptStore(
-            dao = database.messageCommittedInferencePromptDao(),
-            scope = this,
-            logger = logger
-        )
-
-        // When
-        store.commit(msgX, "Prompt Content X")
-        store.commit(msgY, "Prompt Content Y")
-
-        // Then
-        assertEquals("Prompt Content X", store.get(msgX))
-        assertEquals("Prompt Content Y", store.get(msgY))
-    }
+            // Then
+            assertEquals("Prompt Content X", store.get(msgX))
+            assertEquals("Prompt Content Y", store.get(msgY))
+        }
 }

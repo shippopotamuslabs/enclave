@@ -25,7 +25,5 @@ internal abstract class PromptModule {
 
     @Binds
     @Singleton
-    abstract fun bindCommittedInferenceTranscript(
-        impl: InMemoryCommittedInferenceTranscriptStore,
-    ): CommittedInferenceTranscriptPort
+    abstract fun bindCommittedInferenceTranscript(impl: InMemoryCommittedInferenceTranscriptStore): CommittedInferenceTranscriptPort
 }

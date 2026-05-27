@@ -7,7 +7,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -55,9 +55,9 @@ import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
-import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -131,12 +131,13 @@ fun VaultUnlockContent(
                     )
                 } else {
                     Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .neoSurface(
-                                backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                                borderColor = neoBorderColor(),
-                            ),
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .neoSurface(
+                                    backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    borderColor = neoBorderColor(),
+                                ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -164,12 +165,13 @@ fun VaultUnlockContent(
             }
             VaultAuthUiState.Unauthenticated, VaultAuthUiState.Loading, is VaultAuthUiState.Error -> {
                 Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .neoSurface(
-                            backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                            borderColor = neoBorderColor(),
-                        ),
+                    modifier =
+                        Modifier
+                            .size(80.dp)
+                            .neoSurface(
+                                backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                                borderColor = neoBorderColor(),
+                            ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -237,15 +239,16 @@ fun VaultUnlockContent(
                             .padding(vertical = 48.dp),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .neoSurface(
-                                backgroundColor = MaterialTheme.colorScheme.primary,
-                                borderColor = neoBorderColor(),
-                                withShadow = true,
-                                shadowColor = neoShadowColor(),
-                                shadowOffset = neoButtonShadowOffset(),
-                            ),
+                        modifier =
+                            Modifier
+                                .size(64.dp)
+                                .neoSurface(
+                                    backgroundColor = MaterialTheme.colorScheme.primary,
+                                    borderColor = neoBorderColor(),
+                                    withShadow = true,
+                                    shadowColor = neoShadowColor(),
+                                    shadowOffset = neoButtonShadowOffset(),
+                                ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
@@ -293,15 +296,16 @@ fun VaultUnlockContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .neoSurface(
-                                backgroundColor = MaterialTheme.colorScheme.primary,
-                                borderColor = neoBorderColor(),
-                                withShadow = true,
-                                shadowColor = neoShadowColor(),
-                                shadowOffset = neoButtonShadowOffset(),
-                            ),
+                        modifier =
+                            Modifier
+                                .size(64.dp)
+                                .neoSurface(
+                                    backgroundColor = MaterialTheme.colorScheme.primary,
+                                    borderColor = neoBorderColor(),
+                                    withShadow = true,
+                                    shadowColor = neoShadowColor(),
+                                    shadowOffset = neoButtonShadowOffset(),
+                                ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(

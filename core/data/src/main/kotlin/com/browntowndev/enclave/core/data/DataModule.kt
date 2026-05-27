@@ -36,10 +36,10 @@ import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
+import com.browntowndev.enclave.core.data.local.MessageCommittedInferencePromptDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
-import com.browntowndev.enclave.core.data.local.MessageCommittedInferencePromptDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.SQLiteVecInstaller
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
@@ -89,8 +89,8 @@ import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -565,7 +565,5 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindCommittedInferencePromptPort(
-        impl: RoomCommittedInferencePromptStore,
-    ): CommittedInferencePromptPort
+    abstract fun bindCommittedInferencePromptPort(impl: RoomCommittedInferencePromptStore): CommittedInferencePromptPort
 }

@@ -24,12 +24,12 @@ class LiteRtAgentPolicyBridge
             com.browntowndev.enclave.core.agent
                 .repairTool(name, argsJson, toolSemanticsJson, toolCatalogJson)
                 .let { result ->
-                AgentPolicyRepairResult(
-                    resolvedName = result.resolvedName,
-                    argumentsJson = result.argumentsJson,
-                    confidence = if (result.repaired) 1.0f else 0.0f,
-                )
-            }
+                    AgentPolicyRepairResult(
+                        resolvedName = result.resolvedName,
+                        argumentsJson = result.argumentsJson,
+                        confidence = if (result.repaired) 1.0f else 0.0f,
+                    )
+                }
 
         override fun truncateResult(
             json: String,
