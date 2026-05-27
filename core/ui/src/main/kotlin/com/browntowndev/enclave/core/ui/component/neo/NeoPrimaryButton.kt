@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -30,17 +31,23 @@ fun NeoPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     icon: ImageVector? = null,
+    backgroundColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    withShadow: Boolean? = null,
 ) {
     val borderColor = neoBorderColor()
+    val shadow = withShadow ?: enabled
+    val actualBg = if (enabled) backgroundColor else MaterialTheme.colorScheme.surfaceVariant
+    val actualContent = if (enabled) contentColor else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .neoSurface(
-                    backgroundColor = MaterialTheme.colorScheme.primary,
+                    backgroundColor = actualBg,
                     borderColor = borderColor,
-                    withShadow = enabled,
+                    withShadow = shadow,
                     shadowColor = neoShadowColor(),
                     shadowOffset = neoButtonShadowOffset(),
                 ).clickable(enabled = enabled, onClick = onClick)
@@ -52,7 +59,7 @@ fun NeoPrimaryButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
+                tint = actualContent,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -61,7 +68,7 @@ fun NeoPrimaryButton(
             text = text,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = actualContent,
         )
     }
 }
