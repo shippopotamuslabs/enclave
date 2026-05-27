@@ -586,7 +586,9 @@ class RustLoopInferenceService(
                     userMessageId = options.userMessageId,
                     assistantMessageId = options.assistantMessageId,
                 )
+            loggingPort.info(TAG, "Executing tool call: name=${call.name} callId=${call.callId} args=${call.argumentsJson}")
             val result = toolExecutor.execute(request)
+            loggingPort.info(TAG, "Tool call completed: name=${call.name} callId=${call.callId} result=${result.resultJson}")
             AgentToolResult(
                 callId = call.callId,
                 resultJson = result.resultJson,
@@ -596,7 +598,7 @@ class RustLoopInferenceService(
         } catch (e: CancellationException) {
             throw e
         } catch (t: Throwable) {
-            loggingPort.error(TAG, "tool execution threw tool=${call.name}", t)
+            loggingPort.error(TAG, "tool execution threw tool=${call.name} callId=${call.callId}", t)
             AgentToolResult(
                 callId = call.callId,
                 resultJson = errorJson(call, t),
