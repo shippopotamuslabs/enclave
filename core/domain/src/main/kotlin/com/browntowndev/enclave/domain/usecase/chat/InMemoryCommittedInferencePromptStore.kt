@@ -11,18 +11,18 @@ import javax.inject.Inject
 class InMemoryCommittedInferencePromptStore
     @Inject
     constructor() : CommittedInferencePromptPort {
-    private val prompts = ConcurrentHashMap<MessageId, String>()
+        private val prompts = ConcurrentHashMap<MessageId, String>()
 
-    override fun commit(
-        userMessageId: MessageId,
-        content: String,
-    ) {
-        prompts[userMessageId] = content
+        override fun commit(
+            userMessageId: MessageId,
+            content: String,
+        ) {
+            prompts[userMessageId] = content
+        }
+
+        override fun get(userMessageId: MessageId): String? = prompts[userMessageId]
+
+        override fun clear(userMessageId: MessageId) {
+            prompts.remove(userMessageId)
+        }
     }
-
-    override fun get(userMessageId: MessageId): String? = prompts[userMessageId]
-
-    override fun clear(userMessageId: MessageId) {
-        prompts.remove(userMessageId)
-    }
-}

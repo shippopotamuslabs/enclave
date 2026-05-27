@@ -504,7 +504,11 @@ class ChatInferenceRequestPreparer(
         private const val PROMPT_LOG_CHUNK_SIZE = 2_000
 
         private object NoopMonotonicToolActivationPort : MonotonicToolActivationPort {
-            override fun union(chatId: ChatId, newNames: Set<String>): Set<String> = newNames
+            override fun union(
+                chatId: ChatId,
+                newNames: Set<String>,
+            ): Set<String> = newNames
+
             override fun clearSession(chatId: ChatId) = Unit
         }
 

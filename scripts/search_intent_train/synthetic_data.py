@@ -175,12 +175,83 @@ NO_SEARCH_FULL = [
     "Go back to your earlier suggestion about microservices.",
 ]
 
+# Iterative refinement templates (class 0)
+iterative_templates = [
+    "Good suggestion, I'll make those changes",
+    "Ok, I just updated things with {feature}",
+    "How does this look now?",
+    "That worked. What about {next_thing}?",
+    "I see what you mean. Here's what I changed: {change}",
+    "Much cleaner now. The {component} is {state}",
+    "This is exactly right. You've iterated from {before} to {after}",
+    "Good catch — that one is genuinely confusing because it looks like it should be meaningful",
+    "Are these {items} noise or actually serving a purpose?",
+    "What would make this better?",
+    "Is this clean enough?",
+    "How do you even know what {component} is?",
+]
+
+# Feedback request templates (class 0)
+feedback_templates = [
+    "Are these {items} noise or actually serving a purpose?",
+    "What would make this better for you?",
+    "Is this clean enough?",
+    "How do you even know what {component} and {other_component} are?",
+    "Can you tell me what error you get with the tools?",
+]
+
+# Architecture discussion templates (class 0 when context is sufficient)
+architecture_templates = [
+    "I'm not going to lie, this is pretty dope working with you inside of the app itself",
+    "It's like I am designing you a sort of {metaphor} and you are giving me advice",
+    "Yeah honestly this is the next thing I want to work on",
+]
+
 LANGS = ["Kotlin", "Python", "Rust", "Java", "TypeScript", "Go"]
 PHRASES = [
     "I would like a coffee please",
     "the deployment failed overnight",
     "we need a concise executive summary",
 ]
+
+FEATURES = ["ellipses idea", "deduplication", "caching", "logging", "error handling", "retry logic"]
+NEXT_THINGS = ["this layout problem", "the other controller", "that compile error", "the schema mapping"]
+CHANGES = ["removed the unused import", "changed the threshold", "updated the adapter class", "deduplicated the lists"]
+COMPONENTS = ["adapter", "classifier", "controller", "service", "model-schema", "tool-schema-0", "tool-schema-1"]
+STATES = ["ready", "running", "initialized", "updated", "working perfectly"]
+BEFORES = ["v1", "an old format", "scratch", "v2", "initial layout"]
+AFTERS = ["v2", "a cleaner approach", "the final build", "v3", "optimized version"]
+ITEMS = ["imports", "tokens", "logs", "variables", "references", "parameters"]
+METAPHORS = ["digital canvas", "pair programmer", "co-pilot", "sounding board", "collaborative workspace"]
+OTHER_COMPONENTS = ["handler", "manager", "port", "repository", "bridge", "wrapper"]
+
+
+def is_iterative_refinement(message_text: str) -> bool:
+    """Identify non-search iterative refinement patterns"""
+    indicators = [
+        "that worked", "thanks", "now try", "what about",
+        "here's my updated", "i changed", "looks good",
+        "good catch", "i'll make those changes", "ok i just",
+        "how does this look", "is this clean enough",
+        "much cleaner now", "this is exactly right",
+        "i see what you mean", "done", "fixed", "updated"
+    ]
+    return any(indicator in message_text.lower() for indicator in indicators)
+
+
+def extract_refinement_sequences(conversation: list[dict], min_depth: int = 3) -> list[list[str]]:
+    """Extract multi-turn refinement sequences from conversations"""
+    sequences = []
+    for i in range(min_depth - 1, len(conversation)):
+        text = conversation[i].get("text", "") or conversation[i].get("value", "") or conversation[i].get("content", "")
+        if text and is_iterative_refinement(str(text)):
+            # Grab context: 2 messages before + the refinement message
+            start_idx = max(0, i - 2)
+            sequences.append([
+                str(msg.get("text", "") or msg.get("value", "") or msg.get("content", ""))
+                for msg in conversation[start_idx:i+1]
+            ])
+    return sequences
 
 
 def _fill(template: str, rng: random.Random) -> str:
@@ -194,6 +265,16 @@ def _fill(template: str, rng: random.Random) -> str:
             tool=rng.choice(TOOLS_IN_APP),
             lang=rng.choice(LANGS),
             phrase=rng.choice(PHRASES),
+            feature=rng.choice(FEATURES),
+            next_thing=rng.choice(NEXT_THINGS),
+            change=rng.choice(CHANGES),
+            component=rng.choice(COMPONENTS),
+            state=rng.choice(STATES),
+            before=rng.choice(BEFORES),
+            after=rng.choice(AFTERS),
+            items=rng.choice(ITEMS),
+            metaphor=rng.choice(METAPHORS),
+            other_component=rng.choice(OTHER_COMPONENTS),
         )
         .replace("  ", " ")
         .strip()
@@ -235,9 +316,11 @@ def generate_no_search_samples(rng: random.Random, count: int) -> list[str]:
     attempts = 0
     max_attempts = max(count * 80, 1_000)
 
+    template_pool = NO_SEARCH_FULL + iterative_templates + feedback_templates + architecture_templates
+
     while len(out) < count and attempts < max_attempts:
         attempts += 1
-        text = _fill(rng.choice(NO_SEARCH_FULL), rng)
+        text = _fill(rng.choice(template_pool), rng)
         text = " ".join(text.split())
         if len(text) < 12 or len(text) > 480:
             continue

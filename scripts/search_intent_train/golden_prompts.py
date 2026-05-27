@@ -44,4 +44,17 @@ GOLDEN_LABELED: list[tuple[str, int]] = [
     ("Use the docgen tool instead of searching the web", 0),
     ("Format this as a markdown table", 0),
     ("Summarize what we talked about earlier in this conversation", 0),
+    # Iterative refinement
+    ("Good catch — that one is genuinely confusing because it looks like it should be meaningful", 0),
+    ("I am going to make those changes now. I'm not going to lie, this is pretty dope working with you", 0),
+    ("Ok, I just updated things with the ellipses idea and deduplication", 0),
+    # Feedback requests
+    ("Are these noise or actually serving a purpose?", 0),
+    ("How do you even know what tool-schema-0 and tool-schema-1 are and what tools they point to?", 0),
+    # Architecture discussions with sufficient context
+    ("I actually have 0 user data and this app uses zero knowledge encryption anyway", 0),
+    ("Yeah honestly this is the next thing I want to work on", 0),
+    # Status updates
+    ("The tools are working perfectly now", 0),
+    ("I added some logging to help me troubleshoot", 0),
 ]

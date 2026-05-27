@@ -325,7 +325,7 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                     )
 
             assertEquals(
-                listOf("disclose_tool_schemas", "web_search", "web_extract"),
+                listOf("disclose_tool_schemas", "read_context_reference", "web_search", "web_extract"),
                 request.options.activeTools.map { it.name },
             )
         }
