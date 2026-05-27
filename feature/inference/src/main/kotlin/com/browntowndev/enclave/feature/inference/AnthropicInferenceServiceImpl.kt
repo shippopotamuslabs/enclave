@@ -208,296 +208,303 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
-        val timing =
-            telemetrySupport?.let {
-                com.browntowndev.enclave.feature.inference.telemetry
-                    .InferenceTurnTiming()
-            }
-        val captureContext = telemetrySupport?.captureContext(options)
-        val lastUserIndex =
-            sessionMessages.indexOfLast { msg ->
-                msg.role == Role.USER &&
-                    run {
-                        val meta = msg.metadataJson
-                        if (meta == "null" || meta.isBlank()) return@run true
-                        val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                        obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-                    }
-            }
-        val imageUris = options.imageUris.take(20)
-        val builder =
-            MessageCreateParams
-                .builder()
-                .model(options.modelId ?: modelId)
-
-        if (!options.maxTokensDisabled) {
-            options.maxTokens?.let { builder.maxTokens(it.toLong()) } ?: builder.maxTokens(DEFAULT_MAX_TOKENS)
-        } else {
-            builder.maxTokens(DEFAULT_MAX_TOKENS)
-        }
-
-        if (!options.temperatureDisabled) {
-            options.temperature?.let { builder.temperature(it.toDouble()) }
-        }
-        if (!options.topPDisabled) {
-            options.topP?.let { builder.topP(it.toDouble()) }
-        }
-        if (!options.topKDisabled) {
-            options.topK?.let { builder.topK(it.toLong()) }
-        }
-
-        resolveThinkingBudget(options)?.let {
-            builder.thinking(
-                ThinkingConfigEnabled
+        try {
+            activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
+            val timing =
+                telemetrySupport?.let {
+                    com.browntowndev.enclave.feature.inference.telemetry
+                        .InferenceTurnTiming()
+                }
+            val captureContext = telemetrySupport?.captureContext(options)
+            val lastUserIndex =
+                sessionMessages.indexOfLast { msg ->
+                    msg.role == Role.USER &&
+                        run {
+                            val meta = msg.metadataJson
+                            if (meta == "null" || meta.isBlank()) return@run true
+                            val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                            obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+                        }
+                }
+            val imageUris = options.imageUris.take(20)
+            val builder =
+                MessageCreateParams
                     .builder()
-                    .budgetTokens(it)
-                    .build(),
-            )
-        }
+                    .model(options.modelId ?: modelId)
 
-        val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
-        val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
-
-        if (systemPrompt.isNotBlank()) {
-            val systemBlockBuilder = TextBlockParam.builder().text(systemPrompt)
-            if (useCaching) {
-                systemBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+            if (!options.maxTokensDisabled) {
+                options.maxTokens?.let { builder.maxTokens(it.toLong()) } ?: builder.maxTokens(DEFAULT_MAX_TOKENS)
+            } else {
+                builder.maxTokens(DEFAULT_MAX_TOKENS)
             }
-            builder.systemOfTextBlockParams(listOf(systemBlockBuilder.build()))
-        }
 
-        sessionMessages.forEachIndexed { index, msg ->
-            val metadata =
-                if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
-                    runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
-                } else {
-                    null
-                }
-            val attachCacheBreakpoint =
-                useCaching &&
-                    AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
-
-            val messageContent =
-                if (index == lastUserIndex) {
-                    VolatileTurnContextWireSupport
-                        .combinedLatestUserPrepends(
-                            volatileTurnContext = null, // already in msg.content via Rust history
-                            contextSidecars = contextSidecars,
-                        )?.let { prepended -> "$prepended\n\n${msg.content}" }
-                        ?: msg.content
-                } else {
-                    msg.content
-                }
-
-            when (msg.role) {
-                Role.SYSTEM -> {} // systemPrompt mapped above
-                Role.USER -> {
-                    val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
-                    if (!attachImages) {
-                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                        if (attachCacheBreakpoint) {
-                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                                .build(),
-                        )
-                    } else {
-                        val contentBlocks = mutableListOf<ContentBlockParam>()
-                        ImagePayloads.fromUris(imageUris).forEach { payload ->
-                            val mediaType =
-                                when (payload.mimeType) {
-                                    "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
-                                    "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
-                                    "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
-                                    else -> Base64ImageSource.MediaType.IMAGE_JPEG
-                                }
-                            contentBlocks.add(
-                                ContentBlockParam.ofImage(
-                                    ImageBlockParam
-                                        .builder()
-                                        .source(
-                                            Base64ImageSource
-                                                .builder()
-                                                .data(payload.base64)
-                                                .mediaType(mediaType)
-                                                .build(),
-                                        ).build(),
-                                ),
-                            )
-                        }
-                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                        if (attachCacheBreakpoint) {
-                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        contentBlocks.add(
-                            ContentBlockParam.ofText(textBlockBuilder.build()),
-                        )
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(contentBlocks)
-                                .build(),
-                        )
-                    }
-                }
-                Role.ASSISTANT -> {
-                    if (msg.id.startsWith("compact-summary-")) {
-                        val textBlockBuilder = TextBlockParam.builder().text("[Conversation summary]\n$messageContent")
-                        if (attachCacheBreakpoint) {
-                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                                .build(),
-                        )
-                        return@forEachIndexed
-                    }
-                    val callId = metadata?.get("call_id")?.jsonPrimitive?.content
-                    if (callId != null) {
-                        val toolResultBuilder = ToolResultBlockParam.builder().toolUseId(callId).content(messageContent)
-                        if (attachCacheBreakpoint) {
-                            toolResultBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(
-                                    listOf(
-                                        ContentBlockParam.ofToolResult(toolResultBuilder.build()),
-                                    ),
-                                ).build(),
-                        )
-                        return@forEachIndexed
-                    }
-                    val rawCalls = metadata?.get("raw_tool_calls")
-                    val contentBlocks = mutableListOf<ContentBlockParam>()
-                    if (messageContent.isNotBlank()) {
-                        val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                        val isTextLastBlock =
-                            attachCacheBreakpoint &&
-                                (rawCalls == null || rawCalls !is JsonArray || rawCalls.isEmpty())
-                        if (isTextLastBlock) {
-                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        contentBlocks.add(ContentBlockParam.ofText(textBlockBuilder.build()))
-                    }
-                    if (rawCalls is JsonArray) {
-                        rawCalls.forEachIndexed { tcIndex, tc ->
-                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEachIndexed
-                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEachIndexed
-                            val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
-                            val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-
-                            val toolUseBuilder =
-                                ToolUseBlockParam
-                                    .builder()
-                                    .id(rawCallId)
-                                    .name(callName)
-                                    .input(
-                                        ToolUseBlockParam.Input
-                                            .builder()
-                                            .putAllAdditionalProperties(toolUseInputProperties(argsJson))
-                                            .build(),
-                                    )
-                            val isToolUseLastBlock = attachCacheBreakpoint && (tcIndex == rawCalls.size - 1)
-                            if (isToolUseLastBlock) {
-                                toolUseBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            contentBlocks.add(
-                                ContentBlockParam.ofToolUse(toolUseBuilder.build()),
-                            )
-                        }
-                    }
-                    if (contentBlocks.isNotEmpty()) {
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.ASSISTANT)
-                                .contentOfBlockParams(contentBlocks)
-                                .build(),
-                        )
-                    }
-                }
+            if (!options.temperatureDisabled) {
+                options.temperature?.let { builder.temperature(it.toDouble()) }
             }
-        }
+            if (!options.topPDisabled) {
+                options.topP?.let { builder.topP(it.toDouble()) }
+            }
+            if (!options.topKDisabled) {
+                options.topK?.let { builder.topK(it.toLong()) }
+            }
 
-        if (availableTools.isNotEmpty()) {
-            availableTools.forEachIndexed { idx, toolDef ->
-                val isLast = idx == availableTools.size - 1
-                val cacheControl =
-                    if (useCaching && isLast) {
-                        AnthropicPromptCacheSupport.ephemeralCacheControl()
+            resolveThinkingBudget(options)?.let {
+                builder.thinking(
+                    ThinkingConfigEnabled
+                        .builder()
+                        .budgetTokens(it)
+                        .build(),
+                )
+            }
+
+            val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
+            val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
+
+            if (systemPrompt.isNotBlank()) {
+                val systemBlockBuilder = TextBlockParam.builder().text(systemPrompt)
+                if (useCaching) {
+                    systemBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                }
+                builder.systemOfTextBlockParams(listOf(systemBlockBuilder.build()))
+            }
+
+            sessionMessages.forEachIndexed { index, msg ->
+                val metadata =
+                    if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
+                        runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
                     } else {
                         null
                     }
-                builder.addTool(toolDef.toAnthropicTool(cacheControl))
-            }
-            if (!allowToolCall) {
-                builder.toolChoice(ToolChoice.ofNone(ToolChoiceNone.builder().build()))
-            }
-        }
+                val attachCacheBreakpoint =
+                    useCaching &&
+                        AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
 
-        val accumulatedText = StringBuilder()
-        val response =
-            streamMessages(builder.build()) { event ->
-                when (event) {
-                    is InferenceEvent.PartialResponse -> {
-                        timing?.markFirstOutput()
-                        accumulatedText.append(event.chunk)
-                        onTextToken(event.chunk)
+                val messageContent =
+                    if (index == lastUserIndex) {
+                        VolatileTurnContextWireSupport
+                            .combinedLatestUserPrepends(
+                                volatileTurnContext = null, // already in msg.content via Rust history
+                                contextSidecars = contextSidecars,
+                            )?.let { prepended -> "$prepended\n\n${msg.content}" }
+                            ?: msg.content
+                    } else {
+                        msg.content
                     }
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                    else -> {}
+
+                when (msg.role) {
+                    Role.SYSTEM -> {} // systemPrompt mapped above
+                    Role.USER -> {
+                        val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
+                        if (!attachImages) {
+                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                            if (attachCacheBreakpoint) {
+                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            builder.addMessage(
+                                MessageParam
+                                    .builder()
+                                    .role(MessageParam.Role.USER)
+                                    .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                                    .build(),
+                            )
+                        } else {
+                            val contentBlocks = mutableListOf<ContentBlockParam>()
+                            ImagePayloads.fromUris(imageUris).forEach { payload ->
+                                val mediaType =
+                                    when (payload.mimeType) {
+                                        "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
+                                        "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
+                                        "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
+                                        else -> Base64ImageSource.MediaType.IMAGE_JPEG
+                                    }
+                                contentBlocks.add(
+                                    ContentBlockParam.ofImage(
+                                        ImageBlockParam
+                                            .builder()
+                                            .source(
+                                                Base64ImageSource
+                                                    .builder()
+                                                    .data(payload.base64)
+                                                    .mediaType(mediaType)
+                                                    .build(),
+                                            ).build(),
+                                    ),
+                                )
+                            }
+                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                            if (attachCacheBreakpoint) {
+                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            contentBlocks.add(
+                                ContentBlockParam.ofText(textBlockBuilder.build()),
+                            )
+                            builder.addMessage(
+                                MessageParam
+                                    .builder()
+                                    .role(MessageParam.Role.USER)
+                                    .contentOfBlockParams(contentBlocks)
+                                    .build(),
+                            )
+                        }
+                    }
+                    Role.ASSISTANT -> {
+                        if (msg.id.startsWith("compact-summary-")) {
+                            val textBlockBuilder = TextBlockParam.builder().text("[Conversation summary]\n$messageContent")
+                            if (attachCacheBreakpoint) {
+                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            builder.addMessage(
+                                MessageParam
+                                    .builder()
+                                    .role(MessageParam.Role.USER)
+                                    .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                                    .build(),
+                            )
+                            return@forEachIndexed
+                        }
+                        val callId = metadata?.get("call_id")?.jsonPrimitive?.content
+                        if (callId != null) {
+                            val toolResultBuilder = ToolResultBlockParam.builder().toolUseId(callId).content(messageContent)
+                            if (attachCacheBreakpoint) {
+                                toolResultBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            builder.addMessage(
+                                MessageParam
+                                    .builder()
+                                    .role(MessageParam.Role.USER)
+                                    .contentOfBlockParams(
+                                        listOf(
+                                            ContentBlockParam.ofToolResult(toolResultBuilder.build()),
+                                        ),
+                                    ).build(),
+                            )
+                            return@forEachIndexed
+                        }
+                        val rawCalls = metadata?.get("raw_tool_calls")
+                        val contentBlocks = mutableListOf<ContentBlockParam>()
+                        if (messageContent.isNotBlank()) {
+                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
+                            val isTextLastBlock =
+                                attachCacheBreakpoint &&
+                                    (rawCalls == null || rawCalls !is JsonArray || rawCalls.isEmpty())
+                            if (isTextLastBlock) {
+                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                            }
+                            contentBlocks.add(ContentBlockParam.ofText(textBlockBuilder.build()))
+                        }
+                        if (rawCalls is JsonArray) {
+                            rawCalls.forEachIndexed { tcIndex, tc ->
+                                val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEachIndexed
+                                val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEachIndexed
+                                val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
+                                val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
+
+                                val toolUseBuilder =
+                                    ToolUseBlockParam
+                                        .builder()
+                                        .id(rawCallId)
+                                        .name(callName)
+                                        .input(
+                                            ToolUseBlockParam.Input
+                                                .builder()
+                                                .putAllAdditionalProperties(toolUseInputProperties(argsJson))
+                                                .build(),
+                                        )
+                                val isToolUseLastBlock = attachCacheBreakpoint && (tcIndex == rawCalls.size - 1)
+                                if (isToolUseLastBlock) {
+                                    toolUseBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                                }
+                                contentBlocks.add(
+                                    ContentBlockParam.ofToolUse(toolUseBuilder.build()),
+                                )
+                            }
+                        }
+                        if (contentBlocks.isNotEmpty()) {
+                            builder.addMessage(
+                                MessageParam
+                                    .builder()
+                                    .role(MessageParam.Role.ASSISTANT)
+                                    .contentOfBlockParams(contentBlocks)
+                                    .build(),
+                            )
+                        }
+                    }
                 }
             }
 
-        val toolCalls =
-            response.toolUse?.let { tu ->
-                listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
-            } ?: emptyList()
-        val bufferedText = accumulatedText.toString()
-
-        val telemetry =
-            if (telemetrySupport != null && timing != null && captureContext != null) {
-                telemetrySupport.anthropicTurnTelemetry(
-                    context = captureContext,
-                    modelId = modelId,
-                    modelLabel = modelId,
-                    timing = timing,
-                    inputTokens = response.inputTokens,
-                    outputTokens = response.outputTokens,
-                    reasoningTokens = response.reasoningTokens,
-                    cacheCreationInputTokens = response.cacheCreationInputTokens,
-                    cacheReadInputTokens = response.cacheReadInputTokens,
-                    savedPricing = options.apiModelPricing,
-                )
-            } else {
-                null
+            if (availableTools.isNotEmpty()) {
+                availableTools.forEachIndexed { idx, toolDef ->
+                    val isLast = idx == availableTools.size - 1
+                    val cacheControl =
+                        if (useCaching && isLast) {
+                            AnthropicPromptCacheSupport.ephemeralCacheControl()
+                        } else {
+                            null
+                        }
+                    builder.addTool(toolDef.toAnthropicTool(cacheControl))
+                }
+                if (!allowToolCall) {
+                    builder.toolChoice(ToolChoice.ofNone(ToolChoiceNone.builder().build()))
+                }
             }
 
-        return AgentModelTurnResult(
-            assistantText = bufferedText.takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason =
-                if (toolCalls.isNotEmpty()) {
-                    AgentFinishReason.ToolUse
+            val accumulatedText = StringBuilder()
+            val response =
+                streamMessages(builder.build()) { event ->
+                    when (event) {
+                        is InferenceEvent.PartialResponse -> {
+                            timing?.markFirstOutput()
+                            accumulatedText.append(event.chunk)
+                            onTextToken(event.chunk)
+                        }
+                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                        else -> {}
+                    }
+                }
+
+            val toolCalls =
+                response.toolUse?.let { tu ->
+                    listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
+                } ?: emptyList()
+            val bufferedText = accumulatedText.toString()
+
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport.anthropicTurnTelemetry(
+                        context = captureContext,
+                        modelId = modelId,
+                        modelLabel = modelId,
+                        timing = timing,
+                        inputTokens = response.inputTokens,
+                        outputTokens = response.outputTokens,
+                        reasoningTokens = response.reasoningTokens,
+                        cacheCreationInputTokens = response.cacheCreationInputTokens,
+                        cacheReadInputTokens = response.cacheReadInputTokens,
+                        savedPricing = options.apiModelPricing,
+                    )
                 } else {
-                    response.stopReason
-                        ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
-                        ?: AgentFinishReason.Stop
-                },
-            telemetry = telemetry,
-        )
+                    null
+                }
+
+            return AgentModelTurnResult(
+                assistantText = bufferedText.takeIf { it.isNotBlank() },
+                toolCalls = toolCalls,
+                finishReason =
+                    if (toolCalls.isNotEmpty()) {
+                        AgentFinishReason.ToolUse
+                    } else {
+                        response.stopReason
+                            ?.let { ProviderFinishReasonMapper.fromAnthropic(it, bufferedText).finishReason }
+                            ?: AgentFinishReason.Stop
+                    },
+                telemetry = telemetry,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            loggingPort.error(TAG, "completeSingleTurn failed: ${describeException(e)}", e)
+            throw e
+        }
     }
 
     private fun resolveThinkingBudget(options: GenerationOptions): Long? =
