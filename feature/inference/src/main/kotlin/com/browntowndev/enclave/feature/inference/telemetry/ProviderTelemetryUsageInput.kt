@@ -39,6 +39,7 @@ data class AnthropicTelemetryUsageInput(
     val outputTokens: Int?,
     val reasoningTokens: Int?,
     val cacheCreationInputTokens: Int?,
+    val cacheReadInputTokens: Int? = null,
     val savedPricing: ApiModelSavedPricing? = null,
     val clientBuild: TelemetryClientBuild,
 )

@@ -111,6 +111,7 @@ class InferenceTelemetrySupport
             outputTokens: Int?,
             reasoningTokens: Int?,
             cacheCreationInputTokens: Int?,
+            cacheReadInputTokens: Int? = null,
             savedPricing: ApiModelSavedPricing? = null,
         ): TurnTelemetry =
             normalizer.normalizeAnthropicUsage(
@@ -128,6 +129,7 @@ class InferenceTelemetrySupport
                     outputTokens = outputTokens,
                     reasoningTokens = reasoningTokens,
                     cacheCreationInputTokens = cacheCreationInputTokens,
+                    cacheReadInputTokens = cacheReadInputTokens,
                     savedPricing = savedPricing,
                     clientBuild = context.clientBuild,
                 ),

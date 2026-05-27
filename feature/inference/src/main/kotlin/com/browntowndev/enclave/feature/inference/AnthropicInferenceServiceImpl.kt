@@ -18,10 +18,10 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
-import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
@@ -67,6 +67,7 @@ class AnthropicInferenceServiceImpl(
         val outputTokens: Int? = null,
         val reasoningTokens: Int? = null,
         val cacheCreationInputTokens: Int? = null,
+        val cacheReadInputTokens: Int? = null,
     )
 
     private data class CapturedToolUse(
@@ -477,6 +478,7 @@ class AnthropicInferenceServiceImpl(
                     outputTokens = response.outputTokens,
                     reasoningTokens = response.reasoningTokens,
                     cacheCreationInputTokens = response.cacheCreationInputTokens,
+                    cacheReadInputTokens = response.cacheReadInputTokens,
                     savedPricing = options.apiModelPricing,
                 )
             } else {
@@ -618,6 +620,7 @@ class AnthropicInferenceServiceImpl(
             var outputTokens: Int? = null
             var reasoningTokens: Int? = null
             var cacheCreationInputTokens: Int? = null
+            var cacheReadInputTokens: Int? = null
             val pendingToolUses = mutableMapOf<Long, PendingToolUse>()
 
             while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
@@ -635,6 +638,12 @@ class AnthropicInferenceServiceImpl(
                     cacheCreationInputTokens =
                         usage
                             .cacheCreationInputTokens()
+                            .orElse(0L)
+                            .toInt()
+                            .takeIf { it > 0 }
+                    cacheReadInputTokens =
+                        usage
+                            .cacheReadInputTokens()
                             .orElse(0L)
                             .toInt()
                             .takeIf { it > 0 }
@@ -704,14 +713,28 @@ class AnthropicInferenceServiceImpl(
                     )
                 }
                 if (event.messageDelta().isPresent) {
+                    val deltaEvent = event.messageDelta().get()
                     stopReason =
-                        event
-                            .messageDelta()
-                            .get()
+                        deltaEvent
                             .delta()
                             .stopReason()
                             .map { it.toString() }
                             .orElse(stopReason)
+                    val usage = deltaEvent.usage()
+                    outputTokens = usage.outputTokens().toInt()
+                    usage.inputTokens().ifPresent { inputTokens = it.toInt() }
+                    cacheCreationInputTokens =
+                        usage
+                            .cacheCreationInputTokens()
+                            .orElse(cacheCreationInputTokens?.toLong() ?: 0L)
+                            .toInt()
+                            .takeIf { it > 0 }
+                    cacheReadInputTokens =
+                        usage
+                            .cacheReadInputTokens()
+                            .orElse(cacheReadInputTokens?.toLong() ?: 0L)
+                            .toInt()
+                            .takeIf { it > 0 }
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
                 if (event.contentBlockStart().isPresent) {
@@ -742,6 +765,7 @@ class AnthropicInferenceServiceImpl(
                 outputTokens = outputTokens,
                 reasoningTokens = reasoningTokens,
                 cacheCreationInputTokens = cacheCreationInputTokens,
+                cacheReadInputTokens = cacheReadInputTokens,
             )
         }
     }

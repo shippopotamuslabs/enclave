@@ -692,7 +692,10 @@ class RustLoopInferenceService(
         }.trimEnd()
     }
 
-    private fun buildUserContent(prompt: String, options: GenerationOptions): String =
+    private fun buildUserContent(
+        prompt: String,
+        options: GenerationOptions,
+    ): String =
         InferencePromptContentBuilder.buildUserContent(
             prompt = prompt,
             volatileTurnContext =

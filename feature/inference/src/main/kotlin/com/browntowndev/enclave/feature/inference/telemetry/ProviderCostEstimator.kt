@@ -22,6 +22,7 @@ class ProviderCostEstimator
             outputTokens: Int?,
             reasoningTokens: Int?,
             cacheCreationInputTokens: Int?,
+            cacheReadInputTokens: Int? = null,
             savedPricing: ApiModelSavedPricing? = null,
         ): CostEstimate =
             estimateFromSaved(
@@ -29,7 +30,7 @@ class ProviderCostEstimator
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,
                 reasoningTokens = reasoningTokens,
-                cacheReadInputTokens = null,
+                cacheReadInputTokens = cacheReadInputTokens,
                 cacheCreationInputTokens = cacheCreationInputTokens,
             )
 
