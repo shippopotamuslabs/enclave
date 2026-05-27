@@ -1078,7 +1078,7 @@ class BaseOpenAiSdkInferenceServiceTest {
 
             assertEquals("ok", result.assistantText)
             assertFalse(chatCalled)
-            assertEquals("chat-123", responseParams!!.promptCacheKey().orElse(null))
+            assertEquals(listOf("chat-123"), responseParams!!._headers().values("x-grok-conv-id"))
         }
 
     @Test

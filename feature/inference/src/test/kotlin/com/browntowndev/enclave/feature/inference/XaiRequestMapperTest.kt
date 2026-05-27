@@ -45,7 +45,7 @@ class XaiRequestMapperTest {
                     ),
             )
 
-        assertEquals("chat-123", params.promptCacheKey().orElse(null))
+        assertEquals(listOf("chat-123"), params._headers().values("x-grok-conv-id"))
     }
 
     @Test

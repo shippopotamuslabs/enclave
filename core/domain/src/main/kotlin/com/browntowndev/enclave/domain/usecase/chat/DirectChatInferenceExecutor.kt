@@ -120,6 +120,9 @@ class DirectChatInferenceExecutor
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Unexpected error in $modelType mode", e)
                     emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Unexpected error in $modelType mode due to system error", e)
+                    emit(MessageGenerationState.Failed(error = RuntimeException(e), modelType = modelType))
                 }
             }.flowOn(Dispatchers.Default)
 

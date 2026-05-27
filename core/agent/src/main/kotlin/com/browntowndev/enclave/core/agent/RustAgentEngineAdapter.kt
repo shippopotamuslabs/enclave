@@ -139,7 +139,7 @@ class RustAgentEngineAdapter
                                         }
                                     } catch (e: CancellationException) {
                                         throw e
-                                    } catch (e: Exception) {
+                                    } catch (e: Throwable) {
                                         loggingPort.error(TAG, "model turn failed: ${e.message}", e)
                                         send(AgentLoopEvent.Failed("model turn failed: ${e.message}"))
                                         return@channelFlow

@@ -196,7 +196,7 @@ class GenerateChatResponseUseCase
                                 extractedUrlTracker.clear()
                             }
                         }
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         loggingPort.error(TAG, "Failed to persist messages", e)
                     }
                 }
@@ -304,6 +304,9 @@ class GenerateChatResponseUseCase
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Unexpected error in COUNCIL mode", e)
                     emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Unexpected error in COUNCIL mode due to system error", e)
+                    emit(MessageGenerationState.Failed(RuntimeException(e), ModelType.MAIN))
                 }
             }
 

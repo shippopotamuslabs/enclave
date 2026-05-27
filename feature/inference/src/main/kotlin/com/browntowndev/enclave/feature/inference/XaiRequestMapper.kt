@@ -194,7 +194,9 @@ object XaiRequestMapper {
         options.chatId
             ?.value
             ?.takeIf { it.isNotBlank() }
-            ?.let(builder::promptCacheKey)
+            ?.let { conversationId ->
+                builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+            }
         return builder.build()
     }
 
