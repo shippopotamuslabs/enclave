@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * TOOL-PARSE-001 LI-03: real UniFFI round-trip through [RustToolEnvelopeParser].
  */
 class RustToolEnvelopeParserContractTest {
-    private val parser = RustToolEnvelopeParser()
+    private val parser = RustToolEnvelopeParser(io.mockk.mockk(relaxed = true))
     private val semanticsJson = AgentLoopToolSemanticsResources.enclaveDefaultJson
     private val catalogJson =
         checkNotNull(javaClass.classLoader?.getResourceAsStream("tool_catalog.json")) {

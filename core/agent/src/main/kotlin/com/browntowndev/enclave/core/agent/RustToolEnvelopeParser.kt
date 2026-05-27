@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeBatch
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeFailure
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeFailureReason
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeField
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,7 +34,9 @@ private fun rustHasLocalToolContract(
 @Singleton
 class RustToolEnvelopeParser
     @Inject
-    constructor() : ToolEnvelopeParserPort {
+    constructor(
+        private val loggingPort: LoggingPort,
+    ) : ToolEnvelopeParserPort {
         internal var parseToolCallsDelegate: (String, String, String) -> FfiToolParseBatch = ::rustParseToolCalls
         internal var coerceProviderArgumentsDelegate: (String, String, String, String) -> FfiToolParseField =
             ::rustCoerceProviderArguments
@@ -45,7 +48,20 @@ class RustToolEnvelopeParser
             toolCatalogJson: String,
         ): ToolEnvelopeBatch =
             runCatching { parseToolCallsDelegate(raw, toolSemanticsJson, toolCatalogJson).toDomain() }
-                .getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
+                .onSuccess { batch ->
+                    if (batch.failures.isNotEmpty()) {
+                        batch.failures.forEach { failure ->
+                            loggingPort.warning(
+                                "RustToolEnvelopeParser",
+                                "Tool call envelope parsing failure: reason=${failure.reason} original=${failure.original}"
+                            )
+                        }
+                    }
+                }
+                .getOrElse { error ->
+                    loggingPort.error("RustToolEnvelopeParser", "Failed to parse tool calls. raw=$raw", error)
+                    throw IllegalStateException("Rust tool parser unavailable", error)
+                }
 
         override fun coerceProviderArguments(
             toolName: String,
@@ -55,7 +71,14 @@ class RustToolEnvelopeParser
         ): ToolEnvelopeField =
             runCatching {
                 coerceProviderArgumentsDelegate(toolName, argsJson, toolSemanticsJson, toolCatalogJson).toDomain()
-            }.getOrElse { throw IllegalStateException("Rust tool parser unavailable", it) }
+            }.getOrElse { error ->
+                loggingPort.error(
+                    "RustToolEnvelopeParser",
+                    "Failed to coerce provider arguments toolName=$toolName argsJson=$argsJson",
+                    error
+                )
+                throw IllegalStateException("Rust tool parser unavailable", error)
+            }
 
         override fun hasLocalToolContract(
             systemPrompt: String?,
