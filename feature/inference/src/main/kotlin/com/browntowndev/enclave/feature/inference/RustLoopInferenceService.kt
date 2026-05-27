@@ -479,32 +479,13 @@ class RustLoopInferenceService(
                     provider = provider,
                     contextWindowTokens = (options.contextWindow ?: DEFAULT_CONTEXT_WINDOW).toUInt(),
                     toolsSchemaJson = serializeToolsSchema(options.activeTools),
-                    toolCatalogJson = serializeToolCatalog(options.toolCatalog),
+                    toolCatalogJson =
+                        com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
+                            .jsonForCatalog(options.toolCatalog),
                     toolSchemaRegistryJson = serializeFullRegistry(options.toolCatalog),
                     systemPrompt = options.systemPrompt ?: "",
                 ),
         )
-
-    private fun serializeToolCatalog(catalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>): String {
-        if (catalog.isEmpty()) return "[]"
-        val array =
-            buildJsonArray {
-                catalog.forEach { entry ->
-                    add(
-                        buildJsonObject {
-                            put("name", entry.name)
-                            put("description", entry.description)
-                            put("disclosureMode", entry.disclosureMode.name)
-                        },
-                    )
-                }
-            }
-        return Json.encodeToString(
-            kotlinx.serialization.json.JsonArray
-                .serializer(),
-            array,
-        )
-    }
 
     private fun serializeFullRegistry(catalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>): String {
         if (catalog.isEmpty()) return "[]"

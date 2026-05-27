@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.port.inference
 
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.AgentLoopToolSemanticsResources
 
 data class AgentPolicyRepairResult(
@@ -13,7 +14,7 @@ interface AgentPolicyPort {
         name: String,
         argsJson: String,
         toolSemanticsJson: String = AgentLoopToolSemanticsResources.enclaveDefaultJson,
-        toolCatalogJson: String = "[]",
+        toolCatalogJson: String = AgentLoopToolCatalogJson.fullCatalogFileJson,
     ): AgentPolicyRepairResult
 
     fun truncateResult(

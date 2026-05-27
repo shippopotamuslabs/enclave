@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.conversation
 
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
@@ -165,7 +166,12 @@ internal class LiteRtToolCallLoop(
 
     private fun repairLiteRtToolRequest(request: ToolCallRequest): ToolCallRequest =
         try {
-            val repaired = agentPolicyPort.repairTool(request.toolName, request.argumentsJson)
+            val repaired =
+                agentPolicyPort.repairTool(
+                    name = request.toolName,
+                    argsJson = request.argumentsJson,
+                    toolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(cache.toolCatalog),
+                )
             request.copy(toolName = repaired.resolvedName, argumentsJson = repaired.argumentsJson)
         } catch (t: Throwable) {
             val rootCause = ConversationErrorMapper.rootCause(t)

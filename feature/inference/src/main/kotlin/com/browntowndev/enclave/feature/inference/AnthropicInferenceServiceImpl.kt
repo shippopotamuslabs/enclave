@@ -21,6 +21,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
@@ -95,6 +96,9 @@ class AnthropicInferenceServiceImpl(
 
     private var appendOnlyContext: ProviderAppendOnlyContext? = null
 
+    @Volatile
+    private var activeToolCatalogJson: String = AgentLoopToolCatalogJson.EMPTY_ARRAY
+
     override fun sendPrompt(
         prompt: String,
         closeConversation: Boolean,
@@ -147,6 +151,7 @@ class AnthropicInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
+        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
         logImagePayloads(options)
 
         val params =
@@ -202,6 +207,7 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
         val timing =
             telemetrySupport?.let {
                 com.browntowndev.enclave.feature.inference.telemetry
@@ -773,6 +779,7 @@ class AnthropicInferenceServiceImpl(
             .coerceProviderArguments(
                 toolName = toolName,
                 argsJson = TOOL_INPUT_JSON_MAPPER.writeValueAsString(properties),
+                toolCatalogJson = activeToolCatalogJson,
             ).argumentsJson
 
     private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =
