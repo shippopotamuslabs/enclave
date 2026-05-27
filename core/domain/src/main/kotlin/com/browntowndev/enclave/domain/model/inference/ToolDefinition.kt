@@ -213,6 +213,17 @@ data class ToolDefinition(
                 supportsLazyDisclosure = false,
             )
 
+        val READ_CONTEXT_REFERENCE =
+            ToolDefinition(
+                name = "read_context_reference",
+                description =
+                    "Retrieve the full content of a context reference by its ID. " +
+                        "Use when context sidecars list references with truncated previews that you need to read in full.",
+                parametersClass = ReadContextReferenceParams::class,
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+                supportsLazyDisclosure = false,
+            )
+
         @Suppress("MaxLineLength")
         val SEARCH_CHAT_HISTORY =
             ToolDefinition(
@@ -373,6 +384,7 @@ data class ToolDefinition(
         val ALL_TOOLS =
             listOf(
                 DISCLOSE_TOOL_SCHEMAS,
+                READ_CONTEXT_REFERENCE,
                 WEB_SEARCH,
                 WEB_EXTRACT,
                 ATTACHED_IMAGE_INSPECT,

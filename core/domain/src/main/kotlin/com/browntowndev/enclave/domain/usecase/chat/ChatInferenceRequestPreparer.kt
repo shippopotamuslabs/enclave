@@ -327,6 +327,7 @@ class ChatInferenceRequestPreparer(
         val eligibleTools =
             buildList {
                 add(ToolDefinition.DISCLOSE_TOOL_SCHEMAS)
+                add(ToolDefinition.READ_CONTEXT_REFERENCE)
                 if (webSearchConfigured) {
                     add(ToolDefinition.WEB_SEARCH)
                     add(ToolDefinition.WEB_EXTRACT)
@@ -510,6 +511,7 @@ class ChatInferenceRequestPreparer(
         private val PRELOADED_TOOL_NAMES =
             setOf(
                 ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name,
+                ToolDefinition.READ_CONTEXT_REFERENCE.name,
                 ToolDefinition.WEB_SEARCH.name,
                 ToolDefinition.WEB_EXTRACT.name,
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
