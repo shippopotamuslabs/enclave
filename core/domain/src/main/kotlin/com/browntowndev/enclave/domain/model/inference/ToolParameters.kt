@@ -64,6 +64,12 @@ data class DiscloseToolSchemasParams(
     val tool_names: List<String>,
 ) : ToolParameters
 
+@kotlinx.serialization.Serializable
+data class ReadContextReferenceParams(
+    @ToolParam(description = "The ID of the context reference to retrieve.")
+    val reference_id: String,
+) : ToolParameters
+
 /**
  * Annotation to provide descriptions for tool parameters.
  */

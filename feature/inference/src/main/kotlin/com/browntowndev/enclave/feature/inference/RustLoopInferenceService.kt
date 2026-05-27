@@ -572,6 +572,9 @@ class RustLoopInferenceService(
         if (call.name == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
             return handleDisclosureCall(call, options)
         }
+        if (call.name == ToolDefinition.READ_CONTEXT_REFERENCE.name) {
+            return handleReadContextReference(call)
+        }
         return try {
             val request =
                 ToolCallRequest(
@@ -632,6 +635,38 @@ class RustLoopInferenceService(
             softFailure = false,
             activatedToolNames = resolution.activatedToolNames,
         )
+    }
+
+    private suspend fun handleReadContextReference(call: AgentToolCall): AgentToolResult {
+        val referenceId =
+            runCatching {
+                Json.parseToJsonElement(call.argumentsJson).jsonObject["reference_id"]?.jsonPrimitive?.content
+            }.getOrNull()
+                ?: return AgentToolResult(
+                    callId = call.callId,
+                    resultJson = """{"error":"missing_reference_id"}""",
+                    truncated = false,
+                    softFailure = true,
+                )
+        return try {
+            val content = agentLoopPort.readContextReference(referenceId)
+            AgentToolResult(
+                callId = call.callId,
+                resultJson = content,
+                truncated = false,
+                softFailure = false,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            loggingPort.error(TAG, "read_context_reference failed id=$referenceId", t)
+            AgentToolResult(
+                callId = call.callId,
+                resultJson = errorJson(call, t),
+                truncated = false,
+                softFailure = true,
+            )
+        }
     }
 
     private fun buildSessionContext(options: GenerationOptions): Map<String, String> =
