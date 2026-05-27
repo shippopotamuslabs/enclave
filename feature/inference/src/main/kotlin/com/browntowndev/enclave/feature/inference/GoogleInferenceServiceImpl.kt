@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
@@ -51,6 +52,9 @@ class GoogleInferenceServiceImpl(
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
     private var appendOnlyContext: ProviderAppendOnlyContext? = null
+
+    @Volatile
+    private var activeToolCatalogJson: String = AgentLoopToolCatalogJson.EMPTY_ARRAY
 
     private val promptCacheSession =
         GooglePromptCacheSession(
@@ -112,6 +116,7 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
+        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
         logImagePayloads(options)
 
         val request =
@@ -175,6 +180,7 @@ class GoogleInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
         val timing =
             telemetrySupport?.let {
                 com.browntowndev.enclave.feature.inference.telemetry
@@ -291,6 +297,7 @@ class GoogleInferenceServiceImpl(
                         .coerceProviderArguments(
                             toolName = name,
                             argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
+                            toolCatalogJson = activeToolCatalogJson,
                         ).argumentsJson
                 listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
             } ?: emptyList()
