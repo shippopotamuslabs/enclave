@@ -66,6 +66,12 @@
       "spill_stored_copy_only": true,
       "skip_result_truncation": true,
       "preserve_in_micro_compaction": true
+    },
+    {
+      "tool_name": "read_context_reference",
+      "spill_stored_copy_only": true,
+      "skip_result_truncation": true,
+      "preserve_in_micro_compaction": false
     }
   ],
   "compaction": {
