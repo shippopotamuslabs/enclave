@@ -164,7 +164,8 @@ internal class SettingsApiProvidersDelegate
             deletionState: MutableStateFlow<DeletionTransientState>,
             tag: String,
             id: ApiCredentialsId,
-        ) = byokCoordinator.onDeleteApiModelAsset(scope, deletionState, tag, id)
+            onSuccess: () -> Unit = {},
+        ) = byokCoordinator.onDeleteApiModelAsset(scope, deletionState, tag, id, onSuccess)
 
         fun onDeleteApiModelConfig(
             scope: CoroutineScope,

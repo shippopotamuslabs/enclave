@@ -355,8 +355,10 @@ internal class SettingsViewModel
                 onSuccess = onSuccess,
             )
 
-        fun onDeleteApiModelAsset(id: ApiCredentialsId) =
-            apiProvidersDelegate.onDeleteApiModelAsset(viewModelScope, _deletionState, TAG, id)
+        fun onDeleteApiModelAsset(
+            id: ApiCredentialsId,
+            onSuccess: () -> Unit = {},
+        ) = apiProvidersDelegate.onDeleteApiModelAsset(viewModelScope, _deletionState, TAG, id, onSuccess)
 
         fun onDeleteApiModelConfig(
             id: ApiModelConfigurationId,
