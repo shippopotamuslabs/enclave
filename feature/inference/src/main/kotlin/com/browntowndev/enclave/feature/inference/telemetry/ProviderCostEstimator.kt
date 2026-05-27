@@ -32,6 +32,7 @@ class ProviderCostEstimator
                 reasoningTokens = reasoningTokens,
                 cacheReadInputTokens = cacheReadInputTokens,
                 cacheCreationInputTokens = cacheCreationInputTokens,
+                inputTokensExcludeCacheReads = true,
             )
 
         fun estimateOpenAiCompatible(
@@ -57,6 +58,7 @@ class ProviderCostEstimator
             reasoningTokens: Int?,
             cacheReadInputTokens: Int?,
             cacheCreationInputTokens: Int?,
+            inputTokensExcludeCacheReads: Boolean = false,
         ): CostEstimate {
             val pricing = savedPricing?.takeIf { it.hasPromptAndCompletionRates() } ?: return unavailable()
             val cost =
@@ -67,6 +69,7 @@ class ProviderCostEstimator
                     reasoningTokens = reasoningTokens,
                     cacheReadInputTokens = cacheReadInputTokens,
                     cacheCreationInputTokens = cacheCreationInputTokens,
+                    inputTokensExcludeCacheReads = inputTokensExcludeCacheReads,
                 )
             return if (cost == null) {
                 unavailable()

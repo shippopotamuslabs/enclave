@@ -14,6 +14,8 @@ class SavedApiModelPricingEstimator
             reasoningTokens: Int?,
             cacheReadInputTokens: Int?,
             cacheCreationInputTokens: Int? = null,
+            /** When true, [inputTokens] is non-cached prompt only (Anthropic). When false, it includes cache reads (OpenAI-compatible). */
+            inputTokensExcludeCacheReads: Boolean = false,
         ): BigDecimal? {
             if (!pricing.hasPromptAndCompletionRates()) return null
             val prompt = pricing.promptUsdPerMillion!!
@@ -30,7 +32,12 @@ class SavedApiModelPricingEstimator
             if (hasNoBillableTokens(input, output, reasoning, cacheRead, cacheCreate)) {
                 return null
             }
-            val billableInput = (input - cacheRead).coerceAtLeast(0)
+            val billableInput =
+                if (inputTokensExcludeCacheReads) {
+                    input
+                } else {
+                    (input - cacheRead).coerceAtLeast(0)
+                }
             val dollars =
                 billableInput * inputRatePerToken +
                     cacheRead * cacheReadRatePerToken +
