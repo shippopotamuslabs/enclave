@@ -84,6 +84,28 @@ class SettingsGeneralDelegateTest {
         }
 
     @Test
+    fun `no cloud vault with local material bootstraps then unlocks and syncs`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.NoCloudVault)
+            coEvery { vaultMetadataPort.getVaultSalt() } returns "salt-b64"
+            coEvery { vaultMetadataPort.getWrappedDek() } returns "wrapped-b64"
+            coEvery { bootstrapCloudVaultFromLocalUseCase() } returns Result.success(Unit)
+            coEvery { unlockVaultFromStoredMetadataUseCase("password") } returns Result.success(Unit)
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns Result.success(Unit)
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+
+            assertEquals(VaultReauthSheetState.Hidden, sheet.value)
+            coVerify(exactly = 1) { bootstrapCloudVaultFromLocalUseCase() }
+            coVerify(exactly = 1) { unlockVaultFromStoredMetadataUseCase("password") }
+            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true) }
+            coVerify(exactly = 0) { createVaultUseCase(any(), any()) }
+        }
+
+    @Test
     fun `no cloud vault and no local vault creates the first vault`() =
         runTest {
             val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
@@ -120,6 +142,49 @@ class SettingsGeneralDelegateTest {
             coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false) }
             verify(exactly = 0) { cloudSyncPort.startListening() }
             coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
+        }
+
+    @Test
+    fun `already matching unlocks starts cloud sync and hides sheet`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            coEvery { unlockVaultFromStoredMetadataUseCase("password") } returns Result.success(Unit)
+            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true) } returns Result.success(Unit)
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+
+            assertEquals(VaultReauthSheetState.Hidden, sheet.value)
+            coVerifyOrder {
+                detectVaultReconciliationStateUseCase("password")
+                unlockVaultFromStoredMetadataUseCase("password")
+                startCloudSyncListeningUseCase(uploadLocalFirst = true)
+            }
+            coVerify(exactly = 0) { bootstrapCloudVaultFromLocalUseCase() }
+            coVerify(exactly = 0) { createVaultUseCase(any(), any()) }
+        }
+
+    @Test
+    fun `password mismatch shows inline error and keeps sheet open`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            coEvery { detectVaultReconciliationStateUseCase("wrong") } returns
+                Result.success(VaultReconciliationOutcome.PasswordMismatch)
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "wrong")
+            advanceUntilIdle()
+
+            assertEquals(
+                VaultReauthSheetState.EnterPassword(
+                    isUnlocking = false,
+                    errorMessage = "Incorrect Vault Password",
+                ),
+                sheet.value,
+            )
+            coVerify(exactly = 0) { unlockVaultFromStoredMetadataUseCase(any()) }
+            coVerify(exactly = 0) { startCloudSyncListeningUseCase(any()) }
         }
 
     @Test

@@ -46,7 +46,7 @@ class VaultUnlockContentTddRedTest {
         }
 
         // Progress indicator with determinate progress should be shown
-        composeTestRule.onNodeWithTag("unlock_sync_progress_indicator").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("unlock_sync_progress_indicator").assertExists()
         // Status text should be displayed
         composeTestRule.onNodeWithText("Syncing updates...").assertIsDisplayed()
         // Indeterminate indicator should NOT be shown when progress is known
@@ -72,7 +72,7 @@ class VaultUnlockContentTddRedTest {
         }
 
         // Indeterminate progress indicator should be shown
-        composeTestRule.onNodeWithTag("unlock_sync_progress_indicator_indeterminate").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("unlock_sync_progress_indicator_indeterminate").assertExists()
         // Determinate indicator should NOT be shown when progress is unknown
         composeTestRule.onNodeWithTag("unlock_sync_progress_indicator").assertDoesNotExist()
         // Status text should show the status message

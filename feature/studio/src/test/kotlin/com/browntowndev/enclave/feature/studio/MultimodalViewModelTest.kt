@@ -184,6 +184,39 @@ class MultimodalViewModelTest {
     }
 
     @Test
+    fun `ST1 generation completes with media visible and isGenerating false`() =
+        runTest {
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.onPromptChange("sunset mountains")
+            viewModel.generate()
+            assertTrue(viewModel.uiState.value.isGenerating)
+
+            ephemeralMediaFlow.value =
+                listOf(
+                    StudioMediaAsset(
+                        id = "gen-1",
+                        localUri = "cache://generated.jpg",
+                        prompt = "sunset mountains",
+                        mediaType = "IMAGE",
+                        createdAt = 1L,
+                    ),
+                )
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.isGenerating)
+            assertEquals(1, state.gallery.size)
+            assertEquals("gen-1", state.gallery.first().id)
+            assertEquals("cache://generated.jpg", state.gallery.first().localUri)
+
+            job.cancel()
+        }
+
+    @Test
     fun `uiState emits typed studio state without generation error`() =
         runTest {
             viewModel.uiState.test {

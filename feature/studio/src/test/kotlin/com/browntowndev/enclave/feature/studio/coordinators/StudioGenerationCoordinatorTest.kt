@@ -90,6 +90,63 @@ class StudioGenerationCoordinatorTest {
     }
 
     @Test
+    fun `ST2 continual generation continues until stopGeneration`() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.beginGenerationAttempt(
+                submittedPrompt = "continual prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = true,
+                settings = ImageGenerationSettings(),
+            )
+            assertTrue(coordinator.isContinualGenerationActive.value)
+            assertTrue(coordinator.isGenerating.value)
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+
+            ephemeralMediaFlow.value =
+                listOf(
+                    StudioMediaAsset(
+                        id = "1",
+                        localUri = "cache://1.jpg",
+                        prompt = "continual prompt",
+                        mediaType = MediaCapability.IMAGE.name,
+                        createdAt = 1L,
+                    ),
+                )
+            advanceUntilIdle()
+            assertFalse(coordinator.isGenerating.value)
+            assertTrue(coordinator.isContinualGenerationActive.value)
+
+            coordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            assertTrue(coordinator.isGenerating.value)
+
+            ephemeralMediaFlow.value =
+                ephemeralMediaFlow.value +
+                    StudioMediaAsset(
+                        id = "2",
+                        localUri = "cache://2.jpg",
+                        prompt = "continual prompt",
+                        mediaType = MediaCapability.IMAGE.name,
+                        createdAt = 2L,
+                    )
+            advanceUntilIdle()
+            assertFalse(coordinator.isGenerating.value)
+
+            coordinator.onGenerativeScrollThresholdVisible("anchor-2", MediaCapability.IMAGE)
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+
+            coordinator.stopGeneration()
+            assertFalse(coordinator.isContinualGenerationActive.value)
+            assertFalse(coordinator.isGenerating.value)
+
+            coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
     fun ephemeralMediaUpdate_afterDetailVideoGen_setsSuccessState() =
         runTest {
             val sourceAsset =

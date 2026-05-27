@@ -447,4 +447,81 @@ class ChatViewModelActionsTest {
             )
             collectJob.cancel()
         }
+
+    @Test
+    fun `removeImage removes only the matching staged uri`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            coEvery { stageImageAttachmentUseCase("content://keep") } returns "staged://keep"
+            coEvery { stageImageAttachmentUseCase("content://drop") } returns "staged://drop"
+            chatViewModel.onImagesSelected(listOf("content://keep"))
+            chatViewModel.onImagesSelected(listOf("content://drop"))
+            advanceUntilIdle()
+            assertEquals(
+                listOf("staged://keep", "staged://drop"),
+                chatViewModel.uiState.value.selectedImageUris,
+            )
+
+            chatViewModel.removeImage("staged://drop")
+            runCurrent()
+
+            assertEquals(listOf("staged://keep"), chatViewModel.uiState.value.selectedImageUris)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onModeChange trims staged images when policy maxItems shrinks`() =
+        runTest {
+            val apiVision =
+                ActiveModelConfiguration(
+                    modelId = "api-vision",
+                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId("vision"),
+                    isLocal = false,
+                    name = "API Vision",
+                    systemPrompt = null,
+                    temperature = 0.7,
+                    topK = 40,
+                    topP = 0.95,
+                    maxTokens = 512,
+                    minP = 0.0,
+                    repetitionPenalty = 1.1,
+                    contextWindow = 4096,
+                    thinkingEnabled = false,
+                    isMultimodal = true,
+                    apiProvider = com.browntowndev.enclave.domain.model.inference.ApiProvider.OPENAI,
+                )
+            val localThinking =
+                apiVision.copy(
+                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId("local-thinking"),
+                    isLocal = true,
+                    modelId = "local-thinking",
+                )
+            coEvery { activeModelProvider.getActiveConfiguration(any()) } answers {
+                when (firstArg<com.browntowndev.enclave.domain.model.inference.ModelType>()) {
+                    com.browntowndev.enclave.domain.model.inference.ModelType.FAST -> null
+                    com.browntowndev.enclave.domain.model.inference.ModelType.THINKING -> localThinking
+                    com.browntowndev.enclave.domain.model.inference.ModelType.VISION -> apiVision
+                    else -> null
+                }
+            }
+
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+            runCurrent()
+
+            coEvery { stageImageAttachmentUseCase("content://one") } returns "staged://one"
+            coEvery { stageImageAttachmentUseCase("content://two") } returns "staged://two"
+            chatViewModel.onImagesSelected(listOf("content://one"))
+            chatViewModel.onImagesSelected(listOf("content://two"))
+            advanceUntilIdle()
+            assertEquals(2, chatViewModel.uiState.value.selectedImageUris.size)
+
+            chatViewModel.onModeChange(ChatModeUi.THINKING)
+            advanceUntilIdle()
+
+            assertEquals(1, chatViewModel.uiState.value.selectedImageUris.size)
+            assertEquals("staged://one", chatViewModel.uiState.value.selectedImageUris.single())
+            collectJob.cancel()
+        }
 }

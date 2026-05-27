@@ -309,6 +309,64 @@ class HistoryViewModelTest {
             }
         }
 
+    // Suite H: Happy Path Tests
+
+    @Test
+    fun `H1 pinChat success - chat appears in pinned section`() =
+        runTest(testDispatcher) {
+            val chatId = ChatId("pin-me")
+            val unpinned = createTestChat(chatId, "To Pin", today, pinned = false)
+            val chatsFlow = MutableStateFlow(listOf(unpinned))
+            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            coEvery { mockTogglePinChatUseCase.invoke(chatId) } coAnswers {
+                chatsFlow.value = listOf(unpinned.copy(pinned = true))
+            }
+
+            viewModel = createViewModel()
+            backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+            advanceUntilIdle()
+
+            var state = viewModel.uiState.value
+            assertEquals(1, state.otherChats.size)
+            assertTrue(state.pinnedChats.isEmpty())
+
+            viewModel.pinChat(chatId)
+            advanceUntilIdle()
+
+            state = viewModel.uiState.value
+            assertTrue(state.pinnedChats.any { it.id == chatId })
+            assertFalse(state.otherChats.any { it.id == chatId })
+            io.mockk.coVerify(exactly = 1) { mockTogglePinChatUseCase.invoke(chatId) }
+        }
+
+    @Test
+    fun `H2 deleteChat success - chat removed from UI, use case invoked`() =
+        runTest(testDispatcher) {
+            val chatId = ChatId("delete-me")
+            val toDelete = createTestChat(chatId, "Delete Me", today, pinned = false)
+            val toKeep = createTestChat(ChatId("keep"), "Keep Me", today, pinned = false)
+            val chatsFlow = MutableStateFlow(listOf(toDelete, toKeep))
+            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            coEvery { mockDeleteChatUseCase.invoke(chatId) } coAnswers {
+                chatsFlow.value = listOf(toKeep)
+            }
+
+            viewModel = createViewModel()
+            backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+            advanceUntilIdle()
+
+            assertEquals(2, viewModel.uiState.value.otherChats.size)
+
+            viewModel.deleteChat(chatId)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(1, state.otherChats.size)
+            assertEquals(ChatId("keep"), state.otherChats.first().id)
+            assertFalse(state.otherChats.any { it.id == chatId })
+            io.mockk.coVerify(exactly = 1) { mockDeleteChatUseCase.invoke(chatId) }
+        }
+
     // Suite C: Relative Date Formatting Tests
 
     @Test
