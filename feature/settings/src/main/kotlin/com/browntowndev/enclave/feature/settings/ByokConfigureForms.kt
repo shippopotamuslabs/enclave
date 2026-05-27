@@ -615,6 +615,7 @@ fun ContextConfiguration(
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ParameterExclusionSection(
+    parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
@@ -632,41 +633,55 @@ fun ParameterExclusionSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            ParameterExclusionChip(
-                label = "Max Tokens",
-                selected = config.maxTokensDisabled,
-                onSelectedChange = { onConfigChange(config.copy(maxTokensDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Temperature",
-                selected = config.temperatureDisabled,
-                onSelectedChange = { onConfigChange(config.copy(temperatureDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Top P",
-                selected = config.topPDisabled,
-                onSelectedChange = { onConfigChange(config.copy(topPDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Top K",
-                selected = config.topKDisabled,
-                onSelectedChange = { onConfigChange(config.copy(topKDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Min P",
-                selected = config.minPDisabled,
-                onSelectedChange = { onConfigChange(config.copy(minPDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Freq. Penalty",
-                selected = config.frequencyPenaltyDisabled,
-                onSelectedChange = { onConfigChange(config.copy(frequencyPenaltyDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Pres. Penalty",
-                selected = config.presencePenaltyDisabled,
-                onSelectedChange = { onConfigChange(config.copy(presencePenaltyDisabled = it)) },
-            )
+            if (parameterSupport.supportsMaxTokens) {
+                ParameterExclusionChip(
+                    label = "Max Tokens",
+                    selected = config.maxTokensDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(maxTokensDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTemperature) {
+                ParameterExclusionChip(
+                    label = "Temperature",
+                    selected = config.temperatureDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(temperatureDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTopP) {
+                ParameterExclusionChip(
+                    label = "Top P",
+                    selected = config.topPDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(topPDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTopK) {
+                ParameterExclusionChip(
+                    label = "Top K",
+                    selected = config.topKDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(topKDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsMinP) {
+                ParameterExclusionChip(
+                    label = "Min P",
+                    selected = config.minPDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(minPDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsFrequencyPenalty) {
+                ParameterExclusionChip(
+                    label = "Freq. Penalty",
+                    selected = config.frequencyPenaltyDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(frequencyPenaltyDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsPresencePenalty) {
+                ParameterExclusionChip(
+                    label = "Pres. Penalty",
+                    selected = config.presencePenaltyDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(presencePenaltyDisabled = it)) },
+                )
+            }
         }
     }
 }
@@ -917,6 +932,7 @@ fun PresetConfigurationForm(
         )
 
         ParameterExclusionSection(
+            parameterSupport = parameterSupport,
             config = config,
             onConfigChange = onConfigChange,
         )

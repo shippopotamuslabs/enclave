@@ -58,8 +58,10 @@ class ApiProviderModelPolicyTest {
             )
 
         assertTrue(support.supportsReasoningEffort)
-        assertTrue(support.supportsTopK)
         assertTrue(support.supportsMaxTokens)
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
+        assertFalse(support.supportsTopK)
         assertFalse(support.supportsMinP)
         assertFalse(support.supportsFrequencyPenalty)
         assertFalse(support.supportsPresencePenalty)
