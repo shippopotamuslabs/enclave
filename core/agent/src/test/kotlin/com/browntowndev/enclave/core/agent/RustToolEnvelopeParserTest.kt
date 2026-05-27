@@ -9,7 +9,7 @@ class RustToolEnvelopeParserTest {
     @Test
     fun parse_whenRustParserFails_wrapsUnavailableError() {
         val cause = LinkageError("missing JNI symbol")
-        val parser = RustToolEnvelopeParser()
+        val parser = RustToolEnvelopeParser(io.mockk.mockk(relaxed = true))
         parser.parseToolCallsDelegate = { _, _, _ -> throw cause }
 
         val error =
