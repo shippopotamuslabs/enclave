@@ -4,7 +4,7 @@ import android.util.Log
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
-import com.browntowndev.enclave.feature.inference.anthropic.AnthropicClientProvider
+import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
 import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
 import com.google.genai.types.Model
@@ -12,12 +12,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,6 +57,46 @@ private data class OpenRouterArchitecture(
 )
 
 @Serializable
+private data class AnthropicModelsResponse(
+    val data: List<AnthropicModel> = emptyList(),
+)
+
+@Serializable
+private data class AnthropicModel(
+    val id: String,
+    val name: String? = null,
+    @SerialName("display_name")
+    val displayName: String? = null,
+    val created: Long? = null,
+    @SerialName("created_at")
+    val createdAt: String? = null,
+    @SerialName("context_window")
+    val contextWindow: Int? = null,
+    @SerialName("context_window_tokens")
+    val contextWindowTokens: Int? = null,
+    @SerialName("context_length")
+    val contextLength: Int? = null,
+    @SerialName("max_context_length")
+    val maxContextLength: Int? = null,
+    @SerialName("max_prompt_length")
+    val maxPromptLength: Int? = null,
+    @SerialName("max_output_tokens")
+    val maxOutputTokens: Int? = null,
+    val capabilities: AnthropicModelCapabilities? = null,
+)
+
+@Serializable
+private data class AnthropicModelCapabilities(
+    @SerialName("image_input")
+    val imageInput: AnthropicCapabilitySupport? = null,
+)
+
+@Serializable
+private data class AnthropicCapabilitySupport(
+    val supported: Boolean? = null,
+)
+
+@Serializable
 private data class XaiModelsResponse(
     val models: List<XaiModel>? = null,
     val data: List<XaiModel>? = null,
@@ -81,7 +124,6 @@ class ApiModelCatalogRepositoryImpl
     @Inject
     constructor(
         private val openAiClientProvider: OpenAiClientProvider,
-        private val anthropicClientProvider: AnthropicClientProvider,
         private val googleGenAiClientProvider: GoogleGenAiClientProvider,
         private val httpClient: Call.Factory,
     ) : ApiModelCatalogPort {
@@ -114,26 +156,10 @@ class ApiModelCatalogRepositoryImpl
 
                 when (provider) {
                     ApiProvider.ANTHROPIC ->
-                        anthropicClientProvider
-                            .getClient(
-                                apiKey = apiKey,
-                                baseUrl = resolvedBaseUrl,
-                            ).models()
-                            .list()
-                            .autoPager()
-                            .mapNotNull {
-                                DiscoveredApiModel(
-                                    id = it.id(),
-                                    name = it.displayName(),
-                                    created = it.createdAt().toEpochSecond(),
-                                    isMultimodal =
-                                        it
-                                            .capabilities()
-                                            .map { capabilities -> capabilities.imageInput().supported() }
-                                            .orElse(null),
-                                ).applyCapabilities(provider)
-                            }.distinctBy(DiscoveredApiModel::id)
-                            .sortedBy(DiscoveredApiModel::id)
+                        fetchAnthropicModels(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                        )
 
                     ApiProvider.GOOGLE ->
                         googleGenAiClientProvider
@@ -214,6 +240,78 @@ class ApiModelCatalogRepositoryImpl
                 .removePrefix("models/")
                 .removePrefix("publishers/google/models/")
                 .substringAfterLast('/')
+
+        private fun fetchAnthropicModels(
+            apiKey: String,
+            baseUrl: String?,
+        ): List<DiscoveredApiModel> {
+            val trimmedApiKey = apiKey.trim()
+            val url = buildAnthropicModelsUrl(baseUrl)
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .get()
+                    .header("x-api-key", trimmedApiKey)
+                    .header("Authorization", "Bearer $trimmedApiKey")
+                    .header("anthropic-version", "2023-06-01")
+                    .header("Accept", "application/json")
+                    .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body.string()
+                    error("Anthropic model discovery failed with HTTP ${response.code}: $errorBody")
+                }
+                return parseAnthropicModels(response.body.string())
+            }
+        }
+
+        private fun buildAnthropicModelsUrl(baseUrl: String?): okhttp3.HttpUrl {
+            val httpUrl = (AnthropicSdkBaseUrl.normalize(baseUrl) ?: "https://api.anthropic.com").toHttpUrl()
+            val segments = httpUrl.pathSegments
+            val lastSegment = segments.lastOrNull()
+            val penultimateSegment = segments.dropLast(1).lastOrNull()
+            val removeModelsSegment = lastSegment == "models"
+            val removeVersionSegment = lastSegment == "v1" || (removeModelsSegment && penultimateSegment == "v1")
+            return httpUrl
+                .newBuilder()
+                .apply {
+                    if (removeModelsSegment) {
+                        removePathSegment(segments.lastIndex)
+                    }
+                    if (removeVersionSegment) {
+                        removePathSegment(if (removeModelsSegment) segments.lastIndex - 1 else segments.lastIndex)
+                    }
+                }.addPathSegments("v1/models")
+                .build()
+        }
+
+        internal fun parseAnthropicModels(responseBody: String): List<DiscoveredApiModel> {
+            val response = json.decodeFromString<AnthropicModelsResponse>(responseBody)
+            return response.data
+                .mapNotNull { model ->
+                    val displayName =
+                        model.displayName?.takeIf { it.isNotBlank() }
+                            ?: model.name?.takeIf { it.isNotBlank() }
+                            ?: model.id.takeIf { it.isNotBlank() }
+                            ?: return@mapNotNull null
+                    DiscoveredApiModel(
+                        id = model.id,
+                        name = displayName,
+                        created = model.created ?: model.createdAt?.toEpochSecondOrNull(),
+                        contextWindowTokens =
+                            model.contextWindowTokens
+                                ?: model.contextWindow
+                                ?: model.contextLength
+                                ?: model.maxContextLength
+                                ?: model.maxPromptLength,
+                        maxOutputTokens = model.maxOutputTokens,
+                        isMultimodal = model.capabilities?.imageInput?.supported,
+                    ).applyCapabilities(ApiProvider.ANTHROPIC)
+                }.distinctBy(DiscoveredApiModel::id)
+                .sortedBy(DiscoveredApiModel::id)
+        }
 
         private fun fetchOpenRouterModels(
             apiKey: String,
@@ -517,6 +615,13 @@ class ApiModelCatalogRepositoryImpl
         private fun Double.asUsdPerMillionFromXai(): Double? =
             takeIf { isFinite() && this >= 0.0 }
                 ?.div(XAI_PER_TOKEN_TO_PER_MILLION)
+
+        private fun String.toEpochSecondOrNull(): Long? =
+            try {
+                OffsetDateTime.parse(this).toEpochSecond()
+            } catch (_: DateTimeParseException) {
+                null
+            }
 
         @Suppress("CyclomaticComplexMethod")
         private fun DiscoveredApiModel.applyCapabilities(

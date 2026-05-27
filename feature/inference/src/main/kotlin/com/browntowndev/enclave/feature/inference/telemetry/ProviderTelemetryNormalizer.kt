@@ -68,6 +68,7 @@ class ProviderTelemetryNormalizer
                     outputTokens = input.outputTokens,
                     reasoningTokens = input.reasoningTokens,
                     cacheCreationInputTokens = input.cacheCreationInputTokens,
+                    cacheReadInputTokens = input.cacheReadInputTokens,
                     savedPricing = input.savedPricing,
                 )
             return TurnTelemetry(
@@ -87,7 +88,7 @@ class ProviderTelemetryNormalizer
                 outputTokens = input.outputTokens,
                 reasoningTokens = input.reasoningTokens,
                 cachedInputTokens = null,
-                cacheReadInputTokens = null,
+                cacheReadInputTokens = input.cacheReadInputTokens,
                 cacheWriteInputTokens = null,
                 cacheCreationInputTokens = input.cacheCreationInputTokens,
                 costUsd = estimate.costUsd,
