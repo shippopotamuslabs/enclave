@@ -14,7 +14,6 @@ import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -38,9 +37,10 @@ class AnthropicVolatileTurnContextCommitTest {
             val service = createAnthropicService(capturedParams)
 
             // Turn 1: sessionMessages already contain the merged content (as Rust stored it)
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\noriginal query"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\noriginal query"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -50,17 +50,24 @@ class AnthropicVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = "web-prefix",
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = "web-prefix",
+                    ),
             )
 
             assertEquals(1, capturedParams.size, "CSPC-ANTHRO-03a turn 1: should have 1 params capture")
             val msgs1 = capturedParams[0].messages()
             assertEquals(1, msgs1.size)
 
-            val firstUserText1 = msgs1[0].content().asBlockParams().single().asText().text()
+            val firstUserText1 =
+                msgs1[0]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
             assertEquals(
                 "web-prefix\n\noriginal query",
                 firstUserText1,
@@ -72,11 +79,12 @@ class AnthropicVolatileTurnContextCommitTest {
             )
 
             // Turn 2: sessionMessages include replayed turn 1 (with merged content) + new user
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\noriginal query"),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "answer"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "follow-up"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\noriginal query"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "answer"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "follow-up"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -86,24 +94,37 @@ class AnthropicVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = null,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = null,
+                    ),
             )
 
             assertEquals(2, capturedParams.size, "CSPC-ANTHRO-03a: should have 2 captures total")
             val msgs2 = capturedParams[1].messages()
             assertEquals(3, msgs2.size)
 
-            val firstUserText2 = msgs2[0].content().asBlockParams().single().asText().text()
+            val firstUserText2 =
+                msgs2[0]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
             assertEquals(
                 "web-prefix\n\noriginal query",
                 firstUserText2,
                 "CSPC-ANTHRO-03a turn 2: first USER text block must still be 'web-prefix\\n\\noriginal query' (replayed from Rust)",
             )
 
-            val thirdUserText2 = msgs2[2].content().asBlockParams().single().asText().text()
+            val thirdUserText2 =
+                msgs2[2]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
             assertEquals(
                 "follow-up",
                 thirdUserText2,
@@ -111,9 +132,17 @@ class AnthropicVolatileTurnContextCommitTest {
             )
 
             // Confirm no double-prepend anywhere
-            val allTexts = msgs2.mapNotNull { msg ->
-                runCatching { msg.content().asBlockParams().single().asText().text() }.getOrNull()
-            }
+            val allTexts =
+                msgs2.mapNotNull { msg ->
+                    runCatching {
+                        msg
+                            .content()
+                            .asBlockParams()
+                            .single()
+                            .asText()
+                            .text()
+                    }.getOrNull()
+                }
             assertFalse(
                 allTexts.any { it.contains("web-prefix\n\nweb-prefix") },
                 "CSPC-ANTHRO-03a: 'web-prefix\\n\\nweb-prefix' must NOT appear in any message text block",
@@ -134,9 +163,10 @@ class AnthropicVolatileTurnContextCommitTest {
             val expectedContent = "# RELEVANT FACTS & CONTEXT:\n- fact-a\n\nhelp"
 
             // Turn 1
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -146,14 +176,21 @@ class AnthropicVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = memoryPrefix,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = memoryPrefix,
+                    ),
             )
 
             val msgs1 = capturedParams[0].messages()
-            val firstUserText1 = msgs1[0].content().asBlockParams().single().asText().text()
+            val firstUserText1 =
+                msgs1[0]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
             assertEquals(
                 expectedContent,
                 firstUserText1,
@@ -165,11 +202,12 @@ class AnthropicVolatileTurnContextCommitTest {
             )
 
             // Turn 2
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "more"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "more"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -179,14 +217,21 @@ class AnthropicVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = null,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = null,
+                    ),
             )
 
             val msgs2 = capturedParams[1].messages()
-            val firstUserText2 = msgs2[0].content().asBlockParams().single().asText().text()
+            val firstUserText2 =
+                msgs2[0]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
             assertEquals(
                 expectedContent,
                 firstUserText2,
@@ -198,9 +243,7 @@ class AnthropicVolatileTurnContextCommitTest {
     // Helper
     // ---------------------------------------------------------------------------
 
-    private fun createAnthropicService(
-        capturedParams: MutableList<MessageCreateParams>,
-    ): AnthropicInferenceServiceImpl {
+    private fun createAnthropicService(capturedParams: MutableList<MessageCreateParams>): AnthropicInferenceServiceImpl {
         val client = mockk<AnthropicClient>()
         val messageService = mockk<MessageService>()
         val streamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()

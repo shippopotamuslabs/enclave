@@ -15,7 +15,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -38,12 +37,13 @@ class GoogleInferenceServiceImplCachePrefixTest {
                     allowToolCall = any(),
                     emitEvent = any(),
                 )
-            } returns GoogleSdkResult(
-                emittedAny = true,
-                functionCall = null,
-                assistantContent = null,
-                finishReason = "STOP",
-            )
+            } returns
+                GoogleSdkResult(
+                    emittedAny = true,
+                    functionCall = null,
+                    assistantContent = null,
+                    finishReason = "STOP",
+                )
 
             // Mock cache creation/deletion
             coEvery {
@@ -51,23 +51,25 @@ class GoogleInferenceServiceImplCachePrefixTest {
             } returns "cachedContents/test-cache-999"
             coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
 
-            val service = GoogleInferenceServiceImpl(
-                sdkClient = sdkClient,
-                modelId = "gemini-2.5-flash",
-                modelType = ModelType.MAIN,
-                loggingPort = loggingPort,
-                toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-                toolStreamGatePort = FakeToolStreamGatePort(),
-            )
+            val service =
+                GoogleInferenceServiceImpl(
+                    sdkClient = sdkClient,
+                    modelId = "gemini-2.5-flash",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
 
             // Turn 1: History contains enough tokens to exceed the flash threshold of 1024 tokens.
             // "stable prefix " is 14 characters. Replicated 150 times gives a very long prompt to exceed 1024 tokens.
             val longPrefixText = "stable prefix ".repeat(1500)
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = longPrefixText),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "acknowledgement"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 1 active user message"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = longPrefixText),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "acknowledgement"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 1 active user message"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -99,16 +101,26 @@ class GoogleInferenceServiceImplCachePrefixTest {
             // Verify Turn 1 contentsToSend only contains delta contents (the last user message "Turn 1 active user message").
             // Since Turn 1's stableHistory is cached, only the delta (turn1Messages.last()) is sent.
             assertEquals(1, contentsSlot.captured.size)
-            assertEquals("Turn 1 active user message", contentsSlot.captured.single().parts().get().single().text().get())
+            assertEquals(
+                "Turn 1 active user message",
+                contentsSlot.captured
+                    .single()
+                    .parts()
+                    .get()
+                    .single()
+                    .text()
+                    .get(),
+            )
 
             // Turn 2: Keep the prefix, append Turn 1's assistant answer, and a new Turn 2 active user message.
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = longPrefixText),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "acknowledgement"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 1 active user message"),
-                AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Turn 1 model response"),
-                AgentLoopMessage(id = "u3", role = Role.USER, content = "Turn 2 active user message"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = longPrefixText),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "acknowledgement"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 1 active user message"),
+                    AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Turn 1 model response"),
+                    AgentLoopMessage(id = "u3", role = Role.USER, content = "Turn 2 active user message"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -135,9 +147,33 @@ class GoogleInferenceServiceImplCachePrefixTest {
             // That is 3 messages total!
             val capturedContents2 = contentsSlot.captured
             assertEquals(3, capturedContents2.size)
-            assertEquals("Turn 1 active user message", capturedContents2[0].parts().get().single().text().get())
-            assertEquals("Turn 1 model response", capturedContents2[1].parts().get().single().text().get())
-            assertEquals("Turn 2 active user message", capturedContents2[2].parts().get().single().text().get())
+            assertEquals(
+                "Turn 1 active user message",
+                capturedContents2[0]
+                    .parts()
+                    .get()
+                    .single()
+                    .text()
+                    .get(),
+            )
+            assertEquals(
+                "Turn 1 model response",
+                capturedContents2[1]
+                    .parts()
+                    .get()
+                    .single()
+                    .text()
+                    .get(),
+            )
+            assertEquals(
+                "Turn 2 active user message",
+                capturedContents2[2]
+                    .parts()
+                    .get()
+                    .single()
+                    .text()
+                    .get(),
+            )
 
             // Close session and verify cleanup
             service.closeSession()

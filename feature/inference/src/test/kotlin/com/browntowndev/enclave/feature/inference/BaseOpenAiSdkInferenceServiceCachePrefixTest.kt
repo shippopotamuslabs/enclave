@@ -28,9 +28,10 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
             val capturedParams = mutableListOf<ChatCompletionCreateParams>()
             val service = createTestService(capturedParams, modelId = "gpt-4o", provider = "OPENAI")
 
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -43,11 +44,12 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
                 options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-123")),
             )
 
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -91,9 +93,10 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
             val capturedParams = mutableListOf<ChatCompletionCreateParams>()
             val service = createTestService(capturedParams, modelId = "grok-4.3", provider = "XAI")
 
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -106,11 +109,12 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
                 options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-123")),
             )
 
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -150,9 +154,10 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
             // Using anthropic/claude model identifier to trigger cache control breakpoints
             val service = createTestService(capturedParams, modelId = "anthropic/claude-sonnet-4", provider = "OPENROUTER")
 
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -165,11 +170,12 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
                 options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-123")),
             )
 
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "Turn 1 user request"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Turn 1 response text"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Turn 2 user request"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -239,47 +245,51 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
         }
     }
 
-    private fun ChatCompletionMessageParam.toComparisonString(): String {
-        return when {
+    private fun ChatCompletionMessageParam.toComparisonString(): String =
+        when {
             isSystem() -> {
                 val sys = asSystem()
                 val content = sys.content()
-                val contentStr = if (content.isText()) {
-                    content.asText()
-                } else {
-                    content.asArrayOfContentParts().joinToString { part ->
-                        part.text()
+                val contentStr =
+                    if (content.isText()) {
+                        content.asText()
+                    } else {
+                        content.asArrayOfContentParts().joinToString { part ->
+                            part.text()
+                        }
                     }
-                }
                 "SYSTEM:$contentStr"
             }
             isUser() -> {
                 val user = asUser()
                 val content = user.content()
-                val contentStr = if (content.isText()) {
-                    content.asText()
-                } else {
-                    content.asArrayOfContentParts().joinToString { part ->
-                        if (part.isText()) part.asText().text() else "IMAGE"
+                val contentStr =
+                    if (content.isText()) {
+                        content.asText()
+                    } else {
+                        content.asArrayOfContentParts().joinToString { part ->
+                            if (part.isText()) part.asText().text() else "IMAGE"
+                        }
                     }
-                }
                 "USER:$contentStr"
             }
             isAssistant() -> {
                 val assistant = asAssistant()
-                val toolCallsText = if (assistant.toolCalls().isPresent) {
-                    assistant.toolCalls().get().joinToString { tc ->
-                        "${tc.asFunction().id()}:${tc.asFunction().function().name()}:${tc.asFunction().function().arguments()}"
+                val toolCallsText =
+                    if (assistant.toolCalls().isPresent) {
+                        assistant.toolCalls().get().joinToString { tc ->
+                            "${tc.asFunction().id()}:${tc.asFunction().function().name()}:${tc.asFunction().function().arguments()}"
+                        }
+                    } else {
+                        "no_tools"
                     }
-                } else {
-                    "no_tools"
-                }
-                val text = if (assistant.content().isPresent) {
-                    val content = assistant.content().get()
-                    if (content.isText()) content.asText() else "content_parts"
-                } else {
-                    ""
-                }
+                val text =
+                    if (assistant.content().isPresent) {
+                        val content = assistant.content().get()
+                        if (content.isText()) content.asText() else "content_parts"
+                    } else {
+                        ""
+                    }
                 "ASSISTANT:text=$text;tools=$toolCallsText"
             }
             isTool() -> {
@@ -288,5 +298,4 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
             }
             else -> toString()
         }
-    }
 }

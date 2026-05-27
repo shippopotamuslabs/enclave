@@ -8,7 +8,6 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCompletedEvent
-import com.openai.models.responses.ResponseUsage
 import com.openai.models.responses.ResponseErrorEvent
 import com.openai.models.responses.ResponseFailedEvent
 import com.openai.models.responses.ResponseIncompleteEvent
@@ -19,6 +18,7 @@ import com.openai.models.responses.ResponseRefusalDoneEvent
 import com.openai.models.responses.ResponseStreamEvent
 import com.openai.models.responses.ResponseTextDeltaEvent
 import com.openai.models.responses.ResponseTextDoneEvent
+import com.openai.models.responses.ResponseUsage
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

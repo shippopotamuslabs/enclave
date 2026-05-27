@@ -642,7 +642,11 @@ class RustLoopInferenceService(
     private suspend fun handleReadContextReference(call: AgentToolCall): AgentToolResult {
         val referenceId =
             runCatching {
-                Json.parseToJsonElement(call.argumentsJson).jsonObject["reference_id"]?.jsonPrimitive?.content
+                Json
+                    .parseToJsonElement(call.argumentsJson)
+                    .jsonObject["reference_id"]
+                    ?.jsonPrimitive
+                    ?.content
             }.getOrNull()
                 ?: return AgentToolResult(
                     callId = call.callId,

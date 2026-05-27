@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.google.genai.types.Content
 import io.mockk.coEvery
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -34,9 +33,10 @@ class GoogleVolatileTurnContextCommitTest {
 
             // Turn 1: sessionMessages already contain the merged content (as Rust stored it)
             // volatileTurnContext = "web-prefix" but the message content already has it
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\nquery"),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\nquery"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -46,10 +46,11 @@ class GoogleVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = "web-prefix",
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = "web-prefix",
+                    ),
             )
 
             assertEquals(1, capturedContentsList.size, "CSPC-GOOGLE-03a turn 1: should have 1 contentsToSend capture")
@@ -67,11 +68,12 @@ class GoogleVolatileTurnContextCommitTest {
             )
 
             // Turn 2: sessionMessages include replayed turn 1 + new user
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\nquery"),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "answer"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "follow-up"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "web-prefix\n\nquery"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "answer"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "follow-up"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -81,10 +83,11 @@ class GoogleVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = null,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = null,
+                    ),
             )
 
             assertEquals(2, capturedContentsList.size, "CSPC-GOOGLE-03a: should have 2 captures total")
@@ -119,9 +122,10 @@ class GoogleVolatileTurnContextCommitTest {
             val expectedContent = "# RELEVANT FACTS & CONTEXT:\n- fact-a\n\nhelp"
 
             // Turn 1
-            val turn1Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
-            )
+            val turn1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn1Messages,
@@ -131,10 +135,11 @@ class GoogleVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = memoryPrefix,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = memoryPrefix,
+                    ),
             )
 
             val contents1 = capturedContentsList[0]
@@ -146,11 +151,12 @@ class GoogleVolatileTurnContextCommitTest {
             )
 
             // Turn 2
-            val turn2Messages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
-                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "more"),
-            )
+            val turn2Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = expectedContent),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "more"),
+                )
 
             service.completeSingleTurn(
                 sessionMessages = turn2Messages,
@@ -160,10 +166,11 @@ class GoogleVolatileTurnContextCommitTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = null,
-                ),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        volatileTurnContext = null,
+                    ),
             )
 
             val contents2 = capturedContentsList[1]
@@ -179,9 +186,7 @@ class GoogleVolatileTurnContextCommitTest {
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private fun createGoogleService(
-        capturedContentsList: MutableList<List<Content>>,
-    ): GoogleInferenceServiceImpl {
+    private fun createGoogleService(capturedContentsList: MutableList<List<Content>>): GoogleInferenceServiceImpl {
         val sdkClient = mockk<GoogleGenAiSdkClient>()
 
         coEvery {
@@ -216,5 +221,9 @@ class GoogleVolatileTurnContextCommitTest {
     }
 
     private fun Content.extractFirstTextPart(): String =
-        parts().orElse(emptyList()).firstOrNull()?.text()?.orElse("") ?: ""
+        parts()
+            .orElse(emptyList())
+            .firstOrNull()
+            ?.text()
+            ?.orElse("") ?: ""
 }

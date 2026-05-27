@@ -28,7 +28,6 @@ import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionMessageParam
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
@@ -51,24 +50,26 @@ class RustLoopVolatileTurnContextCommitTest {
             val userMessageId = MessageId("u1")
             val volatilePrefix = "# RELEVANT WEB SEARCH RESULTS:\nresult-text-abc"
             val expectedContent = "search query"
-            val port = FakeAgentLoopPort {
-                send(AgentLoopEvent.Finished)
-            }
+            val port =
+                FakeAgentLoopPort {
+                    send(AgentLoopEvent.Finished)
+                }
             val service =
                 createService(
                     agentLoopPort = port,
                     committedInferencePrompts = committedPrompts,
                 )
 
-            service.sendPrompt(
-                prompt = "search query",
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        userMessageId = userMessageId,
-                        volatileTurnContext = volatilePrefix,
-                    ),
-            ).toList()
+            service
+                .sendPrompt(
+                    prompt = "search query",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            userMessageId = userMessageId,
+                            volatileTurnContext = volatilePrefix,
+                        ),
+                ).toList()
 
             assertEquals(expectedContent, committedPrompts.get(userMessageId))
         }
@@ -83,47 +84,53 @@ class RustLoopVolatileTurnContextCommitTest {
             val capturing = CapturingRustCompatibleService()
 
             // Turn 1: FakeAgentLoopPort calls completeModelTurn with sessionMessages
-            val port1 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
+            val port1 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
             val service1 = createService(agentLoopPort = port1, inner = capturing)
 
-            service1.sendPrompt(
-                prompt = "Hello",
-                options = GenerationOptions(reasoningBudget = 0),
-            ).toList()
+            service1
+                .sendPrompt(
+                    prompt = "Hello",
+                    options = GenerationOptions(reasoningBudget = 0),
+                ).toList()
 
             val turn1SessionMessages = capturing.capturedTurnArgs.last()
             assertEquals("Hello", turn1SessionMessages[0].content, "CSPC-01 turn 1: sessionMessages[0].content")
 
             // Turn 2: FakeAgentLoopPort replays sessionMessages with history
-            val port2 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "World"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Hello"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
+            val port2 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "World"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "Hello"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
             val service2 = createService(agentLoopPort = port2, inner = capturing)
 
-            service2.sendPrompt(
-                prompt = "Hello",
-                options = GenerationOptions(reasoningBudget = 0),
-            ).toList()
+            service2
+                .sendPrompt(
+                    prompt = "Hello",
+                    options = GenerationOptions(reasoningBudget = 0),
+                ).toList()
 
             val turn2SessionMessages = capturing.capturedTurnArgs.last()
             assertEquals(
@@ -147,39 +154,42 @@ class RustLoopVolatileTurnContextCommitTest {
         runTest {
             val capturing = CapturingRustCompatibleService()
 
-            val turn2SessionMessages = listOf(
-                AgentLoopMessage(id = "u1", role = Role.USER, content = "What time is it?"),
-                AgentLoopMessage(
-                    id = "a1",
-                    role = Role.ASSISTANT,
-                    content = "",
-                    metadataJson = """{"raw_tool_calls":[{"id":"c1","name":"web_search","arguments_json":"{}"}]}""",
-                ),
-                AgentLoopMessage(
-                    id = "t1",
-                    role = Role.USER,
-                    content = """{"result":"3pm"}""",
-                    metadataJson = """{"call_id":"c1"}""",
-                ),
-                AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "It is 3pm"),
-                AgentLoopMessage(id = "u2", role = Role.USER, content = "Tell me more"),
-            )
-
-            val port = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = turn2SessionMessages,
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
+            val turn2SessionMessages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "What time is it?"),
+                    AgentLoopMessage(
+                        id = "a1",
+                        role = Role.ASSISTANT,
+                        content = "",
+                        metadataJson = """{"raw_tool_calls":[{"id":"c1","name":"web_search","arguments_json":"{}"}]}""",
+                    ),
+                    AgentLoopMessage(
+                        id = "t1",
+                        role = Role.USER,
+                        content = """{"result":"3pm"}""",
+                        metadataJson = """{"call_id":"c1"}""",
+                    ),
+                    AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "It is 3pm"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Tell me more"),
                 )
-                send(AgentLoopEvent.Finished)
-            }
+
+            val port =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = turn2SessionMessages,
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
             val service = createService(agentLoopPort = port, inner = capturing)
 
-            service.sendPrompt(
-                prompt = "Tell me more",
-                options = GenerationOptions(reasoningBudget = 0),
-            ).toList()
+            service
+                .sendPrompt(
+                    prompt = "Tell me more",
+                    options = GenerationOptions(reasoningBudget = 0),
+                ).toList()
 
             val capturedMessages = capturing.capturedTurnArgs.last()
             assertEquals(
@@ -211,26 +221,30 @@ class RustLoopVolatileTurnContextCommitTest {
             val webRagPrefix = "# RELEVANT WEB SEARCH RESULTS:\nresult-text-abc"
             val barePrompt = "search query"
 
-            val port1 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
+            val port1 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
             val service1 = createService(agentLoopPort = port1, inner = providerCapture.service)
 
-            service1.sendPrompt(
-                prompt = barePrompt,
-                options = GenerationOptions(
-                    reasoningBudget = 0,
-                    volatileTurnContext = webRagPrefix,
-                ),
-            ).toList()
+            service1
+                .sendPrompt(
+                    prompt = barePrompt,
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            volatileTurnContext = webRagPrefix,
+                        ),
+                ).toList()
 
             assertEquals(
                 barePrompt,
@@ -240,41 +254,56 @@ class RustLoopVolatileTurnContextCommitTest {
             assertTrue(
                 providerCapture.params.last().messages().any { message ->
                     message.isSystem() &&
-                        message.asSystem().content().asText().contains("RELEVANT WEB SEARCH RESULTS")
+                        message
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("RELEVANT WEB SEARCH RESULTS")
                 },
                 "CSPC-03a turn 1: provider wire must include pre-retrieval system sidecar",
             )
 
-            val port2 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "some answer"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
+            val port2 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "some answer"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
             val service2 = createService(agentLoopPort = port2, inner = providerCapture.service)
 
-            service2.sendPrompt(
-                prompt = "follow up",
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
-            ).toList()
+            service2
+                .sendPrompt(
+                    prompt = "follow up",
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
+                ).toList()
 
             val turn2SessionMessages = providerCapture.params.last().messages()
             assertEquals(
                 barePrompt,
-                turn2SessionMessages.first { it.isUser() }.asUser().content().asText(),
+                turn2SessionMessages
+                    .first { it.isUser() }
+                    .asUser()
+                    .content()
+                    .asText(),
                 "CSPC-03a turn 2: first user wire content stays bare for cache prefix stability",
             )
             assertTrue(
                 turn2SessionMessages.any { message ->
                     message.isSystem() &&
-                        message.asSystem().content().asText().contains("RELEVANT WEB SEARCH RESULTS")
+                        message
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("RELEVANT WEB SEARCH RESULTS")
                 },
                 "CSPC-03a turn 2: frozen pre-retrieval sidecar replays on provider wire",
             )
@@ -291,49 +320,66 @@ class RustLoopVolatileTurnContextCommitTest {
             val xRagPrefix = "# RELEVANT X SEARCH RESULTS:\ntweet-data-xyz"
             val barePrompt = "x query"
 
-            val port1 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
-                prompt = barePrompt,
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = xRagPrefix),
-            ).toList()
+            val port1 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port1, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = barePrompt,
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = xRagPrefix),
+                ).toList()
 
             assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
-            val port2 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
-                prompt = "follow up",
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
-            ).toList()
+            val port2 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port2, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = "follow up",
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
+                ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
                 barePrompt,
-                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+                turn2Wire
+                    .first { it.isUser() }
+                    .asUser()
+                    .content()
+                    .asText(),
             )
             assertTrue(
-                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT X SEARCH RESULTS") },
+                turn2Wire.any {
+                    it.isSystem() &&
+                        it
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("RELEVANT X SEARCH RESULTS")
+                },
             )
         }
 
@@ -348,49 +394,66 @@ class RustLoopVolatileTurnContextCommitTest {
             val combinedRag = "# RELEVANT WEB SEARCH RESULTS:\nweb-results\n\n# RELEVANT X SEARCH RESULTS:\nx-results"
             val barePrompt = "combo query"
 
-            val port1 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
-                prompt = barePrompt,
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = combinedRag),
-            ).toList()
+            val port1 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port1, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = barePrompt,
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = combinedRag),
+                ).toList()
 
             assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
-            val port2 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
-                prompt = "follow up",
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
-            ).toList()
+            val port2 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "follow up"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port2, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = "follow up",
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
+                ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
                 barePrompt,
-                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+                turn2Wire
+                    .first { it.isUser() }
+                    .asUser()
+                    .content()
+                    .asText(),
             )
             assertTrue(
-                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT WEB SEARCH RESULTS") },
+                turn2Wire.any {
+                    it.isSystem() &&
+                        it
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("RELEVANT WEB SEARCH RESULTS")
+                },
             )
         }
 
@@ -405,49 +468,66 @@ class RustLoopVolatileTurnContextCommitTest {
             val memoryPrefix = "# RELEVANT FACTS & CONTEXT:\n- User prefers concise answers\n- User is a developer"
             val barePrompt = "help me code"
 
-            val port1 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port1, inner = providerCapture.service).sendPrompt(
-                prompt = barePrompt,
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = memoryPrefix),
-            ).toList()
+            val port1 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port1, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = barePrompt,
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = memoryPrefix),
+                ).toList()
 
             assertEquals(barePrompt, port1.capturedInitialMessages.last().content)
 
-            val port2 = FakeAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "more help"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            createService(agentLoopPort = port2, inner = providerCapture.service).sendPrompt(
-                prompt = "more help",
-                options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
-            ).toList()
+            val port2 =
+                FakeAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = barePrompt),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "more help"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            createService(agentLoopPort = port2, inner = providerCapture.service)
+                .sendPrompt(
+                    prompt = "more help",
+                    options = GenerationOptions(reasoningBudget = 0, volatileTurnContext = null),
+                ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
             assertEquals(
                 barePrompt,
-                turn2Wire.first { it.isUser() }.asUser().content().asText(),
+                turn2Wire
+                    .first { it.isUser() }
+                    .asUser()
+                    .content()
+                    .asText(),
             )
             assertTrue(
-                turn2Wire.any { it.isSystem() && it.asSystem().content().asText().contains("RELEVANT FACTS & CONTEXT") },
+                turn2Wire.any {
+                    it.isSystem() &&
+                        it
+                            .asSystem()
+                            .content()
+                            .asText()
+                            .contains("RELEVANT FACTS & CONTEXT")
+                },
             )
         }
 
@@ -461,54 +541,60 @@ class RustLoopVolatileTurnContextCommitTest {
             val providerCapture = captureOpenAiParams()
             val turn1Needle = """"turn":1"""
             val turn2Needle = """"turn":2"""
-            val port = SequentialAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = "First"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                    stateLedgerJson = """{"turn":1}""",
-                )
-                assertTrue(
-                    requireNotNull(providerCapture.service.appendOnlyContextForTests())
-                        .committedVolatileSidecarTexts()
-                        .any { sidecar -> sidecar.contains(turn1Needle) },
-                    "CSPC-06 setup: turn 1 sidecar must freeze before the compaction boundary",
-                )
+            val port =
+                SequentialAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "First"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        stateLedgerJson = """{"turn":1}""",
+                    )
+                    assertTrue(
+                        requireNotNull(providerCapture.service.appendOnlyContextForTests())
+                            .committedVolatileSidecarTexts()
+                            .any { sidecar -> sidecar.contains(turn1Needle) },
+                        "CSPC-06 setup: turn 1 sidecar must freeze before the compaction boundary",
+                    )
 
-                emit(AgentLoopEvent.CompactionBoundaryApplied(revisionAfter = 1))
-                assertTrue(
-                    providerCapture.service
-                        .appendOnlyContextForTests()
-                        ?.committedVolatileSidecarTexts()
-                        ?.isEmpty() == true,
-                    "CSPC-06 setup: compaction boundary must clear frozen provider sidecars",
-                )
+                    emit(AgentLoopEvent.CompactionBoundaryApplied(revisionAfter = 1))
+                    assertTrue(
+                        providerCapture.service
+                            .appendOnlyContextForTests()
+                            ?.committedVolatileSidecarTexts()
+                            ?.isEmpty() == true,
+                        "CSPC-06 setup: compaction boundary must clear frozen provider sidecars",
+                    )
 
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(id = "u1", role = Role.USER, content = "First"),
-                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
-                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Second"),
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                    stateLedgerJson = """{"turn":2}""",
-                )
-                emit(AgentLoopEvent.Finished)
-            }
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "First"),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "ok"),
+                                AgentLoopMessage(id = "u2", role = Role.USER, content = "Second"),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        stateLedgerJson = """{"turn":2}""",
+                    )
+                    emit(AgentLoopEvent.Finished)
+                }
             val service = createService(agentLoopPort = port, inner = providerCapture.service)
 
-            service.sendPrompt(
-                prompt = "First",
-                options = GenerationOptions(reasoningBudget = 0),
-            ).toList()
+            service
+                .sendPrompt(
+                    prompt = "First",
+                    options = GenerationOptions(reasoningBudget = 0),
+                ).toList()
 
             val turn2WireSystemTexts =
-                providerCapture.params.last().messages()
+                providerCapture.params
+                    .last()
+                    .messages()
                     .filter { message -> message.isSystem() }
                     .map { message -> message.asSystem().content().asText() }
             assertFalse(
@@ -538,21 +624,23 @@ class RustLoopVolatileTurnContextCommitTest {
         return RustLoopInferenceService(
             inner = inner,
             agentLoopPort = agentLoopPort,
-            toolExecutor = object : ToolExecutorPort {
-                override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
-                    ToolExecutionResult(toolName = request.toolName, resultJson = """{"ok":true}""")
-            },
+            toolExecutor =
+                object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+                        ToolExecutionResult(toolName = request.toolName, resultJson = """{"ok":true}""")
+                },
             loggingPort = logger,
             provider = "OPENAI",
             modelType = ModelType.THINKING,
-            inferenceFactoryProvider = Provider {
-                object : com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort {
-                    override suspend fun <T> withInferenceService(
-                        modelType: ModelType,
-                        block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
-                    ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
-                }
-            },
+            inferenceFactoryProvider =
+                Provider {
+                    object : com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort {
+                        override suspend fun <T> withInferenceService(
+                            modelType: ModelType,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+                    }
+                },
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferencePrompts = committedInferencePrompts,
@@ -643,8 +731,10 @@ class RustLoopVolatileTurnContextCommitTest {
     private class CapturingRustCompatibleService : RustCompatibleInferenceService {
         val capturedTurnArgs = mutableListOf<List<AgentLoopMessage>>()
 
-        override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> =
-            flowOf(InferenceEvent.Finished(ModelType.THINKING))
+        override fun sendPrompt(
+            prompt: String,
+            closeConversation: Boolean,
+        ): Flow<InferenceEvent> = flowOf(InferenceEvent.Finished(ModelType.THINKING))
 
         override fun sendPrompt(
             prompt: String,
@@ -676,10 +766,31 @@ class RustLoopVolatileTurnContextCommitTest {
     }
 
     private class NoopLogger : LoggingPort {
-        override fun debug(tag: String, message: String) {}
-        override fun info(tag: String, message: String) {}
-        override fun warning(tag: String, message: String) {}
-        override fun error(tag: String, message: String, throwable: Throwable?) {}
-        override fun recordException(tag: String, message: String, throwable: Throwable) {}
+        override fun debug(
+            tag: String,
+            message: String,
+        ) {}
+
+        override fun info(
+            tag: String,
+            message: String,
+        ) {}
+
+        override fun warning(
+            tag: String,
+            message: String,
+        ) {}
+
+        override fun error(
+            tag: String,
+            message: String,
+            throwable: Throwable?,
+        ) {}
+
+        override fun recordException(
+            tag: String,
+            message: String,
+            throwable: Throwable,
+        ) {}
     }
 }
