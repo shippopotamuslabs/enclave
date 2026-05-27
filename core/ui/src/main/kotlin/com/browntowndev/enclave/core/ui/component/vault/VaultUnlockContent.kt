@@ -16,7 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -49,11 +50,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
@@ -121,20 +126,31 @@ fun VaultUnlockContent(
                         modifier =
                             Modifier
                                 .size(80.dp)
-                                .clip(RoundedCornerShape(40.dp)),
+                                .clip(EnclaveNeoTokens.shape)
+                                .border(EnclaveNeoTokens.borderWidth, neoBorderColor(), EnclaveNeoTokens.shape),
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .neoSurface(
+                                backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                                borderColor = neoBorderColor(),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(52.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Welcome back, ${authState.user.displayName ?: "User"}",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge.copy(letterSpacing = 0.5.sp),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
@@ -147,12 +163,22 @@ fun VaultUnlockContent(
                 }
             }
             VaultAuthUiState.Unauthenticated, VaultAuthUiState.Loading, is VaultAuthUiState.Error -> {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                            borderColor = neoBorderColor(),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(52.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
                     text = "Unlock Enclave",
@@ -210,12 +236,25 @@ fun VaultUnlockContent(
                             .fillMaxWidth()
                             .padding(vertical = 48.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Signing in",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .neoSurface(
+                                backgroundColor = MaterialTheme.colorScheme.primary,
+                                borderColor = neoBorderColor(),
+                                withShadow = true,
+                                shadowColor = neoShadowColor(),
+                                shadowOffset = neoButtonShadowOffset(),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Signing in",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = unlockSyncStatus ?: "Signing In...",
@@ -253,17 +292,30 @@ fun VaultUnlockContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Vault Lock",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .neoSurface(
+                                backgroundColor = MaterialTheme.colorScheme.primary,
+                                borderColor = neoBorderColor(),
+                                withShadow = true,
+                                shadowColor = neoShadowColor(),
+                                shadowOffset = neoButtonShadowOffset(),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Vault Lock",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
                         text = "Unlock Your Vault",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineSmall.copy(letterSpacing = 0.5.sp),
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -347,6 +399,8 @@ fun VaultUnlockContent(
                                 text = "Use Biometrics",
                                 onClick = onBiometricUnlockClick,
                                 icon = Icons.Default.Fingerprint,
+                                backgroundColor = MaterialTheme.colorScheme.background,
+                                contentColor = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.testTag("use_biometrics_button"),
                             )
                         } else {
@@ -360,12 +414,13 @@ fun VaultUnlockContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     NeoPrimaryButton(
                         text = "Unlock",
                         onClick = { onSubmitVaultPassword(password, enableBiometric) },
                         enabled = password.isNotBlank(),
+                        withShadow = true,
                     )
                 }
             }

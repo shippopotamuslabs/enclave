@@ -28,6 +28,7 @@ fun NeoSheetHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBackClick: (() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
 ) {
     Row(
         modifier =
@@ -62,11 +63,15 @@ fun NeoSheetHeader(
                 )
             }
         }
-        NeoIconButton(
-            onClick = onDismiss,
-            icon = Icons.Default.Close,
-            contentDescription = "Close",
-        )
+        if (trailingContent != null) {
+            trailingContent()
+        } else {
+            NeoIconButton(
+                onClick = onDismiss,
+                icon = Icons.Default.Close,
+                contentDescription = "Close",
+            )
+        }
     }
 }
 
