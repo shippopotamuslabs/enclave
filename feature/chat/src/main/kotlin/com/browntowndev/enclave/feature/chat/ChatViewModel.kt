@@ -322,8 +322,16 @@ class ChatViewModel
                 toolExecutionBannerCoordinator.activeToolCallBanner,
                 hasTtsProviderAssignedFlow,
                 ttsController.isPlayingTts,
-            ) { activeToolCallBanner, hasTtsProviderAssigned, isPlayingTts ->
-                Triple(activeToolCallBanner, hasTtsProviderAssigned, isPlayingTts)
+                ttsController.isLoadingTts,
+                ttsController.isPausedTts,
+            ) { activeToolCallBanner, hasTtsProviderAssigned, isPlayingTts, isLoadingTts, isPausedTts ->
+                TtsPlaybackState(
+                    activeToolCallBanner = activeToolCallBanner,
+                    hasTtsProviderAssigned = hasTtsProviderAssigned,
+                    isPlayingTts = isPlayingTts,
+                    isLoadingTts = isLoadingTts,
+                    isPausedTts = isPausedTts,
+                )
             }
 
         private val studioMediaFlow =
@@ -460,6 +468,8 @@ class ChatViewModel
 
         fun onStopTts() = ttsController.onStopTts()
 
+        fun onPauseTts() = ttsController.onPauseTts()
+
         fun onModeChange(mode: ChatModeUi) {
             chatInputCoordinator.onModeChange(mode)
             viewModelScope.launch(
@@ -538,6 +548,7 @@ class ChatViewModel
         }
 
         fun createNewChat() {
+            onStopTts()
             speechInputCoordinator.stopListening()
             activeTurnKeyFlow.value?.let { key ->
                 viewModelScope.launch {
@@ -665,6 +676,7 @@ class ChatViewModel
             super.onCleared()
             inferenceOrchestrator.cancelInference()
             speechInputCoordinator.stopListening()
+            onStopTts()
         }
 
         private companion object {
@@ -688,7 +700,7 @@ private fun reduceChatUiStateFromArgs(
     val isBlocked = args[1] as Boolean
     val dbMessages = args[2] as List<Message>
     val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
-    val ttsPlayback = args[4] as Triple<*, *, *>
+    val ttsPlayback = args[4] as TtsPlaybackState
     val studioMediaMap = args[5] as Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>
     val shareState = args[6] as ShareState
     val isReadOnly = args[7] as Boolean
@@ -716,9 +728,11 @@ private fun reduceChatUiStateFromArgs(
                 dbMessages = dbMessages,
                 activeTurnKey = activeTurnSnapshotState.key,
                 activeTurnSnapshot = activeTurnSnapshotState.snapshot,
-                activeToolCallBanner = ttsPlayback.first as ToolCallBannerUi?,
-                hasTtsProviderAssigned = ttsPlayback.second as Boolean,
-                isPlayingTts = ttsPlayback.third as Boolean,
+                activeToolCallBanner = ttsPlayback.activeToolCallBanner,
+                hasTtsProviderAssigned = ttsPlayback.hasTtsProviderAssigned,
+                isPlayingTts = ttsPlayback.isPlayingTts,
+                isLoadingTts = ttsPlayback.isLoadingTts,
+                isPausedTts = ttsPlayback.isPausedTts,
                 studioMediaMap = studioMediaMap,
                 shareState = shareState,
                 isReadOnly = isReadOnly,
@@ -755,6 +769,14 @@ private data class UiInputs(
 private data class UiInputsWithPolicy(
     val inputs: UiInputs,
     val attachmentPolicy: com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy,
+)
+
+private data class TtsPlaybackState(
+    val activeToolCallBanner: ToolCallBannerUi?,
+    val hasTtsProviderAssigned: Boolean,
+    val isPlayingTts: Boolean,
+    val isLoadingTts: Boolean,
+    val isPausedTts: Boolean,
 )
 
 private data class ActiveTurnCandidate(

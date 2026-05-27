@@ -23,6 +23,7 @@ import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ThinkingDetailsBottomSheet
 
+@Suppress("LongParameterList")
 @Composable
 internal fun AssistantResponseFinalMessage(
     message: ChatMessage,
@@ -30,9 +31,13 @@ internal fun AssistantResponseFinalMessage(
     isStreaming: Boolean,
     isPreview: Boolean,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     toolCallBanner: ToolCallBannerUi?,
     trailingStatusIndicator: @Composable (() -> Unit)?,
     onPlayAudio: (String) -> Unit,
+    onPauseAudio: () -> Unit,
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
@@ -120,7 +125,11 @@ internal fun AssistantResponseFinalMessage(
         contentText = contentText,
         isComplete = isComplete,
         hasTtsProviderAssigned = hasTtsProviderAssigned,
+        isPlayingTts = isPlayingTts,
+        isLoadingTts = isLoadingTts,
+        isPausedTts = isPausedTts,
         onPlayAudio = onPlayAudio,
+        onPauseAudio = onPauseAudio,
         onShareClick = onShareClick,
         onStatsClick = onStatsClick,
         onShowSources = onShowSources,

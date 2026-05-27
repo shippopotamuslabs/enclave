@@ -44,6 +44,9 @@ internal fun MessageListItem(
     message: ChatMessage,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     chatMode: ChatModeUi,
     callbacks: MessageListCallbacks,
     isPreview: Boolean,
@@ -92,6 +95,9 @@ internal fun MessageListItem(
                 message = message,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
+                isPlayingTts = isPlayingTts,
+                isLoadingTts = isLoadingTts,
+                isPausedTts = isPausedTts,
                 toolCallBanner = activeToolCallBanner,
                 trailingStatusIndicator =
                     if (hasTranscriptSegments) {
@@ -113,6 +119,7 @@ internal fun MessageListItem(
                         null
                     },
                 onPlayAudio = callbacks.onPlayAudio,
+                onPauseAudio = callbacks.onPauseAudio,
                 onArtifactCardClick = callbacks.onArtifactCardClick,
                 onNavigateToStudio = callbacks.onNavigateToStudio,
                 onShareClick = callbacks.onShareClick,

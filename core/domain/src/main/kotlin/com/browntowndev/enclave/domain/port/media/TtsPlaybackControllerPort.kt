@@ -29,4 +29,14 @@ interface TtsPlaybackControllerPort {
      * Cancels the Media3 player, clears the media item, and removes the registry entry.
      */
     fun stop()
+
+    /**
+     * Pauses any currently active TTS playback.
+     */
+    fun pause()
+
+    /**
+     * Resumes any currently paused TTS playback.
+     */
+    fun resume()
 }

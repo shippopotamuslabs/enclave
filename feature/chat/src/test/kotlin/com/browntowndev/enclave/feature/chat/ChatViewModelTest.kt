@@ -562,6 +562,25 @@ class ChatViewModelTest {
         }
 
     @Test
+    fun `onPauseTts calls pause on playbackController`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+            defaultModelsFlow.value =
+                listOf(
+                    DefaultModelAssignment(
+                        modelType = ModelType.TTS,
+                        ttsProviderId = TtsProviderId("tts-provider"),
+                    ),
+                )
+            runCurrent()
+
+            chatViewModel.onPauseTts()
+
+            verify { playbackController.pause() }
+            collectJob.cancel()
+        }
+
+    @Test
     fun `onPlayTts cancels previous streaming job before starting new one`() =
         runTest {
             val text1 = "Hello"

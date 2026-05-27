@@ -49,6 +49,7 @@ internal val MessageListLazyCacheWindowDp = MessageListLazyCacheWindow
 internal val MessageListTopContentPaddingDp = MessageListTopContentPadding
 
 @OptIn(ExperimentalFoundationApi::class)
+@Suppress("LongParameterList")
 @Composable
 fun MessageList(
     modifier: Modifier = Modifier,
@@ -57,10 +58,14 @@ fun MessageList(
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
     hasTtsProviderAssigned: Boolean = false,
+    isPlayingTts: Boolean = false,
+    isLoadingTts: Boolean = false,
+    isPausedTts: Boolean = false,
     isPreview: Boolean = false,
     chatMode: ChatModeUi = ChatModeUi.FAST,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
+    onPauseAudio: () -> Unit = {},
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (
         ids: List<String>,
@@ -73,6 +78,7 @@ fun MessageList(
 ) {
     val onEditMessageRef = rememberUpdatedState(onEditMessage)
     val onPlayAudioRef = rememberUpdatedState(onPlayAudio)
+    val onPauseAudioRef = rememberUpdatedState(onPauseAudio)
     val onArtifactCardClickRef = rememberUpdatedState(onArtifactCardClick)
     val onNavigateToStudioRef = rememberUpdatedState(onNavigateToStudio)
     val onShareClickRef = rememberUpdatedState(onShareClick)
@@ -82,6 +88,7 @@ fun MessageList(
             MessageListCallbacks(
                 onEditMessage = { onEditMessageRef.value(it) },
                 onPlayAudio = { onPlayAudioRef.value(it) },
+                onPauseAudio = { onPauseAudioRef.value() },
                 onArtifactCardClick = { messageId, card -> onArtifactCardClickRef.value(messageId, card) },
                 onNavigateToStudio = { ids, uris, types, prompts ->
                     onNavigateToStudioRef.value(ids, uris, types, prompts)
@@ -126,6 +133,9 @@ fun MessageList(
             activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeToolCallBanner,
             hasTtsProviderAssigned = hasTtsProviderAssigned,
+            isPlayingTts = isPlayingTts,
+            isLoadingTts = isLoadingTts,
+            isPausedTts = isPausedTts,
             chatMode = chatMode,
             callbacks = callbacks,
             isPreview = isPreview,
@@ -143,6 +153,9 @@ private fun MessageListContent(
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     chatMode: ChatModeUi,
     callbacks: MessageListCallbacks,
     isPreview: Boolean,
@@ -269,6 +282,9 @@ private fun MessageListContent(
                             activeToolCallBanner = activeToolCallBanner,
                         ),
                     hasTtsProviderAssigned = hasTtsProviderAssigned,
+                    isPlayingTts = isPlayingTts,
+                    isLoadingTts = isLoadingTts,
+                    isPausedTts = isPausedTts,
                     chatMode = chatMode,
                     callbacks = callbacks,
                     isPreview = isPreview,
