@@ -4,10 +4,11 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
-import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -341,6 +342,15 @@ class GoogleInferenceServiceImpl(
             )
         } catch (e: CancellationException) {
             throw e
+        } catch (e: InferenceNetworkException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            loggingPort.error(TAG, "completeSingleTurn network failure: ${e.message}", e)
+            throw InferenceNetworkException(
+                provider = PROVIDER,
+                message = e.message ?: "Connection error",
+                cause = e,
+            )
         } catch (e: Exception) {
             loggingPort.error(TAG, "completeSingleTurn failed: ${e.message}", e)
             throw e

@@ -45,39 +45,47 @@ class XUserTweetsToolExecutor
             val pageSource = params.pagination_source?.trim()?.lowercase()
 
             val result =
-                when {
-                    pageSource == "search" || searchText != null -> {
-                        val query =
-                            if (searchText.isNullOrBlank()) {
-                                "from:${cleanUser.lowercase()}"
-                            } else {
-                                "from:${cleanUser.lowercase()} $searchText"
-                            }
-                        loggingPort.info(
-                            TAG,
-                            "Executing X user tweets search query=$query maxResults=$maxResults",
-                        )
-                        xSearchRepository.searchPaginated(
-                            query = query,
-                            sortOrder = "recency",
-                            maxPostsPerAuthor = maxResults,
-                            maxTotalPosts = maxResults,
-                            nextToken = nextToken,
-                            ordering = XPostOrdering.RECENCY,
-                            skipDiscoveryFilters = true,
-                        )
+                try {
+                    when {
+                        pageSource == "search" || searchText != null -> {
+                            val query =
+                                if (searchText.isNullOrBlank()) {
+                                    "from:${cleanUser.lowercase()}"
+                                } else {
+                                    "from:${cleanUser.lowercase()} $searchText"
+                                }
+                            loggingPort.info(
+                                TAG,
+                                "Executing X user tweets search query=$query maxResults=$maxResults",
+                            )
+                            xSearchRepository.searchPaginated(
+                                query = query,
+                                sortOrder = "recency",
+                                maxPostsPerAuthor = maxResults,
+                                maxTotalPosts = maxResults,
+                                nextToken = nextToken,
+                                ordering = XPostOrdering.RECENCY,
+                                skipDiscoveryFilters = true,
+                            )
+                        }
+                        else -> {
+                            loggingPort.info(
+                                TAG,
+                                "Executing X user tweets timeline username=$cleanUser maxResults=$maxResults",
+                            )
+                            xSearchRepository.fetchUserTimeline(
+                                username = cleanUser,
+                                maxResults = maxResults,
+                                paginationToken = nextToken,
+                            )
+                        }
                     }
-                    else -> {
-                        loggingPort.info(
-                            TAG,
-                            "Executing X user tweets timeline username=$cleanUser maxResults=$maxResults",
-                        )
-                        xSearchRepository.fetchUserTimeline(
-                            username = cleanUser,
-                            maxResults = maxResults,
-                            paginationToken = nextToken,
-                        )
-                    }
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "X User Tweets failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
                 }
 
             return ToolExecutionResult(

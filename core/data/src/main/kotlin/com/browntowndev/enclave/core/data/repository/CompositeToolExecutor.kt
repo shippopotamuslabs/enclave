@@ -86,6 +86,8 @@ class CompositeToolExecutor
                         ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
                         // Intercepted and fully handled by agent core before reaching this executor.
                         ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name -> ToolExecutionResult(request.toolName, "{}")
+                        // Intercepted and fully handled by RustLoopInferenceService before reaching this executor.
+                        ToolDefinition.READ_CONTEXT_REFERENCE.name -> ToolExecutionResult(request.toolName, "{}")
                         else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
                     }
 

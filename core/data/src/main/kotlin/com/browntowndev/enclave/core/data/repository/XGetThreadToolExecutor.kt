@@ -34,7 +34,16 @@ class XGetThreadToolExecutor
             val params = request.parameters as XGetThreadParams
             loggingPort.info(TAG, "Executing X get thread tool tweet_url=${params.tweet_url}")
 
-            val resultJson = xSearchRepository.getThread(params.tweet_url)
+            val resultJson =
+                try {
+                    xSearchRepository.getThread(params.tweet_url)
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "X Get Thread failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
+                }
             return ToolExecutionResult(
                 toolName = request.toolName,
                 resultJson = resultJson,

@@ -1,10 +1,14 @@
 package com.browntowndev.enclave.domain.model.error
 
+import java.io.IOException
+
 /**
  * Thrown when an I/O error occurs during inference.
- * This is a domain-specific replacement for java.io.IOException.
+ * Domain-specific extension of java.io.IOException so the agent loop can catch
+ * both generic inference I/O failures and provider-specific subtypes
+ * (e.g. InferenceNetworkException) via a single clause when desired.
  */
-class InferenceIOException(
+open class InferenceIOException(
     message: String? = null,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : IOException(message, cause)

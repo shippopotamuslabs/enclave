@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
@@ -19,13 +20,13 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.appendonly.OpenAiCompatibleVolatilePlacement
-import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
+import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
 import com.browntowndev.enclave.feature.inference.openai.StreamState
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.browntowndev.enclave.feature.inference.openai.accumulateOpenAiStreamUsage
@@ -48,9 +49,6 @@ import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseFunctionToolCall
-import com.openai.models.responses.ResponseInputImage
-import com.openai.models.responses.ResponseInputItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -97,8 +95,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private val appendOnlyContexts = mutableMapOf<String, ProviderAppendOnlyContext>()
     private var activeAppendOnlyKey: String? = null
 
-    internal fun appendOnlyContextForTests(): ProviderAppendOnlyContext? =
-        activeAppendOnlyKey?.let(appendOnlyContexts::get)
+    internal fun appendOnlyContextForTests(): ProviderAppendOnlyContext? = activeAppendOnlyKey?.let(appendOnlyContexts::get)
 
     override fun sendPrompt(
         prompt: String,
@@ -364,22 +361,22 @@ abstract class BaseOpenAiSdkInferenceService(
                                     messages
                                         .take(XAI_WIRE_LOG_HEAD_MESSAGE_COUNT)
                                         .joinToString(" | ") { param ->
-                                        when {
-                                            param.isSystem() ->
-                                                "sys:${
-                                                    param.asSystem().content().asText()
-                                                        .take(XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS)
-                                                }"
-                                            param.isUser() ->
-                                                "user:${
-                                                    param.asUser().content().asText()
-                                                        .take(XAI_WIRE_LOG_USER_PREVIEW_CHARS)
-                                                }"
-                                            param.isAssistant() -> "asst"
-                                            param.isTool() -> "tool"
-                                            else -> "other"
+                                            when {
+                                                param.isSystem() ->
+                                                    "sys:${
+                                                        param.asSystem().content().asText()
+                                                            .take(XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS)
+                                                    }"
+                                                param.isUser() ->
+                                                    "user:${
+                                                        param.asUser().content().asText()
+                                                            .take(XAI_WIRE_LOG_USER_PREVIEW_CHARS)
+                                                    }"
+                                                param.isAssistant() -> "asst"
+                                                param.isTool() -> "tool"
+                                                else -> "other"
+                                            }
                                         }
-                                    }
                                 loggingPort.debug(
                                     tag,
                                     "xAI telemetry turn seq=${row.sequenceIndex} allowToolCall=$allowToolCall " +
@@ -410,6 +407,15 @@ abstract class BaseOpenAiSdkInferenceService(
             )
         } catch (e: CancellationException) {
             throw e
+        } catch (e: InferenceNetworkException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            loggingPort.error(tag, "completeSingleTurn network failure: ${e.message}", e)
+            throw InferenceNetworkException(
+                provider = provider,
+                message = e.message ?: "Connection error",
+                cause = e,
+            )
         } catch (e: Exception) {
             loggingPort.error(tag, "completeSingleTurn failed: ${e.message}", e)
             throw e
@@ -772,8 +778,7 @@ abstract class BaseOpenAiSdkInferenceService(
      * True for real transcript system rows, not volatile sidecars or engine-internal system rows
      * (budget, compaction summary) that must not suppress the stable system prompt prepend.
      */
-    private fun ChatCompletionMessageParam.isStableSessionSystemMessage(): Boolean =
-        isSystem() && !isVolatileOrEngineSystemMessage()
+    private fun ChatCompletionMessageParam.isStableSessionSystemMessage(): Boolean = isSystem() && !isVolatileOrEngineSystemMessage()
 
     private fun ChatCompletionMessageParam.isVolatileOrEngineSystemMessage(): Boolean {
         if (!isSystem()) return false
