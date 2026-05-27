@@ -27,7 +27,15 @@ internal object MessageFirestoreMapper {
             role = Role.fromApiValue(doc.getString("role") ?: "user"),
             userMessageId = doc.getString("user_message_id")?.takeIf { it.isNotBlank() }?.let { MessageId(it) },
             imageUrisJson = doc.getEncryptedField(ctx, "image_uris_json"),
-            messageState = doc.getString("message_state")?.let { MessageState.fromApiValue(it) } ?: MessageState.COMPLETE,
+            // Clamp transient generation states (PROCESSING/THINKING/GENERATING/ENGINE_LOADING)
+            // to COMPLETE: they are only meaningful during the live session that wrote them.
+            // Restoring them as-is would resurrect the "stop" icon on chats opened in a new session.
+            messageState =
+                doc
+                    .getString("message_state")
+                    ?.let { MessageState.fromApiValue(it) }
+                    ?.takeIf { it == MessageState.COMPLETE }
+                    ?: MessageState.COMPLETE,
             createdAt = doc.getLong("created_at") ?: 0L,
             modelType = doc.getString("model_type")?.let { ModelType.fromApiValue(it) },
             thinkingDurationSeconds = doc.getLong("thinking_duration_seconds"),

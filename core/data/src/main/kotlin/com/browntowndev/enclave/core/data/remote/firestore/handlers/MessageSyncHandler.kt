@@ -85,6 +85,32 @@ internal class MessageSyncHandler(
         overwrite: Boolean,
     ) {
         val existing = ctx.daos.messageDao.getMessageById(entity.message.id)
+        // Stale same-device echo guard: an overwrite request whose updatedAt is strictly older
+        // than the local row would clobber a newer in-flight write (e.g. COMPLETE) and reset
+        // pendingSync, causing it to never re-upload. Skip the upsert in that case.
+        if (existing != null && entity.message.updatedAt < existing.message.updatedAt) {
+            ctx.loggingPort.debug(
+                FirestoreSyncContext.TAG,
+                "Message ${entity.message.id.value} stale echo " +
+                    "(incoming ${entity.message.updatedAt} < local ${existing.message.updatedAt}), " +
+                    "skipping overwrite",
+            )
+            return
+        }
+        // Live-generation guard: when the local row is mid-generation (transient state) the
+        // listener echo of our own upload arrives with the same updatedAt but a mapper-clamped
+        // COMPLETE state. Letting it merge would briefly flip the UI to a "completed" message
+        // (showing copy/share affordances) before the next streaming write flips it back to
+        // THINKING/GENERATING — a visible flicker. Local placeholder is authoritative until the
+        // session writes its terminal COMPLETE row.
+        if (existing != null && existing.message.messageState != MessageState.COMPLETE) {
+            ctx.loggingPort.debug(
+                FirestoreSyncContext.TAG,
+                "Message ${entity.message.id.value} local in transient state " +
+                    "${existing.message.messageState}, skipping live echo overwrite",
+            )
+            return
+        }
         if (overwrite || existing == null || entity.message.updatedAt > existing.message.updatedAt) {
             // Preserve local artifacts_json until Task 4 migration is complete
             val merged =
