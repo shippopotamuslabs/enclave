@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -569,37 +570,44 @@ fun ContextConfiguration(
     supportsMaxTokens: Boolean,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        NeoOutlinedTextField(
-            modifier = Modifier.weight(1f),
-            value = config.contextWindow,
-            onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
-            readOnly = hasReadonlyContextWindow,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Context Window")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-        )
-
-        if (supportsMaxTokens) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
             NeoOutlinedTextField(
-                modifier = Modifier.weight(1f),
-                value = config.maxTokens,
-                onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
-                enabled = !config.maxTokensDisabled,
+                value = config.contextWindow,
+                onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
+                readOnly = hasReadonlyContextWindow,
                 label = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Max Tokens")
+                        Text("Context Window")
                         Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                        PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
                     }
                 },
+                modifier = Modifier.fillMaxWidth().testTag("ApiContextWindowField"),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             )
+        }
+
+        if (supportsMaxTokens) {
+            Box(modifier = Modifier.weight(1f)) {
+                NeoOutlinedTextField(
+                    value = config.maxTokens,
+                    onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                    enabled = !config.maxTokensDisabled,
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Max Tokens")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("ApiMaxTokensField"),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+            }
         }
     }
 }

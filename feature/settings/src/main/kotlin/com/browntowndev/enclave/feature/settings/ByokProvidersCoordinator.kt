@@ -276,6 +276,7 @@ internal class ByokProvidersCoordinator
             deletionState: MutableStateFlow<DeletionTransientState>,
             tag: String,
             id: ApiCredentialsId,
+            onSuccess: () -> Unit = {},
         ) {
             deletionHelper.prepareDeletion(
                 scope = scope,
@@ -284,6 +285,7 @@ internal class ByokProvidersCoordinator
                 tag = tag,
                 failureMessage = "Failed to delete API provider",
                 userMessage = "Failed to delete provider",
+                onImmediateSuccess = onSuccess,
             )
         }
 
