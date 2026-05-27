@@ -43,4 +43,26 @@ class SavedApiModelPricingEstimatorTest {
         // (800k * $1) + (200k * $0.1) + (500k * $2) = $0.8 + $0.02 + $1.0 = $1.82
         assertEquals(BigDecimal("1.820000"), cost)
     }
+
+    @Test
+    fun `Anthropic style input tokens are not reduced by cache read`() {
+        val cost =
+            estimator.estimateCostUsd(
+                pricing =
+                    ApiModelSavedPricing(
+                        promptUsdPerMillion = 3.0,
+                        completionUsdPerMillion = 15.0,
+                        cachedPromptUsdPerMillion = 0.3,
+                    ),
+                inputTokens = 7_787,
+                outputTokens = 1_515,
+                reasoningTokens = 0,
+                cacheReadInputTokens = 16_000,
+                inputTokensExcludeCacheReads = true,
+            )
+
+        assertNotNull(cost)
+        // (7787 * $3) + (16000 * $0.3) + (1515 * $15) per million
+        assertEquals(BigDecimal("0.050886"), cost)
+    }
 }

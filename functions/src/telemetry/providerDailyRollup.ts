@@ -11,15 +11,29 @@ function rollupKey(row: RawTelemetryDoc): RollupKey {
   ].join('|');
 }
 
+/** OpenAI/Google input totals include cache reads; Anthropic reports them separately. */
+function inputDenominatorForCacheHitRate(row: RawTelemetryDoc): number {
+  const input = row.inputTokens ?? 0;
+  const cacheRead = row.cacheReadInputTokens ?? 0;
+  if (row.providerKey.toUpperCase() === 'ANTHROPIC') {
+    return input + cacheRead;
+  }
+  return input;
+}
+
+type RollupAccumulator = ProviderDailyRollupDoc & {
+  inputDenominatorForCacheHitRate: number;
+};
+
 export function buildProviderDailyRollups(
   _dateUtc: string,
   rows: RawTelemetryDoc[],
 ): ProviderDailyRollupDoc[] {
-  const grouped = new Map<RollupKey, ProviderDailyRollupDoc>();
+  const grouped = new Map<RollupKey, RollupAccumulator>();
 
   rows.forEach((row) => {
     const key = rollupKey(row);
-    const existing =
+    const existing: RollupAccumulator =
       grouped.get(key) ??
       ({
         dateUtc: _dateUtc,
@@ -43,10 +57,12 @@ export function buildProviderDailyRollups(
         ttftMsTotal: 0,
         generationDurationMsTotal: 0,
         cacheHitRatePercent: 0,
-      } satisfies ProviderDailyRollupDoc);
+        inputDenominatorForCacheHitRate: 0,
+      } satisfies RollupAccumulator);
 
     existing.requestCount += 1;
     existing.inputTokens += row.inputTokens ?? 0;
+    existing.inputDenominatorForCacheHitRate += inputDenominatorForCacheHitRate(row);
     existing.outputTokens += row.outputTokens ?? 0;
     existing.reasoningTokens += row.reasoningTokens ?? 0;
     existing.cacheReadInputTokens += row.cacheReadInputTokens ?? 0;
@@ -60,15 +76,18 @@ export function buildProviderDailyRollups(
     grouped.set(key, existing);
   });
 
-  return Array.from(grouped.values()).map((rollup) => ({
-    ...rollup,
-    cacheHitRatePercent:
-      rollup.inputTokens === 0
-        ? 0
-        : Number(
-            ((rollup.cacheReadInputTokens / rollup.inputTokens) * 100).toFixed(1),
-          ),
-  }));
+  return Array.from(grouped.values()).map((rollup) => {
+    const { inputDenominatorForCacheHitRate: inputDenominator, ...doc } = rollup;
+    return {
+      ...doc,
+      cacheHitRatePercent:
+        inputDenominator === 0
+          ? 0
+          : Number(
+              ((rollup.cacheReadInputTokens / inputDenominator) * 100).toFixed(1),
+            ),
+    };
+  });
 }
 
 /** Callable entry point for admin rollup refresh; Firestore scan wiring is deferred. */

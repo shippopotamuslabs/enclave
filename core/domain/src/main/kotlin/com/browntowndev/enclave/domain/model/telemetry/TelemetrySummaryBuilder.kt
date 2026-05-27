@@ -261,11 +261,32 @@ object TelemetrySummaryBuilder {
         return (totalOutput / seconds).toBigDecimal().setScale(1, RoundingMode.HALF_UP).toDouble()
     }
 
+    /**
+     * Denominator for cache-hit %.
+     * OpenAI/Google report [TurnTelemetry.inputTokens] as total prompt tokens (cache read is a subset).
+     * Anthropic reports non-cached [TurnTelemetry.inputTokens] separately from [TurnTelemetry.cacheReadInputTokens].
+     */
+    internal fun inputDenominatorForCacheHitRate(row: TurnTelemetry): Int? {
+        val input = row.inputTokens ?: return null
+        val cacheRead = row.cacheReadInputTokens ?: 0
+        return when (row.providerKey) {
+            TelemetryProviderKey.ANTHROPIC -> input + cacheRead
+            else -> input
+        }
+    }
+
     private fun cacheHitRate(rows: List<TurnTelemetry>): Double? {
-        val inputTotal = rows.mapNotNull { it.inputTokens }.sum()
-        if (inputTotal == 0) return null
-        val cacheRead = rows.mapNotNull { it.cacheReadInputTokens }.sum()
-        return (cacheRead.toDouble() / inputTotal.toDouble() * 100.0)
+        var inputDenominatorTotal = 0
+        var cacheReadTotal = 0
+        var hasInput = false
+        rows.forEach { row ->
+            val denominator = inputDenominatorForCacheHitRate(row) ?: return@forEach
+            hasInput = true
+            inputDenominatorTotal += denominator
+            cacheReadTotal += row.cacheReadInputTokens ?: 0
+        }
+        if (!hasInput || inputDenominatorTotal == 0) return null
+        return (cacheReadTotal.toDouble() / inputDenominatorTotal.toDouble() * 100.0)
             .toBigDecimal()
             .setScale(1, RoundingMode.HALF_UP)
             .toDouble()

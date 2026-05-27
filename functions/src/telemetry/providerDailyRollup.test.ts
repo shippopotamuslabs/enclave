@@ -106,4 +106,33 @@ describe('providerDailyRollup', () => {
     expect(newVersion?.cacheReadInputTokens).to.equal(100);
     expect(newVersion?.cacheHitRatePercent).to.equal(5.0);
   });
+
+  it('Anthropic cache hit rate uses non-cached plus cache-read input', () => {
+    const rows: RawTelemetryDoc[] = [
+      {
+        providerKey: 'anthropic',
+        providerLabel: 'Anthropic',
+        modelId: 'claude-sonnet-4-20250514',
+        modelLabel: 'claude-sonnet-4-20250514',
+        appVersionName: '1.4.0',
+        appVersionCode: 140,
+        telemetrySchemaVersion: 1,
+        inputTokens: 7787,
+        outputTokens: 1515,
+        reasoningTokens: 0,
+        cacheReadInputTokens: 16000,
+        cacheWriteInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        costUsdDecimal: null,
+        requestStartedAtMs: 0,
+        firstOutputTokenAtMs: null,
+        completedAtMs: 0,
+      },
+    ];
+
+    const rollups = buildProviderDailyRollups('2026-05-10', rows);
+    const anthropic = rollups.find((rollup) => rollup.providerLabel === 'Anthropic');
+
+    expect(anthropic?.cacheHitRatePercent).to.equal(67.3);
+  });
 });
