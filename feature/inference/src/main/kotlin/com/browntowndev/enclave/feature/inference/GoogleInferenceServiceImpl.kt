@@ -180,164 +180,171 @@ class GoogleInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
-        val timing =
-            telemetrySupport?.let {
-                com.browntowndev.enclave.feature.inference.telemetry
-                    .InferenceTurnTiming()
-            }
-        val captureContext = telemetrySupport?.captureContext(options)
-        val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
-        val imageUris = options.imageUris.take(3600)
-
-        val stableHistory = sessionMessages.dropLast(1)
-        val latestMessage =
-            sessionMessages.lastOrNull()
-                ?: throw IllegalArgumentException("sessionMessages cannot be empty")
-        val latestIndex = sessionMessages.lastIndex
-
-        val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
-
-        fun mapAtIndex(
-            message: AgentLoopMessage,
-            index: Int,
-            prependVolatile: Boolean,
-            attachImages: Boolean,
-        ): Content? =
-            GoogleAgentLoopContentMapper.mapMessage(
-                message = message,
-                index = index,
-                lastUserIndex = if (attachImages) lastUserIndex else -1,
-                imageUris = if (attachImages) imageUris else emptyList(),
-                prependedText = if (prependVolatile) latestUserPrepends else null,
-            )
-
-        val activeCacheName =
-            promptCacheSession.ensureCacheForStablePrefix(
-                systemPrompt = systemPrompt,
-                stableHistory = stableHistory,
-                availableTools = availableTools,
-                mapToContent = { msg ->
-                    val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                    mapAtIndex(msg, index, prependVolatile = false, attachImages = false)
-                },
-            )
-
-        val configBuilder = GenerateContentConfig.builder()
-        options.temperature?.let { configBuilder.temperature(it) }
-        options.topP?.let { configBuilder.topP(it) }
-        options.topK?.let { configBuilder.topK(it.toFloat()) }
-        options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
-        resolveThinkingConfig(options)?.let { configBuilder.thinkingConfig(it) }
-
-        if (availableTools.isNotEmpty()) {
-            configBuilder.tools(availableTools.map { it.toGoogleTool() })
-            val mode =
-                if (allowToolCall) {
-                    FunctionCallingConfigMode.Known.AUTO
-                } else {
-                    FunctionCallingConfigMode.Known.NONE
+        try {
+            activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
+            val timing =
+                telemetrySupport?.let {
+                    com.browntowndev.enclave.feature.inference.telemetry
+                        .InferenceTurnTiming()
                 }
-            configBuilder.toolConfig(
-                ToolConfig
-                    .builder()
-                    .functionCallingConfig(
-                        FunctionCallingConfig
-                            .builder()
-                            .mode(mode)
-                            .build(),
-                    ).build(),
-            )
-        }
+            val captureContext = telemetrySupport?.captureContext(options)
+            val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
+            val imageUris = options.imageUris.take(3600)
 
-        if (activeCacheName != null) {
-            configBuilder.cachedContent(activeCacheName)
-        } else if (systemPrompt.isNotBlank()) {
-            configBuilder.systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
-        }
+            val stableHistory = sessionMessages.dropLast(1)
+            val latestMessage =
+                sessionMessages.lastOrNull()
+                    ?: throw IllegalArgumentException("sessionMessages cannot be empty")
+            val latestIndex = sessionMessages.lastIndex
 
-        val deltaHistory = promptCacheSession.deltaHistory(stableHistory)
-        val contentsToSend =
-            buildList {
-                deltaHistory.forEach { msg ->
-                    val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                    mapAtIndex(msg, index, prependVolatile = false, attachImages = false)?.let(::add)
-                }
-                mapAtIndex(
-                    latestMessage,
-                    latestIndex,
-                    prependVolatile = !latestUserPrepends.isNullOrBlank(),
-                    attachImages = true,
-                )?.let(::add)
-            }
+            val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
 
-        val response =
-            sdkClient.generateContentStream(
-                modelId = modelId,
-                contents = contentsToSend,
-                config = configBuilder.build(),
-                allowToolCall = allowToolCall,
-                emitEvent = { event ->
-                    when (event) {
-                        is InferenceEvent.PartialResponse -> {
-                            timing?.markFirstOutput()
-                            onTextToken(event.chunk)
-                        }
-                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                        else -> {}
-                    }
-                },
-            )
-
-        val toolCalls =
-            response.functionCall?.let { fc ->
-                val name = fc.name().orElse(null) ?: return@let null
-                val argsJson =
-                    toolEnvelopeParserPort
-                        .coerceProviderArguments(
-                            toolName = name,
-                            argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
-                            toolCatalogJson = activeToolCatalogJson,
-                        ).argumentsJson
-                listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
-            } ?: emptyList()
-
-        val assistantTextParts = mutableListOf<String>()
-        response.assistantContent?.parts()?.orElse(null)?.forEach { part ->
-            if (!part.thought().orElse(false)) {
-                part.text().ifPresent { assistantTextParts.add(it) }
-            }
-        }
-        val assistantText = assistantTextParts.joinToString("").takeIf { it.isNotBlank() }
-
-        val outputTokenEstimate =
-            assistantText
-                ?.takeIf { it.isNotBlank() }
-                ?.let { text -> (text.length / 4).coerceAtLeast(1) }
-        val telemetry =
-            if (telemetrySupport != null && timing != null && captureContext != null) {
-                telemetrySupport.localTurnTelemetry(
-                    context = captureContext,
-                    providerLabel = "Google",
-                    modelLabel = modelId,
-                    timing = timing,
-                    outputTokens = outputTokenEstimate,
+            fun mapAtIndex(
+                message: AgentLoopMessage,
+                index: Int,
+                prependVolatile: Boolean,
+                attachImages: Boolean,
+            ): Content? =
+                GoogleAgentLoopContentMapper.mapMessage(
+                    message = message,
+                    index = index,
+                    lastUserIndex = if (attachImages) lastUserIndex else -1,
+                    imageUris = if (attachImages) imageUris else emptyList(),
+                    prependedText = if (prependVolatile) latestUserPrepends else null,
                 )
-            } else {
-                null
+
+            val activeCacheName =
+                promptCacheSession.ensureCacheForStablePrefix(
+                    systemPrompt = systemPrompt,
+                    stableHistory = stableHistory,
+                    availableTools = availableTools,
+                    mapToContent = { msg ->
+                        val index = sessionMessages.indexOfFirst { it.id == msg.id }
+                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)
+                    },
+                )
+
+            val configBuilder = GenerateContentConfig.builder()
+            options.temperature?.let { configBuilder.temperature(it) }
+            options.topP?.let { configBuilder.topP(it) }
+            options.topK?.let { configBuilder.topK(it.toFloat()) }
+            options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
+            resolveThinkingConfig(options)?.let { configBuilder.thinkingConfig(it) }
+
+            if (availableTools.isNotEmpty()) {
+                configBuilder.tools(availableTools.map { it.toGoogleTool() })
+                val mode =
+                    if (allowToolCall) {
+                        FunctionCallingConfigMode.Known.AUTO
+                    } else {
+                        FunctionCallingConfigMode.Known.NONE
+                    }
+                configBuilder.toolConfig(
+                    ToolConfig
+                        .builder()
+                        .functionCallingConfig(
+                            FunctionCallingConfig
+                                .builder()
+                                .mode(mode)
+                                .build(),
+                        ).build(),
+                )
             }
 
-        return AgentModelTurnResult(
-            assistantText = assistantText,
-            toolCalls = toolCalls,
-            finishReason =
-                googleFinishReason(
-                    toolCalls = toolCalls,
-                    finishReason = response.finishReason,
-                    assistantText = assistantText,
-                ),
-            telemetry = telemetry,
-        )
+            if (activeCacheName != null) {
+                configBuilder.cachedContent(activeCacheName)
+            } else if (systemPrompt.isNotBlank()) {
+                configBuilder.systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
+            }
+
+            val deltaHistory = promptCacheSession.deltaHistory(stableHistory)
+            val contentsToSend =
+                buildList {
+                    deltaHistory.forEach { msg ->
+                        val index = sessionMessages.indexOfFirst { it.id == msg.id }
+                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)?.let(::add)
+                    }
+                    mapAtIndex(
+                        latestMessage,
+                        latestIndex,
+                        prependVolatile = !latestUserPrepends.isNullOrBlank(),
+                        attachImages = true,
+                    )?.let(::add)
+                }
+
+            val response =
+                sdkClient.generateContentStream(
+                    modelId = modelId,
+                    contents = contentsToSend,
+                    config = configBuilder.build(),
+                    allowToolCall = allowToolCall,
+                    emitEvent = { event ->
+                        when (event) {
+                            is InferenceEvent.PartialResponse -> {
+                                timing?.markFirstOutput()
+                                onTextToken(event.chunk)
+                            }
+                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                            else -> {}
+                        }
+                    },
+                )
+
+            val toolCalls =
+                response.functionCall?.let { fc ->
+                    val name = fc.name().orElse(null) ?: return@let null
+                    val argsJson =
+                        toolEnvelopeParserPort
+                            .coerceProviderArguments(
+                                toolName = name,
+                                argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
+                                toolCatalogJson = activeToolCatalogJson,
+                            ).argumentsJson
+                    listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
+                } ?: emptyList()
+
+            val assistantTextParts = mutableListOf<String>()
+            response.assistantContent?.parts()?.orElse(null)?.forEach { part ->
+                if (!part.thought().orElse(false)) {
+                    part.text().ifPresent { assistantTextParts.add(it) }
+                }
+            }
+            val assistantText = assistantTextParts.joinToString("").takeIf { it.isNotBlank() }
+
+            val outputTokenEstimate =
+                assistantText
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { text -> (text.length / 4).coerceAtLeast(1) }
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport.localTurnTelemetry(
+                        context = captureContext,
+                        providerLabel = "Google",
+                        modelLabel = modelId,
+                        timing = timing,
+                        outputTokens = outputTokenEstimate,
+                    )
+                } else {
+                    null
+                }
+
+            return AgentModelTurnResult(
+                assistantText = assistantText,
+                toolCalls = toolCalls,
+                finishReason =
+                    googleFinishReason(
+                        toolCalls = toolCalls,
+                        finishReason = response.finishReason,
+                        assistantText = assistantText,
+                    ),
+                telemetry = telemetry,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            loggingPort.error(TAG, "completeSingleTurn failed: ${e.message}", e)
+            throw e
+        }
     }
 
     private fun resolveThinkingConfig(options: GenerationOptions): ThinkingConfig? {

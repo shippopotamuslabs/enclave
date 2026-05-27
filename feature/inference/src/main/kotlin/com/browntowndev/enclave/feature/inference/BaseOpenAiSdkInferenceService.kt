@@ -158,255 +158,262 @@ abstract class BaseOpenAiSdkInferenceService(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val timing = telemetrySupport?.let { InferenceTurnTiming() }
-        val captureContext =
-            telemetrySupport?.captureContext(
-                options = options,
-                sequenceIndex = options.telemetrySequenceIndex,
-            )
-        val lastUserIndex =
-            sessionMessages.indexOfLast { msg ->
-                msg.role == Role.USER &&
-                    run {
-                        val meta = msg.metadataJson
-                        if (meta == "null" || meta.isBlank()) return@run true
-                        val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                        obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-                    }
-            }
-        val imageUris = options.imageUris.take(maxImages)
-        val requestModelId = options.modelId ?: modelId
-        val requestProvider = provider.toApiProviderOrNull()
-        val useOpenRouterCacheControl =
-            if (requestProvider == ApiProvider.OPENROUTER) {
-                OpenRouterPromptCacheSupport.supportsExplicitCacheControl(requestModelId)
-            } else {
-                false
-            }
-        val cacheControlIndex =
-            if (useOpenRouterCacheControl) {
-                sessionMessages.dropLast(1).indexOfLast { it.role == Role.USER }.takeIf { it >= 0 }
-            } else {
-                null
-            }
-        val mappedSession =
-            sessionMessages.toMappedSessionBody(
-                imageUris = imageUris,
-                imageTargetIndex = lastUserIndex,
-                cacheControlIndex = cacheControlIndex,
-            )
-        val mappedBody = mappedSession.params
-
-        val appendOnly = ensureAppendOnlyContext(options.chatId)
-        appendOnly.ensureStablePrefix(
-            systemPrompt = systemPrompt,
-            toolsFingerprint = availableTools.toToolsFingerprint(),
-        )
-        appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
-
-        val systemPromptPrepended =
-            systemPrompt.isNotBlank() &&
-                mappedBody.none { it.isStableSessionSystemMessage() }
-        val stableSystemMessage =
-            if (systemPromptPrepended) {
-                ChatCompletionMessageParam.ofSystem(
-                    buildSystemPromptMessage(
-                        content = systemPrompt,
-                        useCacheControl = useOpenRouterCacheControl,
-                    ),
+        try {
+            val timing = telemetrySupport?.let { InferenceTurnTiming() }
+            val captureContext =
+                telemetrySupport?.captureContext(
+                    options = options,
+                    sequenceIndex = options.telemetrySequenceIndex,
                 )
-            } else {
-                null
-            }
-        val tailInsertIndex =
-            resolveTailMappedInsertIndex(
-                sessionMessages = sessionMessages,
-                sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
-            )
-        val preRetrievalInsertIndex =
-            resolvePreRetrievalMappedInsertIndex(
-                sessionMessages = sessionMessages,
-                sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
-            )
-        val preRetrievalSidecarText =
-            options.volatileTurnContext
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let(PreRetrievalContextSidecar::format)
-        if (
-            !preRetrievalSidecarText.isNullOrBlank() &&
-            preRetrievalInsertIndex != null &&
-            !appendOnly.hasFrozenPreRetrievalSidecar()
-        ) {
-            appendOnly.endTurnFreezeSidecar(
-                sidecarText = preRetrievalSidecarText,
-                mappedInsertIndex = preRetrievalInsertIndex,
-            )
-        }
-        val livePreRetrievalSidecarText =
-            if (appendOnly.hasFrozenPreRetrievalSidecar()) {
-                null
-            } else {
-                preRetrievalSidecarText
-            }
-        val messages =
-            buildList {
-                stableSystemMessage?.let(::add)
-                addAll(
-                    OpenAiCompatibleVolatilePlacement.buildMappedBodyWithSidecars(
-                        mappedBody = mappedBody,
-                        frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
-                        preRetrievalSidecarText = livePreRetrievalSidecarText,
-                        preRetrievalInsertIndex = preRetrievalInsertIndex,
-                        currentSidecarText = contextSidecars,
-                        tailInsertIndex = tailInsertIndex,
-                    ),
-                )
-            }
-        if (!contextSidecars.isNullOrBlank()) {
-            appendOnly.endTurnFreezeSidecar(
-                sidecarText = contextSidecars,
-                mappedInsertIndex = tailInsertIndex,
-            )
-        }
-
-        val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
-
-        val builder =
-            ChatCompletionCreateParams
-                .builder()
-                .model(requestModelId)
-                .messages(messages)
-
-        val toolsAvailable = availableTools.isNotEmpty() && supportsClientTools(requestModelId)
-        if (toolsAvailable) {
-            availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
-            builder.parallelToolCalls(false)
-            val toolChoice =
-                if (allowToolCall) {
-                    ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
-                } else {
-                    ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
-                }
-            builder.toolChoice(toolChoice)
-        }
-
-        if (parameterSupport?.supportsReasoningEffort != false) {
-            options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        }
-        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
-            options.temperature?.let { builder.temperature(it.toDouble()) }
-        }
-        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
-            options.topP?.let { builder.topP(it.toDouble()) }
-        }
-        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
-            options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
-        }
-        applyPromptCacheRouting(builder = builder, options = options)
-
-        builder.streamOptions(
-            ChatCompletionStreamOptions.builder().includeUsage(true).build(),
-        )
-
-        val emitProviderEvent: suspend (InferenceEvent) -> Unit = { event ->
-            when (event) {
-                is InferenceEvent.PartialResponse -> {
-                    timing?.markFirstOutput()
-                    onTextToken(event.chunk)
-                }
-                is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                else -> {}
-            }
-        }
-        val chatParams = builder.build()
-        val response =
-            streamResponsesFirst(
-                messages = messages,
-                requestProvider = requestProvider,
-                requestModelId = requestModelId,
-                availableTools = availableTools,
-                options = options,
-                chatParams = chatParams,
-                emitEvent = emitProviderEvent,
-            )
-
-        val toolCalls =
-            response.functionCalls.mapIndexed { index, call ->
-                AgentRawToolCall(
-                    id = response.providerToolCallIds.getOrElse(index) { "" },
-                    name = call.toolName,
-                    argumentsJson = call.argumentsJson,
-                )
-            }
-        val bufferedText = response.assistantMessageText
-
-        val telemetry =
-            if (telemetrySupport != null && timing != null && captureContext != null) {
-                telemetrySupport
-                    .openAiTurnTelemetry(
-                        context = captureContext,
-                        providerLabel = telemetrySupport.providerLabel(provider),
-                        modelId = modelId,
-                        modelLabel = modelId,
-                        timing = timing,
-                        inputTokens = response.inputTokens,
-                        outputTokens = response.outputTokens,
-                        reasoningTokens = response.reasoningTokens,
-                        cacheReadInputTokens = response.cacheReadInputTokens,
-                        cacheWriteInputTokens = response.cacheWriteInputTokens,
-                        costUsd = response.costUsd,
-                        savedPricing = options.apiModelPricing,
-                    ).also { row ->
-                        if (provider.toApiProviderOrNull() == ApiProvider.XAI) {
-                            val wireHead =
-                                messages
-                                    .take(XAI_WIRE_LOG_HEAD_MESSAGE_COUNT)
-                                    .joinToString(" | ") { param ->
-                                    when {
-                                        param.isSystem() ->
-                                            "sys:${
-                                                param.asSystem().content().asText()
-                                                    .take(XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS)
-                                            }"
-                                        param.isUser() ->
-                                            "user:${
-                                                param.asUser().content().asText()
-                                                    .take(XAI_WIRE_LOG_USER_PREVIEW_CHARS)
-                                            }"
-                                        param.isAssistant() -> "asst"
-                                        param.isTool() -> "tool"
-                                        else -> "other"
-                                    }
-                                }
-                            loggingPort.debug(
-                                tag,
-                                "xAI telemetry turn seq=${row.sequenceIndex} allowToolCall=$allowToolCall " +
-                                    "toolCalls=${toolCalls.size} wireMsgs=${messages.size} " +
-                                    "appendOnlyClears=${appendOnly.clearCount} wireHead=[$wireHead] " +
-                                    "input=${row.inputTokens} cacheRead=${row.cacheReadInputTokens} " +
-                                    "output=${row.outputTokens}",
-                            )
+            val lastUserIndex =
+                sessionMessages.indexOfLast { msg ->
+                    msg.role == Role.USER &&
+                        run {
+                            val meta = msg.metadataJson
+                            if (meta == "null" || meta.isBlank()) return@run true
+                            val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                            obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
                         }
-                    }
-            } else {
-                null
+                }
+            val imageUris = options.imageUris.take(maxImages)
+            val requestModelId = options.modelId ?: modelId
+            val requestProvider = provider.toApiProviderOrNull()
+            val useOpenRouterCacheControl =
+                if (requestProvider == ApiProvider.OPENROUTER) {
+                    OpenRouterPromptCacheSupport.supportsExplicitCacheControl(requestModelId)
+                } else {
+                    false
+                }
+            val cacheControlIndex =
+                if (useOpenRouterCacheControl) {
+                    sessionMessages.dropLast(1).indexOfLast { it.role == Role.USER }.takeIf { it >= 0 }
+                } else {
+                    null
+                }
+            val mappedSession =
+                sessionMessages.toMappedSessionBody(
+                    imageUris = imageUris,
+                    imageTargetIndex = lastUserIndex,
+                    cacheControlIndex = cacheControlIndex,
+                )
+            val mappedBody = mappedSession.params
+
+            val appendOnly = ensureAppendOnlyContext(options.chatId)
+            appendOnly.ensureStablePrefix(
+                systemPrompt = systemPrompt,
+                toolsFingerprint = availableTools.toToolsFingerprint(),
+            )
+            appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+
+            val systemPromptPrepended =
+                systemPrompt.isNotBlank() &&
+                    mappedBody.none { it.isStableSessionSystemMessage() }
+            val stableSystemMessage =
+                if (systemPromptPrepended) {
+                    ChatCompletionMessageParam.ofSystem(
+                        buildSystemPromptMessage(
+                            content = systemPrompt,
+                            useCacheControl = useOpenRouterCacheControl,
+                        ),
+                    )
+                } else {
+                    null
+                }
+            val tailInsertIndex =
+                resolveTailMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                )
+            val preRetrievalInsertIndex =
+                resolvePreRetrievalMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                )
+            val preRetrievalSidecarText =
+                options.volatileTurnContext
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(PreRetrievalContextSidecar::format)
+            if (
+                !preRetrievalSidecarText.isNullOrBlank() &&
+                preRetrievalInsertIndex != null &&
+                !appendOnly.hasFrozenPreRetrievalSidecar()
+            ) {
+                appendOnly.endTurnFreezeSidecar(
+                    sidecarText = preRetrievalSidecarText,
+                    mappedInsertIndex = preRetrievalInsertIndex,
+                )
+            }
+            val livePreRetrievalSidecarText =
+                if (appendOnly.hasFrozenPreRetrievalSidecar()) {
+                    null
+                } else {
+                    preRetrievalSidecarText
+                }
+            val messages =
+                buildList {
+                    stableSystemMessage?.let(::add)
+                    addAll(
+                        OpenAiCompatibleVolatilePlacement.buildMappedBodyWithSidecars(
+                            mappedBody = mappedBody,
+                            frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                            preRetrievalSidecarText = livePreRetrievalSidecarText,
+                            preRetrievalInsertIndex = preRetrievalInsertIndex,
+                            currentSidecarText = contextSidecars,
+                            tailInsertIndex = tailInsertIndex,
+                        ),
+                    )
+                }
+            if (!contextSidecars.isNullOrBlank()) {
+                appendOnly.endTurnFreezeSidecar(
+                    sidecarText = contextSidecars,
+                    mappedInsertIndex = tailInsertIndex,
+                )
             }
 
-        return AgentModelTurnResult(
-            assistantText = bufferedText.takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason =
-                if (toolCalls.isNotEmpty()) {
-                    AgentFinishReason.ToolUse
+            val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
+
+            val builder =
+                ChatCompletionCreateParams
+                    .builder()
+                    .model(requestModelId)
+                    .messages(messages)
+
+            val toolsAvailable = availableTools.isNotEmpty() && supportsClientTools(requestModelId)
+            if (toolsAvailable) {
+                availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
+                builder.parallelToolCalls(false)
+                val toolChoice =
+                    if (allowToolCall) {
+                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
+                    } else {
+                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
+                    }
+                builder.toolChoice(toolChoice)
+            }
+
+            if (parameterSupport?.supportsReasoningEffort != false) {
+                options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
+            }
+            if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+                options.temperature?.let { builder.temperature(it.toDouble()) }
+            }
+            if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+                options.topP?.let { builder.topP(it.toDouble()) }
+            }
+            if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+                options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+            }
+            applyPromptCacheRouting(builder = builder, options = options)
+
+            builder.streamOptions(
+                ChatCompletionStreamOptions.builder().includeUsage(true).build(),
+            )
+
+            val emitProviderEvent: suspend (InferenceEvent) -> Unit = { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse -> {
+                        timing?.markFirstOutput()
+                        onTextToken(event.chunk)
+                    }
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    else -> {}
+                }
+            }
+            val chatParams = builder.build()
+            val response =
+                streamResponsesFirst(
+                    messages = messages,
+                    requestProvider = requestProvider,
+                    requestModelId = requestModelId,
+                    availableTools = availableTools,
+                    options = options,
+                    chatParams = chatParams,
+                    emitEvent = emitProviderEvent,
+                )
+
+            val toolCalls =
+                response.functionCalls.mapIndexed { index, call ->
+                    AgentRawToolCall(
+                        id = response.providerToolCallIds.getOrElse(index) { "" },
+                        name = call.toolName,
+                        argumentsJson = call.argumentsJson,
+                    )
+                }
+            val bufferedText = response.assistantMessageText
+
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport
+                        .openAiTurnTelemetry(
+                            context = captureContext,
+                            providerLabel = telemetrySupport.providerLabel(provider),
+                            modelId = modelId,
+                            modelLabel = modelId,
+                            timing = timing,
+                            inputTokens = response.inputTokens,
+                            outputTokens = response.outputTokens,
+                            reasoningTokens = response.reasoningTokens,
+                            cacheReadInputTokens = response.cacheReadInputTokens,
+                            cacheWriteInputTokens = response.cacheWriteInputTokens,
+                            costUsd = response.costUsd,
+                            savedPricing = options.apiModelPricing,
+                        ).also { row ->
+                            if (provider.toApiProviderOrNull() == ApiProvider.XAI) {
+                                val wireHead =
+                                    messages
+                                        .take(XAI_WIRE_LOG_HEAD_MESSAGE_COUNT)
+                                        .joinToString(" | ") { param ->
+                                        when {
+                                            param.isSystem() ->
+                                                "sys:${
+                                                    param.asSystem().content().asText()
+                                                        .take(XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS)
+                                                }"
+                                            param.isUser() ->
+                                                "user:${
+                                                    param.asUser().content().asText()
+                                                        .take(XAI_WIRE_LOG_USER_PREVIEW_CHARS)
+                                                }"
+                                            param.isAssistant() -> "asst"
+                                            param.isTool() -> "tool"
+                                            else -> "other"
+                                        }
+                                    }
+                                loggingPort.debug(
+                                    tag,
+                                    "xAI telemetry turn seq=${row.sequenceIndex} allowToolCall=$allowToolCall " +
+                                        "toolCalls=${toolCalls.size} wireMsgs=${messages.size} " +
+                                        "appendOnlyClears=${appendOnly.clearCount} wireHead=[$wireHead] " +
+                                        "input=${row.inputTokens} cacheRead=${row.cacheReadInputTokens} " +
+                                        "output=${row.outputTokens}",
+                                )
+                            }
+                        }
                 } else {
-                    response.finishReason
-                        ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
-                        ?: AgentFinishReason.Stop
-                },
-            providerReasoningContent = response.providerReasoningContent,
-            telemetry = telemetry,
-        )
+                    null
+                }
+
+            return AgentModelTurnResult(
+                assistantText = bufferedText.takeIf { it.isNotBlank() },
+                toolCalls = toolCalls,
+                finishReason =
+                    if (toolCalls.isNotEmpty()) {
+                        AgentFinishReason.ToolUse
+                    } else {
+                        response.finishReason
+                            ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
+                            ?: AgentFinishReason.Stop
+                    },
+                providerReasoningContent = response.providerReasoningContent,
+                telemetry = telemetry,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            loggingPort.error(tag, "completeSingleTurn failed: ${e.message}", e)
+            throw e
+        }
     }
 
     private fun parameterSupport(
