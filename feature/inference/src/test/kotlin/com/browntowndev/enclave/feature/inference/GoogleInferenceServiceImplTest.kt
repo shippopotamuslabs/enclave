@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
@@ -123,5 +124,42 @@ class GoogleInferenceServiceImplTest {
             assertEquals("user", toolResultContent.role().orElse(null))
             val parts = toolResultContent.parts().orElse(emptyList())
             assertTrue(parts.any { it.functionResponse().isPresent })
+        }
+
+    @Test
+    fun `completeSingleTurn throws InferenceNetworkException when SDK client throws IOException`() =
+        runTest {
+            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            coEvery {
+                sdkClient.generateContentStream(any(), any(), any(), any(), any())
+            } throws java.io.IOException("Gemini API server down")
+
+            val service =
+                GoogleInferenceServiceImpl(
+                    sdkClient = sdkClient,
+                    modelId = "gemini-2.5-flash",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+
+            val exception =
+                org.junit.jupiter.api.assertThrows<InferenceNetworkException> {
+                    service.completeSingleTurn(
+                        sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
+                        systemPrompt = "",
+                        contextSidecars = null,
+                        availableTools = emptyList(),
+                        allowToolCall = false,
+                        onTextToken = {},
+                        onThinkingToken = {},
+                        options = GenerationOptions(reasoningBudget = 0),
+                    )
+                }
+
+            assertEquals("GOOGLE", exception.provider)
+            assertEquals("[GOOGLE] Network error: Gemini API server down", exception.message)
+            assertTrue(exception.cause is java.io.IOException)
         }
 }

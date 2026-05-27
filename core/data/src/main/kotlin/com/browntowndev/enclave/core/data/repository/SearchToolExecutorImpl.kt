@@ -48,9 +48,17 @@ class SearchToolExecutorImpl
             )
 
             val resultJson =
-                when (settings.searchProvider) {
-                    SearchProvider.TAVILY -> tavilySearchRepository.search(query)
-                    SearchProvider.EXA -> exaSearchRepository.search(query)
+                try {
+                    when (settings.searchProvider) {
+                        SearchProvider.TAVILY -> tavilySearchRepository.search(query)
+                        SearchProvider.EXA -> exaSearchRepository.search(query)
+                    }
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "Search failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
                 }
 
             loggingPort.info(

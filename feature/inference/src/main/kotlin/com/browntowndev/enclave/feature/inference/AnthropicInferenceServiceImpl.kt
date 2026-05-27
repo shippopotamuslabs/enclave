@@ -23,6 +23,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -501,6 +502,15 @@ class AnthropicInferenceServiceImpl(
             )
         } catch (e: CancellationException) {
             throw e
+        } catch (e: InferenceNetworkException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            loggingPort.error(TAG, "completeSingleTurn network failure: ${describeException(e)}", e)
+            throw InferenceNetworkException(
+                provider = PROVIDER,
+                message = e.message ?: "Connection error",
+                cause = e,
+            )
         } catch (e: Exception) {
             loggingPort.error(TAG, "completeSingleTurn failed: ${describeException(e)}", e)
             throw e

@@ -181,4 +181,35 @@ class SearchToolExecutorImplTest {
 
             assertEquals("""{"query":"android \"agent\" news","results":[]}""", result.resultJson)
         }
+
+    @Test
+    fun `execute returns error JSON when Tavily repository throws IOException`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            every { settingsRepository.settingsFlow } returns
+                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            every { tavilySearchRepository.search(any()) } throws java.io.IOException("Connection timed out")
+
+            val executor =
+                SearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
+                )
+
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"test"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertEquals("""{"success":false,"error":"Network error: Connection timed out"}""", result.resultJson)
+        }
 }

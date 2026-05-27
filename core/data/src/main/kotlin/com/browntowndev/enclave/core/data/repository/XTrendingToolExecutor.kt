@@ -34,7 +34,16 @@ class XTrendingToolExecutor
             val params = request.parameters as XTrendingParams
             loggingPort.info(TAG, "Executing X trending tool location=${params.location}")
 
-            val resultJson = xSearchRepository.getTrends(params.location)
+            val resultJson =
+                try {
+                    xSearchRepository.getTrends(params.location)
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "X Trending failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
+                }
             return ToolExecutionResult(
                 toolName = request.toolName,
                 resultJson = resultJson,

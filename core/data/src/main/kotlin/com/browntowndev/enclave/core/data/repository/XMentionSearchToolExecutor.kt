@@ -41,13 +41,21 @@ class XMentionSearchToolExecutor
             loggingPort.info(TAG, "Executing X mention search tool query=$query")
 
             val result =
-                xSearchRepository.searchPaginated(
-                    query = query,
-                    sortOrder = "recency",
-                    maxPostsPerAuthor = 20,
-                    maxTotalPosts = 20,
-                    nextToken = params.next_token,
-                )
+                try {
+                    xSearchRepository.searchPaginated(
+                        query = query,
+                        sortOrder = "recency",
+                        maxPostsPerAuthor = 20,
+                        maxTotalPosts = 20,
+                        nextToken = params.next_token,
+                    )
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "X Mention Search failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
+                }
 
             return ToolExecutionResult(
                 toolName = request.toolName,

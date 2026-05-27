@@ -27,22 +27,36 @@ class MediaToolExecutor
                 ToolDefinition.GENERATE_VIDEO.name,
                 ToolDefinition.GENERATE_MUSIC.name,
                 -> {
-                    val mediaRequest = MediaGenerationRequestMapper.fromToolCall(request)
-                    loggingPort.debug(TAG, "Executing ${request.toolName}: prompt='${mediaRequest.prompt}'")
-                    generateMediaUseCase(mediaRequest).fold(
-                        onSuccess = { assets ->
-                            ToolExecutionResult(
-                                toolName = request.toolName,
-                                resultJson = buildResultJson(assets),
-                            )
-                        },
-                        onFailure = { error ->
-                            ToolExecutionResult(
-                                toolName = request.toolName,
-                                resultJson = buildErrorJson(error.message ?: "Unknown error during media generation"),
-                            )
-                        },
-                    )
+                    try {
+                        val mediaRequest = MediaGenerationRequestMapper.fromToolCall(request)
+                        loggingPort.debug(TAG, "Executing ${request.toolName}: prompt='${mediaRequest.prompt}'")
+                        generateMediaUseCase(mediaRequest).fold(
+                            onSuccess = { assets ->
+                                ToolExecutionResult(
+                                    toolName = request.toolName,
+                                    resultJson = buildResultJson(assets),
+                                )
+                            },
+                            onFailure = { error ->
+                                val message =
+                                    if (error is java.io.IOException) {
+                                        "Network error: ${error.message}"
+                                    } else {
+                                        error.message ?: "Unknown error during media generation"
+                                    }
+                                ToolExecutionResult(
+                                    toolName = request.toolName,
+                                    resultJson = buildErrorJson(message),
+                                )
+                            },
+                        )
+                    } catch (e: java.io.IOException) {
+                        loggingPort.warning(TAG, "Media generation failed with network error: ${e.message}")
+                        ToolExecutionResult(
+                            toolName = request.toolName,
+                            resultJson = buildErrorJson("Network error: ${e.message}"),
+                        )
+                    }
                 }
                 else -> throw IllegalArgumentException("Unsupported media tool: ${request.toolName}")
             }

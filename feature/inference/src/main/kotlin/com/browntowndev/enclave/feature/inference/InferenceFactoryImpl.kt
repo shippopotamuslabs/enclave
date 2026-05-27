@@ -125,6 +125,8 @@ class InferenceFactoryImpl
                 withInferenceServiceImpl(modelType, block)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: InferenceIOException) {
+                throw e
             } catch (e: java.io.IOException) {
                 throw InferenceIOException(message = e.message, cause = e)
             }
