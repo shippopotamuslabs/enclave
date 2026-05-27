@@ -46,6 +46,26 @@ python3 scripts/train_search_classifier.py --no-synthetic
 
 Classes are balanced to the smaller side. `--cap` limits each routing bucket (CRAG, QReCC, WildChat, etc.).
 
+### Synthetic edge-case hard negatives (auto-mixed)
+
+`scripts/search_intent_train/synthetic_edge_cases.jsonl` (2000 rows, 1000 per class) is
+auto-loaded by `routing_datasets.load_synthetic_edge_cases()` and folded into both the
+search and no-search pools. It targets the classifier's known failure mode: messages that
+*look* search-like but cannot be resolved without prior context (anaphora, refinement,
+status updates, meta-questions about the assistant). Difficulty split per class:
+30% easy / 40% medium / 30% hard.
+
+Regenerate any time with:
+
+```bash
+python3 scripts/search_intent_train/generate_synthetic_edge_cases.py
+```
+
+Seed is fixed (`--seed 20260527`) so the file is reproducible. The generator emits the
+rich JSONL schema (`conversation_context`, `target_message`, `label`, `reasoning`,
+`difficulty`, `category`) — the trainer only consumes `target_message` + `label`; the
+remaining fields are kept for audit and future contextual fine-tuning.
+
 ## Head options
 
 ### 1. Linear head on frozen embeddings (default export)

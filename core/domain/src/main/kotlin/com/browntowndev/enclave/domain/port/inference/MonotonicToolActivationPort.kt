@@ -12,7 +12,10 @@ interface MonotonicToolActivationPort {
      * Returns the full union (previously activated ∪ newNames).
      * This set only grows; names are never removed within a session.
      */
-    fun union(chatId: ChatId, newNames: Set<String>): Set<String>
+    fun union(
+        chatId: ChatId,
+        newNames: Set<String>,
+    ): Set<String>
 
     /**
      * Clears the record for [chatId].

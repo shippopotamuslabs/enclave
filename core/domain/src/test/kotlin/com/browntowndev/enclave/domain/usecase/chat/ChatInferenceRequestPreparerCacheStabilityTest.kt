@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ChatInferenceRequestPreparerCacheStabilityTest {
-
     // ---------------------------------------------------------------------------
     // Shared helpers
     // ---------------------------------------------------------------------------
@@ -107,7 +106,11 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
 
     private fun neverSearchClassifier(): SearchIntentClassifierPort =
         object : SearchIntentClassifierPort {
-            override fun requiresSearch(embedding: FloatArray, threshold: Float): Boolean = false
+            override fun requiresSearch(
+                embedding: FloatArray,
+                threshold: Float,
+            ): Boolean = false
+
             override fun getSearchIntentProbability(embedding: FloatArray): Float = 0.0f
         }
 
@@ -153,11 +156,12 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
     fun CSPC_04a_deferred_tool_no_activation_catalog_bytes_identical_across_turns() =
         runTest {
             val store = InMemoryMonotonicToolActivationStore()
-            val preparer = buildPreparer(
-                settings = SettingsData(searchEnabled = true, tavilyKeyPresent = true),
-                monotonicToolActivation = store,
-                activeModelProvider = mockLocalModelProvider(),
-            )
+            val preparer =
+                buildPreparer(
+                    settings = SettingsData(searchEnabled = true, tavilyKeyPresent = true),
+                    monotonicToolActivation = store,
+                    activeModelProvider = mockLocalModelProvider(),
+                )
 
             val result1 = invoke(preparer, "hello")
             val systemPrompt1 = result1.options.systemPrompt
@@ -191,26 +195,30 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             // Turn 1: requiresSearch=false; Turn 2: requiresSearch=true; Turn 3: requiresSearch=false
             // The classifier is called twice per turn when xSearch is configured:
             // once by ToolIntentActivationPolicy.resolve() and once by the xDeferred block.
-            val classifier = ControlledSearchIntentClassifier(
-                ArrayDeque(listOf(false, false, true, true, false, false)),
-            )
+            val classifier =
+                ControlledSearchIntentClassifier(
+                    ArrayDeque(listOf(false, false, true, true, false, false)),
+                )
             val store = InMemoryMonotonicToolActivationStore()
-            val preparer = buildPreparer(
-                settings = SettingsData(
-                    searchEnabled = true,
-                    tavilyKeyPresent = true,
-                    xSearchEnabled = true,
-                    xApiKeyPresent = true,
-                ),
-                monotonicToolActivation = store,
-                searchIntentClassifier = classifier,
-                activeModelProvider = mockLocalModelProvider(),
-            )
+            val preparer =
+                buildPreparer(
+                    settings =
+                        SettingsData(
+                            searchEnabled = true,
+                            tavilyKeyPresent = true,
+                            xSearchEnabled = true,
+                            xApiKeyPresent = true,
+                        ),
+                    monotonicToolActivation = store,
+                    searchIntentClassifier = classifier,
+                    activeModelProvider = mockLocalModelProvider(),
+                )
 
             val result1 = invoke(preparer, "plain text")
-            val disclosureModeTurn1 = result1.options.toolCatalog
-                .single { it.name == "search_x_recent" }
-                .disclosureMode
+            val disclosureModeTurn1 =
+                result1.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode
             val systemPromptTurn1 = result1.options.systemPrompt
 
             assertEquals(
@@ -220,9 +228,10 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             )
 
             val result2 = invoke(preparer, "breaking news x")
-            val disclosureModeTurn2 = result2.options.toolCatalog
-                .single { it.name == "search_x_recent" }
-                .disclosureMode
+            val disclosureModeTurn2 =
+                result2.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode
             val systemPromptTurn2 = result2.options.systemPrompt
 
             assertEquals(
@@ -232,9 +241,10 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             )
 
             val result3 = invoke(preparer, "plain text again")
-            val disclosureModeTurn3 = result3.options.toolCatalog
-                .single { it.name == "search_x_recent" }
-                .disclosureMode
+            val disclosureModeTurn3 =
+                result3.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode
             val systemPromptTurn3 = result3.options.systemPrompt
 
             assertEquals(
@@ -258,12 +268,13 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
     fun CSPC_04c_runtime_disclose_tool_schemas_does_not_mutate_preparer_catalog_next_turn() =
         runTest {
             val store = InMemoryMonotonicToolActivationStore()
-            val preparer = buildPreparer(
-                // webSearchConfigured=false so start_artifact is deferred
-                settings = SettingsData(searchEnabled = false),
-                monotonicToolActivation = store,
-                activeModelProvider = mockLocalModelProvider(),
-            )
+            val preparer =
+                buildPreparer(
+                    // webSearchConfigured=false so start_artifact is deferred
+                    settings = SettingsData(searchEnabled = false),
+                    monotonicToolActivation = store,
+                    activeModelProvider = mockLocalModelProvider(),
+                )
 
             val result1 = invoke(preparer, "what is the weather today", chatId = "chat-2")
             val systemPromptTurn1 = result1.options.systemPrompt
@@ -301,25 +312,29 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             // Turn 2: requiresSearch=true; Turn 3: requiresSearch=false
             // The classifier is called twice per turn when xSearch is configured:
             // once by ToolIntentActivationPolicy.resolve() and once by the xDeferred block.
-            val classifier = ControlledSearchIntentClassifier(
-                ArrayDeque(listOf(true, true, false, false)),
-            )
-            val preparer = buildPreparer(
-                settings = SettingsData(
-                    searchEnabled = true,
-                    tavilyKeyPresent = true,
-                    xSearchEnabled = true,
-                    xApiKeyPresent = true,
-                ),
-                monotonicToolActivation = IdentityMonotonicToolActivationPort,
-                searchIntentClassifier = classifier,
-                activeModelProvider = mockLocalModelProvider(),
-            )
+            val classifier =
+                ControlledSearchIntentClassifier(
+                    ArrayDeque(listOf(true, true, false, false)),
+                )
+            val preparer =
+                buildPreparer(
+                    settings =
+                        SettingsData(
+                            searchEnabled = true,
+                            tavilyKeyPresent = true,
+                            xSearchEnabled = true,
+                            xApiKeyPresent = true,
+                        ),
+                    monotonicToolActivation = IdentityMonotonicToolActivationPort,
+                    searchIntentClassifier = classifier,
+                    activeModelProvider = mockLocalModelProvider(),
+                )
 
             val result2 = invoke(preparer, "breaking news x")
-            val disclosureModeTurn2 = result2.options.toolCatalog
-                .single { it.name == "search_x_recent" }
-                .disclosureMode
+            val disclosureModeTurn2 =
+                result2.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode
             val systemPromptTurn2 = result2.options.systemPrompt
 
             assertEquals(
@@ -329,9 +344,10 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             )
 
             val result3 = invoke(preparer, "plain text")
-            val disclosureModeTurn3 = result3.options.toolCatalog
-                .single { it.name == "search_x_recent" }
-                .disclosureMode
+            val disclosureModeTurn3 =
+                result3.options.toolCatalog
+                    .single { it.name == "search_x_recent" }
+                    .disclosureMode
             val systemPromptTurn3 = result3.options.systemPrompt
 
             assertEquals(
@@ -356,11 +372,12 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
     private class ControlledSearchIntentClassifier(
         private val decisions: ArrayDeque<Boolean>,
     ) : SearchIntentClassifierPort {
-        override fun requiresSearch(embedding: FloatArray, threshold: Float): Boolean =
-            decisions.removeFirstOrNull() ?: false
+        override fun requiresSearch(
+            embedding: FloatArray,
+            threshold: Float,
+        ): Boolean = decisions.removeFirstOrNull() ?: false
 
-        override fun getSearchIntentProbability(embedding: FloatArray): Float =
-            if (decisions.firstOrNull() == true) 0.95f else 0.05f
+        override fun getSearchIntentProbability(embedding: FloatArray): Float = if (decisions.firstOrNull() == true) 0.95f else 0.05f
     }
 
     /**
@@ -368,7 +385,11 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
      * Used by CSPC-MUTDEF-01 to prove the real store is required.
      */
     private object IdentityMonotonicToolActivationPort : MonotonicToolActivationPort {
-        override fun union(chatId: ChatId, newNames: Set<String>): Set<String> = newNames
+        override fun union(
+            chatId: ChatId,
+            newNames: Set<String>,
+        ): Set<String> = newNames
+
         override fun clearSession(chatId: ChatId) = Unit
     }
 }

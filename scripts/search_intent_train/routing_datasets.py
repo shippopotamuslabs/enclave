@@ -31,6 +31,9 @@ CRAG_JSONL_URL = (
     "https://github.com/facebookresearch/CRAG/raw/refs/heads/main/data/"
     "crag_task_1_and_2_dev_v4.jsonl.bz2"
 )
+SYNTHETIC_EDGE_CASES_JSONL = (
+    REPO_ROOT / "scripts" / "search_intent_train" / "synthetic_edge_cases.jsonl"
+)
 
 # ---------------------------------------------------------------------------
 # CRAG (Meta) — web-search gating from static_or_dynamic + popularity
@@ -304,8 +307,438 @@ def _looks_like_tool_or_artifact(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# New Training Data Sources (Class 0 - Non-Search)
+# ---------------------------------------------------------------------------
+
+
+def load_oasst1_refinement(rng: random.Random, cap: int) -> list[str]:
+    from datasets import load_dataset
+    from search_intent_train.synthetic_data import is_iterative_refinement
+    
+    out: list[str] = []
+    try:
+        ds = load_dataset("OpenAssistant/oasst1", split="train")
+        msg_map = {}
+        tree_messages = {}
+        for row in ds:
+            m_id = row["message_id"]
+            t_id = row["message_tree_id"]
+            p_id = row["parent_id"]
+            role = row["role"]
+            text = row["text"]
+            rank = row["rank"]
+            lang = row.get("lang", "en")
+            
+            if lang != "en":
+                continue
+                
+            msg = {
+                "message_id": m_id,
+                "message_tree_id": t_id,
+                "parent_id": p_id,
+                "role": role,
+                "text": text,
+                "rank": rank,
+            }
+            msg_map[m_id] = msg
+            if t_id not in tree_messages:
+                tree_messages[t_id] = []
+            tree_messages[t_id].append(msg)
+            
+        depth_map = {}
+        def get_depth(m_id):
+            if m_id not in msg_map:
+                return -1
+            if m_id in depth_map:
+                return depth_map[m_id]
+            p_id = msg_map[m_id]["parent_id"]
+            if p_id is None:
+                depth_map[m_id] = 0
+                return 0
+            d = get_depth(p_id)
+            if d == -1:
+                depth_map[m_id] = 0
+            else:
+                depth_map[m_id] = d + 1
+            return depth_map[m_id]
+
+        for m_id in msg_map:
+            get_depth(m_id)
+
+        tree_max_depth = {}
+        for t_id, msgs in tree_messages.items():
+            max_d = 0
+            for msg in msgs:
+                d = depth_map.get(msg["message_id"], 0)
+                if d > max_d:
+                    max_d = d
+            tree_max_depth[t_id] = max_d
+
+        for m_id, msg in msg_map.items():
+            if msg["role"] != "prompter":
+                continue
+            t_id = msg["message_tree_id"]
+            if tree_max_depth.get(t_id, 0) <= 3:
+                continue
+            depth = depth_map.get(m_id, 0)
+            if depth < 2:
+                continue
+            text = msg["text"]
+            if not is_iterative_refinement(text):
+                continue
+            
+            p_id = msg["parent_id"]
+            if p_id in msg_map:
+                parent_msg = msg_map[p_id]
+                parent_rank = parent_msg.get("rank")
+                if parent_rank is not None and parent_rank >= 0:
+                    cleaned = _clean(text, min_len=10)
+                    if cleaned:
+                        out.append(cleaned)
+                        
+    except Exception as exc:
+        print(f"  Warning: OASST1 loading failed, using synthetic fallback: {exc}")
+        
+    fallback_oasst = [
+        "Good suggestion, I'll make those changes to the config flow.",
+        "Ok, I just updated things with the ellipses idea.",
+        "How does this look now? Is it clean enough?",
+        "That worked. What about the other controller?",
+        "I see what you mean. Here's what I changed: removed the unused import",
+        "Much cleaner now. The adapter is updated.",
+        "This is exactly right. You've iterated from v1 to v2",
+        "Good catch — that one is genuinely confusing because it looks like it should be meaningful",
+        "Are these variables noise or actually serving a purpose?",
+        "What would make this better?",
+        "Is this clean enough?",
+        "How do you even know what tool-schema-0 is?"
+    ]
+    while len(out) < cap:
+        out.extend(fallback_oasst)
+        
+    return _sample(list(dict.fromkeys(out)), cap, rng)
+
+
+def load_lmsys_refinement(rng: random.Random, cap: int) -> list[str]:
+    from datasets import load_dataset
+    from search_intent_train.synthetic_data import is_iterative_refinement
+
+    out: list[str] = []
+    try:
+        ds = load_dataset("HuggingFaceH4/ultrachat_200k", split="test_sft", streaming=True)
+        
+        tech_keywords = {
+            "code", "programming", "developer", "compile", "refactor", "class", "function",
+            "python", "javascript", "typescript", "kotlin", "rust", "java", "c++", "html", "css",
+            "sql", "git", "bash", "linux", "compiler", "debugging", "regex", "api", "database"
+        }
+        
+        added = 0
+        for row in tqdm(ds, desc="LMSYS (UltraChat)"):
+            messages = row.get("messages", [])
+            if len(messages) <= 4:
+                continue
+                
+            is_technical = False
+            for msg in messages:
+                content = str(msg.get("content", "")).lower()
+                if "```" in content or any(kw in content for kw in tech_keywords):
+                    is_technical = True
+                    break
+                    
+            if not is_technical:
+                continue
+                
+            for i in range(2, len(messages)):
+                msg = messages[i]
+                if msg.get("role") == "user":
+                    content = msg.get("content", "")
+                    if content and is_iterative_refinement(content):
+                        cleaned = _clean(content, min_len=10)
+                        if cleaned:
+                            out.append(cleaned)
+                            added += 1
+            if len(out) >= cap * 2:
+                break
+    except Exception as exc:
+        print(f"  Warning: LMSYS loading failed, using synthetic fallback: {exc}")
+        
+    fallback_lmsys = [
+        "Good suggestion, I'll make those changes to the adapter class.",
+        "Ok, I just updated things with the ellipses idea and deduplication.",
+        "How does this look now? Is the schema mapping correct?",
+        "That worked. What about the controller state machine?",
+        "I see what you mean. Here's what I changed in the logic.",
+        "Much cleaner now. The classifier threshold is updated to 0.78.",
+        "This is exactly right. You've iterated from the initial layout to the optimized version.",
+        "Good catch — that one is genuinely confusing because it looks like it should be meaningful.",
+        "Are these imports noise or actually serving a purpose?",
+        "What would make this better? Should I use a flow or live coroutine?",
+        "Is this clean enough, or should we decouple the DB persistence?",
+        "How do you even know what tool-schema-0 and tool-schema-1 are?",
+        "I added some extra logging to help me troubleshoot the thread issue.",
+        "The tools are working perfectly now after resolving the missing package.",
+        "I actually have 0 user data and this app uses zero knowledge encryption anyway.",
+        "Yeah honestly this is the next thing I want to work on."
+    ]
+    while len(out) < cap:
+        out.extend(fallback_lmsys)
+        
+    return _sample(list(dict.fromkeys(out)), cap, rng)
+
+
+def load_sharegpt_refinement(rng: random.Random, cap: int) -> list[str]:
+    from datasets import load_dataset
+    from search_intent_train.synthetic_data import is_iterative_refinement
+
+    out: list[str] = []
+    try:
+        ds = load_dataset("Aeala/ShareGPT_Vicuna_unfiltered", split="train", streaming=True)
+        
+        tech_keywords = {
+            "code", "programming", "developer", "compile", "refactor", "class", "function",
+            "python", "javascript", "typescript", "kotlin", "rust", "java", "c++", "html", "css",
+            "git", "debugging"
+        }
+        
+        added = 0
+        for row in tqdm(ds, desc="ShareGPT"):
+            conversations = row.get("conversations", [])
+            if len(conversations) <= 4:
+                continue
+                
+            is_technical = False
+            for msg in conversations:
+                val = str(msg.get("value", "")).lower()
+                if "```" in val or any(kw in val for kw in tech_keywords):
+                    is_technical = True
+                    break
+                    
+            if not is_technical:
+                continue
+                
+            for i in range(2, len(conversations)):
+                msg = conversations[i]
+                if msg.get("from") in ("human", "user"):
+                    value = msg.get("value", "")
+                    if value and is_iterative_refinement(value):
+                        cleaned = _clean(value, min_len=10)
+                        if cleaned:
+                            out.append(cleaned)
+                            added += 1
+            if len(out) >= cap * 2:
+                break
+    except Exception as exc:
+        print(f"  Warning: ShareGPT loading failed, using synthetic fallback: {exc}")
+        
+    fallback_sharegpt = [
+        "Can you write a unit test for the function I just pasted?",
+        "Debug this script — it throws a KeyError on line 42.",
+        "That's not what I meant — let me rephrase.",
+        "No, I mean use the tool instead.",
+        "Use the memory repository to handle this, not a web search.",
+        "Create a document that outlines the plan we just discussed.",
+        "Generate a PDF report from this chat using the artifact flow.",
+        "Export our conversation as a markdown file.",
+        "Append this section to the artifact we are building.",
+        "Thanks, that makes sense now. I've updated the script.",
+        "Good call, that worked perfectly."
+    ]
+    while len(out) < cap:
+        out.extend(fallback_sharegpt)
+        
+    return _sample(list(dict.fromkeys(out)), cap, rng)
+
+
+def load_ubuntu_refinement(rng: random.Random, cap: int) -> list[str]:
+    from datasets import load_dataset
+
+    out: list[str] = []
+    try:
+        ds = load_dataset("sedthh/ubuntu_dialogue_qa", split="train", streaming=True)
+        
+        cmd_keywords = ["sudo", "apt", "git", "cd", "ls", "grep", "chmod", "chown", "mkdir", "rm", "cp", "mv", "install", "config"]
+        result_keywords = ["worked", "fixed", "thanks", "done", "okay", "ok", "yes", "yeah", "now it says", "error", "no luck", "compiled", "running"]
+        
+        added = 0
+        for row in tqdm(ds, desc="Ubuntu Dialogs"):
+            question = row.get("user_question", "")
+            response = row.get("responder_response", "")
+            
+            has_cmd = any(kw in question.lower() for kw in cmd_keywords) or any(kw in response.lower() for kw in cmd_keywords)
+            has_result = any(kw in question.lower() for kw in result_keywords) or any(kw in response.lower() for kw in result_keywords)
+            
+            if has_cmd and has_result:
+                cleaned = _clean(question, min_len=8)
+                if cleaned:
+                    out.append(cleaned)
+                    added += 1
+            if len(out) >= cap:
+                break
+    except Exception as exc:
+        print(f"  Warning: Ubuntu Dialogue Corpus loading failed, using synthetic fallback: {exc}")
+        
+    fallback_ubuntu = [
+        "I ran `sudo apt update` and that worked, thanks!",
+        "Ok I just did that. now it says command not found",
+        "I got error: permission denied when running git clone",
+        "Fixed it by updating python and running pip install -r requirements.txt",
+        "It finished with exit code 0. Looks good, dependencies installed.",
+        "Still getting the same compile error after running cargo build",
+        "Done, the server is running now on port 8000",
+        "Ok, I just executed chmod +x scripts/train_search_classifier.py",
+        "Confirmed, the build succeeded on gradle assembleDebug",
+        "Yep, that resolved the library mismatch.",
+        "I checked cat /var/log/syslog and it was empty."
+    ]
+    while len(out) < cap:
+        out.extend(fallback_ubuntu)
+        
+    return _sample(list(dict.fromkeys(out)), cap, rng)
+
+
+def load_github_pr_comments(rng: random.Random, cap: int) -> list[str]:
+    import urllib.request
+    import json
+    from search_intent_train.synthetic_data import is_iterative_refinement
+    
+    out: list[str] = []
+    
+    repos = [
+        "tensorflow/tensorflow",
+        "pytorch/pytorch",
+        "rust-lang/rust",
+        "flutter/flutter",
+        "google/jax",
+        "kotlin/kotlin"
+    ]
+    
+    for repo in repos:
+        if len(out) >= cap:
+            break
+        try:
+            url = f"https://api.github.com/repos/{repo}/pulls/comments?per_page=100"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "application/vnd.github.v3+json"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                comments = json.loads(resp.read().decode("utf-8"))
+                for comment in comments:
+                    body = comment.get("body", "")
+                    in_reply = comment.get("in_reply_to_id") is not None
+                    
+                    if body and (in_reply or is_iterative_refinement(body)):
+                        cleaned = _clean(body, min_len=10)
+                        if cleaned:
+                            out.append(cleaned)
+        except Exception as exc:
+            print(f"  Warning: Failed to fetch GitHub comments for {repo}: {exc}")
+            
+    fallback_comments = [
+        "Good catch, I've updated the test case to cover this boundary condition.",
+        "Thanks for the feedback! I added the null checks and simplified the logic.",
+        "I'll make that change now. Should be updated in the next commit.",
+        "Much cleaner. I removed the redundant check and squashed the commits.",
+        "Done. I've updated the README as well to reflect the new API parameters.",
+        "That worked, now all unit tests are passing locally.",
+        "Fixed in the latest revision. Thanks for pointing it out!",
+        "Yes, that is correct. I updated it to use the new adapter interface.",
+        "Good call, I changed the threshold value to 0.78 as suggested.",
+        "Updated the schema definitions. Please let me know how it looks now.",
+        "I see what you mean. Here is what I changed in the config handler.",
+        "Ah, good catch. The reference here was indeed serving no purpose. Removed it.",
+        "Is this clean enough, or should I abstract the database mapping further?",
+        "Okay, I just updated things with the deduplication and ellipses idea.",
+        "I added some extra logging to help me troubleshoot that thread issue.",
+        "The tools are working perfectly now after resolving the missing package.",
+        "Can you verify the benchmark run results? I've updated the PR branch.",
+        "Thanks! Applied the suggestions and formatted the code using ktlint.",
+        "Done. It now uses the memory repository instead of direct DB access.",
+        "Perfect suggestion, that simplifies the controller state machine a lot.",
+        "I'll make those changes. Let me know if we need to restructure the test suite too.",
+        "Updated. Now it properly raises a ValueError on invalid shapes.",
+        "I just pushed the fix for the CI build error. It was a mismatch in target API.",
+        "Looks good, I will merge once the checks complete.",
+        "That's exactly right. I updated the serialization helper to handle nested maps.",
+        "Ok, fixed the warnings from the static analyzer."
+    ]
+    
+    if len(out) < cap:
+        out.extend(fallback_comments)
+        
+    return _sample(list(dict.fromkeys(out)), cap, rng)
+
+
+# ---------------------------------------------------------------------------
+# Synthetic edge-case dataset (anaphoric / refinement / meta hard negatives)
+#
+# JSONL produced by scripts/search_intent_train/generate_synthetic_edge_cases.py
+# Each row has at least: target_message (str), label (0|1). Optional richer
+# fields (conversation_context, reasoning, difficulty, category) are kept for
+# audit and future contextual fine-tuning, but not consumed here — the trainer
+# only embeds the standalone target string.
+# ---------------------------------------------------------------------------
+
+
+def load_synthetic_edge_cases() -> tuple[list[str], list[str]]:
+    """Return (search_strings, no_search_strings) from the synthetic edge JSONL.
+
+    Returns empty lists if the file is missing — train.py will continue with the
+    rest of the routing corpora.
+    """
+    if not SYNTHETIC_EDGE_CASES_JSONL.exists():
+        print(
+            f"  Note: {SYNTHETIC_EDGE_CASES_JSONL.name} not found. "
+            "Run scripts/search_intent_train/generate_synthetic_edge_cases.py to create it.",
+        )
+        return [], []
+
+    search: list[str] = []
+    no_search: list[str] = []
+    with SYNTHETIC_EDGE_CASES_JSONL.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            target = row.get("target_message", "")
+            label = row.get("label")
+            # Allow short fragments like "Mhm." or "Yes." — these are intentional
+            # hard negatives for the confirmation_querylike bucket.
+            cleaned = _clean(target, min_len=3)
+            if not cleaned:
+                continue
+            if label == 1:
+                search.append(cleaned)
+            elif label == 0:
+                no_search.append(cleaned)
+    print(
+        f"  Synthetic edge cases: {len(search)} search, {len(no_search)} non-search "
+        f"({SYNTHETIC_EDGE_CASES_JSONL.name})"
+    )
+    return search, no_search
+
+
+# ---------------------------------------------------------------------------
 # Public API: assemble routing-aware training corpora
 # ---------------------------------------------------------------------------
+
+
+_synthetic_edge_cache: tuple[list[str], list[str]] | None = None
+
+
+def _get_synthetic_edge_cases() -> tuple[list[str], list[str]]:
+    global _synthetic_edge_cache
+    if _synthetic_edge_cache is None:
+        _synthetic_edge_cache = load_synthetic_edge_cases()
+    return _synthetic_edge_cache
 
 
 def load_routing_search_samples(rng: random.Random, cap_per_source: int) -> list[str]:
@@ -327,6 +760,10 @@ def load_routing_search_samples(rng: random.Random, cap_per_source: int) -> list
 
     parts.extend(load_search_samples(rng, cap=max(cap_per_source // 4, 400)))
 
+    # Synthetic edge-case positives (concrete entities, time-sensitive, etc.)
+    synth_search, _ = _get_synthetic_edge_cases()
+    parts.extend(synth_search)
+
     return list(dict.fromkeys(parts))
 
 
@@ -346,8 +783,19 @@ def load_routing_no_search_samples(rng: random.Random, cap_per_source: int) -> l
     parts.extend(load_tool_calling_negatives(rng, cap_per_source))
     parts.extend(load_wildchat_organic_negatives(rng, cap_per_source))
 
+    # New training data sources (Class 0 - Non-Search)
+    parts.extend(load_oasst1_refinement(rng, cap_per_source))
+    parts.extend(load_lmsys_refinement(rng, cap_per_source))
+    parts.extend(load_sharegpt_refinement(rng, cap_per_source))
+    parts.extend(load_ubuntu_refinement(rng, cap_per_source))
+    parts.extend(load_github_pr_comments(rng, cap_per_source))
+
     from search_intent_train.data_sources import load_no_search_samples
 
     parts.extend(load_no_search_samples(rng, cap=max(cap_per_source // 4, 400)))
+
+    # Synthetic edge-case hard negatives (anaphoric, refinement, meta, ...)
+    _, synth_no = _get_synthetic_edge_cases()
+    parts.extend(synth_no)
 
     return list(dict.fromkeys(parts))

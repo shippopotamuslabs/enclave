@@ -12,15 +12,18 @@ import javax.inject.Inject
 class InMemoryMonotonicToolActivationStore
     @Inject
     constructor() : MonotonicToolActivationPort {
-    private val store = ConcurrentHashMap<ChatId, MutableSet<String>>()
+        private val store = ConcurrentHashMap<ChatId, MutableSet<String>>()
 
-    override fun union(chatId: ChatId, newNames: Set<String>): Set<String> {
-        val existing = store.getOrPut(chatId) { java.util.concurrent.CopyOnWriteArraySet() }
-        existing.addAll(newNames)
-        return existing.toSet()
-    }
+        override fun union(
+            chatId: ChatId,
+            newNames: Set<String>,
+        ): Set<String> {
+            val existing = store.getOrPut(chatId) { java.util.concurrent.CopyOnWriteArraySet() }
+            existing.addAll(newNames)
+            return existing.toSet()
+        }
 
-    override fun clearSession(chatId: ChatId) {
-        store.remove(chatId)
+        override fun clearSession(chatId: ChatId) {
+            store.remove(chatId)
+        }
     }
-}

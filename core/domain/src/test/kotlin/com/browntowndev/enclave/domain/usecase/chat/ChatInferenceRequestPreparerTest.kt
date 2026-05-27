@@ -73,6 +73,7 @@ class ChatInferenceRequestPreparerTest {
                     assertEquals(
                         listOf(
                             "disclose_tool_schemas",
+                            "read_context_reference",
                             "web_search",
                             "web_extract",
                             "search_chat_history",
@@ -88,7 +89,7 @@ class ChatInferenceRequestPreparerTest {
                 },
                 {
                     assertEquals(
-                        listOf("disclose_tool_schemas", "web_search", "web_extract"),
+                        listOf("disclose_tool_schemas", "read_context_reference", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -869,5 +870,4 @@ class ChatInferenceRequestPreparerTest {
             assertFalse(activeNames.contains(ToolDefinition.X_USER_TWEETS.name))
             assertFalse(activeNames.contains(ToolDefinition.X_MENTION_SEARCH.name))
         }
-
 }

@@ -26,7 +26,9 @@ class AgentLoopToolCatalogJsonTest {
         assertTrue(array.isNotEmpty())
         val webSearch =
             array.first { element ->
-                element.jsonObject.getValue("name").jsonPrimitive.content == "web_search"
+                element.jsonObject
+                    .getValue("name")
+                    .jsonPrimitive.content == "web_search"
             }
         val spec = webSearch.jsonObject
         assertTrue(spec.containsKey("aliases"))
@@ -67,7 +69,9 @@ class AgentLoopToolCatalogJsonTest {
             )
         val names =
             Json.parseToJsonElement(json).jsonArray.map { element ->
-                element.jsonObject.getValue("name").jsonPrimitive.content
+                element.jsonObject
+                    .getValue("name")
+                    .jsonPrimitive.content
             }
         assertTrue(ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name in names)
         assertTrue("append_blocks" in names)

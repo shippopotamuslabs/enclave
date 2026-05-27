@@ -26,7 +26,8 @@ object AgentLoopToolCatalogJson {
             kotlinx.serialization.json.Json
                 .parseToJsonElement(AgentLoopToolCatalogResources.bundledCatalogJson)
                 .jsonObject
-        root.getValue("tools")
+        root
+            .getValue("tools")
             .jsonArray
             .associate { element ->
                 val spec = element.jsonObject

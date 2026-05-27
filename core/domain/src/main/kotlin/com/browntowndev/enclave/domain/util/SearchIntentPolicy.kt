@@ -6,7 +6,7 @@ package com.browntowndev.enclave.domain.util
  */
 object SearchIntentPolicy {
     /** Minimum classifier probability to run pre-retrieval search. */
-    const val PRE_RETRIEVAL_THRESHOLD: Float = 0.52f
+    const val PRE_RETRIEVAL_THRESHOLD: Float = 0.70f
 
     private val nonSearchPatterns =
         listOf(
