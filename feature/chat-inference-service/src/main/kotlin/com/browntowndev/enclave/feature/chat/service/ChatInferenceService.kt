@@ -306,6 +306,14 @@ class ChatInferenceService : Service() {
                         state = MessageGenerationState.Failed(e, modelType),
                         persistenceSession = persistenceSession,
                     )
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Inference failed in service due to system error", e)
+                    publishState(
+                        chatId = chatId,
+                        assistantMessageId = assistantMessageId,
+                        state = MessageGenerationState.Failed(RuntimeException(e), modelType),
+                        persistenceSession = persistenceSession,
+                    )
                 } finally {
                     stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
                     stopSelf(latestStartId)
@@ -367,8 +375,8 @@ class ChatInferenceService : Service() {
                 service = service,
             )
             loggingPort.debug(TAG, "history rehydration complete chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+        } catch (e: Throwable) {
+            loggingPort.error(TAG, "Failed to rehydrate history", e)
         }
 
         loggingPort.info(TAG, "sendPrompt begin chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
