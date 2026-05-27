@@ -13,7 +13,6 @@ import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -155,6 +154,63 @@ class MessageSyncHandlerTest {
 
             // Confirm pendingSync was never reset to 0 via an upsert
             coVerify(exactly = 0) { messageDao.upsert(match { it.pendingSync == 0 }) }
+        }
+
+    // -----------------------------------------------------------------------
+    // THE FLICKER: live-generation echo must NOT collapse local placeholder
+    //
+    // While generation is in flight the local row is in a transient state
+    // (PROCESSING/THINKING/GENERATING/ENGINE_LOADING). The listener echo of
+    // our own placeholder upload arrives with the same updatedAt but a
+    // mapper-clamped COMPLETE state. If the merge runs, the UI briefly flips
+    // to a completed AssistantResponse (copy/share row visible) before the
+    // next streaming write flips it back — a visible flicker.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+        "upsertLocal with overwrite=true and clamped-COMPLETE echo at same updatedAt " +
+            "preserves transient local state (no flicker)",
+    )
+    fun upsertLocal_liveEcho_doesNotCollapseTransientPlaceholder() =
+        runTest {
+            // Local placeholder mid-generation: PROCESSING, updatedAt=T1
+            val localProcessing =
+                MessageWithFiles(
+                    message =
+                        MessageEntity(
+                            id = MSG_ID,
+                            chatId = CHAT_ID,
+                            content = "",
+                            role = Role.ASSISTANT,
+                            messageState = MessageState.PROCESSING,
+                            pendingSync = 0, // already markSynced after upload
+                            updatedAt = T1,
+                        ),
+                    files = emptyList(),
+                )
+            coEvery { messageDao.getMessageById(MSG_ID) } returns localProcessing
+
+            // Listener echo: mapper has clamped messageState to COMPLETE, same updatedAt
+            val clampedEcho =
+                MessageWithFiles(
+                    message =
+                        MessageEntity(
+                            id = MSG_ID,
+                            chatId = CHAT_ID,
+                            content = "",
+                            role = Role.ASSISTANT,
+                            messageState = MessageState.COMPLETE,
+                            pendingSync = 0,
+                            updatedAt = T1,
+                        ),
+                    files = emptyList(),
+                )
+
+            handler.upsertLocal(clampedEcho, mockk(relaxed = true), overwrite = true)
+
+            // Local placeholder must not be touched while it is mid-generation.
+            coVerify(exactly = 0) { messageDao.upsert(any()) }
         }
 
     // -----------------------------------------------------------------------
