@@ -19,6 +19,28 @@ val localProperties =
         }
     }
 
+/** Strips optional wrapping quotes and escapes for a Java string literal in BuildConfig. */
+fun String.toBuildConfigStringLiteral(): String {
+    val unquoted =
+        trim().let { value ->
+            when {
+                value.length >= 2 && value.startsWith("\"") && value.endsWith("\"") ->
+                    value.substring(1, value.length - 1)
+                value.length >= 2 && value.startsWith("'") && value.endsWith("'") ->
+                    value.substring(1, value.length - 1)
+                else -> value
+            }
+        }
+    val escaped =
+        unquoted
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
+fun Properties.buildConfigString(propertyName: String): String =
+    getProperty(propertyName, "").toBuildConfigStringLiteral()
+
 kotlin {
     jvmToolchain(17)
 }
@@ -50,12 +72,12 @@ android {
         buildConfigField(
             "String",
             "TELEMETRY_OTLP_ENDPOINT",
-            "\"${localProperties.getProperty("OTEL_EXPORTER_OTLP_ENDPOINT", "")}\"",
+            localProperties.buildConfigString("OTEL_EXPORTER_OTLP_ENDPOINT"),
         )
         buildConfigField(
             "String",
             "TELEMETRY_OTLP_API_KEY",
-            "\"${localProperties.getProperty("OTEL_EXPORTER_OTLP_API_KEY", "")}\"",
+            localProperties.buildConfigString("OTEL_EXPORTER_OTLP_API_KEY"),
         )
     }
 
