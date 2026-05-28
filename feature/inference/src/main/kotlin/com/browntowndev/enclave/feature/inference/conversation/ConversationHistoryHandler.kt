@@ -91,6 +91,7 @@ internal fun buildConversationConfig(
 
 internal data class LiteRtToolContext(
     val modelType: com.browntowndev.enclave.domain.model.inference.ModelType,
+    val modelId: String? = null,
     val chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
     val userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
     val toolLoop: LiteRtToolCallLoop,

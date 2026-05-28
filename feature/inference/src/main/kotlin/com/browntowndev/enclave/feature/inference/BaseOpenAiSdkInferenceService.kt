@@ -992,6 +992,7 @@ abstract class BaseOpenAiSdkInferenceService(
                         argumentsJson = argsJson,
                         provider = provider,
                         modelType = modelType,
+                        modelId = params.model()?.toString() ?: modelId,
                         chatId = chatId,
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
@@ -1031,7 +1032,7 @@ abstract class BaseOpenAiSdkInferenceService(
         val handler =
             OpenAiResponseStreamHandler(
                 provider = provider,
-                modelId = modelId,
+                modelId = params.model().map { it.toString() }.orElse(modelId),
                 modelType = modelType,
                 loggingPort = loggingPort,
                 tag = tag,

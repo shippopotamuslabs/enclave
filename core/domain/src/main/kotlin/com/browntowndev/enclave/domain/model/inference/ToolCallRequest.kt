@@ -8,6 +8,7 @@ data class ToolCallRequest(
     val argumentsJson: String,
     val provider: String,
     val modelType: ModelType,
+    val modelId: String? = null,
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
     val assistantMessageId: MessageId? = null,

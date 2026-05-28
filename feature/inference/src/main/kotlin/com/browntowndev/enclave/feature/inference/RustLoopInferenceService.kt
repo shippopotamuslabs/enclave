@@ -636,6 +636,7 @@ class RustLoopInferenceService(
                     argumentsJson = call.argumentsJson,
                     provider = provider,
                     modelType = modelType,
+                    modelId = options.modelId ?: modelType.name,
                     chatId = options.chatId,
                     userMessageId = options.userMessageId,
                     assistantMessageId = options.assistantMessageId,

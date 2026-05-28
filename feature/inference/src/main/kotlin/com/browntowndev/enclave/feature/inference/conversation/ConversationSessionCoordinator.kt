@@ -171,6 +171,7 @@ internal class ConversationSessionCoordinator(
         val toolContext =
             LiteRtToolContext(
                 modelType = modelType,
+                modelId = options?.modelId ?: modelType.name,
                 chatId = options?.chatId,
                 userMessageId = options?.userMessageId,
                 toolLoop = toolLoop,

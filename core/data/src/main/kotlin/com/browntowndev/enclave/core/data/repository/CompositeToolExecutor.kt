@@ -68,32 +68,7 @@ class CompositeToolExecutor
             )
 
             return try {
-                val result =
-                    when (request.toolName) {
-                        ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
-                        ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
-                        ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
-                        ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
-                        ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
-                        ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
-                        ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
-                        ToolDefinition.START_ARTIFACT.name -> artifactToolExecutor.execute(request)
-                        ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
-                        ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
-                        ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
-                        ToolDefinition.X_GET_THREAD.name -> xGetThreadToolExecutor.execute(request)
-                        ToolDefinition.X_TRENDING.name -> xTrendingToolExecutor.execute(request)
-                        ToolDefinition.X_USER_TWEETS.name -> xUserTweetsToolExecutor.execute(request)
-                        ToolDefinition.X_MENTION_SEARCH.name -> xMentionSearchToolExecutor.execute(request)
-                        ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
-                        ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
-                        ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
-                        // Intercepted and fully handled by agent core before reaching this executor.
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name -> ToolExecutionResult(request.toolName, "{}")
-                        // Intercepted and fully handled by RustLoopInferenceService before reaching this executor.
-                        ToolDefinition.READ_CONTEXT_REFERENCE.name -> ToolExecutionResult(request.toolName, "{}")
-                        else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
-                    }
+                val result = routeToolExecution(request)
 
                 eventBus.emit(
                     ToolExecutionEvent.Finished(
@@ -112,7 +87,7 @@ class CompositeToolExecutor
                             success = false,
                             errorMessage = toolResultErrorMessage(result.resultJson),
                             provider = request.provider,
-                            modelId = request.modelType.name,
+                            modelId = request.modelId ?: request.modelType.name,
                         )
                     } else {
                         telemetryEventPort.emitToolExecutionOutcome(
@@ -120,7 +95,7 @@ class CompositeToolExecutor
                             toolName = request.toolName,
                             success = true,
                             provider = request.provider,
-                            modelId = request.modelType.name,
+                            modelId = request.modelId ?: request.modelType.name,
                         )
                     }
                 }
@@ -136,7 +111,7 @@ class CompositeToolExecutor
                         success = false,
                         errorMessage = e.message,
                         provider = request.provider,
-                        modelId = request.modelType.name,
+                        modelId = request.modelId ?: request.modelType.name,
                     )
                 }
                 eventBus.emit(
@@ -148,6 +123,34 @@ class CompositeToolExecutor
                     ),
                 )
                 throw e
+            }
+        }
+
+        private suspend fun routeToolExecution(request: ToolCallRequest): ToolExecutionResult {
+            return when (request.toolName) {
+                ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
+                ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
+                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
+                ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
+                ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
+                ToolDefinition.START_ARTIFACT.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
+                ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
+                ToolDefinition.X_GET_THREAD.name -> xGetThreadToolExecutor.execute(request)
+                ToolDefinition.X_TRENDING.name -> xTrendingToolExecutor.execute(request)
+                ToolDefinition.X_USER_TWEETS.name -> xUserTweetsToolExecutor.execute(request)
+                ToolDefinition.X_MENTION_SEARCH.name -> xMentionSearchToolExecutor.execute(request)
+                ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
+                ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
+                ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
+                // Intercepted and fully handled by agent core before reaching this executor.
+                ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name -> ToolExecutionResult(request.toolName, "{}")
+                // Intercepted and fully handled by RustLoopInferenceService before reaching this executor.
+                ToolDefinition.READ_CONTEXT_REFERENCE.name -> ToolExecutionResult(request.toolName, "{}")
+                else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
         }
 

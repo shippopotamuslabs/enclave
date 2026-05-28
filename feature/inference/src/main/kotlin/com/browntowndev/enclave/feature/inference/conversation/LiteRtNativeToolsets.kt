@@ -342,7 +342,8 @@ internal object LiteRtNativeToolsets {
         )
         return try {
             runBlocking(Dispatchers.IO) {
-                val request = buildRequest()
+                val req = buildRequest()
+                val request = req.copy(modelId = req.modelId ?: context.modelId)
                 context.toolLoop.loggingPort.info(
                     TAG,
                     "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}",
