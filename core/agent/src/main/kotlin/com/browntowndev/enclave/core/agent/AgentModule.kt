@@ -2,6 +2,7 @@ package com.browntowndev.enclave.core.agent
 
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import dagger.Binds
@@ -28,4 +29,8 @@ abstract class AgentModule {
     @Binds
     @Singleton
     abstract fun bindToolStreamGatePort(impl: RustToolStreamGate): ToolStreamGatePort
+
+    @Binds
+    @Singleton
+    abstract fun bindSearchIntentClassifierPort(impl: RustSearchIntentClassifierAdapter): SearchIntentClassifierPort
 }

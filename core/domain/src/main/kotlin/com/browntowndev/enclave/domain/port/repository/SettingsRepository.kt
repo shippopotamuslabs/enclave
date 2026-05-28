@@ -23,12 +23,16 @@ data class SettingsData(
     val xApiKeyPresent: Boolean = false,
     val showSearchProviderSwitchAlert: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
+    val onboardingCompleted: Boolean = false,
+    val ageConfirmed: Boolean = false,
+    val automaticErrorTrackingEnabled: Boolean = false,
 )
 
 /**
  * Port (interface) for settings persistence.
  * Implemented by the data layer.
  */
+@Suppress("TooManyFunctions")
 interface SettingsRepository {
     /**
      * Flow of settings data that emits whenever preferences change.
@@ -68,4 +72,10 @@ interface SettingsRepository {
     suspend fun updateShowSearchProviderSwitchAlert(show: Boolean)
 
     suspend fun updateBackgroundInferenceEnabled(enabled: Boolean)
+
+    suspend fun updateOnboardingCompleted(completed: Boolean)
+
+    suspend fun updateAgeConfirmed(confirmed: Boolean)
+
+    suspend fun updateAutomaticErrorTrackingEnabled(enabled: Boolean)
 }

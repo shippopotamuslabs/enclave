@@ -144,6 +144,25 @@ class FakeSettingsRepository : SettingsRepository {
         _settingsFlow.value = _settingsFlow.value.copy(showSearchProviderSwitchAlert = show)
     }
 
+    var onboardingCompleted: Boolean = false
+        private set
+    var ageConfirmed: Boolean = false
+        private set
+
+    override suspend fun updateOnboardingCompleted(completed: Boolean) {
+        onboardingCompleted = completed
+        _settingsFlow.value = _settingsFlow.value.copy(onboardingCompleted = completed)
+    }
+
+    override suspend fun updateAgeConfirmed(confirmed: Boolean) {
+        ageConfirmed = confirmed
+        _settingsFlow.value = _settingsFlow.value.copy(ageConfirmed = confirmed)
+    }
+
+    override suspend fun updateAutomaticErrorTrackingEnabled(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(automaticErrorTrackingEnabled = enabled)
+    }
+
     // Verification methods
     fun verifyUpdateThemeCalled(
         times: Int,

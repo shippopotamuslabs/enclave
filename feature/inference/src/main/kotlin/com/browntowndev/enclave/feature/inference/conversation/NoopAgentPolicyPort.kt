@@ -2,14 +2,16 @@ package com.browntowndev.enclave.feature.inference.conversation
 
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyRepairResult
-import kotlinx.serialization.json.Json as KJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.Json as KJson
 
 internal object NoopAgentPolicyPort : AgentPolicyPort {
     override fun repairTool(
         name: String,
         argsJson: String,
+        toolSemanticsJson: String,
+        toolCatalogJson: String,
     ): AgentPolicyRepairResult = AgentPolicyRepairResult(resolvedName = name, argumentsJson = argsJson, confidence = 0.0f)
 
     override fun truncateResult(

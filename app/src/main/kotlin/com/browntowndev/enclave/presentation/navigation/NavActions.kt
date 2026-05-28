@@ -13,6 +13,7 @@ data class ChatNavActions(
         prompts: List<String>,
     ) -> Unit,
     val onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    val onNavigateToImportedChat: (com.browntowndev.enclave.domain.model.chat.ChatId) -> Unit = {},
 )
 
 data class HistoryNavActions(

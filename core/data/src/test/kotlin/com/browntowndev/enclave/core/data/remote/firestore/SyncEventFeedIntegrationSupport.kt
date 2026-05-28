@@ -18,7 +18,6 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
-import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -125,6 +124,7 @@ internal fun buildTestSyncContext(
                         messageFileDao = mockk(relaxed = true),
                         messageVisionAnalysisDao = mockk(relaxed = true),
                         messageTranscriptSegmentDao = mockk(relaxed = true),
+                        messageInferenceTelemetryDao = mockk(relaxed = true),
                         webSearchSourceDao = mockk(relaxed = true),
                         documentDao = mockk(relaxed = true),
                         embeddingDao = mockk(relaxed = true),

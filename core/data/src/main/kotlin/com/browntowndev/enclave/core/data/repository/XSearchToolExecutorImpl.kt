@@ -48,7 +48,16 @@ class XSearchToolExecutorImpl
                     "query=$query sortOrder=${params.sort_order.name}",
             )
 
-            val resultJson = xSearchRepository.search(query, params.sort_order.name)
+            val resultJson =
+                try {
+                    xSearchRepository.search(query, params.sort_order.name)
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "X Search failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
+                }
 
             loggingPort.info(
                 TAG,

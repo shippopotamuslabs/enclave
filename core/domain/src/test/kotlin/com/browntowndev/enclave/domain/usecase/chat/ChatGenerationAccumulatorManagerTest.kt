@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
+import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -301,6 +302,51 @@ class ChatGenerationAccumulatorManagerTest {
 
             assertSame(afterDraftToken, afterMainFirstToken)
             assertSame(afterMainFirstToken, afterMainSecondToken)
+        }
+
+    @Test
+    fun `telemetry capture invalidates cached message snapshot`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val beforeTelemetry =
+                manager
+                    .reduce(MessageGenerationState.GeneratingText("answer", ModelType.FAST))
+                    .messages
+                    .getValue(MessageId("assistant"))
+
+            val afterFirstTelemetry =
+                manager
+                    .reduce(
+                        MessageGenerationState.TelemetryCaptured(
+                            telemetry = TelemetryTestFixtures.telOpenAi1,
+                            modelType = ModelType.FAST,
+                        ),
+                    ).messages
+                    .getValue(MessageId("assistant"))
+            val afterSecondTelemetry =
+                manager
+                    .reduce(
+                        MessageGenerationState.TelemetryCaptured(
+                            telemetry = TelemetryTestFixtures.telAgent2,
+                            modelType = ModelType.FAST,
+                        ),
+                    ).messages
+                    .getValue(MessageId("assistant"))
+
+            assertTrue(beforeTelemetry.telemetryRows.isEmpty())
+            assertEquals(listOf(TelemetryTestFixtures.telOpenAi1), afterFirstTelemetry.telemetryRows)
+            assertEquals(
+                listOf(TelemetryTestFixtures.telOpenAi1, TelemetryTestFixtures.telAgent2),
+                afterSecondTelemetry.telemetryRows,
+            )
         }
 
     @Test

@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 data class AgentEngineRuntimeConfig(
+    val toolResultBudgetRelaxedBytes: ULong,
+    val preflightTokenThreshold: UInt?,
+    val retentionWindowTokens: UInt,
     val maxModelRequestsPerTurn: UInt,
     val enableLoopHooks: Boolean,
     val enablePendingWorkGuard: Boolean,
@@ -18,6 +21,9 @@ data class AgentEngineRuntimeConfig(
 class AgentEngineActionDriver {
     fun mapConfigToFfi(config: AgentLoopAgentConfig): AgentEngineRuntimeConfig =
         AgentEngineRuntimeConfig(
+            toolResultBudgetRelaxedBytes = config.toolResultBudgetRelaxedBytes,
+            preflightTokenThreshold = config.preflightTokenThreshold,
+            retentionWindowTokens = config.retentionWindowTokens,
             maxModelRequestsPerTurn = config.maxModelRequestsPerTurn,
             enableLoopHooks = config.enableLoopHooks,
             enablePendingWorkGuard = config.enablePendingWorkGuard,

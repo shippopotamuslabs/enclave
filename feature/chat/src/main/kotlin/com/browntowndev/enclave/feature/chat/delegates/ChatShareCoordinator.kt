@@ -1,17 +1,14 @@
 package com.browntowndev.enclave.feature.chat.delegates
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.share.ShareOption
+import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.feature.chat.ShareState
 import com.browntowndev.enclave.feature.chat.ShareUiEvent
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -19,13 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class ChatShareCoordinator
     @Inject
     constructor(
         private val shareChatUseCase: ShareChatUseCase,
+        private val importSharedChatUseCase: ImportSharedChatUseCase,
     ) {
         private companion object {
             const val DEFAULT_SHARE_ERROR_MESSAGE = "Couldn't share this conversation. Please try again."
@@ -126,24 +123,15 @@ class ChatShareCoordinator
                 shareChatUseCase
                     .getSharedChat(shareId, decryptionKey)
                     .onSuccess { sharedChat ->
-                        sharedChat?.let { chat ->
-                            val mappedMessages =
-                                withContext(Dispatchers.Default) {
-                                    chat.messages.mapIndexed { index, sharedMessage ->
-                                        Message(
-                                            id = MessageId("shared-$index"),
-                                            chatId = ChatId("shared-chat"),
-                                            role = Role.fromApiValue(sharedMessage.role),
-                                            content = Content(text = sharedMessage.content),
-                                            createdAt = sharedMessage.timestamp,
-                                            messageState = MessageState.COMPLETE,
-                                        )
-                                    }
-                                }
-                            _sharedMessages.value = mappedMessages
-                            _isReadOnly.value = true
-                            _shareState.value = ShareState.Idle
+                        if (sharedChat != null) {
+                            val chatId = importSharedChatUseCase(sharedChat)
+                            _shareUiEvents.emit(ShareUiEvent.ImportedChat(chatId))
                         }
+                    }.onFailure { error ->
+                        _shareState.value =
+                            ShareState.Error(
+                                error.message ?: DEFAULT_SHARE_ERROR_MESSAGE,
+                            )
                     }
             }
         }

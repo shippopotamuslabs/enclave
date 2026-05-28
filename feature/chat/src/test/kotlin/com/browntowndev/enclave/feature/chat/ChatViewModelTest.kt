@@ -8,12 +8,10 @@ import com.browntowndev.enclave.domain.model.artifact.ArtifactExportFormat
 import com.browntowndev.enclave.domain.model.artifact.ArtifactExportOutcome
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.ExportArtifactDocumentsCommand
-import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
@@ -21,7 +19,6 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
@@ -36,26 +33,23 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
-import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
-import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
-import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import io.mockk.*
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -568,6 +562,25 @@ class ChatViewModelTest {
         }
 
     @Test
+    fun `onPauseTts calls pause on playbackController`() =
+        runTest {
+            val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+            defaultModelsFlow.value =
+                listOf(
+                    DefaultModelAssignment(
+                        modelType = ModelType.TTS,
+                        ttsProviderId = TtsProviderId("tts-provider"),
+                    ),
+                )
+            runCurrent()
+
+            chatViewModel.onPauseTts()
+
+            verify { playbackController.pause() }
+            collectJob.cancel()
+        }
+
+    @Test
     fun `onPlayTts cancels previous streaming job before starting new one`() =
         runTest {
             val text1 = "Hello"
@@ -1060,7 +1073,12 @@ class ChatViewModelTest {
             runCurrent()
 
             assertEquals(OSDA_V01_REQUIRED_MESSAGE_COUNT, harness.viewModel.uiState.value.messages.size)
-            assertEquals("Pending", harness.viewModel.uiState.value.messages.last().content.text)
+            assertEquals(
+                "Pending",
+                harness.viewModel.uiState.value.messages
+                    .last()
+                    .content.text,
+            )
 
             processPromptGate.complete(Unit)
             collectJob.cancel()

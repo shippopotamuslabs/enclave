@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentContextReference
@@ -16,22 +17,34 @@ import com.browntowndev.enclave.domain.model.inference.AgentSummaryRequest
 import com.browntowndev.enclave.domain.model.inference.AgentSummaryResult
 import com.browntowndev.enclave.domain.model.inference.AgentToolCall
 import com.browntowndev.enclave.domain.model.inference.AgentToolResult
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
+import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
+import com.browntowndev.enclave.feature.inference.appendonly.ContextSidecarCompaction
+import com.browntowndev.enclave.feature.inference.appendonly.clearAppendOnlyOnRustCompactionBoundary
+import com.browntowndev.enclave.feature.inference.appendonly.resetAppendOnlyForNewPrompt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -44,6 +57,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -60,6 +74,7 @@ private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
  * History, compaction, tool retry, and KV-cache tracking are all delegated to the Rust
  * engine. Kotlin handles model I/O and tool execution at each callback boundary.
  */
+@Suppress("LargeClass")
 class RustLoopInferenceService(
     private val inner: RustCompatibleInferenceService,
     private val agentLoopPort: AgentLoopPort,
@@ -70,8 +85,17 @@ class RustLoopInferenceService(
     private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val rollingSummarizer: RollingSummarizer,
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
+    private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
+    private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
+    override val baseUrl: String?
+        get() = inner.baseUrl
+
     private val conversationHistory = mutableListOf<ChatMessage>()
+    private val disclosureResolver = ToolSchemaDisclosureResolver()
+    private var lastSeenRevision = 0L
+    private var latestProviderTranscript: List<ChatMessage> = emptyList()
 
     override fun sendPrompt(
         prompt: String,
@@ -84,12 +108,16 @@ class RustLoopInferenceService(
         closeConversation: Boolean,
     ): Flow<InferenceEvent> =
         channelFlow {
+            val startedAtMs = System.currentTimeMillis()
             try {
-                val history = buildHistory()
-                val initialMessages = history + listOf(ChatMessage(Role.USER, prompt))
+                inner.resetAppendOnlyForNewPrompt()
+                val history = buildHistory(options.chatId)
+                val userContent = buildUserContent(prompt, options)
+                val initialMessages = history + listOf(ChatMessage(Role.USER, userContent))
                 val config = buildAgentLoopConfig(options)
                 val assistantText = StringBuilder()
 
+                var telemetrySequenceIndex = 0
                 val host =
                     object : AgentLoopHostCallbacks {
                         override suspend fun completeModelTurn(
@@ -102,31 +130,49 @@ class RustLoopInferenceService(
                             toolContextIndexJson: String?,
                             fileContextIndexJson: String?,
                             cacheHints: List<String>,
+                            transcriptRevision: Long,
                             onTextToken: suspend (String) -> Unit,
                             onThinkingToken: suspend (String) -> Unit,
-                        ): AgentModelTurnResult =
-                            inner.completeSingleTurn(
-                                sessionMessages = sessionMessages,
-                                systemPrompt =
-                                    systemPrompt.withContextSidecars(
-                                        contextReferences = contextReferences,
-                                        stateLedgerJson = stateLedgerJson,
-                                        toolContextIndexJson = toolContextIndexJson,
-                                        fileContextIndexJson = fileContextIndexJson,
-                                        cacheHints = cacheHints,
-                                    ),
-                                availableTools =
-                                    toolsForRequest(
-                                        toolsSchemaJson = toolsSchemaJson,
-                                        toolContextIndexJson = toolContextIndexJson,
-                                        availableTools = options.availableTools,
-                                        allowToolCall = allowToolCall,
-                                    ),
-                                allowToolCall = allowToolCall,
-                                onTextToken = onTextToken,
-                                onThinkingToken = onThinkingToken,
-                                options = options,
-                            )
+                        ): AgentModelTurnResult {
+                            val turnOptions =
+                                options.copy(
+                                    assistantMessageId = options.assistantMessageId,
+                                    chatId = options.chatId,
+                                    telemetrySequenceIndex = telemetrySequenceIndex,
+                                    transcriptRevision = transcriptRevision,
+                                )
+                            val result =
+                                inner.completeSingleTurn(
+                                    sessionMessages = sessionMessages,
+                                    systemPrompt = systemPrompt,
+                                    contextSidecars =
+                                        buildContextSidecars(
+                                            contextReferences = contextReferences,
+                                            stateLedgerJson = stateLedgerJson,
+                                            toolContextIndexJson = toolContextIndexJson,
+                                            fileContextIndexJson = fileContextIndexJson,
+                                            cacheHints = cacheHints,
+                                        ),
+                                    // Full eligible tool pool on the wire for prefix-cache stability;
+                                    // Rust active subset is conveyed via sidecar tool context index.
+                                    // Outer allowToolCall still drives provider toolChoice NONE.
+                                    availableTools =
+                                        wireToolsForRequest(
+                                            options = options,
+                                            toolContextIndexJson = toolContextIndexJson,
+                                        ),
+                                    allowToolCall = allowToolCall,
+                                    onTextToken = onTextToken,
+                                    onThinkingToken = onThinkingToken,
+                                    options = turnOptions,
+                                )
+                            latestProviderTranscript = buildProviderTranscript(sessionMessages, result)
+                            result.telemetry?.let { telemetry ->
+                                send(InferenceEvent.TelemetryCaptured(telemetry, modelType))
+                            }
+                            telemetrySequenceIndex++
+                            return result
+                        }
 
                         override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
                             coroutineScope {
@@ -173,6 +219,7 @@ class RustLoopInferenceService(
                                             .completeSingleTurn(
                                                 sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
                                                 systemPrompt = "",
+                                                contextSidecars = null,
                                                 availableTools = emptyList(),
                                                 allowToolCall = false,
                                                 onTextToken = {},
@@ -233,7 +280,18 @@ class RustLoopInferenceService(
                                 send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
                                     loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
                                 }
-                            is AgentLoopEvent.PostCompact ->
+                            is AgentLoopEvent.CompactionBoundaryApplied -> {
+                                inner.clearAppendOnlyOnRustCompactionBoundary()
+                                lastSeenRevision = event.revisionAfter
+                                loggingPort.debug(
+                                    TAG,
+                                    "append_only cleared on destructive compaction revision=${event.revisionAfter}",
+                                )
+                            }
+                            is AgentLoopEvent.PostCompact -> {
+                                if (event.transcriptRevisionAfter > lastSeenRevision) {
+                                    lastSeenRevision = event.transcriptRevisionAfter
+                                }
                                 send(
                                     InferenceEvent.PostCompact(
                                         trigger = event.trigger,
@@ -241,19 +299,53 @@ class RustLoopInferenceService(
                                         historyRef = event.historyRef,
                                         modelType = modelType,
                                     ),
-                                ).also {
-                                    loggingPort.debug(TAG, "post_compact trigger=${event.trigger} historyRef=${event.historyRef}")
-                                }
+                                )
+                                loggingPort.debug(
+                                    TAG,
+                                    "post_compact trigger=${event.trigger} historyRef=${event.historyRef} " +
+                                        "transcriptRevisionAfter=${event.transcriptRevisionAfter}",
+                                )
+                            }
                             is AgentLoopEvent.Finished -> {
-                                conversationHistory.add(ChatMessage(Role.USER, prompt))
-                                assistantText.toString().takeIf { it.isNotBlank() }?.let { text ->
-                                    conversationHistory.add(ChatMessage(Role.ASSISTANT, text))
+                                 telemetryEventPort.emitInferenceExecutionOutcome(
+                                     startedAtMs = startedAtMs,
+                                     provider = provider,
+                                     modelId = modelType.name,
+                                     success = true,
+                                     baseUrl = baseUrl,
+                                 )
+                                options.userMessageId?.let { userMessageId ->
+                                    committedInferencePrompts.commit(
+                                        userMessageId = userMessageId,
+                                        content = userContent,
+                                    )
                                 }
+                                val completedTranscript =
+                                    latestProviderTranscript.takeIf { it.isNotEmpty() }
+                                        ?: buildFallbackTranscript(userContent, assistantText.toString())
+                                options.chatId?.let { chatId ->
+                                    committedInferenceTranscripts.commit(
+                                        chatId = chatId,
+                                        messages = completedTranscript,
+                                    )
+                                }
+                                conversationHistory.clear()
+                                conversationHistory.addAll(completedTranscript)
+                                latestProviderTranscript = emptyList()
                                 if (closeConversation) closeSession()
                                 send(InferenceEvent.Finished(modelType))
                             }
-                            is AgentLoopEvent.Failed ->
+                            is AgentLoopEvent.Failed -> {
+                                 telemetryEventPort.emitInferenceExecutionOutcome(
+                                     startedAtMs = startedAtMs,
+                                     provider = provider,
+                                     modelId = modelType.name,
+                                     success = false,
+                                     errorMessage = event.message,
+                                     baseUrl = baseUrl,
+                                 )
                                 send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
+                            }
                         }
                     }
             } catch (e: CancellationException) {
@@ -269,6 +361,7 @@ class RustLoopInferenceService(
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
@@ -278,6 +371,7 @@ class RustLoopInferenceService(
         inner.completeSingleTurn(
             sessionMessages = sessionMessages,
             systemPrompt = systemPrompt,
+            contextSidecars = contextSidecars,
             availableTools = availableTools,
             allowToolCall = allowToolCall,
             onTextToken = onTextToken,
@@ -288,15 +382,119 @@ class RustLoopInferenceService(
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
         conversationHistory.addAll(messages)
+        latestProviderTranscript = emptyList()
+        lastSeenRevision = 0L
         inner.setHistory(messages)
     }
 
     override suspend fun closeSession() {
         conversationHistory.clear()
+        latestProviderTranscript = emptyList()
+        lastSeenRevision = 0L
         inner.closeSession()
     }
 
-    private fun buildHistory(): List<ChatMessage> = conversationHistory
+    private fun buildHistory(chatId: ChatId?): List<ChatMessage> =
+        chatId
+            ?.let(committedInferenceTranscripts::get)
+            ?.takeIf { it.isNotEmpty() }
+            ?: conversationHistory.toList()
+
+    private fun buildProviderTranscript(
+        sessionMessages: List<AgentLoopMessage>,
+        result: AgentModelTurnResult,
+    ): List<ChatMessage> =
+        buildList {
+            sessionMessages.forEach { message ->
+                if (!message.isEngineInternalSidecar()) {
+                    add(message.toChatMessage())
+                }
+            }
+            result.toAssistantChatMessageOrNull()?.let(::add)
+        }
+
+    private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean {
+        val metadata = runCatching {
+            if (metadataJson != "null" && metadataJson.isNotBlank()) {
+                Json.parseToJsonElement(metadataJson).jsonObject
+            } else {
+                null
+            }
+        }.getOrNull()
+
+        if (metadata != null) {
+            if (metadata.containsKey("agent_tool_budget") ||
+                metadata.containsKey("tools_blocked_nudge") ||
+                metadata.containsKey("envelope_parse_failure")) {
+                return true
+            }
+        }
+
+        val contentObj = runCatching {
+            Json.parseToJsonElement(content).jsonObject
+        }.getOrNull()
+        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey("_agent")) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun buildFallbackTranscript(
+        userContent: String,
+        assistantContent: String,
+    ): List<ChatMessage> =
+        buildList {
+            add(ChatMessage(Role.USER, userContent))
+            assistantContent.takeIf { it.isNotBlank() }?.let { text ->
+                add(ChatMessage(Role.ASSISTANT, text))
+            }
+        }
+
+    private fun AgentModelTurnResult.toAssistantChatMessageOrNull(): ChatMessage? {
+        val assistantContent = assistantText.orEmpty()
+        if (assistantContent.isBlank() && toolCalls.isEmpty() && providerReasoningContent.isNullOrBlank()) {
+            return null
+        }
+        return ChatMessage(
+            role = Role.ASSISTANT,
+            content = assistantContent,
+            metadataJson = buildAssistantMetadataJson(this),
+        )
+    }
+
+    private fun buildAssistantMetadataJson(result: AgentModelTurnResult): String {
+        val hasProviderReasoning = !result.providerReasoningContent.isNullOrBlank()
+        if (!hasProviderReasoning && result.toolCalls.isEmpty()) {
+            return "null"
+        }
+        return buildJsonObject {
+            result.providerReasoningContent?.takeIf { it.isNotBlank() }?.let { reasoningContent ->
+                put(
+                    "provider_reasoning",
+                    buildJsonObject {
+                        put("reasoning_content", reasoningContent)
+                    },
+                )
+            }
+            if (result.toolCalls.isNotEmpty()) {
+                put(
+                    "raw_tool_calls",
+                    buildJsonArray {
+                        result.toolCalls.forEach { call ->
+                            add(
+                                buildJsonObject {
+                                    call.id?.let { put("id", it) }
+                                    put("name", call.name)
+                                    put("arguments_json", call.argumentsJson)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        }.toString()
+    }
 
     private fun buildAgentLoopConfig(options: GenerationOptions): AgentLoopConfig =
         AgentLoopConfig(
@@ -334,10 +532,38 @@ class RustLoopInferenceService(
                 AgentLoopSessionIoParams(
                     provider = provider,
                     contextWindowTokens = (options.contextWindow ?: DEFAULT_CONTEXT_WINDOW).toUInt(),
-                    toolsSchemaJson = serializeToolsSchema(options.availableTools),
+                    toolsSchemaJson = serializeToolsSchema(options.activeTools),
+                    toolCatalogJson =
+                        com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
+                            .jsonForCatalog(options.toolCatalog),
+                    toolSchemaRegistryJson = serializeFullRegistry(options.toolCatalog),
                     systemPrompt = options.systemPrompt ?: "",
                 ),
         )
+
+    private fun serializeFullRegistry(catalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>): String {
+        if (catalog.isEmpty()) return "[]"
+        val array =
+            buildJsonArray {
+                catalog.forEach { entry ->
+                    val def = ToolDefinition.fromName(entry.name)
+                    add(
+                        buildJsonObject {
+                            put("name", entry.name)
+                            put("description", entry.description)
+                            if (def != null) {
+                                put("parameters", def.schema.toJsonObject())
+                            }
+                        },
+                    )
+                }
+            }
+        return Json.encodeToString(
+            kotlinx.serialization.json.JsonArray
+                .serializer(),
+            array,
+        )
+    }
 
     private fun serializeToolsSchema(tools: List<ToolDefinition>): String {
         if (tools.isEmpty()) return "[]"
@@ -359,60 +585,65 @@ class RustLoopInferenceService(
         )
     }
 
-    private fun toolsForRequest(
-        toolsSchemaJson: String,
-        toolContextIndexJson: String?,
-        availableTools: List<ToolDefinition>,
-        allowToolCall: Boolean,
-    ): List<ToolDefinition> {
-        if (!allowToolCall) return emptyList()
-        val allowedNames =
-            toolContextIndexJson?.let(::toolNamesFromContextIndex)
-                ?: toolNamesFromSchema(toolsSchemaJson)
-        return when {
-            allowedNames == null -> availableTools
-            allowedNames.isEmpty() -> emptyList()
-            else -> availableTools.filter { it.name in allowedNames }
+    /** Full eligible tool set for mapping Rust-emitted active names back to [ToolDefinition]. */
+    private fun eligibleToolPool(options: GenerationOptions): List<ToolDefinition> {
+        val byName = LinkedHashMap<String, ToolDefinition>()
+        options.toolCatalog.forEach { entry ->
+            ToolDefinition.fromName(entry.name)?.let { byName[it.name] = it }
         }
+        options.activeTools.forEach { byName[it.name] = it }
+        return byName.values.toList()
     }
 
-    private fun toolNamesFromSchema(toolsSchemaJson: String): Set<String>? {
-        if (toolsSchemaJson.isBlank()) return null
-        return runCatching {
-            Json
-                .parseToJsonElement(toolsSchemaJson)
-                .jsonArray
-                .mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
-                .toSet()
-        }.getOrNull()
+    /**
+     * Stable superset of tools for the provider wire payload. Rust may shrink the active
+     * schema in [toolsSchemaJson]; deferral and activation are conveyed via sidecars instead
+     * of mutating the tools array (prompt-cache prefix stability).
+     */
+    private fun wireToolsForRequest(
+        options: GenerationOptions,
+        toolContextIndexJson: String?,
+    ): List<ToolDefinition> {
+        if (toolContextIndexJson != null && toolNamesFromContextIndex(toolContextIndexJson) == null) {
+            return emptyList()
+        }
+        return eligibleToolPool(options)
     }
 
-    private fun toolNamesFromContextIndex(toolContextIndexJson: String): Set<String>? =
+    private fun toolNamesFromContextIndex(toolContextIndexJson: String): List<String>? =
         runCatching {
             Json
                 .parseToJsonElement(toolContextIndexJson)
                 .jsonObject["advertised_tools"]
                 ?.jsonArray
                 ?.mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
-                ?.toSet()
         }.getOrNull()
 
     private suspend fun executeOneTool(
         call: AgentToolCall,
         options: GenerationOptions,
-    ): AgentToolResult =
-        try {
+    ): AgentToolResult {
+        if (call.name == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
+            return handleDisclosureCall(call, options)
+        }
+        if (call.name == ToolDefinition.READ_CONTEXT_REFERENCE.name) {
+            return handleReadContextReference(call)
+        }
+        return try {
             val request =
                 ToolCallRequest(
                     toolName = call.name,
                     argumentsJson = call.argumentsJson,
                     provider = provider,
                     modelType = modelType,
+                    modelId = options.modelId ?: modelType.name,
                     chatId = options.chatId,
                     userMessageId = options.userMessageId,
                     assistantMessageId = options.assistantMessageId,
                 )
+            loggingPort.info(TAG, "Executing tool call: name=${call.name} callId=${call.callId} args=${call.argumentsJson}")
             val result = toolExecutor.execute(request)
+            loggingPort.info(TAG, "Tool call completed: name=${call.name} callId=${call.callId} result=${result.resultJson}")
             AgentToolResult(
                 callId = call.callId,
                 resultJson = result.resultJson,
@@ -422,7 +653,7 @@ class RustLoopInferenceService(
         } catch (e: CancellationException) {
             throw e
         } catch (t: Throwable) {
-            loggingPort.error(TAG, "tool execution threw tool=${call.name}", t)
+            loggingPort.error(TAG, "tool execution threw tool=${call.name} callId=${call.callId}", t)
             AgentToolResult(
                 callId = call.callId,
                 resultJson = errorJson(call, t),
@@ -430,6 +661,74 @@ class RustLoopInferenceService(
                 softFailure = true,
             )
         }
+    }
+
+    private fun handleDisclosureCall(
+        call: AgentToolCall,
+        options: GenerationOptions,
+    ): AgentToolResult {
+        val requestedNames =
+            runCatching {
+                val args = Json.parseToJsonElement(call.argumentsJson).jsonObject
+                args["tool_names"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content } ?: emptyList()
+            }.getOrDefault(emptyList())
+        val effectiveActive = options.activeTools
+        val activeNames = effectiveActive.map { it.name }.toSet()
+        val deferredCatalog =
+            options.toolCatalog.filter { entry ->
+                entry.name !in activeNames
+            }
+        val resolution =
+            disclosureResolver.resolve(
+                toolNames = requestedNames,
+                toolCatalog = deferredCatalog,
+                activeTools = effectiveActive,
+                strategy = options.toolCallStrategy,
+            )
+        return AgentToolResult(
+            callId = call.callId,
+            resultJson = resolution.resultJson,
+            truncated = false,
+            softFailure = false,
+            activatedToolNames = resolution.activatedToolNames,
+        )
+    }
+
+    private suspend fun handleReadContextReference(call: AgentToolCall): AgentToolResult {
+        val referenceId =
+            runCatching {
+                Json
+                    .parseToJsonElement(call.argumentsJson)
+                    .jsonObject["reference_id"]
+                    ?.jsonPrimitive
+                    ?.content
+            }.getOrNull()
+                ?: return AgentToolResult(
+                    callId = call.callId,
+                    resultJson = """{"error":"missing_reference_id"}""",
+                    truncated = false,
+                    softFailure = true,
+                )
+        return try {
+            val content = agentLoopPort.readContextReference(referenceId)
+            AgentToolResult(
+                callId = call.callId,
+                resultJson = content,
+                truncated = false,
+                softFailure = false,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            loggingPort.error(TAG, "read_context_reference failed id=$referenceId", t)
+            AgentToolResult(
+                callId = call.callId,
+                resultJson = errorJson(call, t),
+                truncated = false,
+                softFailure = true,
+            )
+        }
+    }
 
     private fun buildSessionContext(options: GenerationOptions): Map<String, String> =
         buildMap {
@@ -454,41 +753,70 @@ class RustLoopInferenceService(
             }
         }
 
-    private fun String.withContextSidecars(
+    private fun buildContextSidecars(
         contextReferences: List<AgentContextReference>,
         stateLedgerJson: String?,
         toolContextIndexJson: String?,
         fileContextIndexJson: String?,
         cacheHints: List<String>,
-    ): String {
-        val jsonSidecars = listOfNotNull(stateLedgerJson, toolContextIndexJson, fileContextIndexJson)
+    ): String? {
+        val compactLedger = stateLedgerJson?.let(ContextSidecarCompaction::compactStateLedgerJson)
+        val compactToolIndex =
+            toolContextIndexJson?.let(ContextSidecarCompaction::compactToolContextIndexJson)
+        val compactFileIndex =
+            fileContextIndexJson?.let(ContextSidecarCompaction::compactFileContextIndexJson)
+        val jsonSidecars = listOfNotNull(compactLedger, compactToolIndex, compactFileIndex)
         if (contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()) {
-            return this
+            return null
         }
 
-        val contextBlock =
-            buildString {
-                appendLine(this@withContextSidecars)
-                appendLine()
-                appendLine("Context management sidecars:")
-                if (contextReferences.isNotEmpty()) {
-                    appendLine("References:")
-                    contextReferences.forEach { reference ->
-                        appendLine(
-                            "- ${reference.kind} ${reference.id}: " +
-                                "${reference.title}. ${reference.retrievalHint}",
-                        )
-                    }
+        return buildString {
+            appendLine("Context management sidecars:")
+            if (contextReferences.isNotEmpty()) {
+                appendLine("References:")
+                contextReferences.forEach { reference ->
+                    appendLine(
+                        "- ${reference.kind} ${reference.id}: " +
+                            "${reference.title}. ${reference.retrievalHint}",
+                    )
                 }
-                stateLedgerJson?.let { appendLine("State ledger JSON: $it") }
-                toolContextIndexJson?.let { appendLine("Tool context index JSON: $it") }
-                fileContextIndexJson?.let { appendLine("File context index JSON: $it") }
-                if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
             }
-        return contextBlock.trimEnd()
+            compactLedger?.let { appendLine("State ledger JSON: $it") }
+            compactToolIndex?.let { appendLine("Tool context index JSON: $it") }
+            compactFileIndex?.let { appendLine("File context index JSON: $it") }
+            if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
+        }.trimEnd()
     }
 
-    private fun AgentLoopMessage.toChatMessage(): ChatMessage = ChatMessage(role = role, content = content)
+    private fun buildUserContent(
+        prompt: String,
+        options: GenerationOptions,
+    ): String =
+        InferencePromptContentBuilder.buildUserContent(
+            prompt = prompt,
+            volatileTurnContext =
+                if (deliverPreRetrievalAsOpenAiSidecar()) {
+                    null
+                } else {
+                    options.volatileTurnContext
+                },
+        )
+
+    private fun deliverPreRetrievalAsOpenAiSidecar(): Boolean =
+        when (provider.uppercase()) {
+            ApiProvider.OPENAI.name,
+            ApiProvider.XAI.name,
+            "OPENROUTER",
+            -> true
+            else -> false
+        }
+
+    private fun AgentLoopMessage.toChatMessage(): ChatMessage =
+        ChatMessage(
+            role = role,
+            content = content,
+            metadataJson = metadataJson,
+        )
 
     private fun errorJson(
         call: AgentToolCall,

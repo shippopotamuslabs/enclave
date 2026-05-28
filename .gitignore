@@ -43,6 +43,7 @@ third_party/*
 !third_party/whisper.cpp/
 !third_party/docgen_core/
 !third_party/agent_core/
+!third_party/classifier_core/
 
 bin/
 
@@ -56,6 +57,31 @@ modularization-plan.md
 
 golden-test-examples/
 *.so
+!core/agent/src/main/jniLibs/**/*.so
+
+# Python (classifier training, eval scripts, tooling)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+
+# Search-intent / classifier training session artifacts
+scripts/.venv_classifier/
+scripts/.cache/
+scripts/search_intent_train/**/checkpoints/
+
+# Ad-hoc scratch notes at repo root (agent sessions, local experiments)
+/scratch*
+/scratch_*
+
+# Agent / CI session logs (not checked in; see AGENTS.md)
+lint_output.txt
+core_data_ksp_output.txt
+/*_ksp_output.txt
 
 PHASE_10_HANDOFF.md
 

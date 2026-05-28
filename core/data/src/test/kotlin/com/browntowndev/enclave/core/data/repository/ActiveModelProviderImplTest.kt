@@ -8,13 +8,12 @@ import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelEntity
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
-import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
-import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -25,8 +24,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -125,9 +122,7 @@ class ActiveModelProviderImplTest {
         assertFalse(source.contains("credentials.modelId"))
     }
 
-    private suspend fun activeApiConfigurationFromPreset(
-        modelType: ModelType = ModelType.VISION,
-    ): ActiveModelConfiguration {
+    private suspend fun activeApiConfigurationFromPreset(modelType: ModelType = ModelType.VISION): ActiveModelConfiguration {
         val configId = ApiModelConfigurationId("cfg-9")
         val credentialsId = ApiCredentialsId("creds-1")
         coEvery { defaultModelRepository.getDefault(modelType) } returns

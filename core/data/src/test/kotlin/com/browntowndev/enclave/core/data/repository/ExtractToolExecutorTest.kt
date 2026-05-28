@@ -124,4 +124,42 @@ class ExtractToolExecutorTest {
                 )
             }
         }
+
+    @Test
+    fun `execute returns error JSON when Tavily repository throws IOException`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val tavilySearchRepository = mockk<TavilySearchRepository>()
+            val exaSearchRepository = mockk<ExaSearchRepository>()
+            val webSearchSourceDao = mockk<WebSearchSourceDao>(relaxed = true)
+            val eventBus = mockk<ToolExecutionEventBus>(relaxed = true)
+            val extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true)
+
+            every { settingsRepository.settingsFlow } returns
+                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            every { tavilySearchRepository.extract(any(), any(), any()) } throws java.io.IOException("DNS resolution failed")
+
+            val executor =
+                ExtractToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    tavilySearchRepository = tavilySearchRepository,
+                    exaSearchRepository = exaSearchRepository,
+                    webSearchSourceDao = webSearchSourceDao,
+                    eventBus = eventBus,
+                    extractedUrlTracker = extractedUrlTracker,
+                )
+
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "web_extract",
+                        argumentsJson = """{"urls":["https://example.com"]}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertEquals("""{"success":false,"error":"Network error: DNS resolution failed"}""", result.resultJson)
+        }
 }

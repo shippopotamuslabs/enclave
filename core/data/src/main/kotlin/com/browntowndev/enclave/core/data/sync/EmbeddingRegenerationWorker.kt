@@ -15,6 +15,13 @@ import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
@@ -65,6 +72,8 @@ class EmbeddingRegenerationWorker
             try {
                 processPendingBatch(pending)
                 true
+            } catch (c: CancellationException) {
+                throw c
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Embedding regeneration failed", e)
                 coordinator.markFailed(pending)
@@ -72,62 +81,103 @@ class EmbeddingRegenerationWorker
             }
 
         private suspend fun processPendingBatch(pending: PendingWork) {
-            val total =
-                (if (pending.fullScanPending) 100 else 0) +
-                    pending.messageIds.size + pending.memoryIds.size + pending.documentIds.size
-            var processed = 0
+            val tasks = mutableListOf<suspend () -> Unit>()
 
             if (pending.fullScanPending) {
-                performFullScan { current, subTotal ->
-                    progressManager.updateProgress(processed + (current * 100 / subTotal), total)
+                val messageIds = messageDao.getAllIds().map { it.value }
+                val memoryIds = memoriesDao.getAllIds()
+                val documentIds = documentDao.getAllIds()
+
+                messageIds.forEach { id ->
+                    tasks.add { processMessage(id) }
                 }
-                processed += 100
+                memoryIds.forEach { id ->
+                    tasks.add { processMemory(id) }
+                }
+                documentIds.forEach { id ->
+                    tasks.add { processDocument(id) }
+                }
+            } else {
+                pending.messageIds.forEach { id ->
+                    tasks.add { processMessage(id) }
+                }
+                pending.memoryIds.forEach { id ->
+                    tasks.add { processMemory(id) }
+                }
+                pending.documentIds.forEach { id ->
+                    tasks.add { processDocument(id) }
+                }
             }
 
-            pending.messageIds.forEach { id ->
-                processMessage(id)
-                processed++
-                progressManager.updateProgress(processed, total)
+            val actualTotal = tasks.size
+            if (actualTotal == 0) {
+                setProgress(
+                    androidx.work.workDataOf(
+                        "current" to 0,
+                        "total" to 0,
+                        "fraction" to 0f,
+                    ),
+                )
+                return
             }
 
-            pending.memoryIds.forEach { id ->
-                processMemory(id)
-                processed++
-                progressManager.updateProgress(processed, total)
-            }
+            var actualProcessed = 0
+            setProgress(
+                androidx.work.workDataOf(
+                    "current" to 0,
+                    "total" to actualTotal,
+                    "fraction" to 0f,
+                ),
+            )
 
-            pending.documentIds.forEach { id ->
-                processDocument(id)
-                processed++
-                progressManager.updateProgress(processed, total)
-            }
-        }
-
-        private suspend fun performFullScan(onProgress: (Int, Int) -> Unit = { _, _ -> }) {
-            loggingPort.info(TAG, "Starting full embedding scan")
-
-            val messageIds = messageDao.getAllIds().map { it.value }
-            val memoryIds = memoriesDao.getAllIds()
-            val documentIds = documentDao.getAllIds()
-
-            val total = messageIds.size + memoryIds.size + documentIds.size
-            if (total == 0) return
-
-            var current = 0
-            messageIds.forEach { id ->
-                processMessage(id)
-                current++
-                onProgress(current, total)
-            }
-            memoryIds.forEach { id ->
-                processMemory(id)
-                current++
-                onProgress(current, total)
-            }
-            documentIds.forEach { id ->
-                processDocument(id)
-                current++
-                onProgress(current, total)
+            val maxConcurrency = embeddingEngine.maxConcurrentEmbeddings
+            if (maxConcurrency > 1) {
+                val semaphore = Semaphore(maxConcurrency)
+                val mutex = Mutex()
+                kotlinx.coroutines.coroutineScope {
+                    tasks
+                        .map { task ->
+                            async {
+                                semaphore.withPermit {
+                                    try {
+                                        task()
+                                    } catch (c: CancellationException) {
+                                        throw c
+                                    } catch (e: Exception) {
+                                        loggingPort.error(TAG, "Task failed during concurrent embedding", e)
+                                    } finally {
+                                        mutex.withLock {
+                                            actualProcessed++
+                                            val fraction = actualProcessed.toFloat() / actualTotal
+                                            setProgress(
+                                                androidx.work.workDataOf(
+                                                    "current" to actualProcessed,
+                                                    "total" to actualTotal,
+                                                    "fraction" to fraction,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }.awaitAll()
+                }
+            } else {
+                tasks.forEach { task ->
+                    try {
+                        task()
+                    } finally {
+                        actualProcessed++
+                        val fraction = actualProcessed.toFloat() / actualTotal
+                        setProgress(
+                            androidx.work.workDataOf(
+                                "current" to actualProcessed,
+                                "total" to actualTotal,
+                                "fraction" to fraction,
+                            ),
+                        )
+                    }
+                }
             }
         }
 
@@ -181,6 +231,8 @@ class EmbeddingRegenerationWorker
                     json.parseToJsonElement(
                         localEncryption.decryptString(entity.json, jsonAad),
                     ) as kotlinx.serialization.json.JsonObject
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to parse document JSON for re-embedding $id", e)
                     return
@@ -216,6 +268,8 @@ class EmbeddingRegenerationWorker
                             ),
                         )
                         embeddingDao.insertEmbeddingMetadata(EmbeddingEntity(compositeId, hash))
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         loggingPort.error(TAG, "Failed to embed block $index for document $id", e)
                     }

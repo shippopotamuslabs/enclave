@@ -84,7 +84,14 @@ class ChatViewModelLiveSnapshotIntegrationTest {
             advanceUntilIdle()
 
             assertEquals(1, collected.size)
-            assertEquals(MessageState.THINKING, collected.single()?.messages?.get(assistantId)?.messageState)
+            assertEquals(
+                MessageState.THINKING,
+                collected
+                    .single()
+                    ?.messages
+                    ?.get(assistantId)
+                    ?.messageState,
+            )
 
             job.cancel()
         }
@@ -98,12 +105,13 @@ class ChatViewModelLiveSnapshotIntegrationTest {
 
             val dbMessages = MutableStateFlow(listOf(processingAssistant()))
             val observeKeyFlow =
-                dbMessages.map { messages ->
-                    messages
-                        .lastOrNull { message ->
-                            message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
-                        }?.let { message -> ActiveChatTurnKey(chatId, message.id) }
-                }.distinctUntilChanged()
+                dbMessages
+                    .map { messages ->
+                        messages
+                            .lastOrNull { message ->
+                                message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
+                            }?.let { message -> ActiveChatTurnKey(chatId, message.id) }
+                    }.distinctUntilChanged()
 
             val indicators = mutableListOf<IndicatorState?>()
             val job =
@@ -142,7 +150,8 @@ class ChatViewModelLiveSnapshotIntegrationTest {
                                             chatId = chatId,
                                             modelDisplayNames = emptyMap(),
                                         ),
-                                    ).uiState.messages.single()
+                                    ).uiState.messages
+                                    .single()
                                     .indicatorState
                             }
                         }.collect { indicators.add(it) }
@@ -189,7 +198,8 @@ class ChatViewModelLiveSnapshotIntegrationTest {
                                     chatId = chatId,
                                     modelDisplayNames = emptyMap(),
                                 ),
-                            ).uiState.messages.single()
+                            ).uiState.messages
+                            .single()
                             .indicatorState
                     }.collect { indicators.add(it) }
                 }

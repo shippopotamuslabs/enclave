@@ -171,10 +171,21 @@ internal class ConversationSessionCoordinator(
         val toolContext =
             LiteRtToolContext(
                 modelType = modelType,
+                modelId = options?.modelId ?: modelType.name,
                 chatId = options?.chatId,
                 userMessageId = options?.userMessageId,
                 toolLoop = toolLoop,
             )
+        // Seed the LiteRT-local active-tool set from GenerationOptions on a fresh build, and
+        // preserve any disclosure-driven additions accumulated against the prior conversation
+        // when rebuilding within the same engine session (e.g., signature change after
+        // disclosure widens the callable set).
+        val seededActive: List<String> =
+            buildList {
+                options?.activeTools?.forEach { def -> if (def.name !in this) add(def.name) }
+                cache.activeToolNames.forEach { name -> if (name !in this) add(name) }
+            }
+        cache.activeToolNames = seededActive
         val conversationConfig =
             buildConversationConfig(
                 signature = desiredSignature,
@@ -183,6 +194,7 @@ internal class ConversationSessionCoordinator(
                 samplerConfig = targetSamplerConfig,
                 activeBackendIsNpu = cache.activeBackendIsNpu,
                 toolContext = toolContext,
+                activeToolNames = seededActive,
             )
 
         ensureRequestActive(requestCancellationEpoch, "Cancelled during conversation setup")
@@ -231,6 +243,8 @@ internal class ConversationSessionCoordinator(
         cache.currentSamplerConfig = targetSamplerConfig
         cache.currentModelPath = modelPath
         cache.latestAssistantMessageId = options?.assistantMessageId
+        cache.toolCatalog = options?.toolCatalog.orEmpty()
+        cache.toolCallStrategy = options?.toolCallStrategy ?: cache.toolCallStrategy
 
         Log.d(
             TAG,

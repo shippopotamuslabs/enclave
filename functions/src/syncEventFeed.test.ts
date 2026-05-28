@@ -7,6 +7,10 @@ describe('sync event feed (pure handlers)', () => {
         expect(SYNC_FEED_ALLOWLIST).to.include('utility_models');
     });
 
+    it('SCN-FUNC-001b allowlist contains message_inference_telemetry', () => {
+        expect(SYNC_FEED_ALLOWLIST).to.include('message_inference_telemetry');
+    });
+
     it('upsert trigger writes a monotonic sync event', async () => {
         const store = new InMemorySyncFeedFirestore();
         store.syncMeta.nextSequence = 0;

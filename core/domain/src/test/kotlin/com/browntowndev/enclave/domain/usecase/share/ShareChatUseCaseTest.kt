@@ -53,7 +53,7 @@ class ShareChatUseCaseTest {
 
             val sharedMessages = listOf(mapToShared(userMessage), mapToShared(assistantMessage))
             val sharedChat = SharedChat("share-1", sharedMessages, createdAt = 0, expiresAt = 0, shareUrl = "url")
-            coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage)) } returns sharedChat
+            coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) } returns sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -86,7 +86,7 @@ class ShareChatUseCaseTest {
                     expiresAt = 0,
                     shareUrl = "url",
                 )
-            coEvery { shareRepository.shareChat(messages) } returns sharedChat
+            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -105,7 +105,7 @@ class ShareChatUseCaseTest {
             val messages = listOf(createMessage("msg-1", chatId, Role.USER, "Msg 1"))
 
             coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
-            coEvery { shareRepository.shareChat(any()) } throws Exception("encryptedPayload and iv must be provided.")
+            coEvery { shareRepository.shareChat(any(), any()) } throws Exception("encryptedPayload and iv must be provided.")
 
             // When
             val result = shareChatUseCase(option)
@@ -139,7 +139,7 @@ class ShareChatUseCaseTest {
                     expiresAt = 0,
                     shareUrl = "url",
                 )
-            coEvery { shareRepository.shareChat(messages) } returns sharedChat
+            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -147,6 +147,40 @@ class ShareChatUseCaseTest {
             // Then
             assertTrue(result.isSuccess, "Should succeed even if first emission was empty")
             assertEquals(sharedChat, result.getOrNull())
+        }
+
+    @Test
+    fun `invoke with FullConversation should pass chatId to repository`() =
+        runTest {
+            val chatId = ChatId("chat-1")
+            val option = ShareOption.FullConversation(chatId)
+            val messages = listOf(createMessage("msg-1", chatId, Role.USER, "Msg 1"))
+            coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
+            val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
+            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
+
+            val result = shareChatUseCase(option)
+
+            assertTrue(result.isSuccess)
+            coVerify { shareRepository.shareChat(messages, chatId) }
+        }
+
+    @Test
+    fun `invoke with SingleTurn should pass chatId to repository`() =
+        runTest {
+            val chatId = ChatId("chat-1")
+            val assistantMessageId = MessageId("msg-2")
+            val option = ShareOption.SingleTurn(chatId, assistantMessageId)
+            val userMessage = createMessage("msg-1", chatId, Role.USER, "User message")
+            val assistantMessage = createMessage("msg-2", chatId, Role.ASSISTANT, "Assistant response")
+            coEvery { chatUseCases.getChat(chatId) } returns flowOf(listOf(userMessage, assistantMessage))
+            val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "url")
+            coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) } returns sharedChat
+
+            val result = shareChatUseCase(option)
+
+            assertTrue(result.isSuccess)
+            coVerify { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) }
         }
 
     @Test

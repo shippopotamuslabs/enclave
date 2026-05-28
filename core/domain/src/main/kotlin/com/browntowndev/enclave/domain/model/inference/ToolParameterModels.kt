@@ -139,3 +139,64 @@ data class ManageMemoriesParams(
     @ToolParam(description = "The ID of the memory (for 'update' or 'delete' only).", required = false)
     val id: String? = null,
 ) : ToolParameters
+
+@Serializable
+data class XGetThreadParams(
+    @ToolParam(
+        description =
+            "The URL or ID of the tweet to fetch. Response includes requested_post for this exact post, " +
+                "not the parent it replies to.",
+    )
+    val tweet_url: String,
+) : ToolParameters
+
+@Serializable
+data class XTrendingParams(
+    @ToolParam(
+        description = "The location to get trending topics for (e.g. 'worldwide', 'united states'). Defaults to 'worldwide'.",
+        required = false,
+    )
+    val location: String = "worldwide",
+) : ToolParameters
+
+@Serializable
+data class XUserTweetsParams(
+    @ToolParam(description = "The user screen name (e.g. 'elonmusk' or '@elonmusk').")
+    val username: String,
+    @ToolParam(
+        description =
+            "Optional keyword filter. When omitted, returns the user's timeline " +
+                "newest-first. When set, searches that user's recent posts for the keyword.",
+        required = false,
+    )
+    val search_text: String? = null,
+    @ToolParam(
+        description =
+            "Pagination token from a prior x_user_tweets response (next_token field). " +
+                "Omit entirely on the first request — do not pass null or an empty string.",
+        required = false,
+    )
+    val next_token: String? = null,
+    @ToolParam(
+        description =
+            "Must match the prior response pagination_source (timeline or search). " +
+                "Pass through unchanged when using next_token.",
+        required = false,
+    )
+    val pagination_source: String? = null,
+    @ToolParam(
+        description = "Maximum posts to return for this page (5–100). Defaults to 10.",
+        required = false,
+    )
+    val max_results: Int = 10,
+) : ToolParameters
+
+@Serializable
+data class XMentionSearchParams(
+    @ToolParam(description = "The user screen name whose mentions to search (e.g. 'elonmusk' or '@elonmusk').")
+    val username: String,
+    @ToolParam(description = "Keywords to search within the mentions.")
+    val search_text: String,
+    @ToolParam(description = "Optional pagination token to retrieve subsequent pages.", required = false)
+    val next_token: String? = null,
+) : ToolParameters

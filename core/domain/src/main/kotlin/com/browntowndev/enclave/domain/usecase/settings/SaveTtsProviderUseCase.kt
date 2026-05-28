@@ -12,6 +12,7 @@ class SaveTtsProviderUseCase
     ) {
         suspend operator fun invoke(draft: TtsProviderDraft): Result<TtsProviderId> =
             Result.runCatching {
+                val finalCredentialAlias = draft.sourceCredentialAlias?.takeIf { it.isNotBlank() } ?: draft.credentialAlias
                 repository.saveTtsProvider(
                     asset =
                         TtsProviderAsset(
@@ -19,8 +20,9 @@ class SaveTtsProviderUseCase
                             displayName = draft.displayName,
                             provider = draft.provider,
                             voiceName = draft.voiceName,
+                            modelName = draft.modelName,
                             baseUrl = draft.baseUrl,
-                            credentialAlias = draft.credentialAlias,
+                            credentialAlias = finalCredentialAlias,
                         ),
                     apiKey = draft.apiKey.takeIf { it.isNotBlank() },
                 )

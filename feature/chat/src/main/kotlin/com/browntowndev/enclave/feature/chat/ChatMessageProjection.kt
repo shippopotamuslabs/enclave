@@ -146,8 +146,19 @@ internal class ChatMessageProjector {
                 snapshot.toMessage(chatId = chatId, createdAt = dbMessage.createdAt)
             snapshot != null && dbMessage.messageState != MessageState.COMPLETE ->
                 snapshot.toMessage(chatId = chatId, createdAt = dbMessage.createdAt)
-            else -> dbMessage
+            else -> dbMessage.mergeWebSearchSourcesFrom(snapshot)
         }
+}
+
+private fun Message.mergeWebSearchSourcesFrom(snapshot: MessageSnapshot?): Message {
+    if (snapshot == null || snapshot.webSearchSources.isEmpty() || webSearchSources.isNotEmpty()) {
+        return this
+    }
+    val mergedSources = snapshot.webSearchSources
+    return copy(
+        webSearchSources = mergedSources,
+        content = content.copy(webSearchSources = mergedSources),
+    )
 }
 
 internal fun projectChatMessages(

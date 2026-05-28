@@ -58,6 +58,7 @@ data class SettingsUiState(
     val dataControls: DataControlsUiState = DataControlsUiState(),
     val memories: MemoriesUiState = MemoriesUiState(),
     val feedback: FeedbackUiState = FeedbackUiState(),
+    val usageSpend: UsageSpendSheetUiState = UsageSpendSheetUiState(),
     val localModelsSheet: LocalModelsSheetUiState = LocalModelsSheetUiState(),
     val localModelEditor: LocalModelEditorUiState = LocalModelEditorUiState(),
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
@@ -110,6 +111,7 @@ data class SettingsHomeUiState(
     val isDataControlsSheetOpen: Boolean = false,
     val isMemoriesSheetOpen: Boolean = false,
     val isFeedbackSheetOpen: Boolean = false,
+    val isUsageSpendSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
@@ -146,6 +148,7 @@ sealed interface DataControlsPendingAction {
 data class DataControlsUiState(
     val isSheetOpen: Boolean = false,
     val allowMemories: Boolean = true,
+    val automaticErrorTrackingEnabled: Boolean = false,
     val pendingAction: DataControlsPendingAction? = null,
     val isDeleting: Boolean = false,
     val deleteError: String? = null,
@@ -394,6 +397,9 @@ data class ApiModelConfigUi(
     val thinkingEnabled: Boolean = false,
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null,
+    val promptPriceUsdPerMillion: String = "",
+    val completionPriceUsdPerMillion: String = "",
+    val cachedPromptPriceUsdPerMillion: String = "",
 )
 
 @Immutable
@@ -405,6 +411,7 @@ data class DiscoveredApiModelUi(
     val created: Long? = null,
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
+    val cachedPromptPrice: Double? = null,
     val providerName: String? = null,
     val isMultimodal: Boolean? = null,
     val isChatCapable: Boolean = true,
@@ -688,3 +695,26 @@ object MockSettingsData {
             assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
         )
 }
+
+@Immutable
+enum class UsagePeriodUi {
+    LIFETIME,
+    CURRENT_MONTH,
+}
+
+@Immutable
+data class UsageSpendProviderRowUi(
+    val providerLabel: String,
+    val costLabel: String,
+    val turnCount: Int,
+)
+
+@Immutable
+data class UsageSpendSheetUiState(
+    val isVisible: Boolean = false,
+    val selectedPeriod: UsagePeriodUi = UsagePeriodUi.LIFETIME,
+    val totalCostLabel: String = "",
+    val providerRows: List<UsageSpendProviderRowUi> = emptyList(),
+    val emptyMessage: String? = null,
+    val missingCostTurnsLabel: String? = null,
+)

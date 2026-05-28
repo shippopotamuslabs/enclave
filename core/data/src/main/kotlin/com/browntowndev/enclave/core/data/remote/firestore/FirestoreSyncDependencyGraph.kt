@@ -86,28 +86,30 @@ internal object FirestoreSyncDependencyGraph {
         buildList { if (!albumId.isNullOrBlank()) add(ParentRef("studio_albums", albumId)) }
     }
 
-    private val GRAPH: Map<String, (Map<String, Any?>) -> List<ParentRef>> = mapOf(
-        "chats" to NO_PARENTS,
-        "messages" to MESSAGE_PARENTS,
-        "chat_summaries" to CHAT_SUMMARY_PARENTS,
-        "memories" to NO_PARENTS,
-        "vision_analysis" to VISION_PARENTS,
-        "message_files" to MESSAGE_CHILD_PARENTS,
-        "web_search_sources" to MESSAGE_CHILD_PARENTS,
-        "message_transcript_segments" to MESSAGE_CHILD_PARENTS,
-        "documents" to MESSAGE_CHILD_PARENTS,
-        "api_credentials" to NO_PARENTS,
-        "api_keys" to NO_PARENTS,
-        "api_model_configs" to API_MODEL_CONFIG_PARENTS,
-        "local_models" to NO_PARENTS,
-        "utility_models" to NO_PARENTS,
-        "local_model_configs" to LOCAL_MODEL_CONFIG_PARENTS,
-        "default_models" to DEFAULT_MODEL_PARENTS,
-        "tts_providers" to NO_PARENTS,
-        "media_providers" to NO_PARENTS,
-        "studio_albums" to NO_PARENTS,
-        "studio_gallery" to STUDIO_GALLERY_PARENTS,
-    )
+    private val GRAPH: Map<String, (Map<String, Any?>) -> List<ParentRef>> =
+        mapOf(
+            "chats" to NO_PARENTS,
+            "messages" to MESSAGE_PARENTS,
+            "chat_summaries" to CHAT_SUMMARY_PARENTS,
+            "memories" to NO_PARENTS,
+            "vision_analysis" to VISION_PARENTS,
+            "message_files" to MESSAGE_CHILD_PARENTS,
+            "web_search_sources" to MESSAGE_CHILD_PARENTS,
+            "message_transcript_segments" to MESSAGE_CHILD_PARENTS,
+            "message_inference_telemetry" to MESSAGE_CHILD_PARENTS,
+            "documents" to MESSAGE_CHILD_PARENTS,
+            "api_credentials" to NO_PARENTS,
+            "api_keys" to NO_PARENTS,
+            "api_model_configs" to API_MODEL_CONFIG_PARENTS,
+            "local_models" to NO_PARENTS,
+            "utility_models" to NO_PARENTS,
+            "local_model_configs" to LOCAL_MODEL_CONFIG_PARENTS,
+            "default_models" to DEFAULT_MODEL_PARENTS,
+            "tts_providers" to NO_PARENTS,
+            "media_providers" to NO_PARENTS,
+            "studio_albums" to NO_PARENTS,
+            "studio_gallery" to STUDIO_GALLERY_PARENTS,
+        )
 
     fun collectionPaths(): Set<String> = GRAPH.keys
 

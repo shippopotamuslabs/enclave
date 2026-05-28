@@ -79,6 +79,12 @@ data class ApiModelConfigurationEntity(
     val openRouterDataCollectionPolicy: String? = null,
     @ColumnInfo(name = "openrouter_zdr")
     val openRouterZeroDataRetention: Boolean? = null,
+    @ColumnInfo(name = "prompt_price_usd_per_million")
+    val promptPriceUsdPerMillion: Double? = null,
+    @ColumnInfo(name = "completion_price_usd_per_million")
+    val completionPriceUsdPerMillion: Double? = null,
+    @ColumnInfo(name = "cached_prompt_price_usd_per_million")
+    val cachedPromptPriceUsdPerMillion: Double? = null,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "pending_sync")

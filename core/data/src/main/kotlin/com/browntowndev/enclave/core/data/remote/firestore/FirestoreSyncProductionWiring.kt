@@ -101,8 +101,17 @@ internal class FirestoreBackedSyncEventQueryGateway(
  */
 internal class FirestoreBackedSyncSourceDocumentStore(
     private val firestore: FirebaseFirestore,
+    private val cache: FirestoreSyncDocumentCache? = null,
 ) : FirestoreSyncSourceDocumentStore {
     override suspend fun getDocument(path: String): Map<String, Any?>? {
+        val cached = cache?.getCachedSnapshot(path)
+        if (cached != null) {
+            return cached.data
+        }
+        val fromCacheDoc = cache?.getDocument(path)
+        if (fromCacheDoc != null) {
+            return fromCacheDoc
+        }
         val snapshot = firestore.document(path).get().await()
         if (!snapshot.exists()) return null
         return snapshot.data
@@ -129,6 +138,7 @@ internal class RoomFirestoreSyncLocalStore(
     private val loggingPort: LoggingPort,
     private val syncStateStore: FirestoreSyncStateStore,
     private val pendingSyncLookup: FirestoreSyncPendingSyncLookup,
+    private val cache: FirestoreSyncDocumentCache? = null,
 ) : FirestoreSyncLocalStore {
     override suspend fun upsert(
         collectionPath: String,
@@ -141,7 +151,8 @@ internal class RoomFirestoreSyncLocalStore(
                 ?: throw IllegalStateException("missing adapter for $collectionPath")
         val userId = userIdProvider() ?: return
         val docRef = firestore.document("users/$userId/$collectionPath/$entityId")
-        val snapshot = docRef.get().await()
+        val path = "users/$userId/$collectionPath/$entityId"
+        val snapshot = cache?.getCachedSnapshot(path) ?: docRef.get().await()
         if (!snapshot.exists()) {
             throw IllegalStateException(
                 "source document missing at apply for $collectionPath/$entityId",
@@ -151,6 +162,7 @@ internal class RoomFirestoreSyncLocalStore(
         val repaired = repairer.repairInbound(collectionPath, entityId, original)
         val decodeSnapshot =
             if (repaired != original) {
+                cache?.invalidate(path)
                 runCatching {
                     docRef.set(repaired, SetOptions.merge()).await()
                 }.onFailure { failure ->

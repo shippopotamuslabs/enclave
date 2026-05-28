@@ -28,13 +28,14 @@ class AnthropicClientProvider
             baseUrl: String?,
             headers: Map<String, String> = emptyMap(),
         ): AnthropicClient {
+            val normalizedBaseUrl = AnthropicSdkBaseUrl.normalize(baseUrl)
             val normalizedHeaders =
                 headers
                     .filterValues { it.isNotBlank() }
                     .toSortedMap()
                     .entries
                     .joinToString(separator = "|") { (name, value) -> "$name=$value" }
-            val key = "${apiKey.sha256Hex()}_${baseUrl}_$normalizedHeaders"
+            val key = "${apiKey.sha256Hex()}_${normalizedBaseUrl}_$normalizedHeaders"
 
             var client = clientCache.get(key)
             if (client == null) {
@@ -45,8 +46,8 @@ class AnthropicClientProvider
                             AnthropicOkHttpClient
                                 .builder()
                                 .apiKey(apiKey)
-                        if (!baseUrl.isNullOrBlank()) {
-                            builder.baseUrl(baseUrl)
+                        if (!normalizedBaseUrl.isNullOrBlank()) {
+                            builder.baseUrl(normalizedBaseUrl)
                         }
                         headers
                             .filterValues { it.isNotBlank() }

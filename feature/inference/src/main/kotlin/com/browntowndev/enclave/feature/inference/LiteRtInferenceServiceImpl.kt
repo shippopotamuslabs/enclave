@@ -10,6 +10,8 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +30,7 @@ class LiteRtInferenceServiceImpl
         private val processThinkingTokens: ProcessThinkingTokensUseCase,
         private val toolExecutionEventPort: ToolExecutionEventPort,
         private val modelType: ModelType,
+        private val telemetrySupport: InferenceTelemetrySupport? = null,
     ) : LlmInferencePort {
         companion object {
             private const val TAG = "LiteRtInferenceService"
@@ -47,6 +50,7 @@ class LiteRtInferenceServiceImpl
             conversationManager.setHistory(messages)
         }
 
+        @Suppress("CyclomaticComplexMethod")
         override fun sendPrompt(
             prompt: String,
             options: GenerationOptions,
@@ -97,6 +101,8 @@ class LiteRtInferenceServiceImpl
                     }
 
                 suspend fun attemptInference(retryOnFail: Boolean) {
+                    val timing = telemetrySupport?.let { InferenceTurnTiming() }
+                    val captureContext = telemetrySupport?.captureContext(options)
                     try {
                         val conversation =
                             conversationManager.getConversation(targetModelType, options) {
@@ -123,6 +129,7 @@ class LiteRtInferenceServiceImpl
                                             send(InferenceEvent.Thinking(segment.text, targetModelType))
                                         }
                                         SegmentKind.VISIBLE -> {
+                                            timing?.markFirstOutput()
                                             accumulatedText.append(segment.text)
                                             send(InferenceEvent.PartialResponse(segment.text, targetModelType))
                                         }
@@ -141,6 +148,23 @@ class LiteRtInferenceServiceImpl
                             }
                         }
 
+                        val outputTokenEstimate =
+                            accumulatedText
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { text -> (text.length / 4).coerceAtLeast(1) }
+                        val telemetry =
+                            if (telemetrySupport != null && timing != null && captureContext != null) {
+                                telemetrySupport.localTurnTelemetry(
+                                    context = captureContext,
+                                    providerLabel = "LiteRT",
+                                    modelLabel = options.modelId ?: "local",
+                                    timing = timing,
+                                    outputTokens = outputTokenEstimate,
+                                )
+                            } else {
+                                null
+                            }
+                        telemetrySupport?.emitCaptured(telemetry, targetModelType) { send(it) }
                         send(InferenceEvent.Finished(targetModelType))
                     } catch (e: JavaCancellationException) {
                         // LiteRT cancelProcess() signals cancellation through this exception type.

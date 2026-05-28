@@ -101,6 +101,8 @@ class InferenceFactoryImplTest {
                 toolExecutorPort = toolExecutor,
                 toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
                 toolStreamGatePort = FakeToolStreamGatePort(),
+                telemetrySupport = testInferenceTelemetrySupport(),
+                telemetryEventPort = mockk(relaxed = true),
             )
     }
 

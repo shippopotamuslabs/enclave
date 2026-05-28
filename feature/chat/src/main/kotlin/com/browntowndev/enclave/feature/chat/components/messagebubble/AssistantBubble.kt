@@ -96,5 +96,4 @@ internal fun ExpandableTruncatableMessageText(
 
 internal const val PLAIN_TEXT_CLIP_LABEL = "Enclave Response"
 
-internal fun plainTextClipData(content: String): ClipData =
-    ClipData.newPlainText(PLAIN_TEXT_CLIP_LABEL, content)
+internal fun plainTextClipData(content: String): ClipData = ClipData.newPlainText(PLAIN_TEXT_CLIP_LABEL, content)

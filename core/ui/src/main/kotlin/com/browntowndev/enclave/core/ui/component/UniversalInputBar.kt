@@ -10,10 +10,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -44,7 +42,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ripple
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -189,8 +186,7 @@ fun UniversalInputBar(
                                 .padding(
                                     top = InputBarLayoutMetrics.topPadding,
                                     bottom = InputBarLayoutMetrics.bottomRowReserve,
-                                )
-                                .then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
+                                ).then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
                         verticalArrangement = Arrangement.Top,
                     ) {
                         // 1. Pinned Attachment Row
@@ -443,6 +439,7 @@ fun UniversalVoiceTrailingAction(
     modifier: Modifier = Modifier,
     isGlobalInferenceBlocked: Boolean = false,
     hasSendableContent: Boolean = inputText.isNotBlank(),
+    onCollapse: (() -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -491,6 +488,13 @@ fun UniversalVoiceTrailingAction(
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
 
+            val description =
+                when {
+                    isGenerating || isRecording -> "Stop"
+                    isSending -> "Send"
+                    else -> "Voice input"
+                }
+
             StandardTrailingAction(
                 onClick = {
                     when {
@@ -499,6 +503,7 @@ fun UniversalVoiceTrailingAction(
                         isSending -> {
                             keyboardController?.hide()
                             focusManager.clearFocus()
+                            onCollapse?.invoke()
                             onSend(inputText)
                         }
                         else -> onMicClick()
@@ -509,6 +514,7 @@ fun UniversalVoiceTrailingAction(
                 containerColor = containerColor,
                 contentColor = contentColor,
                 withShadow = enabled,
+                description = description,
             )
         }
     }

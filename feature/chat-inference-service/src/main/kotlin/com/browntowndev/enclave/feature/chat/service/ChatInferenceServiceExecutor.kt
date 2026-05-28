@@ -73,6 +73,9 @@ class ChatInferenceServiceExecutor
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
                     emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value} due to system error", e)
+                    emit(MessageGenerationState.Failed(RuntimeException(e), modelType))
                 }
             }
 

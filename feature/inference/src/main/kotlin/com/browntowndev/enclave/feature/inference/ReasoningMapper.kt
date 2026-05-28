@@ -7,6 +7,7 @@ import com.openai.models.ReasoningEffort
 internal object ReasoningMapper {
     fun toSdkEffort(effort: ApiReasoningEffort): ReasoningEffort =
         when (effort) {
+            ApiReasoningEffort.NONE -> ReasoningEffort.of("none")
             ApiReasoningEffort.LOW -> ReasoningEffort.LOW
             ApiReasoningEffort.MEDIUM -> ReasoningEffort.MEDIUM
             ApiReasoningEffort.HIGH -> ReasoningEffort.HIGH

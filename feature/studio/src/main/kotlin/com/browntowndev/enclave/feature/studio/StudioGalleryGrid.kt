@@ -54,7 +54,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -72,6 +71,7 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.feature.studio.components.PromptHeaderDivider
+
 internal const val GRID_COLUMNS = 2
 private const val GENERATING_SHIMMER_DURATION_MS = 1_400
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -526,8 +526,7 @@ private fun GalleryItem(
                 .combinedClickable(
                     onClick = { onMediaClick(asset.id) },
                     onLongClick = { onMediaLongClick(asset.id) },
-                )
-                .padding(padding)
+                ).padding(padding)
                 .then(
                     if (isSelected) {
                         Modifier.border(

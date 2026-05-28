@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.agent
 
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolSemanticsResources
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeFailureReason
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -10,13 +11,18 @@ import kotlin.test.assertTrue
  * TOOL-PARSE-001 LI-03: real UniFFI round-trip through [RustToolEnvelopeParser].
  */
 class RustToolEnvelopeParserContractTest {
-    private val parser = RustToolEnvelopeParser()
+    private val parser = RustToolEnvelopeParser(io.mockk.mockk(relaxed = true))
+    private val semanticsJson = AgentLoopToolSemanticsResources.enclaveDefaultJson
+    private val catalogJson =
+        checkNotNull(javaClass.classLoader?.getResourceAsStream("tool_catalog.json")) {
+            "tool_catalog.json test fixture"
+        }.bufferedReader().use { it.readText() }
 
     @Test
     fun li03RealAdapterRoundTripsAllEnvelopeShapes() {
         val toolCallRaw =
             """<tool_call>{"name":"web_search","arguments":{"query":"android compose"}}</tool_call>"""
-        val toolCallBatch = parser.parse(toolCallRaw)
+        val toolCallBatch = parser.parse(toolCallRaw, semanticsJson, catalogJson)
         assertEquals(1, toolCallBatch.successes.size)
         assertEquals("web_search", toolCallBatch.successes[0].toolName)
         assertEquals("""{"query":"android compose"}""", toolCallBatch.successes[0].argumentsJson)
@@ -25,7 +31,7 @@ class RustToolEnvelopeParserContractTest {
         val mistralRaw =
             """[TOOL_CALLS] [{"name":"web_search","arguments":{"query":"news"}},""" +
                 """{"name":"search_chat_history","arguments":{"query":"old chats"}}]"""
-        val mistralBatch = parser.parse(mistralRaw)
+        val mistralBatch = parser.parse(mistralRaw, semanticsJson, catalogJson)
         assertEquals(2, mistralBatch.successes.size)
         assertEquals("search_chat_history", mistralBatch.successes[1].toolName)
         assertTrue(
@@ -40,7 +46,7 @@ class RustToolEnvelopeParserContractTest {
                 "</｜｜DSML｜｜parameter>" +
                 "</｜｜DSML｜｜invoke>" +
                 "</｜｜DSML｜｜tool_calls>"
-        val dsmlBatch = parser.parse(dsmlRaw)
+        val dsmlBatch = parser.parse(dsmlRaw, semanticsJson, catalogJson)
         assertTrue(dsmlBatch.successes.isEmpty())
         assertEquals(1, dsmlBatch.failures.size)
         val reason = dsmlBatch.failures[0].reason
@@ -51,7 +57,7 @@ class RustToolEnvelopeParserContractTest {
 
         val appendBlocksRaw =
             """<tool_call>{"name":"append_blocks","arguments":{"artifactId":"artifact-1","blocks":[{"type":"heading","level":1,"text":"Research Document"}]}}</tool_call>"""
-        val appendBlocksBatch = parser.parse(appendBlocksRaw)
+        val appendBlocksBatch = parser.parse(appendBlocksRaw, semanticsJson, catalogJson)
         assertTrue(appendBlocksBatch.failures.isEmpty())
         assertEquals(1, appendBlocksBatch.successes.size)
         assertEquals("append_blocks", appendBlocksBatch.successes[0].toolName)
@@ -63,6 +69,8 @@ class RustToolEnvelopeParserContractTest {
         val startArtifactBatch =
             parser.parse(
                 """<tool_call>{"name":"start_artifact","arguments":{"title":"Research Brief"}}</tool_call>""",
+                semanticsJson,
+                catalogJson,
             )
         assertTrue(startArtifactBatch.failures.isEmpty())
         assertEquals("start_artifact", startArtifactBatch.successes.single().toolName)
@@ -70,6 +78,8 @@ class RustToolEnvelopeParserContractTest {
         val manageMemoriesBatch =
             parser.parse(
                 """<tool_call>{"name":"manage_memories","arguments":{"action":"search"}}</tool_call>""",
+                semanticsJson,
+                catalogJson,
             )
         assertTrue(manageMemoriesBatch.failures.isEmpty())
         assertEquals("manage_memories", manageMemoriesBatch.successes.single().toolName)
@@ -77,6 +87,8 @@ class RustToolEnvelopeParserContractTest {
         val searchArtifactBatch =
             parser.parse(
                 """<tool_call>{"name":"search_current_artifact","arguments":{"artifactId":"artifact-1","query":"summary"}}</tool_call>""",
+                semanticsJson,
+                catalogJson,
             )
         assertTrue(searchArtifactBatch.failures.isEmpty())
         assertEquals("search_current_artifact", searchArtifactBatch.successes.single().toolName)

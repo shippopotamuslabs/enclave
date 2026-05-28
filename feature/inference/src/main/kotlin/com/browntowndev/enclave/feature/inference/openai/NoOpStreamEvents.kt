@@ -45,5 +45,4 @@ internal val noOpStreamEventPredicates: List<ResponseStreamEvent.() -> Boolean> 
         ResponseStreamEvent::isMcpListToolsInProgress,
     )
 
-internal fun isNoOpStreamEvent(event: ResponseStreamEvent): Boolean =
-    noOpStreamEventPredicates.any { predicate -> predicate(event) }
+internal fun isNoOpStreamEvent(event: ResponseStreamEvent): Boolean = noOpStreamEventPredicates.any { predicate -> predicate(event) }

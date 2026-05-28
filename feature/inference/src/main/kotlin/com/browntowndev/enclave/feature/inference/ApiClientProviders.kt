@@ -4,6 +4,7 @@ import android.util.LruCache
 import com.anthropic.client.AnthropicClient
 import com.anthropic.client.okhttp.AnthropicOkHttpClient
 import com.browntowndev.enclave.domain.model.inference.GoogleApiConstants
+import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
 import com.google.genai.Client
 import com.google.genai.types.HttpOptions
 import com.openai.client.OpenAIClient
@@ -122,8 +123,9 @@ class AnthropicInferenceClientProvider
             baseUrl: String?,
             headers: Map<String, String>,
         ): AnthropicClient {
+            val normalizedBaseUrl = AnthropicSdkBaseUrl.normalize(baseUrl)
             val normalizedHeaders = headers.normalizedHeaderCacheKey()
-            val key = "${apiKey.sha256Hex()}_${baseUrl}_$normalizedHeaders"
+            val key = "${apiKey.sha256Hex()}_${normalizedBaseUrl}_$normalizedHeaders"
 
             var client = clientCache.get(key)
             if (client == null) {
@@ -134,8 +136,8 @@ class AnthropicInferenceClientProvider
                             AnthropicOkHttpClient
                                 .builder()
                                 .apiKey(apiKey)
-                        if (!baseUrl.isNullOrBlank()) {
-                            builder.baseUrl(baseUrl)
+                        if (!normalizedBaseUrl.isNullOrBlank()) {
+                            builder.baseUrl(normalizedBaseUrl)
                         }
                         headers
                             .filterValues { it.isNotBlank() }

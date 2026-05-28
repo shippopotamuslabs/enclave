@@ -43,20 +43,21 @@ class ApiCredentialsSyncHandlerTest {
     @Test
     fun `SCN-SYNC-003 Credentials fromFirestore Ignores Legacy Model Fields`() {
         val handler = ApiCredentialsSyncHandler(createContext())
-        val doc = mockCredentialsDocument(
-            entityId = "cred-legacy",
-            data =
-                mapOf(
-                    "provider" to "OPENAI",
-                    "credential_alias" to "openai-main",
-                    "model_id" to "legacy-model",
-                    "is_multimodal" to true,
-                    "created_at" to 0L,
-                    "updated_at" to 0L,
-                    "deleted" to false,
-                    "display_name" to "PCENC:v1:aes-gcm:Test",
-                ),
-        )
+        val doc =
+            mockCredentialsDocument(
+                entityId = "cred-legacy",
+                data =
+                    mapOf(
+                        "provider" to "OPENAI",
+                        "credential_alias" to "openai-main",
+                        "model_id" to "legacy-model",
+                        "is_multimodal" to true,
+                        "created_at" to 0L,
+                        "updated_at" to 0L,
+                        "deleted" to false,
+                        "display_name" to "PCENC:v1:aes-gcm:Test",
+                    ),
+            )
 
         val entity = handler.fromFirestore(doc)
 

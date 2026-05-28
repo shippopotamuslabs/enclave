@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.model.chat
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 
 data class AccumulatedMessages(
     val messages: Map<MessageId, MessageSnapshot>,
@@ -26,4 +27,5 @@ data class MessageSnapshot(
     val generatedMediaTypes: List<String> = emptyList(),
     val generatedMediaPrompts: List<String> = emptyList(),
     val transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
+    val telemetryRows: List<TurnTelemetry> = emptyList(),
 )

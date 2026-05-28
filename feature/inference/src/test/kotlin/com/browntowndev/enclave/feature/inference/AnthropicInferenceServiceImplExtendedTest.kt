@@ -4,15 +4,22 @@ import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
 import com.anthropic.core.http.StreamResponse
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageDeltaUsage
 import com.anthropic.models.messages.RawContentBlockDelta
 import com.anthropic.models.messages.RawContentBlockDeltaEvent
 import com.anthropic.models.messages.RawContentBlockStartEvent
+import com.anthropic.models.messages.RawMessageDeltaEvent
+import com.anthropic.models.messages.RawMessageStartEvent
 import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.TextDelta
 import com.anthropic.models.messages.ToolUseBlock
+import com.anthropic.models.messages.Usage
 import com.anthropic.services.blocking.MessageService
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -266,6 +273,84 @@ class AnthropicInferenceServiceImplExtendedTest {
 
             val finishedEvent = events.filterIsInstance<InferenceEvent.Finished>().first()
             assertEquals(ModelType.FAST, finishedEvent.modelType)
+        }
+
+    @Test
+    fun `completeSingleTurn captures final Anthropic usage from message delta`() =
+        runTest {
+            val telemetryService =
+                AnthropicInferenceServiceImpl(
+                    client = client,
+                    modelId = "claude-sonnet-4-20250514",
+                    modelType = ModelType.THINKING,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                    telemetrySupport = testInferenceTelemetrySupport(),
+                )
+            val startUsage = mockk<Usage>()
+            every { startUsage.inputTokens() } returns 100L
+            every { startUsage.outputTokens() } returns 0L
+            every { startUsage.cacheCreationInputTokens() } returns Optional.empty()
+            every { startUsage.cacheReadInputTokens() } returns Optional.of(20L)
+
+            val startMessage = mockk<com.anthropic.models.messages.Message>()
+            every { startMessage.usage() } returns startUsage
+            val startEvent = mockk<RawMessageStartEvent>()
+            every { startEvent.message() } returns startMessage
+
+            val textDelta = mockk<TextDelta>()
+            every { textDelta.text() } returns "answer"
+            val textBlockDelta = mockk<RawContentBlockDelta>()
+            every { textBlockDelta.text() } returns Optional.of(textDelta)
+            every { textBlockDelta.inputJson() } returns Optional.empty()
+            every { textBlockDelta.thinking() } returns Optional.empty()
+            val textDeltaEvent = mockk<RawContentBlockDeltaEvent>()
+            every { textDeltaEvent.delta() } returns textBlockDelta
+
+            val deltaUsage = mockk<MessageDeltaUsage>()
+            every { deltaUsage.outputTokens() } returns 7L
+            every { deltaUsage.inputTokens() } returns Optional.empty()
+            every { deltaUsage.cacheCreationInputTokens() } returns Optional.empty()
+            every { deltaUsage.cacheReadInputTokens() } returns Optional.of(20L)
+            val messageDelta = mockk<RawMessageDeltaEvent>()
+            val messageDeltaBody = mockk<RawMessageDeltaEvent.Delta>()
+            every { messageDeltaBody.stopReason() } returns Optional.empty()
+            every { messageDelta.delta() } returns messageDeltaBody
+            every { messageDelta.usage() } returns deltaUsage
+
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
+            every { streamResponse.stream() } returns
+                Stream.of(
+                    mockStreamEvent(messageStart = Optional.of(startEvent)),
+                    mockStreamEvent(contentBlockDelta = Optional.of(textDeltaEvent)),
+                    mockStreamEvent(messageDelta = Optional.of(messageDelta)),
+                    mockStreamEvent(messageStop = Optional.of(mockk())),
+                )
+            every { streamResponse.close() } returns Unit
+
+            val result =
+                telemetryService.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage("u1", Role.USER, "Hello")),
+                    systemPrompt = "",
+                    contextSidecars = null,
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            chatId = ChatId("chat-1"),
+                            assistantMessageId = MessageId("assistant-1"),
+                        ),
+                )
+
+            val telemetry = requireNotNull(result.telemetry)
+            assertEquals(100, telemetry.inputTokens)
+            assertEquals(7, telemetry.outputTokens)
+            assertEquals(20, telemetry.cacheReadInputTokens)
         }
 
     private fun mockStreamEvent(

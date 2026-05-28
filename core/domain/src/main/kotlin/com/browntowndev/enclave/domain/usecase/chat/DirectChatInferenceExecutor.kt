@@ -7,13 +7,18 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -47,11 +52,16 @@ class DirectChatInferenceExecutor
         private val mediaToolDefinitionFactory: com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory,
         private val getProviderCapabilitiesUseCase: com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase,
         private val loggingPort: LoggingPort,
+        private val searchIntentClassifier: SearchIntentClassifierPort,
+        private val toolExecutor: ToolExecutorPort,
+        private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
             ChatHistoryRehydrator(
                 messageRepository = messageRepository,
                 loggingPort = loggingPort,
+                committedInferencePrompts = committedInferencePrompts,
             )
         private val inferenceRequestPreparer =
             ChatInferenceRequestPreparer(
@@ -66,6 +76,9 @@ class DirectChatInferenceExecutor
                 mediaToolDefinitionFactory = mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
                 loggingPort = loggingPort,
+                searchIntentClassifier = searchIntentClassifier,
+                toolExecutor = toolExecutor,
+                monotonicToolActivation = monotonicToolActivation,
             )
 
         override fun execute(
@@ -107,6 +120,9 @@ class DirectChatInferenceExecutor
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Unexpected error in $modelType mode", e)
                     emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Unexpected error in $modelType mode due to system error", e)
+                    emit(MessageGenerationState.Failed(error = RuntimeException(e), modelType = modelType))
                 }
             }.flowOn(Dispatchers.Default)
 
@@ -131,6 +147,15 @@ class DirectChatInferenceExecutor
                         assistantMessageId = assistantMessageId,
                         modelType = modelType,
                     )
+
+                if (preparedRequest.preRetrievalSources.isNotEmpty()) {
+                    emit(
+                        MessageGenerationState.WebSearchSourcesAttached(
+                            preparedRequest.preRetrievalSources,
+                            modelType,
+                        ),
+                    )
+                }
 
                 try {
                     historyRehydrator(
@@ -193,6 +218,15 @@ class DirectChatInferenceExecutor
                             is InferenceEvent.PostCompact -> Unit
 
                             is InferenceEvent.ToolRepaired -> Unit
+
+                            is InferenceEvent.TelemetryCaptured -> {
+                                emit(
+                                    MessageGenerationState.TelemetryCaptured(
+                                        telemetry = event.telemetry,
+                                        modelType = event.modelType,
+                                    ),
+                                )
+                            }
 
                             is InferenceEvent.Finished -> {
                                 emit(MessageGenerationState.Finished(event.modelType))

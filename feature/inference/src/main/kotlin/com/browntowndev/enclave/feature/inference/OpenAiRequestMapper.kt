@@ -100,10 +100,14 @@ object OpenAiRequestMapper {
         }
 
         if (options.toolingEnabled) {
-            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+            options.activeTools.forEach { builder.addTool(it.toChatCompletionTool()) }
             builder.parallelToolCalls(false)
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let(builder::promptCacheKey)
         builder.messages(messages)
         return builder.build()
     }
@@ -159,9 +163,13 @@ object OpenAiRequestMapper {
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
         if (options.toolingEnabled) {
-            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
+            options.activeTools.forEach { builder.addTool(it.toResponsesTool()) }
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let(builder::promptCacheKey)
         return builder.build()
     }
 

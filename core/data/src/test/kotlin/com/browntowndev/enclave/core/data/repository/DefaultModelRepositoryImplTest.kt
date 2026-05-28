@@ -19,7 +19,6 @@ import com.browntowndev.enclave.core.data.local.TtsProviderEntity
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
-import javax.crypto.AEADBadTagException
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -40,6 +39,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import javax.crypto.AEADBadTagException
 
 class DefaultModelRepositoryImplTest {
     private lateinit var repo: DefaultModelRepositoryImpl

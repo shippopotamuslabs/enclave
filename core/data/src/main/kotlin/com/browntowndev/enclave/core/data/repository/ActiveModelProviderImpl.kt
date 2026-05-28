@@ -7,6 +7,7 @@ import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -110,6 +111,12 @@ class ActiveModelProviderImpl
                     presencePenaltyDisabled = config.presencePenaltyDisabled,
                     localModelFormat = null,
                     apiProvider = credentials.provider,
+                    apiModelPricing =
+                        ApiModelSavedPricing(
+                            promptUsdPerMillion = config.promptPriceUsdPerMillion,
+                            completionUsdPerMillion = config.completionPriceUsdPerMillion,
+                            cachedPromptUsdPerMillion = config.cachedPromptPriceUsdPerMillion,
+                        ).takeIf { it.hasPromptAndCompletionRates() },
                 )
             }
 

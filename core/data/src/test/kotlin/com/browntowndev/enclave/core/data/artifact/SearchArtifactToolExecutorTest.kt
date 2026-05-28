@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.artifact
 
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
@@ -10,7 +11,6 @@ import com.browntowndev.enclave.domain.model.inference.SearchArtifactParams
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import androidx.sqlite.db.SupportSQLiteQuery
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

@@ -106,6 +106,72 @@ class TranscriptIndicatorDuplicatePolicyTest {
     }
 
     @Test
+    fun `trailing processing strip shown when transcript segments exist`() {
+        assertTrue(
+            transcriptLayoutShowsTrailingStatusIndicator(
+                indicatorState = IndicatorState.Processing,
+                hasStreamingThinkingSegment = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `trailing thinking strip shown when no streaming thinking segment owns status`() {
+        assertTrue(
+            transcriptLayoutShowsTrailingStatusIndicator(
+                indicatorState =
+                    IndicatorState.Thinking(
+                        thinkingRaw = "next thought",
+                        thinkingDurationSeconds = 0L,
+                    ),
+                hasStreamingThinkingSegment = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `trailing thinking strip hidden when streaming thinking segment owns status`() {
+        assertFalse(
+            transcriptLayoutShowsTrailingStatusIndicator(
+                indicatorState =
+                    IndicatorState.Thinking(
+                        thinkingRaw = "streaming thought",
+                        thinkingDurationSeconds = 0L,
+                    ),
+                hasStreamingThinkingSegment = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `trailing active tool call hidden when streaming thinking segment owns status`() {
+        assertFalse(
+            showsTrailingActiveToolCall(
+                hasStreamingThinkingSegment = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `trailing active tool call shown when no streaming thinking segment owns status`() {
+        assertTrue(
+            showsTrailingActiveToolCall(
+                hasStreamingThinkingSegment = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `trailing status hidden for complete state`() {
+        assertFalse(
+            transcriptLayoutShowsTrailingStatusIndicator(
+                indicatorState = IndicatorState.Complete(thinkingData = null),
+                hasStreamingThinkingSegment = false,
+            ),
+        )
+    }
+
+    @Test
     fun `top thinking not shown for non thinking states`() {
         assertFalse(
             transcriptLayoutShowsTopThinkingIndicator(

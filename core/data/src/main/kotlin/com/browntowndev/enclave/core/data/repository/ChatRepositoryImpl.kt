@@ -4,18 +4,19 @@ import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.local.MessageDao
-import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayload
 import com.browntowndev.enclave.core.data.local.MessageEntity
-import com.browntowndev.enclave.core.data.local.MessageFileEntity
-import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentEntity
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
+import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceEntity
+import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayload
 import com.browntowndev.enclave.core.data.mapper.chat.toDomain
 import com.browntowndev.enclave.core.data.mapper.chat.toEntity
 import com.browntowndev.enclave.core.data.mapper.message.toDomain
 import com.browntowndev.enclave.core.data.mapper.message.toEntity
+import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity
 import com.browntowndev.enclave.core.data.security.PersistenceBoundary
 import com.browntowndev.enclave.core.data.security.SensitiveEntityFieldEncryptors
 import com.browntowndev.enclave.core.data.security.SensitiveFieldRef
@@ -35,6 +36,7 @@ import com.browntowndev.enclave.domain.model.chat.ThinkingData
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -57,6 +59,7 @@ class ChatRepositoryImpl
         private val documentDao: DocumentDao,
         private val transactionProvider: com.browntowndev.enclave.domain.port.repository.TransactionProvider,
         private val cleanupDao: CleanupDao,
+        private val messageInferenceTelemetryDao: MessageInferenceTelemetryDao,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ChatRepository {
@@ -149,11 +152,12 @@ class ChatRepositoryImpl
             messageId: MessageId,
             content: String,
         ) {
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                content,
-            ) ?: content
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    content,
+                ) ?: content
             messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
@@ -162,19 +166,22 @@ class ChatRepositoryImpl
             messageId: MessageId,
             content: String,
         ) {
-            val existing = messageDao.getMessageById(messageId)?.message
-                ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val decryptedExisting = healer.decryptForRead(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                existing.content,
-            ) ?: ""
+            val existing =
+                messageDao.getMessageById(messageId)?.message
+                    ?: throw IllegalArgumentException("Message not found with id: $messageId")
+            val decryptedExisting =
+                healer.decryptForRead(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    existing.content,
+                ) ?: ""
             val merged = decryptedExisting + content
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                messageId.value,
-                merged,
-            ) ?: merged
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    merged,
+                ) ?: merged
             messageDao.updateMessageContentText(messageId, encrypted)
             triggerSync()
         }
@@ -194,19 +201,23 @@ class ChatRepositoryImpl
             messageId: MessageId,
             thinkingText: String,
         ) {
-            val existing = messageDao.getMessageById(messageId)?.message
-                ?: throw IllegalArgumentException("Message not found with id: $messageId")
-            val decryptedExisting = healer.decryptForRead(
-                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
-                messageId.value,
-                existing.thinkingRaw,
-            ).orEmpty()
+            val existing =
+                messageDao.getMessageById(messageId)?.message
+                    ?: throw IllegalArgumentException("Message not found with id: $messageId")
+            val decryptedExisting =
+                healer
+                    .decryptForRead(
+                        SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                        messageId.value,
+                        existing.thinkingRaw,
+                    ).orEmpty()
             val merged = decryptedExisting + thinkingText
-            val encrypted = healer.requireEncrypted(
-                SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
-                messageId.value,
-                merged,
-            ) ?: merged
+            val encrypted =
+                healer.requireEncrypted(
+                    SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                    messageId.value,
+                    merged,
+                ) ?: merged
             messageDao.updateThinkingRaw(messageId, encrypted)
             triggerSync()
         }
@@ -267,20 +278,38 @@ class ChatRepositoryImpl
 
             messageDao.updateMessageContent(
                 id = messageId,
-                content = healer.requireEncrypted(
-                    SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
-                    messageId.value,
-                    content,
-                ) ?: content,
-                thinkingDuration = duration,
-                thinkingRaw = thinkingData?.rawFullThought?.let { raw ->
+                content =
                     healer.requireEncrypted(
-                        SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                        SensitiveFieldRef("MessageEntity", "content", PersistenceBoundary.ROOM),
                         messageId.value,
-                        raw,
-                    )
-                },
+                        content,
+                    ) ?: content,
+                thinkingDuration = duration,
+                thinkingRaw =
+                    thinkingData?.rawFullThought?.let { raw ->
+                        healer.requireEncrypted(
+                            SensitiveFieldRef("MessageEntity", "thinkingRaw", PersistenceBoundary.ROOM),
+                            messageId.value,
+                            raw,
+                        )
+                    },
             )
+            triggerSync()
+        }
+
+        override suspend fun persistWebSearchSources(
+            messageId: MessageId,
+            sources: List<WebSearchSource>,
+        ) {
+            val scopedSources = sources.filter { it.messageId == messageId }
+            if (scopedSources.isEmpty()) return
+            transactionProvider.runInTransaction {
+                webSearchSourceDao.insertAll(
+                    scopedSources.map { source ->
+                        SensitiveEntityFieldEncryptors.encrypt(source.toEntity(), healer)
+                    },
+                )
+            }
             triggerSync()
         }
 
@@ -305,6 +334,7 @@ class ChatRepositoryImpl
             generatedMediaTypes: List<String>,
             generatedMediaPrompts: List<String>,
             transcriptSegments: List<MessageTranscriptSegment>,
+            telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry>,
         ) {
             val mediaUrisJson =
                 if (generatedMediaUris.isNotEmpty()) {
@@ -402,6 +432,10 @@ class ChatRepositoryImpl
                         )
                     }
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
+
+                if (telemetry.isNotEmpty()) {
+                    messageInferenceTelemetryDao.insertAll(telemetry.map(TurnTelemetry::toEntity))
+                }
             }
             triggerSync()
         }

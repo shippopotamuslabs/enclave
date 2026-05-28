@@ -1,14 +1,14 @@
 package com.browntowndev.enclave.core.data.mapper
 
 import com.browntowndev.enclave.core.data.local.ChatEntity
-import com.browntowndev.enclave.core.data.mapper.chat.toDomain
-import com.browntowndev.enclave.core.data.mapper.message.toDomain
-import com.browntowndev.enclave.core.data.mapper.message.toEntity
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageFileEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
 import com.browntowndev.enclave.core.data.local.WebSearchSourceEntity
+import com.browntowndev.enclave.core.data.mapper.chat.toDomain
+import com.browntowndev.enclave.core.data.mapper.message.toDomain
+import com.browntowndev.enclave.core.data.mapper.message.toEntity
 import com.browntowndev.enclave.domain.model.artifact.MimeType
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content

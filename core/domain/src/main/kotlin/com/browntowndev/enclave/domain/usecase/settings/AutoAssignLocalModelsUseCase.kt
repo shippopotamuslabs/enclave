@@ -50,8 +50,9 @@ class AutoAssignLocalModelsUseCase
                     if (existing != null && isAssignmentValid(existing, localAssets, apiAssets, ttsProviders, mediaProviders)) {
                         return@forEach
                     }
-                    val candidate = pickCandidate(modelType, localAssets, apiAssets, ttsProviders, mediaProviders)
-                        ?: return@forEach
+                    val candidate =
+                        pickCandidate(modelType, localAssets, apiAssets, ttsProviders, mediaProviders)
+                            ?: return@forEach
                     setDefaultModelUseCase(
                         modelType = modelType,
                         localConfigId = candidate.localConfigId,
@@ -69,12 +70,14 @@ class AutoAssignLocalModelsUseCase
             ttsProviders: List<TtsProviderAsset>,
             mediaProviders: List<MediaProviderAsset>,
         ): Boolean {
-            val localExists = assignment.localConfigId?.let { id ->
-                localAssets.any { asset -> asset.configurations.any { it.id == id } }
-            } ?: false
-            val apiExists = assignment.apiConfigId?.let { id ->
-                apiAssets.any { asset -> asset.configurations.any { it.id == id } }
-            } ?: false
+            val localExists =
+                assignment.localConfigId?.let { id ->
+                    localAssets.any { asset -> asset.configurations.any { it.id == id } }
+                } ?: false
+            val apiExists =
+                assignment.apiConfigId?.let { id ->
+                    apiAssets.any { asset -> asset.configurations.any { it.id == id } }
+                } ?: false
             val ttsExists = assignment.ttsProviderId?.let { id -> ttsProviders.any { it.id == id } } ?: false
             val mediaExists = assignment.mediaProviderId?.let { id -> mediaProviders.any { it.id == id } } ?: false
             return localExists || apiExists || ttsExists || mediaExists
@@ -110,10 +113,16 @@ class AutoAssignLocalModelsUseCase
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
         ): Candidate? {
-            val localId = localAssets.firstOrNull()?.configurations?.firstOrNull()?.id
+            val localId =
+                localAssets
+                    .firstOrNull()
+                    ?.configurations
+                    ?.firstOrNull()
+                    ?.id
             if (localId != null) return Candidate(localConfigId = localId)
             val apiId =
-                apiAssets.asSequence()
+                apiAssets
+                    .asSequence()
                     .flatMap { it.configurations.asSequence() }
                     .firstOrNull()
                     ?.id
@@ -121,7 +130,8 @@ class AutoAssignLocalModelsUseCase
         }
 
         private fun firstMultimodalApi(apiAssets: List<ApiModelAsset>): ApiModelConfigurationId? =
-            apiAssets.asSequence()
+            apiAssets
+                .asSequence()
                 .flatMap { it.configurations.asSequence() }
                 .firstOrNull { it.isMultimodal }
                 ?.id

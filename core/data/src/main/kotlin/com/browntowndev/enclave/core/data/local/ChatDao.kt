@@ -28,6 +28,9 @@ abstract class ChatDao {
     @Query("SELECT * FROM chat WHERE deleted = 0 ORDER BY pinned DESC, last_modified DESC")
     abstract fun getAllChats(): Flow<List<ChatEntity>>
 
+    @Query("SELECT COUNT(*) FROM chat WHERE deleted = 0")
+    abstract suspend fun countActiveChats(): Int
+
     @Query("SELECT * FROM chat WHERE id = :id AND deleted = 0")
     abstract suspend fun getChatById(id: ChatId): ChatEntity?
 

@@ -1,14 +1,11 @@
 package com.browntowndev.enclave.feature.inference.conversation
 
 import android.util.Log
-import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.AppendBlocksParams
 import com.browntowndev.enclave.domain.model.inference.AttachedImageInspectParams
 import com.browntowndev.enclave.domain.model.inference.ExtractDepth
 import com.browntowndev.enclave.domain.model.inference.ExtractFormat
 import com.browntowndev.enclave.domain.model.inference.GetMessageContextParams
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SearchArtifactParams
 import com.browntowndev.enclave.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.enclave.domain.model.inference.SearchChatParams
@@ -17,49 +14,75 @@ import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.WebExtractParams
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.domain.util.NativeToolResultFormatter
-import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.ToolParam
+import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.Json as KJson
 import java.util.concurrent.CancellationException as JavaCancellationException
+import kotlinx.serialization.json.Json as KJson
 
 internal object LiteRtNativeToolsets {
     private const val TAG = "ConversationManager"
 
     fun buildToolList(
-        signature: ConversationSignature,
+        activeToolNames: List<String>,
         context: LiteRtToolContext,
-    ) =
+    ): List<ToolSet> =
         buildList {
-            if (signature.hasSearchTool) {
-                add(tool(LocalSearchToolset(context)))
-            }
-            if (signature.hasExtractTool) {
-                add(tool(LocalExtractToolset(context)))
-            }
-            if (signature.hasImageTool) {
-                add(tool(LocalImageInspectToolset(context)))
-            }
-            if (signature.hasMemoryTools) {
-                add(tool(LocalSearchChatHistoryToolset(context)))
-                add(tool(LocalSearchChatToolset(context)))
-            }
-            if (signature.hasGetMessageContextTool) {
-                add(tool(LocalGetMessageContextToolset(context)))
-            }
-            if (signature.hasArtifactTools) {
-                add(tool(LocalStartArtifactToolset(context)))
-                add(tool(LocalAppendBlocksToolset(context)))
-                add(tool(LocalSearchArtifactToolset(context)))
+            activeToolNames.forEach { name ->
+                val set: ToolSet? =
+                    when (name) {
+                        "disclose_tool_schemas" -> LocalDiscloseToolset(context)
+                        "web_search" -> LocalSearchToolset(context)
+                        "web_extract" -> LocalExtractToolset(context)
+                        "attached_image_inspect" -> LocalImageInspectToolset(context)
+                        "search_chat_history" -> LocalSearchChatHistoryToolset(context)
+                        "search_chat" -> LocalSearchChatToolset(context)
+                        "get_message_context" -> LocalGetMessageContextToolset(context)
+                        "start_artifact" -> LocalStartArtifactToolset(context)
+                        "append_blocks" -> LocalAppendBlocksToolset(context)
+                        "search_current_artifact" -> LocalSearchArtifactToolset(context)
+                        else -> null
+                    }
+                if (set != null) add(set)
             }
         }
+
+    /**
+     * Production helper: build a list of LiteRT [com.google.ai.edge.litertlm.ToolProvider]
+     * instances wrapped via the litertlm `tool(...)` factory. The active-name [buildToolList]
+     * overload above is exposed as raw [ToolSet] so unit tests can introspect class identities
+     * without depending on litertlm internals.
+     */
+    fun buildToolProviders(
+        activeToolNames: List<String>,
+        context: LiteRtToolContext,
+    ): List<com.google.ai.edge.litertlm.ToolProvider> = buildToolList(activeToolNames, context).map { tool(it) }
+
+    @Suppress("FunctionNaming")
+    internal class LocalDiscloseToolset(
+        private val context: LiteRtToolContext,
+    ) : ToolSet {
+        @com.google.ai.edge.litertlm.Tool(
+            description = "Disclose full schemas for deferred tools so the model may call them next turn.",
+        )
+        fun disclose_tool_schemas(
+            @ToolParam(description = "JSON array of deferred tool names to activate.") tool_names: String,
+        ): String =
+            runBlocking(Dispatchers.IO) {
+                context.toolLoop.handleDisclosure(
+                    runCatching {
+                        KJson
+                            .parseToJsonElement(tool_names)
+                            .jsonArray
+                            .mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    }.getOrDefault(emptyList()),
+                )
+            }
+    }
 
     @Suppress("FunctionNaming")
     internal class LocalSearchToolset(
@@ -68,16 +91,17 @@ internal object LiteRtNativeToolsets {
         @com.google.ai.edge.litertlm.Tool(description = "Search the web for information.")
         fun tavily_web_search(
             @ToolParam(description = "The search query.") query: String,
-        ): String = dispatchTool(context, ToolDefinition.WEB_SEARCH) {
-            ToolCallRequest(
-                toolName = ToolDefinition.WEB_SEARCH.name,
-                argumentsJson = ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query)),
-                provider = "LITERT",
-                modelType = context.modelType,
-                chatId = context.chatId,
-                userMessageId = context.userMessageId,
-            )
-        }
+        ): String =
+            dispatchTool(context, ToolDefinition.WEB_SEARCH) {
+                ToolCallRequest(
+                    toolName = ToolDefinition.WEB_SEARCH.name,
+                    argumentsJson = ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query)),
+                    provider = "LITERT",
+                    modelType = context.modelType,
+                    chatId = context.chatId,
+                    userMessageId = context.userMessageId,
+                )
+            }
     }
 
     @Suppress("FunctionNaming")
@@ -215,8 +239,8 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Initialize a new professional document. Returns artifact_id for use with append_blocks. " +
-                    "Call once before any append_blocks calls.",
+                "Start a downloadable PDF or Word (.docx) document. Returns artifact_id for append_blocks. " +
+                    "Use when the user asks to make a document, PDF, or Word file. Call once before append_blocks.",
         )
         fun start_artifact(
             @ToolParam(description = "The document title as a top-level string.") title: String,
@@ -246,8 +270,8 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Append content blocks to an existing artifact. Emit 10-15 blocks per call. " +
-                    "Set is_complete=true on the final call.",
+                "Add sections to the in-progress PDF/Word document. Emit 10-15 blocks per call. " +
+                    "Set is_complete=true on the final call to finish export.",
         )
         fun append_blocks(
             @ToolParam(description = "The artifact ID returned by start_artifact.") artifact_id: String,
@@ -281,7 +305,8 @@ internal object LiteRtNativeToolsets {
         private val context: LiteRtToolContext,
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
-            description = "Semantically search the artifact currently being generated to recall compressed context.",
+            description =
+                "Search the PDF/Word document currently being written to recall details lost from context.",
         )
         fun search_current_artifact(
             @ToolParam(description = "The artifact ID to search within.") artifact_id: String,
@@ -317,7 +342,8 @@ internal object LiteRtNativeToolsets {
         )
         return try {
             runBlocking(Dispatchers.IO) {
-                val request = buildRequest()
+                val req = buildRequest()
+                val request = req.copy(modelId = req.modelId ?: context.modelId)
                 context.toolLoop.loggingPort.info(
                     TAG,
                     "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}",

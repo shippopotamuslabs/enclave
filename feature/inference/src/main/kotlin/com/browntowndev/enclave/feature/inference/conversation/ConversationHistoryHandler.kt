@@ -5,10 +5,9 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
-import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
-import com.google.ai.edge.litertlm.tool
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
 import com.google.ai.edge.litertlm.Message as LiteRtMessage
+import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 
 internal object ConversationHistoryHandler {
     private const val TAG = "ConversationManager"
@@ -63,13 +62,15 @@ internal object ConversationHistoryHandler {
         }
 }
 
+@Suppress("UnusedParameter")
 internal fun buildConversationConfig(
-    signature: ConversationSignature,
+    @Suppress("UNUSED_PARAMETER") signature: ConversationSignature,
     systemPrompt: String,
     history: List<DomainChatMessage>,
     samplerConfig: com.browntowndev.enclave.domain.model.inference.SamplerConfig,
     activeBackendIsNpu: Boolean,
     toolContext: LiteRtToolContext,
+    activeToolNames: List<String>,
 ): ConversationConfig =
     ConversationConfig(
         systemInstruction = Contents.of(systemPrompt),
@@ -85,11 +86,12 @@ internal fun buildConversationConfig(
                 )
             },
         automaticToolCalling = true,
-        tools = LiteRtNativeToolsets.buildToolList(signature, toolContext),
+        tools = LiteRtNativeToolsets.buildToolProviders(activeToolNames, toolContext),
     )
 
 internal data class LiteRtToolContext(
     val modelType: com.browntowndev.enclave.domain.model.inference.ModelType,
+    val modelId: String? = null,
     val chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
     val userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
     val toolLoop: LiteRtToolCallLoop,

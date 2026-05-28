@@ -108,11 +108,12 @@ object GoogleRequestMapper {
         builder: GenerateContentConfig.Builder,
         options: GenerationOptions,
     ) {
-        if (!options.toolingEnabled || options.availableTools.isEmpty()) {
+        val toolsToRegister = options.activeTools
+        if (!options.toolingEnabled || toolsToRegister.isEmpty()) {
             return
         }
 
-        builder.tools(options.availableTools.map { it.toGoogleTool() })
+        builder.tools(toolsToRegister.map { it.toGoogleTool() })
         builder.toolConfig(
             ToolConfig
                 .builder()

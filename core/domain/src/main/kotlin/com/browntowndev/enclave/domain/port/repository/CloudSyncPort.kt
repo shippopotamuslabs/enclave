@@ -119,4 +119,9 @@ interface CloudSyncPort {
      * Purges all artifacts/documents from Firestore for the current user.
      */
     suspend fun deleteAllArtifactsFromCloud(): Result<Unit>
+
+    /**
+     * Retrieves the count of sync events that are remaining to be applied.
+     */
+    suspend fun getRemainingEventsCount(): Result<Long> = Result.success(0L)
 }

@@ -47,6 +47,7 @@ class SaveApiPresetUseCase
                         } else {
                             OpenRouterRoutingConfiguration()
                         },
+                    pricing = draft.pricing,
                 ),
             )
     }

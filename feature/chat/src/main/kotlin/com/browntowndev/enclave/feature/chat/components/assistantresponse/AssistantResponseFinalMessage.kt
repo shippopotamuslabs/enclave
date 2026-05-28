@@ -23,6 +23,7 @@ import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ThinkingDetailsBottomSheet
 
+@Suppress("LongParameterList")
 @Composable
 internal fun AssistantResponseFinalMessage(
     message: ChatMessage,
@@ -30,11 +31,17 @@ internal fun AssistantResponseFinalMessage(
     isStreaming: Boolean,
     isPreview: Boolean,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     toolCallBanner: ToolCallBannerUi?,
+    trailingStatusIndicator: @Composable (() -> Unit)?,
     onPlayAudio: (String) -> Unit,
+    onPauseAudio: () -> Unit,
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
+    onStatsClick: (MessageId) -> Unit = {},
     onShowSources: () -> Unit,
 ) {
     var transcriptSheetVisible by remember { mutableStateOf(false) }
@@ -74,6 +81,7 @@ internal fun AssistantResponseFinalMessage(
         isStreaming = isStreaming,
         isPreview = isPreview,
         toolCallBanner = toolCallBanner,
+        trailingStatusIndicator = trailingStatusIndicator,
         onOpenThinkingSheet = openThinkingSheet,
     )
 
@@ -105,9 +113,11 @@ internal fun AssistantResponseFinalMessage(
     }
 
     val isComplete =
-        (message.indicatorState is IndicatorState.Complete ||
-            message.indicatorState is IndicatorState.None ||
-            isPreview) &&
+        (
+            message.indicatorState is IndicatorState.Complete ||
+                message.indicatorState is IndicatorState.None ||
+                isPreview
+        ) &&
             toolCallBanner == null
 
     AssistantResponseActionRow(
@@ -115,8 +125,13 @@ internal fun AssistantResponseFinalMessage(
         contentText = contentText,
         isComplete = isComplete,
         hasTtsProviderAssigned = hasTtsProviderAssigned,
+        isPlayingTts = isPlayingTts,
+        isLoadingTts = isLoadingTts,
+        isPausedTts = isPausedTts,
         onPlayAudio = onPlayAudio,
+        onPauseAudio = onPauseAudio,
         onShareClick = onShareClick,
+        onStatsClick = onStatsClick,
         onShowSources = onShowSources,
     )
 }

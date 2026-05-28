@@ -8,6 +8,8 @@ import com.browntowndev.enclave.domain.usecase.settings.DeleteAllChatsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.DeleteAllMediaUseCase
 import com.browntowndev.enclave.domain.usecase.settings.DeleteAllMemoriesUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsDataControlsUseCases
+import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
+import com.browntowndev.enclave.domain.usecase.settings.UpdateAutomaticErrorTrackingEnabledUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -43,12 +45,18 @@ class SettingsDataControlsDelegateTest {
         }
 
     private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
+    private val updateAutomaticErrorTrackingEnabledUseCase =
+        mockk<UpdateAutomaticErrorTrackingEnabledUseCase>(relaxed = true)
+    private val preferencesUseCases =
+        mockk<SettingsPreferencesUseCases> {
+            every { updateAutomaticErrorTrackingEnabled } returns updateAutomaticErrorTrackingEnabledUseCase
+        }
 
     private lateinit var delegate: SettingsDataControlsDelegate
 
     @BeforeEach
     fun setup() {
-        delegate = SettingsDataControlsDelegate(useCases, errorHandler)
+        delegate = SettingsDataControlsDelegate(useCases, preferencesUseCases, errorHandler)
         coEvery { deleteAllChats.invoke() } returns Unit
         coEvery { deleteAllMedia.invoke() } returns Unit
         coEvery { deleteAllMemories.invoke() } returns Unit

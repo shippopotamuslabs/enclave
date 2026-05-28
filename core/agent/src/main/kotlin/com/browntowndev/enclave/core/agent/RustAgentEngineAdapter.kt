@@ -124,6 +124,9 @@ class RustAgentEngineAdapter
                                                 toolContextIndexJson = action.request.toolContextIndexJson,
                                                 fileContextIndexJson = action.request.fileContextIndexJson,
                                                 cacheHints = action.request.cacheHints,
+                                                transcriptRevision =
+                                                    action.request.providerContext.transcriptRevision
+                                                        .toLong(),
                                                 onTextToken = { text ->
                                                     textGate.onProviderTextChunk(text) { emitted ->
                                                         channel.send(AgentLoopEvent.TextToken(emitted))
@@ -136,7 +139,7 @@ class RustAgentEngineAdapter
                                         }
                                     } catch (e: CancellationException) {
                                         throw e
-                                    } catch (e: Exception) {
+                                    } catch (e: Throwable) {
                                         loggingPort.error(TAG, "model turn failed: ${e.message}", e)
                                         send(AgentLoopEvent.Failed("model turn failed: ${e.message}"))
                                         return@channelFlow
@@ -367,14 +370,16 @@ private fun FfiManualCompactResult.toDomain(events: List<AgentLoopEvent> = empty
         events = events,
     )
 
-private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig.toFfi(): FfiAgentConfig =
+internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig.toFfi(): FfiAgentConfig =
     FfiAgentConfig(
         maxTurns = maxTurns,
         thresholdRatio = thresholdRatio,
         microKeepRecent = microKeepRecent,
         toolRetryLimit = toolRetryLimit,
-        greedyAppendBlocks = greedyAppendBlocks,
+        toolSemanticsJson = toolSemanticsJson,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
+        toolResultBudgetRelaxedBytes = toolResultBudgetRelaxedBytes,
+        toolResultTruncationPressureRatio = toolResultTruncationPressureRatio,
         midTurnThresholdRatio = midTurnThresholdRatio,
         postToolResultThresholdRatio = postToolResultThresholdRatio,
         manualCompactThresholdRatio = manualCompactThresholdRatio,
@@ -392,9 +397,27 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfig
         historySnapshotThresholdTokens = historySnapshotThresholdTokens,
         fileOutlineThresholdTokens = fileOutlineThresholdTokens,
         promptCacheAnchorThresholdTokens = promptCacheAnchorThresholdTokens,
+        outputReserveRatio = outputReserveRatio,
+        outputReserveFloorTokens = outputReserveFloorTokens,
+        outputReserveMaxTokens = outputReserveMaxTokens,
+        preflightTokenThreshold = preflightTokenThreshold,
+        midTurnTokenThreshold = midTurnTokenThreshold,
+        postToolResultTokenThreshold = postToolResultTokenThreshold,
+        messageThreshold = messageThreshold,
+        retentionWindowTokens = retentionWindowTokens,
         maxModelRequestsPerTurn = maxModelRequestsPerTurn,
         enableLoopHooks = enableLoopHooks,
         enablePendingWorkGuard = enablePendingWorkGuard,
+        longLoop = longLoop.toFfi(),
+    )
+
+private fun com.browntowndev.enclave.domain.model.inference.AgentLoopLongLoopPolicy.toFfi(): FfiLongLoopPolicy =
+    FfiLongLoopPolicy(
+        maxToolTurns = maxToolTurns,
+        sidecarByteBudgetPerCall = sidecarByteBudgetPerCall,
+        sidecarTotalByteBudget = sidecarTotalByteBudget,
+        summarizeAfterToolTurns = summarizeAfterToolTurns,
+        compactEveryNToolTurns = compactEveryNToolTurns,
     )
 
 private fun com.browntowndev.enclave.domain.model.inference.AgentLoopSessionCapabilities.toFfi(): FfiSessionCapabilities =
@@ -432,6 +455,8 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopSessionIoPa
     FfiSessionIoParams(
         provider = provider,
         contextWindowTokens = contextWindowTokens,
+        toolCatalogJson = toolCatalogJson,
+        toolSchemaRegistryJson = toolSchemaRegistryJson,
         toolsSchemaJson = toolsSchemaJson,
         systemPrompt = systemPrompt,
     )
@@ -465,6 +490,7 @@ private fun AgentToolResult.toFfi(): FfiToolResultRecord =
         resultJson = resultJson,
         truncated = truncated,
         softFailure = softFailure,
+        activatedToolNames = activatedToolNames,
     )
 
 private fun AgentSummaryResult.toFfi(): FfiSummaryResult =

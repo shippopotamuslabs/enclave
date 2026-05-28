@@ -40,4 +40,10 @@ class MessageListScrollPolicyHeightTest {
     fun scPerf14_lazyCacheWindowIs360Dp() {
         assertEquals(360.dp, MessageListLazyCacheWindowDp)
     }
+
+    @Test
+    @DisplayName("SC-UI-01 — MessageListTopContentPadding keeps first row below the app bar")
+    fun scUi01_topContentPaddingIs12Dp() {
+        assertEquals(12.dp, MessageListTopContentPaddingDp)
+    }
 }

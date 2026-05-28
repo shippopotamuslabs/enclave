@@ -94,7 +94,7 @@ class ToolExecutionBannerCoordinator
             )
             if (turnChatId != currentChatId) return
 
-                    when (event) {
+            when (event) {
                 is ToolExecutionEvent.Started -> onToolStarted(event)
                 is ToolExecutionEvent.Extracting -> onToolExtracting(event, onExtractingUrl)
                 is ToolExecutionEvent.Finished -> onToolFinished(scope, event, activeTurnKey)

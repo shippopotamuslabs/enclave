@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.feature.chat.components.detailbottomsheet
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.markdown.StreamableMarkdownText
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.feature.chat.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +54,25 @@ fun DetailBottomSheet(
         onDismissRequest = config.onDismiss,
         sheetState = sheetState,
     ) {
-        DetailBottomSheetHeader(config = config, displayDuration = displayDuration)
+        val title = when (config) {
+            is DetailBottomSheetConfig.Thinking -> {
+                thinkingSheetHeaderTitle(
+                    isStreaming = config.isStreaming,
+                    durationSeconds = displayDuration,
+                )
+            }
+            is DetailBottomSheetConfig.StepCompletion -> {
+                "${config.stepName} Results"
+            }
+            is DetailBottomSheetConfig.Sources -> {
+                "Sources"
+            }
+        }
+
+        NeoSheetHeader(
+            title = title,
+            onDismiss = config.onDismiss,
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -71,69 +89,6 @@ fun DetailBottomSheet(
     }
 }
 
-@Composable
-private fun DetailBottomSheetHeader(
-    config: DetailBottomSheetConfig,
-    displayDuration: Long,
-) {
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (config) {
-            is DetailBottomSheetConfig.Thinking -> {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.lightbulb),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                    Text(
-                        text =
-                            thinkingSheetHeaderTitle(
-                                isStreaming = config.isStreaming,
-                                durationSeconds = displayDuration,
-                            ),
-                        style =
-                            MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 18.sp,
-                            ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            is DetailBottomSheetConfig.StepCompletion -> {
-                Text(
-                    text = "${config.stepName} Results",
-                    style =
-                        MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 18.sp,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            is DetailBottomSheetConfig.Sources -> {
-                Text(
-                    text = "Sources",
-                    style =
-                        MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun DetailBottomSheetBody(

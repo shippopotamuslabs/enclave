@@ -246,7 +246,7 @@ class GenerateChatResponseUseCaseImageToolTest {
 
             val options = fastService.getSentOptions().single()
             assertTrue(options.toolingEnabled)
-            assertTrue(options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
+            assertTrue(options.activeTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
             assertTrue(fastService.getSentPrompts().single().contains("use attached_image_inspect"))
             assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
         }
@@ -424,18 +424,14 @@ class GenerateChatResponseUseCaseImageToolTest {
         object : com.browntowndev.enclave.domain.port.inference.PromptComposerPort {
             override fun compose(
                 baseSystemPrompt: String?,
-                includeSearchTool: Boolean,
-                includeXSearchTool: Boolean,
-                includeImageInspectTool: Boolean,
-                includeMemoryTools: Boolean,
-                includeArtifactTool: Boolean,
-                includeImageGenerationTool: Boolean,
-                includeVideoGenerationTool: Boolean,
-                includeMusicGenerationTool: Boolean,
+                toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+                activeTools: List<ToolDefinition>,
                 currentChatId: String?,
                 strategy: ToolCallStrategy,
                 coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
+                retrievedSearchResults: String?,
+                retrievedXSearchResults: String?,
             ): String = baseSystemPrompt ?: ""
         }
 
@@ -470,6 +466,8 @@ class GenerateChatResponseUseCaseImageToolTest {
                     com.browntowndev.enclave.domain.usecase.media
                         .GetProviderCapabilitiesUseCase(),
                 loggingPort = mockk<LoggingPort>(relaxed = true),
+                searchIntentClassifier = mockk(relaxed = true),
+                toolExecutor = mockk(relaxed = true),
             )
         return GenerateChatResponseUseCase(
             pipelineExecutor = pipelineExecutor,

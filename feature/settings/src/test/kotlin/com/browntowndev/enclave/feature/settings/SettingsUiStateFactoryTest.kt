@@ -1,20 +1,27 @@
 package com.browntowndev.enclave.feature.settings
 
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
+import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 
 class SettingsUiStateFactoryTest {
     private lateinit var factory: SettingsUiStateFactory
@@ -29,6 +36,7 @@ class SettingsUiStateFactoryTest {
                 mediaProviderAssetUiMapper = mockk(relaxed = true),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper = UsageSpendUiMapper(),
             )
     }
 
@@ -152,6 +160,63 @@ class SettingsUiStateFactoryTest {
         assertFalse(inDownloads)
     }
 
+    @Test
+    fun `signed in auth state maps user profile to home auth ui`() {
+        val profile =
+            UserProfile(
+                uid = "uid-42",
+                displayName = "Alice",
+                email = "alice@example.com",
+                photoUrl = "https://example.com/photo.png",
+            )
+
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                authState = AuthState.Authenticated(profile),
+            )
+
+        val auth = state.home.auth
+        assertTrue(auth is AuthStateUi.Authenticated)
+        auth as AuthStateUi.Authenticated
+        assertEquals("uid-42", auth.user.uid)
+        assertEquals("Alice", auth.user.displayName)
+        assertEquals("alice@example.com", auth.user.email)
+        assertEquals("https://example.com/photo.png", auth.user.photoUrl)
+    }
+
+    @Test
+    fun `default model assignments expose slot labels and none assigned placeholders`() {
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                defaultModels =
+                    listOf(
+                        DefaultModelAssignment(
+                            modelType = ModelType.FAST,
+                            displayName = "Gemma Fast",
+                        ),
+                    ),
+            )
+
+        val fast =
+            state.assignments.assignments.single { it.modelType == ModelType.FAST }
+        assertEquals("Fast", fast.displayLabel)
+        assertEquals("Gemma Fast", fast.currentModelName)
+
+        val tts =
+            state.assignments.assignments.single { it.modelType == ModelType.TTS }
+        assertEquals("Text-to-Speech", tts.displayLabel)
+        assertEquals("None Assigned", tts.currentModelName)
+
+        val vision =
+            state.assignments.assignments.single { it.modelType == ModelType.VISION }
+        assertEquals("Vision (API)", vision.displayLabel)
+        assertEquals("None Assigned", vision.currentModelName)
+    }
+
     // endregion
 
     // region helpers
@@ -203,14 +268,16 @@ class SettingsUiStateFactoryTest {
     private fun SettingsUiStateFactory.create(
         localAssets: List<LocalModelAsset>,
         defaults: FactoryArgs,
+        defaultModels: List<DefaultModelAssignment> = emptyList(),
+        authState: AuthState = AuthState.Loading,
     ) = create(
         persistedSettings = defaults.persistedSettings,
         localAssets = localAssets,
         apiAssets = emptyList(),
         ttsAssets = emptyList(),
         mediaAssets = emptyList(),
-        defaultModels = emptyList(),
-        authState = AuthState.Loading,
+        defaultModels = defaultModels,
+        authState = authState,
         sheetVisibility = SheetVisibilityState(),
         memories = emptyList(),
         feedbackText = "",
@@ -230,6 +297,16 @@ class SettingsUiStateFactoryTest {
         isReindexing = false,
         reindexProgress = 0f,
         vaultReauthSheet = VaultReauthSheetState.Hidden,
+        usageSpendSummary =
+            UsageSpendSummary(
+                period = UsagePeriod.LIFETIME,
+                periodStartUtcMs = null,
+                periodEndUtcMs = null,
+                totalCostUsd = BigDecimal.ZERO,
+                telemetryBackedTurnCount = 0,
+                missingCostTurnCount = 0,
+                providerBreakdown = emptyList(),
+            ),
     )
 
     // endregion

@@ -27,4 +27,5 @@ data class ApiModelConfiguration(
     val presencePenaltyDisabled: Boolean = false,
     val customHeaders: Map<String, String> = emptyMap(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    val pricing: ApiModelSavedPricing = ApiModelSavedPricing(),
 ) : ModelTuningConfiguration

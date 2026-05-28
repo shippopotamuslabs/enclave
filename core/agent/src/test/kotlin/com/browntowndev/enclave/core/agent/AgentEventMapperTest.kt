@@ -41,12 +41,14 @@ class AgentEventMapperTest {
                         trigger = FfiCompactionTrigger.PREFLIGHT,
                         summaryRef = null,
                         historyRef = "history-u0-a0",
+                        transcriptRevisionAfter = 2u,
                     ),
                 ),
             )
 
         assertEquals("PREFLIGHT", pre.trigger)
         assertEquals("history-u0-a0", post.historyRef)
+        assertEquals(2L, post.transcriptRevisionAfter)
     }
 
     @Test
@@ -137,14 +139,6 @@ class AgentEventMapperTest {
             tag: String,
             message: String,
             throwable: Throwable?,
-        ) {
-            messages += message
-        }
-
-        override fun recordException(
-            tag: String,
-            message: String,
-            throwable: Throwable,
         ) {
             messages += message
         }

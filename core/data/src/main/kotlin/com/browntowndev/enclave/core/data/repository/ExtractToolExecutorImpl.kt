@@ -67,17 +67,25 @@ class ExtractToolExecutorImpl
             )
 
             val resultJson =
-                when (settings.searchProvider) {
-                    SearchProvider.TAVILY -> {
-                        tavilySearchRepository.extract(
-                            urls = urls,
-                            extractDepth = extractDepth,
-                            format = format,
-                        )
+                try {
+                    when (settings.searchProvider) {
+                        SearchProvider.TAVILY -> {
+                            tavilySearchRepository.extract(
+                                urls = urls,
+                                extractDepth = extractDepth,
+                                format = format,
+                            )
+                        }
+                        SearchProvider.EXA -> {
+                            exaSearchRepository.extract(urls = urls)
+                        }
                     }
-                    SearchProvider.EXA -> {
-                        exaSearchRepository.extract(urls = urls)
-                    }
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "Extract failed with network error: ${e.message}")
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
                 }
 
             // Mark each URL as extracted in the DAO and tracker

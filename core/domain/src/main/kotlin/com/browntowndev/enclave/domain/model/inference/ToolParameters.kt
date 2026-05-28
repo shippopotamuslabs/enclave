@@ -12,15 +12,63 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlin.reflect.KClass
+import kotlin.reflect.KProperty
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
+import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.javaField
 import kotlin.reflect.jvm.jvmErasure
 
 /**
  * Marker interface for tool parameters.
  */
-interface ToolParameters
+interface ToolParameters {
+    companion object {
+        /**
+         * Extracts top-level argument hints from a [ToolSchema]. Nested object schemas,
+         * `oneOf`, `anyOf`, and `definitions` are intentionally excluded — the catalog
+         * stays compact while full schemas live behind the disclosure tool.
+         */
+        fun extractArgumentHints(schema: ToolSchema): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
+            val required = mutableListOf<ToolArgumentHint>()
+            val optional = mutableListOf<ToolArgumentHint>()
+            schema.properties.forEach { (name, element) ->
+                val obj = element as? JsonObject ?: return@forEach
+                val rawType = obj["type"]
+                val type =
+                    when (rawType) {
+                        is JsonPrimitive -> rawType.content
+                        is JsonArray ->
+                            rawType
+                                .mapNotNull { (it as? JsonPrimitive)?.content }
+                                .firstOrNull { it != "null" }
+                                ?: "string"
+                        else -> "string"
+                    }
+                val repeated = type == "array"
+                val hint = ToolArgumentHint(name = name, type = type, repeated = repeated)
+                if (schema.required.contains(name)) {
+                    required += hint
+                } else {
+                    optional += hint
+                }
+            }
+            return required to optional
+        }
+    }
+}
+
+@kotlinx.serialization.Serializable
+data class DiscloseToolSchemasParams(
+    @ToolParam(description = "Deferred tool names whose full schemas should be disclosed.")
+    val tool_names: List<String>,
+) : ToolParameters
+
+@kotlinx.serialization.Serializable
+data class ReadContextReferenceParams(
+    @ToolParam(description = "The ID of the context reference to retrieve.")
+    val reference_id: String,
+) : ToolParameters
 
 /**
  * Annotation to provide descriptions for tool parameters.
@@ -68,10 +116,21 @@ object ToolSchemaGenerator {
     fun <T : ToolParameters> generateSchema(klass: KClass<T>): ToolSchema =
         ToolSchema(JsonObject(generateProperties(klass)), getRequired(klass))
 
+    internal fun toolParamFor(
+        klass: KClass<*>,
+        prop: KProperty<*>,
+    ): ToolParam? =
+        prop.findAnnotation<ToolParam>()
+            ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+            ?: klass.primaryConstructor
+                ?.parameters
+                ?.firstOrNull { it.name == prop.name }
+                ?.findAnnotation<ToolParam>()
+
     private fun generateProperties(klass: KClass<*>): Map<String, JsonElement> {
         val properties = mutableMapOf<String, JsonElement>()
         klass.memberProperties.forEach { prop ->
-            val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+            val toolParam = toolParamFor(klass, prop)
             val name =
                 prop.findAnnotation<SerialName>()?.value
                     ?: prop.javaField?.getAnnotation(SerialName::class.java)?.value
@@ -193,7 +252,7 @@ object ToolSchemaGenerator {
     private fun getRequired(klass: KClass<*>): List<String> =
         klass.memberProperties
             .filter { prop ->
-                val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+                val toolParam = toolParamFor(klass, prop)
                 toolParam?.required != false
             }.map { prop ->
                 prop.findAnnotation<SerialName>()?.value

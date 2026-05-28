@@ -68,8 +68,7 @@ fun PromptHeaderDivider(
                             withShadow = false,
                         )
                     },
-                )
-                .animateContentSize()
+                ).animateContentSize()
                 .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier),
     ) {
         Row(

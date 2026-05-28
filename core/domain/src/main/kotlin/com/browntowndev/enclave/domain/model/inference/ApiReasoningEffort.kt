@@ -4,6 +4,7 @@ enum class ApiReasoningEffort(
     val wireValue: String,
     val displayName: String,
 ) {
+    NONE("none", "None"),
     LOW("low", "Low"),
     MEDIUM("medium", "Medium"),
     HIGH("high", "High"),

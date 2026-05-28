@@ -86,6 +86,15 @@ object ApiProviderModelPolicy {
 
     fun isOpenAiReasoningModel(modelId: String): Boolean = modelId.startsWith("o1") || modelId.startsWith("o3")
 
+    /**
+     * Anthropic ephemeral prompt-cache breakpoints are only valid on documented Claude 3.5+ / 3.7 / 4 families.
+     * Strips an optional `anthropic/` OpenRouter-style prefix before matching.
+     */
+    fun supportsAnthropicPromptCaching(modelId: String): Boolean {
+        val normalized = modelId.substringAfter('/').lowercase()
+        return ANTHROPIC_PROMPT_CACHE_MODEL_PREFIXES.any { normalized.startsWith(it) }
+    }
+
     fun parameterSupport(
         provider: ApiProvider,
         modelId: String,
@@ -94,7 +103,9 @@ object ApiProviderModelPolicy {
         if (provider == ApiProvider.ANTHROPIC) {
             return ApiModelParameterSupport(
                 reasoningPolicy = reasoningPolicy,
-                supportsTopK = true,
+                supportsTemperature = false,
+                supportsTopP = false,
+                supportsTopK = false,
                 supportsMinP = false,
                 supportsFrequencyPenalty = false,
                 supportsPresencePenalty = false,
@@ -129,11 +140,12 @@ object ApiProviderModelPolicy {
             return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }
 
-        // xAI only accepts user-controlled reasoning effort on the grok-3-mini and multi-agent families.
+        // xAI only accepts user-controlled reasoning effort on the grok-3-mini, grok-4.3, and multi-agent families.
         val reasoningEffortSupported =
             when {
                 isXaiGrok3MiniModel(modelId) -> true
                 isXaiMultiAgentModel(modelId) -> true
+                modelId.startsWith("grok-4.3") -> true
                 else -> false
             }
 
@@ -156,6 +168,18 @@ object ApiProviderModelPolicy {
             ApiReasoningPolicy(
                 controlStyle = ApiReasoningControlStyle.XAI_MULTI_AGENT,
                 supportedEfforts = xaiMultiAgentEfforts,
+                defaultEffort = ApiReasoningEffort.LOW,
+            )
+        } else if (provider == ApiProvider.XAI && modelId.startsWith("grok-4.3")) {
+            ApiReasoningPolicy(
+                controlStyle = ApiReasoningControlStyle.STANDARD,
+                supportedEfforts =
+                    listOf(
+                        ApiReasoningEffort.NONE,
+                        ApiReasoningEffort.LOW,
+                        ApiReasoningEffort.MEDIUM,
+                        ApiReasoningEffort.HIGH,
+                    ),
                 defaultEffort = ApiReasoningEffort.LOW,
             )
         } else {
@@ -203,4 +227,22 @@ object ApiProviderModelPolicy {
     private fun String.matchesXaiGrok420Family(): Boolean = startsWith("grok-4.20-")
 
     private fun String.matchesXaiChatReasoningContentModel(): Boolean = matchesXaiGrok3Mini() || startsWith("grok-code-fast-1")
+
+    /**
+     * Prefixes for model IDs that support Anthropic `cache_control` (see Anthropic prompt caching docs).
+     * Date-suffixed snapshot IDs (e.g. `claude-sonnet-4-20250514`) match via prefix.
+     */
+    private val ANTHROPIC_PROMPT_CACHE_MODEL_PREFIXES =
+        listOf(
+            "claude-sonnet-4-",
+            "claude-opus-4-",
+            "claude-haiku-4-",
+            "claude-3-7-sonnet-",
+            "claude-3-5-sonnet-",
+            "claude-3-5-haiku-",
+            "claude-3-opus-",
+            "claude-3-sonnet-20240229",
+            "claude-3-sonnet-20241022",
+            "claude-3-haiku-20240307",
+        )
 }

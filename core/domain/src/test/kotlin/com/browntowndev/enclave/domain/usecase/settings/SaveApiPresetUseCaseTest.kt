@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase.settings
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
@@ -40,6 +41,36 @@ class SaveApiPresetUseCaseTest {
             ).getOrThrow()
 
             assertEquals("gpt-4o", configSlot.captured.modelId)
+        }
+
+    @Test
+    fun `SCN-USECASE-SAVE-PRESET-003 Save Preset Pricing From Discovery`() =
+        runTest {
+            val draft =
+                ApiPresetDraft(
+                    modelId = "grok-4.3",
+                    displayName = "Grok",
+                    pricing =
+                        ApiModelSavedPricing(
+                            promptUsdPerMillion = 1.25,
+                            completionUsdPerMillion = 2.5,
+                            cachedPromptUsdPerMillion = 0.2,
+                        ),
+                )
+
+            val configSlot = slot<ApiModelConfiguration>()
+            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
+
+            saveApiPresetUseCase(
+                provider = ApiProvider.XAI,
+                parentCredentialsId = ApiCredentialsId("parent-cred-1"),
+                defaultReasoningEffort = null,
+                draft = draft,
+            ).getOrThrow()
+
+            assertEquals(1.25, configSlot.captured.pricing.promptUsdPerMillion)
+            assertEquals(2.5, configSlot.captured.pricing.completionUsdPerMillion)
+            assertEquals(0.2, configSlot.captured.pricing.cachedPromptUsdPerMillion)
         }
 
     @Test

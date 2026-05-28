@@ -222,6 +222,35 @@ class FakeChatRepository : ChatRepository {
     override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> =
         _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
 
+    override suspend fun persistWebSearchSources(
+        messageId: MessageId,
+        sources: List<WebSearchSource>,
+    ) {
+        if (sources.isEmpty()) return
+        val latest =
+            persistedMessageData.lastOrNull { it.messageId == messageId }
+                ?: PersistedMessageData(
+                    messageId = messageId,
+                    modelType = ModelType.FAST,
+                    thinkingStartTime = 0L,
+                    thinkingEndTime = 0L,
+                    thinkingDuration = null,
+                    thinkingRaw = null,
+                    content = "",
+                    messageState = MessageState.PROCESSING,
+                    pipelineStep = null,
+                    webSearchSources = emptyList(),
+                    artifacts = emptyList(),
+                    generatedMediaUris = emptyList(),
+                    generatedMediaAssetIds = emptyList(),
+                    generatedMediaTypes = emptyList(),
+                    generatedMediaPrompts = emptyList(),
+                    transcriptSegments = emptyList(),
+                )
+        persistedMessageData.removeAll { it.messageId == messageId }
+        persistedMessageData.add(latest.copy(webSearchSources = sources))
+    }
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -239,6 +268,7 @@ class FakeChatRepository : ChatRepository {
         generatedMediaTypes: List<String>,
         generatedMediaPrompts: List<String>,
         transcriptSegments: List<MessageTranscriptSegment>,
+        telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry>,
     ) {
         persistedMessageData.add(
             PersistedMessageData(
@@ -258,6 +288,7 @@ class FakeChatRepository : ChatRepository {
                 generatedMediaTypes = generatedMediaTypes,
                 generatedMediaPrompts = generatedMediaPrompts,
                 transcriptSegments = transcriptSegments,
+                telemetry = telemetry,
             ),
         )
     }
@@ -286,6 +317,7 @@ class FakeChatRepository : ChatRepository {
         val generatedMediaTypes: List<String> = emptyList(),
         val generatedMediaPrompts: List<String> = emptyList(),
         val transcriptSegments: List<com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment> = emptyList(),
+        val telemetry: List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry> = emptyList(),
     )
 
     override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {

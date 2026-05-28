@@ -17,8 +17,7 @@ internal class UtilityModelSyncHandler(
 
     override suspend fun getClaimedForSync() = ctx.daos.utilityModelsDao.getClaimedForSync()
 
-    override suspend fun markSynced(entities: List<UtilityModelEntity>) =
-        ctx.daos.utilityModelsDao.markSynced(entities.map { it.id })
+    override suspend fun markSynced(entities: List<UtilityModelEntity>) = ctx.daos.utilityModelsDao.markSynced(entities.map { it.id })
 
     override fun getEntityId(entity: UtilityModelEntity): String = entity.id.value
 

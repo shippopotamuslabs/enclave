@@ -33,6 +33,7 @@ fun PreviewChatScreenDark() {
             onInputChange = {},
             onEditMessage = {},
             onPlayAudio = {},
+            onPauseAudio = {},
             onImagesSelected = {},
             onRemoveImage = {},
             onFileSelected = {},

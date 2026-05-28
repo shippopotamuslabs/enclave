@@ -22,7 +22,9 @@ import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
@@ -32,9 +34,14 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferenceTranscriptStore
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
+import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
+import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -45,6 +52,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -55,6 +71,186 @@ import javax.inject.Provider
 
 class RustLoopInferenceServiceTest {
     private val logger = RecordingLogger()
+
+    @Test
+    fun `LTD-05 disclosure tool activates append_blocks for the next Rust backed model turn`() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val nextTurnCompleted = CompletableDeferred<Unit>()
+            val innerService = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-1",
+                                        name = "disclose_tool_schemas",
+                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                    ),
+                                ),
+                            ).single()
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson =
+                            serializeToolNames(
+                                listOf(
+                                    "disclose_tool_schemas",
+                                    "web_search",
+                                    "web_extract",
+                                    "append_blocks",
+                                ),
+                            ),
+                        allowToolCall = true,
+                    )
+                    nextTurnCompleted.complete(Unit)
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = innerService)
+
+            service
+                .sendPrompt(
+                    prompt = "write",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                ),
+                        ),
+                ).toList()
+            withTimeout(1_000) { nextTurnCompleted.await() }
+
+            val json = Json.parseToJsonElement(result.resultJson).jsonObject
+            val nextTurnToolNames = innerService.lastAvailableTools.map { tool -> tool.name }
+
+            assertAll(
+                { assertEquals("ok", json["status"]?.jsonPrimitive?.content) },
+                { assertEquals(listOf("append_blocks"), json["activated_tools"]?.jsonArray?.map { it.jsonPrimitive.content }) },
+                { assertEquals(listOf("append_blocks"), result.activatedToolNames) },
+                {
+                    assertEquals(
+                        listOf(
+                            "append_blocks",
+                            "disclose_tool_schemas",
+                            "web_extract",
+                            "web_search",
+                        ),
+                        nextTurnToolNames.sorted(),
+                    )
+                },
+            )
+        }
+
+    @Test
+    fun `LTD-11 disclosure interception never invokes ToolExecutorPort`() =
+        runTest {
+            val callCount = AtomicInteger(0)
+            val executor =
+                object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+                        callCount.incrementAndGet()
+                        return ToolExecutionResult(request.toolName, """{"ok":true}""")
+                    }
+                }
+            lateinit var rustResult: AgentToolResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    rustResult =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-1",
+                                        name = "disclose_tool_schemas",
+                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, toolExecutor = executor)
+            val cache = ConversationSignatureCache()
+            val liteRtLoop =
+                LiteRtToolCallLoop(
+                    cache = cache,
+                    toolExecutor = executor,
+                    loggingPort = logger,
+                    agentPolicyPort = NoopAgentPolicyPort,
+                    cancellationGate = ConversationCancellationGate(),
+                )
+
+            val disclosureCatalog =
+                listOf(
+                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                )
+            cache.toolCatalog = disclosureCatalog
+            service
+                .sendPrompt(
+                    prompt = "disclose",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog = disclosureCatalog,
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                ),
+                        ),
+                ).toList()
+            val liteRtResult =
+                liteRtLoop.executeToolSafely(
+                    ToolCallRequest(
+                        toolName = "disclose_tool_schemas",
+                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                        provider = "LITERT",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertAll(
+                { assertEquals(0, callCount.get()) },
+                { assertEquals(listOf("append_blocks"), rustResult.activatedToolNames) },
+                { assertTrue(liteRtResult.contains("\"activated_tools\":[\"append_blocks\"]")) },
+                { assertEquals(0, callCount.get()) },
+            )
+        }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
+
+    private fun serializeToolNames(names: List<String>): String =
+        Json.encodeToString(
+            JsonArray.serializer(),
+            buildJsonArray {
+                names.forEach { name ->
+                    add(
+                        buildJsonObject {
+                            put("name", name)
+                            put("description", "$name description")
+                        },
+                    )
+                }
+            },
+        )
 
     @Test
     fun sendPrompt_populatesSessionContextAndLlamaCapabilities() =
@@ -166,11 +362,14 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            availableTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
                         ),
                 ).toList()
 
-            assertEquals(listOf(ToolDefinition.WEB_SEARCH.name), inner.lastAvailableTools.map { it.name })
+            assertEquals(
+                listOf(ToolDefinition.WEB_SEARCH.name, ToolDefinition.APPEND_BLOCKS.name),
+                inner.lastAvailableTools.map { it.name },
+            )
         }
 
     @Test
@@ -196,11 +395,91 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH),
                         ),
                 ).toList()
 
             assertTrue(inner.lastAvailableTools.isEmpty())
+        }
+
+    @Test
+    fun wireTools_stable_when_rust_toolsSchemaJson_grows_across_model_turns() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = serializeToolNames(listOf("web_search")),
+                        allowToolCall = true,
+                    )
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson =
+                            serializeToolNames(listOf("web_search", "append_blocks", "web_extract")),
+                        allowToolCall = true,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service
+                .sendPrompt(
+                    prompt = "tools",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.APPEND_BLOCKS,
+                                    ToolDefinition.WEB_EXTRACT,
+                                ),
+                        ),
+                ).toList()
+
+            assertEquals(2, inner.completeSingleTurnCallCount)
+            val firstTools = inner.toolsPerInvocation[0].map { it.name }
+            val secondTools = inner.toolsPerInvocation[1].map { it.name }
+            assertEquals(firstTools, secondTools)
+            assertEquals(
+                listOf("append_blocks", "web_extract", "web_search"),
+                firstTools.sorted(),
+            )
+        }
+
+    @Test
+    fun completeModelTurn_keepsFullToolListWhenAllowToolCallFalseForCacheStability() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = serializeToolNames(listOf("web_search", "append_blocks")),
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service
+                .sendPrompt(
+                    prompt = "no tools this turn",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
+                        ),
+                ).toList()
+
+            assertEquals(
+                listOf("web_search", "append_blocks"),
+                inner.lastAvailableTools.map { it.name },
+            )
         }
 
     @Test
@@ -234,9 +513,9 @@ class RustLoopInferenceServiceTest {
 
             service.sendPrompt("sidecars").toList()
 
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("Context management sidecars"))
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("file-outline-src/Main.kt"))
-            assertTrue(requireNotNull(inner.lastSystemPrompt).contains("File context index JSON"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("Context management sidecars"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("file-outline-src/Main.kt"))
+            assertTrue(requireNotNull(inner.lastContextSidecars).contains("File context index JSON"))
         }
 
     @Test
@@ -475,6 +754,83 @@ class RustLoopInferenceServiceTest {
         }
 
     @Test
+    fun AOC_03_rust_loop_dual_completeModelTurn_forwards_sidecars() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "Search for cats"),
+                            ),
+                        systemPrompt = "You are a helpful assistant.",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                        stateLedgerJson = """{"turn":1}""",
+                    )
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "Search for cats"),
+                                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "tool pending"),
+                                AgentLoopMessage(
+                                    id = "t1",
+                                    role = Role.USER,
+                                    content = """{"results":[]}""",
+                                    metadataJson = """{"call_id":"call_1"}""",
+                                ),
+                            ),
+                        systemPrompt = "You are a helpful assistant.",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        stateLedgerJson = """{"turn":2}""",
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("run tool loop", options = GenerationOptions(reasoningBudget = 0)).toList()
+
+            assertEquals(2, inner.completeSingleTurnCallCount)
+            assertEquals(true, inner.lastContextSidecars.orEmpty().contains("State ledger"))
+            assertEquals(
+                Role.USER,
+                inner.sessionMessagesByCall
+                    .first()
+                    .first()
+                    .role,
+            )
+        }
+
+    @Test
+    fun completeModelTurn_forwardsMonotonicTelemetrySequenceIndex() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("tool loop").toList()
+
+            assertEquals(listOf(0, 1), inner.telemetrySequenceIndices)
+        }
+
+    @Test
     fun `FB-K-007 RustLoop supports multiple complete model callbacks`() =
         runTest {
             val inner =
@@ -551,6 +907,169 @@ class RustLoopInferenceServiceTest {
             assertEquals("follow up", messages[2].content)
         }
 
+    @Test
+    fun sendPrompt_prefersCommittedProviderTranscriptOverDbHistoryForCacheStability() =
+        runTest {
+            val transcriptStore = InMemoryCommittedInferenceTranscriptStore()
+            val chatId = ChatId("cache-chat")
+            val firstInner =
+                RecordingRustCompatibleService(
+                    responses =
+                        listOf(
+                            AgentModelTurnResult(
+                                assistantText = "final answer",
+                                toolCalls = emptyList(),
+                                finishReason = AgentFinishReason.Stop,
+                                providerReasoningContent = "encrypted-reasoning",
+                            ),
+                        ),
+                )
+            val firstPort =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(id = "u1", role = Role.USER, content = "first"),
+                                AgentLoopMessage(
+                                    id = "a-tool",
+                                    role = Role.ASSISTANT,
+                                    content = "",
+                                    metadataJson =
+                                        """
+                                        {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"query\":\"cats\"}"}]}
+                                        """.trimIndent(),
+                                ),
+                                AgentLoopMessage(
+                                    id = "tool-result",
+                                    role = Role.USER,
+                                    content = """{"results":[{"title":"Cat"}]}""",
+                                    metadataJson = """{"call_id":"call_1"}""",
+                                ),
+                            ),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val firstService =
+                createService(
+                    agentLoopPort = firstPort,
+                    inner = firstInner,
+                    committedInferenceTranscripts = transcriptStore,
+                )
+
+            firstService
+                .sendPrompt(
+                    prompt = "first",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            chatId = chatId,
+                            userMessageId = MessageId("u1"),
+                            assistantMessageId = MessageId("a1"),
+                        ),
+                ).toList()
+
+            val secondPort =
+                CapturingAgentLoopPort {
+                    send(AgentLoopEvent.Finished)
+                }
+            val secondService =
+                createService(
+                    agentLoopPort = secondPort,
+                    committedInferenceTranscripts = transcriptStore,
+                )
+            secondService.setHistory(
+                listOf(
+                    ChatMessage(role = Role.USER, content = "first"),
+                    ChatMessage(role = Role.ASSISTANT, content = "final answer"),
+                ),
+            )
+
+            secondService
+                .sendPrompt(
+                    prompt = "follow up",
+                    options = GenerationOptions(reasoningBudget = 0, chatId = chatId),
+                ).toList()
+
+            val initialMessages = requireNotNull(secondPort.capturedInitialMessages)
+            assertEquals("first", initialMessages[0].content)
+            assertTrue(initialMessages[1].metadataJson.contains("raw_tool_calls"))
+            assertEquals("""{"call_id":"call_1"}""", initialMessages[2].metadataJson)
+            assertTrue(initialMessages[3].metadataJson.contains("provider_reasoning"))
+            assertEquals("follow up", initialMessages.last().content)
+        }
+
+    @Test
+    fun `buildProviderTranscript filters out engine-internal sidecar messages`() =
+        runTest {
+            val transcriptStore = InMemoryCommittedInferenceTranscriptStore()
+            val innerService = RecordingRustCompatibleService(
+                responses = listOf(
+                    AgentModelTurnResult(
+                        assistantText = "final answer",
+                        toolCalls = emptyList(),
+                        finishReason = AgentFinishReason.Stop,
+                    )
+                )
+            )
+            val port = CapturingAgentLoopPort { host ->
+                host.completeModelTurn(
+                    sessionMessages = listOf(
+                        AgentLoopMessage(
+                            id = "u1",
+                            role = Role.USER,
+                            content = "regular user prompt"
+                        ),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.USER,
+                            content = """{"_agent":{"tool_calls_remaining":1}}""",
+                            metadataJson = """{"agent_tool_budget":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "nudge",
+                            role = Role.USER,
+                            content = """{"tools_blocked_nudge":true}""",
+                            metadataJson = """{"tools_blocked_nudge":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "parse-failure",
+                            role = Role.USER,
+                            content = """{"envelope_parse_failure":true}""",
+                            metadataJson = """{"envelope_parse_failure":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "synthetic-agent",
+                            role = Role.USER,
+                            content = """{"_agent":{"some":"guidance"}}"""
+                        )
+                    ),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = false,
+                )
+                send(AgentLoopEvent.Finished)
+            }
+            val service = createService(
+                agentLoopPort = port,
+                inner = innerService,
+                committedInferenceTranscripts = transcriptStore,
+            )
+
+            service.sendPrompt(
+                prompt = "start",
+                options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1")),
+            ).toList()
+
+            val committed = transcriptStore.get(ChatId("chat-1"))
+            assertNotNull(committed)
+            assertEquals(2, committed!!.size)
+            assertEquals("regular user prompt", committed[0].content)
+            assertEquals("final answer", committed[1].content)
+        }
+
     private fun createService(
         agentLoopPort: AgentLoopPort,
         inner: RustCompatibleInferenceService = RecordingRustCompatibleService(),
@@ -566,6 +1085,8 @@ class RustLoopInferenceServiceTest {
             },
         resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase =
             resolveCompactionSummaryModel(fastConfig = null),
+        committedInferenceTranscripts: InMemoryCommittedInferenceTranscriptStore =
+            InMemoryCommittedInferenceTranscriptStore(),
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -577,6 +1098,7 @@ class RustLoopInferenceServiceTest {
             inferenceFactoryProvider = inferenceFactoryProvider,
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
+            committedInferenceTranscripts = committedInferenceTranscripts,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
@@ -627,8 +1149,12 @@ class RustLoopInferenceServiceTest {
         private val responses: List<AgentModelTurnResult> = emptyList(),
     ) : RustCompatibleInferenceService {
         var lastSystemPrompt: String? = null
+        var lastContextSidecars: String? = null
         var lastAvailableTools: List<ToolDefinition> = emptyList()
         var completeSingleTurnCallCount = 0
+        val toolsPerInvocation = mutableListOf<List<ToolDefinition>>()
+        val telemetrySequenceIndices = mutableListOf<Int>()
+        val sessionMessagesByCall = mutableListOf<List<AgentLoopMessage>>()
 
         override fun sendPrompt(
             prompt: String,
@@ -648,6 +1174,7 @@ class RustLoopInferenceServiceTest {
         override suspend fun completeSingleTurn(
             sessionMessages: List<AgentLoopMessage>,
             systemPrompt: String,
+            contextSidecars: String?,
             availableTools: List<ToolDefinition>,
             allowToolCall: Boolean,
             onTextToken: suspend (String) -> Unit,
@@ -655,8 +1182,12 @@ class RustLoopInferenceServiceTest {
             options: GenerationOptions,
         ): AgentModelTurnResult {
             completeSingleTurnCallCount += 1
+            sessionMessagesByCall.add(sessionMessages)
+            toolsPerInvocation.add(availableTools)
             lastSystemPrompt = systemPrompt
+            lastContextSidecars = contextSidecars
             lastAvailableTools = availableTools
+            telemetrySequenceIndices.add(options.telemetrySequenceIndex)
             responses.getOrNull(completeSingleTurnCallCount - 1)?.let { return it }
             return AgentModelTurnResult(
                 assistantText = "done",
@@ -727,12 +1258,6 @@ class RustLoopInferenceServiceTest {
             tag: String,
             message: String,
             throwable: Throwable?,
-        ) {}
-
-        override fun recordException(
-            tag: String,
-            message: String,
-            throwable: Throwable,
         ) {}
     }
 }

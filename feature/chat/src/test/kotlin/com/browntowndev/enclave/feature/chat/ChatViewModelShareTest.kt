@@ -18,6 +18,8 @@ import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -46,12 +48,14 @@ import org.robolectric.annotation.Config
 class ChatViewModelShareTest {
     private lateinit var viewModel: ChatViewModel
     private lateinit var shareChatUseCase: ShareChatUseCase
+    private lateinit var importSharedChatUseCase: ImportSharedChatUseCase
     private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         shareChatUseCase = mockk(relaxed = true)
+        importSharedChatUseCase = mockk(relaxed = true)
 
         // Mock all dependencies
         val settingsUseCases = mockk<SettingsUseCases>(relaxed = true)
@@ -100,6 +104,7 @@ class ChatViewModelShareTest {
                 playbackController = playbackController,
                 studioRepository = studioRepository,
                 shareChatUseCase = shareChatUseCase,
+                importSharedChatUseCase = importSharedChatUseCase,
                 chatRepository = mockk(relaxed = true),
                 exportArtifactDocumentsUseCase = mockk(relaxed = true),
                 stageImageAttachmentUseCase = stageImageAttachmentUseCase,
@@ -166,7 +171,27 @@ class ChatViewModelShareTest {
         }
 
     @Test
-    fun `onLoadSharedChat should set isReadOnly to true and load messages`() =
+    fun `onLoadSharedChat should set error state when getSharedChat fails`() =
+        runTest {
+            coEvery { shareChatUseCase.getSharedChat(any(), any()) } returns
+                Result.failure(Exception("Chat not found"))
+
+            viewModel.uiState.test {
+                awaitItem()
+
+                viewModel.onLoadSharedChat("bad-id")
+                runCurrent()
+
+                var lastState = awaitItem().shareState
+                while (lastState !is ShareState.Error) {
+                    lastState = awaitItem().shareState
+                }
+                assertEquals("Chat not found", (lastState as ShareState.Error).message)
+            }
+        }
+
+    @Test
+    fun `onLoadSharedChat should emit ImportedChat event with chatId`() =
         runTest {
             val sharedChat =
                 SharedChat(
@@ -180,24 +205,17 @@ class ChatViewModelShareTest {
                     expiresAt = 0,
                     shareUrl = "",
                 )
+            val expectedChatId = ChatId("imported-chat-id")
 
             coEvery { shareChatUseCase.getSharedChat("123", null) } returns Result.success(sharedChat)
+            coEvery { importSharedChatUseCase(sharedChat) } returns expectedChatId
 
-            viewModel.uiState.test {
-                assertEquals(false, awaitItem().isReadOnly)
-
-                // When
+            viewModel.shareUiEvents.test {
                 viewModel.onLoadSharedChat("123")
                 runCurrent()
 
-                // Wait for isReadOnly to become true
-                var lastItem = awaitItem()
-                while (!lastItem.isReadOnly) {
-                    lastItem = awaitItem()
-                }
-                assertEquals(true, lastItem.isReadOnly)
-                assertEquals(1, lastItem.messages.size)
-                assertEquals("Hello", lastItem.messages[0].content.text)
+                val event = awaitItem()
+                assertEquals(ShareUiEvent.ImportedChat(expectedChatId), event)
             }
         }
 }

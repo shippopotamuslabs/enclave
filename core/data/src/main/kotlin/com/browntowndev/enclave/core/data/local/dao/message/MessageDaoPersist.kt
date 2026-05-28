@@ -52,5 +52,4 @@ class MessageDaoPersist
                 commands.updateMessageCreatedAt(messageId, System.currentTimeMillis())
             }
         }
-
     }

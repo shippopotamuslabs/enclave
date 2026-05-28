@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.ApiModelSavedPricing
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -119,6 +120,7 @@ data class ApiPresetDraft(
     val reasoningEffort: ApiReasoningEffort? = null,
     val customHeaders: List<Pair<String, String>> = emptyList(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    val pricing: ApiModelSavedPricing = ApiModelSavedPricing(),
 )
 
 data class ApiModelDiscoveryScope(

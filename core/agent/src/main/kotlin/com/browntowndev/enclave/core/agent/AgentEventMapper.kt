@@ -38,7 +38,16 @@ object AgentEventMapper {
                     trigger = event.trigger.name,
                     summaryRef = event.summaryRef,
                     historyRef = event.historyRef,
+                    transcriptRevisionAfter = event.transcriptRevisionAfter.toLong(),
                 )
+            is FfiAgentEvent.CompactionBoundary ->
+                if (event.boundary.destructive) {
+                    AgentLoopEvent.CompactionBoundaryApplied(
+                        revisionAfter = event.boundary.revisionAfter.toLong(),
+                    )
+                } else {
+                    null
+                }
             is FfiAgentEvent.ContextPressure,
             is FfiAgentEvent.ToolSoftFailure,
             is FfiAgentEvent.HookInvoked,
@@ -76,6 +85,13 @@ object AgentEventMapper {
                 loggingPort.debug(
                     TAG,
                     "context_pressure ratio=${event.ratio}",
+                )
+            is FfiAgentEvent.CompactionBoundary ->
+                loggingPort.debug(
+                    TAG,
+                    "compaction_boundary id=${event.boundary.boundaryId} " +
+                        "revision=${event.boundary.revisionBefore}->${event.boundary.revisionAfter} " +
+                        "trigger=${event.boundary.trigger.name} destructive=${event.boundary.destructive}",
                 )
             is FfiAgentEvent.PreCompact ->
                 loggingPort.debug(

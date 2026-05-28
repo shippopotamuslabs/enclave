@@ -9,6 +9,7 @@ import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+
 class JniLlamaEnginePerformanceAuditTest {
     private val gpuProfiler: GpuProfiler = mockk(relaxed = true)
     private lateinit var engine: JniLlamaEngine
@@ -60,5 +61,4 @@ class JniLlamaEnginePerformanceAuditTest {
                 // Expected — native libs not available in unit tests
             }
         }
-
 }
