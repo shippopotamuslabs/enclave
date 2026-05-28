@@ -21,6 +21,7 @@ object Routes {
     const val SETTINGS_GRAPH = "settings_graph"
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"
+    const val ONBOARDING = "onboarding"
     const val BYOK_CONFIGURE = "byok_configure"
     const val SHARED_CHAT = "shared?shareId={shareId}&key={key}"
     const val SHARED_CHAT_DEEP_LINK_PATTERN = "enclave://shared/{shareId}?key={key}"

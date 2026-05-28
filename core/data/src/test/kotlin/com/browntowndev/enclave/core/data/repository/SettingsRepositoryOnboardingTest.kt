@@ -1,0 +1,83 @@
+package com.browntowndev.enclave.core.data.repository
+
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.browntowndev.enclave.core.data.security.ApiKeyManager
+import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SettingsRepositoryOnboardingTest {
+    @TempDir
+    lateinit var tempDir: Path
+
+    // -------- OB-12 --------
+
+    @Test
+    @DisplayName("OB-12 — updateAgeConfirmed(true) persists true to settings flow")
+    fun `OB-12 updateAgeConfirmed true is read back as true from settingsFlow`() =
+        runTest {
+            val repository = createRepository(backgroundScope)
+
+            // Precondition: default is false
+            assertFalse(repository.settingsFlow.first().ageConfirmed)
+
+            repository.updateAgeConfirmed(true)
+
+            assertTrue(
+                repository.settingsFlow.first().ageConfirmed,
+                "settingsFlow.first().ageConfirmed should be true after updateAgeConfirmed(true)",
+            )
+        }
+
+    // -------- OB-13 --------
+
+    @Test
+    @DisplayName("OB-13 — updateOnboardingCompleted(true) round-trips correctly")
+    fun `OB-13 updateOnboardingCompleted true is read back as true from settingsFlow`() =
+        runTest {
+            val repository = createRepository(backgroundScope)
+
+            // Precondition: default is false
+            assertFalse(
+                repository.settingsFlow.first().onboardingCompleted,
+                "onboardingCompleted should default to false",
+            )
+
+            repository.updateOnboardingCompleted(true)
+
+            assertTrue(
+                repository.settingsFlow.first().onboardingCompleted,
+                "settingsFlow.first().onboardingCompleted should be true after updateOnboardingCompleted(true)",
+            )
+        }
+
+    // -------- helpers --------
+
+    private fun createRepository(scope: CoroutineScope): SettingsRepositoryImpl {
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = scope,
+            produceFile = { tempDir.resolve("settings-${System.nanoTime()}.preferences_pb").toFile() },
+        )
+        val apiKeyManager = mockk<ApiKeyManager> {
+            every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
+            every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
+            every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
+        }
+        return SettingsRepositoryImpl(
+            dataStore = dataStore,
+            apiKeyManager = apiKeyManager,
+            localEncryption = LocalDataEncryptionService.NoOp,
+        )
+    }
+}
