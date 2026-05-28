@@ -8,6 +8,7 @@ import com.browntowndev.enclave.feature.chat.ArtifactCardUiModel
 internal data class MessageListCallbacks(
     val onEditMessage: (String) -> Unit = {},
     val onPlayAudio: (String) -> Unit = {},
+    val onPauseAudio: () -> Unit = {},
     val onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     val onNavigateToStudio: (
         ids: List<String>,

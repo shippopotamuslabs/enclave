@@ -110,6 +110,26 @@ class TtsPlaybackController
             stopPlayback(emitStopped = true)
         }
 
+        override fun pause() {
+            val requestId = currentRequestId ?: return
+            val intent =
+                Intent(context, TtsPlaybackService::class.java).apply {
+                    action = TtsPlaybackService.ACTION_PAUSE
+                    putExtra(TtsPlaybackService.EXTRA_REQUEST_ID, requestId)
+                }
+            context.startForegroundService(intent)
+        }
+
+        override fun resume() {
+            val requestId = currentRequestId ?: return
+            val intent =
+                Intent(context, TtsPlaybackService::class.java).apply {
+                    action = TtsPlaybackService.ACTION_RESUME
+                    putExtra(TtsPlaybackService.EXTRA_REQUEST_ID, requestId)
+                }
+            context.startForegroundService(intent)
+        }
+
         private fun stopPlayback(emitStopped: Boolean) {
             playbackJob?.cancel()
             playbackJob = null

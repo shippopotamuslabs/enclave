@@ -111,6 +111,8 @@ data class ChatUiState(
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
     val isPlayingTts: Boolean = false,
+    val isLoadingTts: Boolean = false,
+    val isPausedTts: Boolean = false,
     val shareState: ShareState = ShareState.Idle,
     val isReadOnly: Boolean = false,
     val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,

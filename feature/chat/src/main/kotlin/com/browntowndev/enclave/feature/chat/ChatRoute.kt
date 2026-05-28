@@ -101,6 +101,7 @@ fun ChatRoute(
             onInputChange = viewModel::onInputChange,
             onEditMessage = viewModel::onEditMessage,
             onPlayAudio = viewModel::onPlayTts,
+            onPauseAudio = viewModel::onPauseTts,
             onImagesSelected = viewModel::onImagesSelected,
             onRemoveImage = viewModel::removeImage,
             onFileSelected = viewModel::onFileSelected,

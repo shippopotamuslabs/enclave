@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.chat.components.assistantresponse
 import android.content.ClipData
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,8 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +46,11 @@ internal fun AssistantResponseActionRow(
     contentText: String,
     isComplete: Boolean,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     onPlayAudio: (String) -> Unit,
+    onPauseAudio: () -> Unit,
     onShareClick: (MessageId) -> Unit,
     onShowSources: () -> Unit,
     onStatsClick: (MessageId) -> Unit = {},
@@ -95,19 +104,70 @@ internal fun AssistantResponseActionRow(
                 }
 
                 if (hasTtsProviderAssigned) {
-                    IconButton(
-                        onClick = { onPlayAudio(contentText) },
-                        modifier =
-                            Modifier
-                                .offset(x = (-8).dp)
-                                .size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Read aloud",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
+                    when {
+                        isLoadingTts -> {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        isPlayingTts -> {
+                            IconButton(
+                                onClick = onPauseAudio,
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Pause,
+                                    contentDescription = "Pause audio",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        isPausedTts -> {
+                            IconButton(
+                                onClick = { onPlayAudio(contentText) },
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = "Resume audio",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        else -> {
+                            IconButton(
+                                onClick = { onPlayAudio(contentText) },
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Read aloud",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
                     }
                 }
 
