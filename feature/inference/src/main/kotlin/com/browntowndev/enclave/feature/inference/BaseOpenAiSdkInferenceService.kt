@@ -19,6 +19,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.OpenAiCompatibleVolatilePlacement
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
@@ -32,6 +33,7 @@ import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.browntowndev.enclave.feature.inference.openai.accumulateOpenAiStreamUsage
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -75,6 +77,7 @@ abstract class BaseOpenAiSdkInferenceService(
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
     private val telemetrySupport: InferenceTelemetrySupport? = null,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -155,6 +158,8 @@ abstract class BaseOpenAiSdkInferenceService(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val startedAtMs = System.currentTimeMillis()
+        val resolvedModelId = options.modelId ?: modelId
         try {
             val timing = telemetrySupport?.let { InferenceTurnTiming() }
             val captureContext =
@@ -404,13 +409,36 @@ abstract class BaseOpenAiSdkInferenceService(
                     },
                 providerReasoningContent = response.providerReasoningContent,
                 telemetry = telemetry,
-            )
+            ).also {
+                telemetryEventPort.emitInferenceExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    provider = provider,
+                    modelId = resolvedModelId,
+                    success = true,
+                    tokenCount = response.outputTokens,
+                    costUsd = response.costUsd,
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: InferenceNetworkException) {
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = provider,
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw e
         } catch (e: java.io.IOException) {
             loggingPort.error(tag, "completeSingleTurn network failure: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = provider,
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw InferenceNetworkException(
                 provider = provider,
                 message = e.message ?: "Connection error",

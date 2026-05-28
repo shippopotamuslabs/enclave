@@ -74,12 +74,12 @@ class SensitivePersistenceSelfHealer
                     } catch (e: MalformedEnvelopeException) {
                         val event = SensitiveRepairEvent(ref, SensitiveRepairAction.REJECTED_MALFORMED_ENVELOPE, entityId, sourceSide)
                         logRepair(event)
-                        loggingPort.recordException(TAG, "Malformed envelope for ${ref.owner}.${ref.field}", e)
+                        loggingPort.error(TAG, "Malformed envelope for ${ref.owner}.${ref.field}", e)
                         null
                     } catch (e: Exception) {
                         val event = SensitiveRepairEvent(ref, SensitiveRepairAction.REJECTED_INVALID_CIPHERTEXT, entityId, sourceSide)
                         logRepair(event)
-                        loggingPort.recordException(TAG, "Sensitive persistence decrypt failed for ${ref.owner}.${ref.field}", e)
+                        loggingPort.error(TAG, "Sensitive persistence decrypt failed for ${ref.owner}.${ref.field}", e)
                         null
                     }
                 }
@@ -94,12 +94,12 @@ class SensitivePersistenceSelfHealer
             } catch (e: MalformedEnvelopeException) {
                 val event = SensitiveRepairEvent(ref, SensitiveRepairAction.REJECTED_MALFORMED_ENVELOPE, entityId, sourceSide)
                 logRepair(event)
-                loggingPort.recordException(TAG, "Malformed envelope for ${ref.owner}.${ref.field}", e)
+                loggingPort.error(TAG, "Malformed envelope for ${ref.owner}.${ref.field}", e)
                 null
             } catch (e: Exception) {
                 val event = SensitiveRepairEvent(ref, SensitiveRepairAction.REJECTED_INVALID_CIPHERTEXT, entityId, sourceSide)
                 logRepair(event)
-                loggingPort.recordException(TAG, "Sensitive persistence decrypt failed for ${ref.owner}.${ref.field}", e)
+                loggingPort.error(TAG, "Sensitive persistence decrypt failed for ${ref.owner}.${ref.field}", e)
                 null
             }
         }

@@ -33,10 +33,12 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
@@ -71,6 +73,7 @@ private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
  * History, compaction, tool retry, and KV-cache tracking are all delegated to the Rust
  * engine. Kotlin handles model I/O and tool execution at each callback boundary.
  */
+@Suppress("LargeClass")
 class RustLoopInferenceService(
     private val inner: RustCompatibleInferenceService,
     private val agentLoopPort: AgentLoopPort,
@@ -83,6 +86,7 @@ class RustLoopInferenceService(
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
     private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     private val conversationHistory = mutableListOf<ChatMessage>()
     private val disclosureResolver = ToolSchemaDisclosureResolver()
@@ -100,6 +104,7 @@ class RustLoopInferenceService(
         closeConversation: Boolean,
     ): Flow<InferenceEvent> =
         channelFlow {
+            val startedAtMs = System.currentTimeMillis()
             try {
                 inner.resetAppendOnlyForNewPrompt()
                 val history = buildHistory(options.chatId)
@@ -298,6 +303,12 @@ class RustLoopInferenceService(
                                 )
                             }
                             is AgentLoopEvent.Finished -> {
+                                telemetryEventPort.emitInferenceExecutionOutcome(
+                                    startedAtMs = startedAtMs,
+                                    provider = provider,
+                                    modelId = modelType.name,
+                                    success = true,
+                                )
                                 options.userMessageId?.let { userMessageId ->
                                     committedInferencePrompts.commit(
                                         userMessageId = userMessageId,
@@ -319,8 +330,16 @@ class RustLoopInferenceService(
                                 if (closeConversation) closeSession()
                                 send(InferenceEvent.Finished(modelType))
                             }
-                            is AgentLoopEvent.Failed ->
+                            is AgentLoopEvent.Failed -> {
+                                telemetryEventPort.emitInferenceExecutionOutcome(
+                                    startedAtMs = startedAtMs,
+                                    provider = provider,
+                                    modelId = modelType.name,
+                                    success = false,
+                                    errorMessage = event.message,
+                                )
                                 send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
+                            }
                         }
                     }
             } catch (e: CancellationException) {

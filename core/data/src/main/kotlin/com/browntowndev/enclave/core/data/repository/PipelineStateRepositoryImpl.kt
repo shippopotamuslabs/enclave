@@ -122,11 +122,5 @@ class PipelineStateRepositoryImpl
                 message: String,
                 throwable: Throwable?,
             ) = Unit
-
-            override fun recordException(
-                tag: String,
-                message: String,
-                throwable: Throwable,
-            ) = Unit
         }
     }

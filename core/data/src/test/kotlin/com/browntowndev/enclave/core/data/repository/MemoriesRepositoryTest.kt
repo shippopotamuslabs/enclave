@@ -67,12 +67,6 @@ class MemoriesRepositoryTest {
                 message: String,
                 throwable: Throwable?,
             ) = Unit
-
-            override fun recordException(
-                tag: String,
-                message: String,
-                throwable: Throwable,
-            ) = Unit
         }
     private val healer =
         com.browntowndev.enclave.core.data.security

@@ -142,13 +142,5 @@ class AgentEventMapperTest {
         ) {
             messages += message
         }
-
-        override fun recordException(
-            tag: String,
-            message: String,
-            throwable: Throwable,
-        ) {
-            messages += message
-        }
     }
 }

@@ -6,6 +6,8 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,8 +50,10 @@ class CompositeToolExecutor
         private val xMentionSearchToolExecutor: XMentionSearchToolExecutor,
         private val mediaToolExecutor: MediaToolExecutor,
         private val eventBus: ToolExecutionEventBus,
+        private val telemetryEventPort: TelemetryEventPort,
     ) : ToolExecutorPort {
         override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            val startedAtMs = System.currentTimeMillis()
             val eventId = UUID.randomUUID().toString()
 
             eventBus.emit(
@@ -100,8 +104,35 @@ class CompositeToolExecutor
                     ),
                 )
 
+                if (shouldEmitCompositeToolTelemetry(request.toolName)) {
+                    if (toolResultIndicatesFailure(result.resultJson)) {
+                        telemetryEventPort.emitToolExecutionOutcome(
+                            startedAtMs = startedAtMs,
+                            toolName = request.toolName,
+                            success = false,
+                            errorMessage = toolResultErrorMessage(result.resultJson),
+                        )
+                    } else {
+                        telemetryEventPort.emitToolExecutionOutcome(
+                            startedAtMs = startedAtMs,
+                            toolName = request.toolName,
+                            success = true,
+                        )
+                    }
+                }
+
                 result
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (shouldEmitCompositeToolTelemetry(request.toolName)) {
+                    telemetryEventPort.emitToolExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    toolName = request.toolName,
+                    success = false,
+                        errorMessage = e.message,
+                    )
+                }
                 eventBus.emit(
                     ToolExecutionEvent.Finished(
                         eventId = eventId,
@@ -113,4 +144,7 @@ class CompositeToolExecutor
                 throw e
             }
         }
+
+        private fun shouldEmitCompositeToolTelemetry(toolName: String): Boolean =
+            toolName != ToolDefinition.WEB_SEARCH.name
     }

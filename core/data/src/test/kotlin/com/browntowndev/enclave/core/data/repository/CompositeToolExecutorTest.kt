@@ -73,6 +73,7 @@ class CompositeToolExecutorTest {
                 xMentionSearchToolExecutor = xMentionSearchToolExecutor,
                 mediaToolExecutor = mediaToolExecutor,
                 eventBus = eventBus,
+                telemetryEventPort = mockk(relaxed = true),
             )
     }
 

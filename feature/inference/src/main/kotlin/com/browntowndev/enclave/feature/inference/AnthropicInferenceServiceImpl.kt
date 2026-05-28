@@ -30,8 +30,10 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
@@ -59,6 +61,7 @@ class AnthropicInferenceServiceImpl(
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
     private val telemetrySupport: InferenceTelemetrySupport? = null,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
@@ -209,6 +212,8 @@ class AnthropicInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val startedAtMs = System.currentTimeMillis()
+        val resolvedModelId = options.modelId ?: modelId
         try {
             activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
             val timing =
@@ -499,13 +504,35 @@ class AnthropicInferenceServiceImpl(
                             ?: AgentFinishReason.Stop
                     },
                 telemetry = telemetry,
-            )
+            ).also {
+                telemetryEventPort.emitInferenceExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    provider = "Anthropic",
+                    modelId = resolvedModelId,
+                    success = true,
+                    tokenCount = response.outputTokens,
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: InferenceNetworkException) {
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Anthropic",
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw e
         } catch (e: java.io.IOException) {
             loggingPort.error(TAG, "completeSingleTurn network failure: ${describeException(e)}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Anthropic",
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw InferenceNetworkException(
                 provider = PROVIDER,
                 message = e.message ?: "Connection error",

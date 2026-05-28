@@ -786,11 +786,5 @@ class RustLoopVolatileTurnContextCommitTest {
             message: String,
             throwable: Throwable?,
         ) {}
-
-        override fun recordException(
-            tag: String,
-            message: String,
-            throwable: Throwable,
-        ) {}
     }
 }
