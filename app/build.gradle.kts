@@ -50,12 +50,12 @@ android {
         buildConfigField(
             "String",
             "TELEMETRY_OTLP_ENDPOINT",
-            "\"${localProperties.getProperty("telemetry.otlp.endpoint", "")}\"",
+            "\"${localProperties.getProperty("OTEL_EXPORTER_OTLP_ENDPOINT", "")}\"",
         )
         buildConfigField(
             "String",
             "TELEMETRY_OTLP_API_KEY",
-            "\"${localProperties.getProperty("telemetry.otlp.api.key", "")}\"",
+            "\"${localProperties.getProperty("OTEL_EXPORTER_OTLP_API_KEY", "")}\"",
         )
     }
 
