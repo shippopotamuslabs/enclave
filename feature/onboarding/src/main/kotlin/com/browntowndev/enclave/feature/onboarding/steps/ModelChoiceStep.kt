@@ -1,23 +1,36 @@
+@file:Suppress("LongParameterList", "MagicNumber")
 package com.browntowndev.enclave.feature.onboarding.steps
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
+import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
@@ -37,157 +50,259 @@ fun ModelChoiceStep(
     onApiKeyChanged: (String) -> Unit,
     onDiscoverModels: () -> Unit,
     onModelSelected: (String) -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val borderColor = neoBorderColor()
+    val scrollState = rememberScrollState()
+    
+    val canContinue = when (selectedModelChoice) {
+        ModelChoice.LOCAL -> true
+        ModelChoice.API -> selectedProvider != null && apiKey.isNotBlank() && selectedModelId.isNotBlank()
+        else -> false
+    }
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(24.dp),
+            .fillMaxSize()
+            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "Choose Your Model Source",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Local Models card
+        // Scrollable content area
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .neoSurface(
-                    backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = if (selectedModelChoice == ModelChoice.LOCAL) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        borderColor
-                    },
-                )
-                .clickable { onModelChoiceSelected(ModelChoice.LOCAL) }
-                .semantics { contentDescription = "Use Local Models" }
-                .padding(16.dp),
+                .verticalScroll(scrollState)
         ) {
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Use Local Models",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = "CHOOSE YOUR MODEL SOURCE",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                ),
+                color = MaterialTheme.colorScheme.primary,
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Runs entirely on your device. No API key needed.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // API Provider card
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .neoSurface(
-                    backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = if (selectedModelChoice == ModelChoice.API) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        borderColor
-                    },
-                )
-                .clickable { onModelChoiceSelected(ModelChoice.API) }
-                .semantics { contentDescription = "Use an API Provider" }
-                .padding(16.dp),
-        ) {
-            Text(
-                text = "Use an API Provider",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Connect to a cloud provider for richer capabilities.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "You can always change this later in Settings.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (selectedModelChoice == ModelChoice.API) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Provider picker
-            ApiProvider.entries.forEach { provider ->
-                val label = if (provider == ApiProvider.OPENROUTER) {
-                    "${provider.displayName} (Recommended)"
-                } else {
-                    provider.displayName
-                }
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (selectedProvider == provider) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onBackground
-                    },
-                    modifier = Modifier
-                        .clickable { onProviderSelected(provider) }
-                        .semantics { contentDescription = label }
-                        .padding(vertical = 4.dp),
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            NeoApiKeyField(
-                value = apiKey,
-                onValueChange = onApiKeyChanged,
-                label = "API Key",
-                keyPresent = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            TextButton(onClick = onDiscoverModels) {
-                Text(if (isDiscoveringModels) "Discovering…" else "Discover Models")
-            }
-
-            discoveryError?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            if (discoveredModels.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                discoveredModels.forEach { model ->
-                    Text(
-                        text = model.id,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (selectedModelId == model.id) {
+            // Local Models card
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neoSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        borderColor = if (selectedModelChoice == ModelChoice.LOCAL) {
                             MaterialTheme.colorScheme.primary
                         } else {
-                            MaterialTheme.colorScheme.onBackground
+                            borderColor
                         },
+                    )
+                    .clickable { onModelChoiceSelected(ModelChoice.LOCAL) }
+                    .semantics { contentDescription = "Use Local Models" }
+                    .padding(16.dp),
+            ) {
+                Text(
+                    text = "Use Local Models",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (selectedModelChoice == ModelChoice.LOCAL) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Runs entirely on your device. Secure, private, and no internet or API key required.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // API Provider card
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neoSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        borderColor = if (selectedModelChoice == ModelChoice.API) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            borderColor
+                        },
+                    )
+                    .clickable { onModelChoiceSelected(ModelChoice.API) }
+                    .semantics { contentDescription = "Use an API Provider" }
+                    .padding(16.dp),
+            ) {
+                Text(
+                    text = "Use an API Provider",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (selectedModelChoice == ModelChoice.API) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Connect to premium cloud-based providers (like OpenAI, xAI, " +
+                        "OpenRouter) for advanced capabilities.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (selectedModelChoice == ModelChoice.API) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "API PROVIDER CONFIGURATION",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Provider selection panel
+                NeoPanel(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onModelSelected(model.id) }
-                            .padding(vertical = 4.dp),
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ApiProvider.entries.forEach { provider ->
+                            val isSelected = selectedProvider == provider
+                            val label = if (provider == ApiProvider.OPENROUTER) {
+                                "${provider.displayName} (Recommended)"
+                            } else {
+                                provider.displayName
+                            }
+                            val bgSelected = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .neoSurface(
+                                        backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
+                                        borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
+                                    )
+                                    .clickable { onProviderSelected(provider) }
+                                    .semantics { contentDescription = label }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeoApiKeyField(
+                    value = apiKey,
+                    onValueChange = onApiKeyChanged,
+                    label = "Enter API Key",
+                    keyPresent = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeoPrimaryButton(
+                    text = if (isDiscoveringModels) "DISCOVERING..." else "DISCOVER MODELS",
+                    onClick = onDiscoverModels,
+                    enabled = !isDiscoveringModels && apiKey.isNotBlank() && selectedProvider != null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                discoveryError?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     )
                 }
+
+                if (discoveredModels.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "SELECT MODEL",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    NeoPanel(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            discoveredModels.forEach { model ->
+                                val isSelected = selectedModelId == model.id
+                                val bgSelected = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .neoSurface(
+                                            backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
+                                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
+                                        )
+                                        .clickable { onModelSelected(model.id) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = model.id,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        ),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Bottom Navigation Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            NeoSecondaryButton(
+                text = "BACK",
+                onClick = onPrevious,
+                modifier = Modifier.weight(1f)
+            )
+            NeoPrimaryButton(
+                text = "CONTINUE",
+                onClick = onNext,
+                enabled = canContinue,
+                modifier = Modifier.weight(1.5f)
+            )
         }
     }
 }
@@ -209,6 +324,8 @@ internal fun ModelChoiceStepLightPreview() {
             onApiKeyChanged = {},
             onDiscoverModels = {},
             onModelSelected = {},
+            onNext = {},
+            onPrevious = {},
         )
     }
 }
@@ -230,6 +347,8 @@ internal fun ModelChoiceStepDarkPreview() {
             onApiKeyChanged = {},
             onDiscoverModels = {},
             onModelSelected = {},
+            onNext = {},
+            onPrevious = {},
         )
     }
 }
