@@ -2,15 +2,24 @@ package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
+import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraft
+import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.enclave.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -98,6 +107,62 @@ class ByokProvidersCoordinatorTest {
             coordinator.onApiModelConfigFieldChange(apiState, config)
 
             assertEquals(config, apiState.value.presetDraft)
+        }
+
+    @Test
+    fun `onSaveApiCredentials persists draft clears key and updates selection`() =
+        runTest {
+            val saveDraft = mockk<SaveApiProviderDraftUseCase>()
+            every { apiProviderUseCases.saveApiProviderDraft } returns saveDraft
+            val draftSlot = slot<ApiProviderDraft>()
+            val persistedAsset =
+                ApiModelAsset(
+                    credentials =
+                        ApiCredentials(
+                            id = ApiCredentialsId("saved-cred"),
+                            displayName = "OpenAI",
+                            provider = ApiProvider.OPENAI,
+                            credentialAlias = "openai-alias",
+                        ),
+                    configurations = emptyList(),
+                )
+            coEvery { saveDraft(capture(draftSlot)) } returns
+                Result.success(
+                    ApiProviderDraftSaveResult(persistedAsset = persistedAsset),
+                )
+            val apiState =
+                MutableStateFlow(
+                    ApiProvidersTransientState(
+                        assetDraft =
+                            ApiModelAssetUi(
+                                credentialsId = ApiCredentialsId(""),
+                                displayName = "OpenAI",
+                                provider = ApiProvider.OPENAI,
+                                baseUrl = null,
+                                credentialAlias = "openai-alias",
+                                configurations = emptyList(),
+                            ),
+                    ),
+                )
+            val currentApiKey = MutableStateFlow("sk-test")
+            var successAsset: ApiModelAssetUi? = null
+
+            coordinator.onSaveApiCredentials(
+                scope = this,
+                tag = "Settings",
+                apiState = apiState,
+                currentApiKey = currentApiKey,
+                onSuccess = { asset, _ -> successAsset = asset },
+                onShowSnackbar = {},
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { saveDraft(any()) }
+            assertEquals("sk-test", draftSlot.captured.apiKey)
+            assertEquals("", currentApiKey.value)
+            assertEquals(ApiCredentialsId("saved-cred"), apiState.value.selectedAsset?.credentialsId)
+            assertEquals("OpenAI", apiState.value.assetDraft?.displayName)
+            assertEquals(ApiCredentialsId("saved-cred"), successAsset?.credentialsId)
         }
 
     @Test

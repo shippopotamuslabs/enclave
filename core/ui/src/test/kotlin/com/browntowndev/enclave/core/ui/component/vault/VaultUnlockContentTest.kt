@@ -9,6 +9,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import org.junit.Rule
 import org.junit.Test
@@ -131,5 +132,38 @@ class VaultUnlockContentTest {
         composeTestRule.runOnIdle { initial = false }
         composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
         composeTestRule.onNode(isToggleable()).assertIsOff()
+    }
+
+    @Test
+    fun decryptionErrorResetsUnlockingStateAndShowsError() {
+        var isUnlocking by mutableStateOf(true)
+        var errorMessage by mutableStateOf<String?>(null)
+
+        composeTestRule.setContent {
+            EnclaveTheme {
+                VaultUnlockContent(
+                    authState = authenticatedUser,
+                    errorMessage = errorMessage,
+                    isUnlocking = isUnlocking,
+                    showGoogleSignInOnUnauth = false,
+                    showBiometricToggle = true,
+                    onLoginClick = {},
+                    onSubmitVaultPassword = { _, _ -> },
+                )
+            }
+        }
+
+        // Initially in unlocking state (Signing In... or similar is visible)
+        composeTestRule.onNodeWithTag("unlock_sync_status_text").assertExists()
+
+        // Decryption fails: set error message and clear unlocking flag
+        composeTestRule.runOnIdle {
+            isUnlocking = false
+            errorMessage = "Decryption failed: Incorrect password"
+        }
+
+        // Latch should release and the error message should be displayed along with password fields
+        composeTestRule.onNodeWithText("Decryption failed: Incorrect password").assertExists()
+        composeTestRule.onNodeWithText("Enclave Password").assertExists()
     }
 }

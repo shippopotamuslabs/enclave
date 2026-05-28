@@ -6,11 +6,16 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ViewModelErrorHandlerImplTest {
     private lateinit var loggingPort: LoggingPort
     private lateinit var testClock: TestClock
@@ -80,6 +85,37 @@ class ViewModelErrorHandlerImplTest {
                 testClock.advanceTime(5100)
                 errorHandler.handleError(tag, message, throwable, userMessage)
                 assertEquals(userMessage, awaitItem())
+            }
+        }
+
+    @Test
+    fun `coroutineExceptionHandler emits single error when launched coroutine fails`() =
+        runTest {
+            val tag = "TestTag"
+            val message = "Coroutine failed"
+            val throwable = RuntimeException("Coroutine exception")
+            val userMessage = "Something went wrong"
+
+            errorHandler.errorEvents.test {
+                val handler =
+                    errorHandler.coroutineExceptionHandler(
+                        tag = tag,
+                        message = message,
+                        userMessage = userMessage,
+                    )
+                // Root scope mirrors viewModelScope.launch(handler) — handler consumes the failure.
+                CoroutineScope(handler).launch {
+                    throw throwable
+                }
+                advanceUntilIdle()
+
+                assertEquals(userMessage, awaitItem())
+                expectNoEvents()
+            }
+
+            verify {
+                loggingPort.recordException(tag, message, throwable)
+                loggingPort.error(tag, message, throwable)
             }
         }
 
