@@ -89,6 +89,9 @@ class RustLoopInferenceService(
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
+    override val baseUrl: String?
+        get() = inner.baseUrl
+
     private val conversationHistory = mutableListOf<ChatMessage>()
     private val disclosureResolver = ToolSchemaDisclosureResolver()
     private var lastSeenRevision = 0L
@@ -304,12 +307,13 @@ class RustLoopInferenceService(
                                 )
                             }
                             is AgentLoopEvent.Finished -> {
-                                telemetryEventPort.emitInferenceExecutionOutcome(
-                                    startedAtMs = startedAtMs,
-                                    provider = provider,
-                                    modelId = modelType.name,
-                                    success = true,
-                                )
+                                 telemetryEventPort.emitInferenceExecutionOutcome(
+                                     startedAtMs = startedAtMs,
+                                     provider = provider,
+                                     modelId = modelType.name,
+                                     success = true,
+                                     baseUrl = baseUrl,
+                                 )
                                 options.userMessageId?.let { userMessageId ->
                                     committedInferencePrompts.commit(
                                         userMessageId = userMessageId,
@@ -332,13 +336,14 @@ class RustLoopInferenceService(
                                 send(InferenceEvent.Finished(modelType))
                             }
                             is AgentLoopEvent.Failed -> {
-                                telemetryEventPort.emitInferenceExecutionOutcome(
-                                    startedAtMs = startedAtMs,
-                                    provider = provider,
-                                    modelId = modelType.name,
-                                    success = false,
-                                    errorMessage = event.message,
-                                )
+                                 telemetryEventPort.emitInferenceExecutionOutcome(
+                                     startedAtMs = startedAtMs,
+                                     provider = provider,
+                                     modelId = modelType.name,
+                                     success = false,
+                                     errorMessage = event.message,
+                                     baseUrl = baseUrl,
+                                 )
                                 send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
                             }
                         }

@@ -740,6 +740,24 @@ class Telemetry001DataTddRedTest {
         assertEquals("evt-5", roundTripped.eventId)
         assertEquals("ttfb_ms", roundTripped.metricName)
         assertEquals(250.0, roundTripped.metricValue)
+        assertEquals(null, roundTripped.baseUrl)
+
+        val metricWithUrl =
+            ProviderMetric(
+                eventId = "evt-5-url",
+                timestampMs = 1_717_000_000_000L,
+                provider = "OpenAI",
+                metricName = "cache_hit_rate",
+                metricValue = 0.95,
+                severity = TelemetrySeverity.INFO,
+                baseUrl = "https://api.deepseek.com",
+            )
+        val entityWithUrl = metricWithUrl.toEntity()
+        val roundTrippedWithUrl = entityWithUrl.toDomain() as ProviderMetric
+        assertEquals("evt-5-url", roundTrippedWithUrl.eventId)
+        assertEquals("cache_hit_rate", roundTrippedWithUrl.metricName)
+        assertEquals(0.95, roundTrippedWithUrl.metricValue)
+        assertEquals("https://api.deepseek.com", roundTrippedWithUrl.baseUrl)
     }
 
     @Test
@@ -912,4 +930,41 @@ class Telemetry001DataTddRedTest {
             metricValue = 250.0,
             severity = TelemetrySeverity.INFO,
         )
+
+    @Test
+    fun `TEL-062 TelemetryUploadScheduler triggerImmediateUpload enqueues one-time work with KEEP`() {
+        val workManager = mockk<WorkManager>(relaxed = true)
+        val scheduler =
+            TelemetryUploadScheduler(
+                workManager = workManager,
+                config =
+                    TelemetryUploadConfig(
+                        endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
+                        apiKey = "test-key",
+                    ),
+            )
+        scheduler.triggerImmediateUpload()
+        verify {
+            workManager.enqueueUniqueWork(
+                TelemetryUploadScheduler.ONE_TIME_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                match<OneTimeWorkRequest> { request ->
+                    request.workSpec.constraints.requiredNetworkType == NetworkType.CONNECTED
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `TEL-063 TelemetryEventRepositoryImpl triggers immediate upload on emit`() =
+        runTest {
+            val dao = mockk<TelemetryEventDao>(relaxed = true)
+            val loggingPort = mockk<LoggingPort>(relaxed = true)
+            val scheduler = mockk<TelemetryUploadScheduler>(relaxed = true)
+            val repository = TelemetryEventRepositoryImpl(dao, loggingPort, scheduler)
+            repository.emitInferenceOutcome(sampleInferenceOutcome())
+            verify(exactly = 1) {
+                scheduler.triggerImmediateUpload()
+            }
+        }
 }

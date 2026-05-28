@@ -38,7 +38,7 @@ class GoogleInferenceServiceImpl(
     private val sdkClient: GoogleGenAiSdkClient,
     private val modelId: String,
     private val modelType: ModelType,
-    private val baseUrl: String? = null,
+    override val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
@@ -350,6 +350,7 @@ class GoogleInferenceServiceImpl(
                     modelId = modelId,
                     success = true,
                     tokenCount = outputTokenEstimate,
+                    baseUrl = baseUrl,
                 )
             }
         } catch (e: CancellationException) {
@@ -361,6 +362,7 @@ class GoogleInferenceServiceImpl(
                 modelId = modelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw e
         } catch (e: java.io.IOException) {
@@ -371,6 +373,7 @@ class GoogleInferenceServiceImpl(
                 modelId = modelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw InferenceNetworkException(
                 provider = PROVIDER,

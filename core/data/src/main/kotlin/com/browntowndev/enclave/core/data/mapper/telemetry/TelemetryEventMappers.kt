@@ -131,6 +131,7 @@ private fun encodeProviderMetric(metric: ProviderMetric): String =
         put("metricName", JsonPrimitive(metric.metricName))
         put("metricValue", JsonPrimitive(metric.metricValue))
         put("severity", JsonPrimitive(metric.severity.name))
+        metric.baseUrl?.let { put("baseUrl", JsonPrimitive(it)) }
     }.toString()
 
 private fun decodeInferenceOutcome(payloadJson: String): InferenceOutcome {
@@ -186,6 +187,7 @@ private fun decodeProviderMetric(payloadJson: String): ProviderMetric {
         metricName = json.string("metricName"),
         metricValue = json.double("metricValue"),
         severity = TelemetrySeverity.valueOf(json.string("severity")),
+        baseUrl = json.stringOrNull("baseUrl"),
     )
 }
 

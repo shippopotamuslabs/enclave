@@ -72,7 +72,7 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val modelId: String,
     protected val provider: String,
     protected val modelType: ModelType,
-    protected val baseUrl: String? = null,
+    override val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
@@ -419,6 +419,7 @@ abstract class BaseOpenAiSdkInferenceService(
                     costUsd = response.costUsd,
                     inputTokens = response.inputTokens,
                     cacheReadInputTokens = response.cacheReadInputTokens,
+                    baseUrl = baseUrl,
                 )
             }
         } catch (e: CancellationException) {
@@ -430,6 +431,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 modelId = modelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw e
         } catch (e: java.io.IOException) {
@@ -440,6 +442,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw InferenceNetworkException(
                 provider = provider,

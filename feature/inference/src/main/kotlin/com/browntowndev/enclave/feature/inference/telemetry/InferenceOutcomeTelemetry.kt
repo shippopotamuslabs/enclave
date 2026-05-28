@@ -17,6 +17,7 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
     costUsd: BigDecimal? = null,
     inputTokens: Int? = null,
     cacheReadInputTokens: Int? = null,
+    baseUrl: String? = null,
 ) {
     val port = this ?: return
     val completedAtMs = System.currentTimeMillis()
@@ -52,6 +53,7 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
             tokenCount = tokenCount,
             cacheHitRate = cacheHitRate,
             completedAtMs = completedAtMs,
+            baseUrl = baseUrl,
         )
     }
 }
@@ -63,6 +65,7 @@ private suspend fun emitProviderExecutionMetrics(
     tokenCount: Int?,
     cacheHitRate: Double?,
     completedAtMs: Long,
+    baseUrl: String? = null,
 ) {
     port.emitProviderMetric(
         ProviderMetric(
@@ -110,6 +113,7 @@ private suspend fun emitProviderExecutionMetrics(
                 metricName = "cache_hit_rate",
                 metricValue = rate,
                 severity = TelemetrySeverity.INFO,
+                baseUrl = baseUrl?.takeIf { it.isNotBlank() && !provider.equals("Llama", ignoreCase = true) },
             ),
         )
     }

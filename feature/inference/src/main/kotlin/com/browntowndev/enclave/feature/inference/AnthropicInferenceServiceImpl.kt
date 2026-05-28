@@ -55,7 +55,7 @@ class AnthropicInferenceServiceImpl(
     private val client: AnthropicClient,
     private val modelId: String,
     private val modelType: ModelType,
-    private val baseUrl: String? = null,
+    override val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
@@ -513,6 +513,7 @@ class AnthropicInferenceServiceImpl(
                     tokenCount = response.outputTokens,
                     inputTokens = response.inputTokens,
                     cacheReadInputTokens = response.cacheReadInputTokens,
+                    baseUrl = baseUrl,
                 )
             }
         } catch (e: CancellationException) {
@@ -524,6 +525,7 @@ class AnthropicInferenceServiceImpl(
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw e
         } catch (e: java.io.IOException) {
@@ -534,6 +536,7 @@ class AnthropicInferenceServiceImpl(
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
+                baseUrl = baseUrl,
             )
             throw InferenceNetworkException(
                 provider = PROVIDER,
