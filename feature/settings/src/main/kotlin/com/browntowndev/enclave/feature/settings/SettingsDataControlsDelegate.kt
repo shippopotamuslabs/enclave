@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.usecase.settings.SettingsDataControlsUseCases
+import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -12,6 +13,7 @@ internal class SettingsDataControlsDelegate
     @Inject
     constructor(
         private val dataControlsUseCases: SettingsDataControlsUseCases,
+        private val preferencesUseCases: SettingsPreferencesUseCases,
         private val errorHandler: ViewModelErrorHandler,
     ) {
         fun onShowDataControlsSheet(
@@ -62,6 +64,22 @@ internal class SettingsDataControlsDelegate
                 } else {
                     current.copy(pendingAction = null, isDeleting = false)
                 }
+            }
+        }
+
+        fun onAutomaticErrorTrackingChange(
+            scope: CoroutineScope,
+            tag: String,
+            enabled: Boolean,
+        ) {
+            scope.launch(
+                errorHandler.coroutineExceptionHandler(
+                    tag,
+                    "Failed to update automatic error tracking setting",
+                    "Failed to update setting",
+                ),
+            ) {
+                preferencesUseCases.updateAutomaticErrorTrackingEnabled(enabled)
             }
         }
 

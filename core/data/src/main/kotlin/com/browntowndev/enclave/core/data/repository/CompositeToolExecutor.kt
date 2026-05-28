@@ -111,12 +111,16 @@ class CompositeToolExecutor
                             toolName = request.toolName,
                             success = false,
                             errorMessage = toolResultErrorMessage(result.resultJson),
+                            provider = request.provider,
+                            modelId = request.modelType.name,
                         )
                     } else {
                         telemetryEventPort.emitToolExecutionOutcome(
                             startedAtMs = startedAtMs,
                             toolName = request.toolName,
                             success = true,
+                            provider = request.provider,
+                            modelId = request.modelType.name,
                         )
                     }
                 }
@@ -127,10 +131,12 @@ class CompositeToolExecutor
             } catch (e: Exception) {
                 if (shouldEmitCompositeToolTelemetry(request.toolName)) {
                     telemetryEventPort.emitToolExecutionOutcome(
-                    startedAtMs = startedAtMs,
-                    toolName = request.toolName,
-                    success = false,
+                        startedAtMs = startedAtMs,
+                        toolName = request.toolName,
+                        success = false,
                         errorMessage = e.message,
+                        provider = request.provider,
+                        modelId = request.modelType.name,
                     )
                 }
                 eventBus.emit(

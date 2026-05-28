@@ -12,6 +12,7 @@ data class SharedChat(
     val createdAt: Long,
     val expiresAt: Long,
     val shareUrl: String,
+    val sourceChatId: String? = null,
 )
 
 @Serializable

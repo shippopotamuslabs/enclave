@@ -2,16 +2,8 @@ package com.browntowndev.enclave.feature.chat.components.detailbottomsheet
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -19,7 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.XIcon
+import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.feature.chat.components.WebSearchSourceRow
 import java.net.URI
@@ -48,49 +40,15 @@ internal fun DetailBottomSheetSourcesContent(
     val showTabs = webSources.isNotEmpty() && xSources.isNotEmpty()
 
     if (showTabs) {
-        TabRow(
+        NeoSheetTabRow(
             selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
-            divider = {},
-            indicator = { tabPositions ->
-                SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            },
+            tabs = listOf("Web Sources", "X Sources"),
+            onTabSelected = { selectedTab = it },
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = "Web",
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                selectedContentColor = MaterialTheme.colorScheme.primary,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                icon = {
-                    Icon(
-                        imageVector = XIcon,
-                        contentDescription = "X",
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
-            )
-        }
+        )
     }
 
     val activeSources = if (selectedTab == 0) webSources else xSources
@@ -108,3 +66,4 @@ internal fun DetailBottomSheetSourcesContent(
         }
     }
 }
+

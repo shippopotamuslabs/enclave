@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 data class OnboardingUiState(
     val currentStep: Int = 0,
     val ageConfirmed: Boolean = false,
+    val automaticErrorTrackingEnabled: Boolean = false,
     val selectedModelChoice: ModelChoice = ModelChoice.UNDECIDED,
     val selectedProvider: ApiProvider? = null,
     val apiKey: String = "",

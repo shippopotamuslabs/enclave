@@ -80,6 +80,7 @@ private fun redactToolOutcome(outcome: ToolOutcome): ToolOutcome =
 
 private fun redactExceptionRecord(record: ExceptionRecord): ExceptionRecord =
     record.copy(
+        tag = TelemetryPayloadRedactor.redact(record.tag).orEmpty(),
         message = TelemetryPayloadRedactor.redact(record.message).orEmpty(),
         stackTrace = TelemetryPayloadRedactor.redact(record.stackTrace).orEmpty(),
     )
@@ -107,6 +108,8 @@ private fun encodeToolOutcome(outcome: ToolOutcome): String =
         put("success", JsonPrimitive(outcome.success))
         outcome.errorMessage?.let { put("errorMessage", JsonPrimitive(it)) }
         put("severity", JsonPrimitive(outcome.severity.name))
+        outcome.provider?.let { put("provider", JsonPrimitive(it)) }
+        outcome.modelId?.let { put("modelId", JsonPrimitive(it)) }
     }.toString()
 
 private fun encodeExceptionRecord(record: ExceptionRecord): String =
@@ -156,6 +159,8 @@ private fun decodeToolOutcome(payloadJson: String): ToolOutcome {
         success = json.boolean("success"),
         errorMessage = json.stringOrNull("errorMessage"),
         severity = TelemetrySeverity.valueOf(json.string("severity")),
+        provider = json.stringOrNull("provider"),
+        modelId = json.stringOrNull("modelId"),
     )
 }
 

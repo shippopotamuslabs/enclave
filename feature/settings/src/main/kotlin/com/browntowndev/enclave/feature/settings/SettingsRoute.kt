@@ -36,6 +36,7 @@ internal fun SettingsRoute(
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
+        onAutomaticErrorTrackingChange = viewModel::onAutomaticErrorTrackingChange,
         onRequestDeleteAllChats = viewModel::onRequestDeleteAllChats,
         onConfirmDeleteAllChats = viewModel::onConfirmDeleteAllChats,
         onRequestDeleteAllMedia = viewModel::onRequestDeleteAllMedia,

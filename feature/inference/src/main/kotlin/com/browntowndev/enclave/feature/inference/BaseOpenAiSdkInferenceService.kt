@@ -417,6 +417,8 @@ abstract class BaseOpenAiSdkInferenceService(
                     success = true,
                     tokenCount = response.outputTokens,
                     costUsd = response.costUsd,
+                    inputTokens = response.inputTokens,
+                    cacheReadInputTokens = response.cacheReadInputTokens,
                 )
             }
         } catch (e: CancellationException) {

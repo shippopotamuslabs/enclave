@@ -30,6 +30,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
@@ -335,7 +336,7 @@ class Telemetry001InferenceTddRedTest {
         mockkStatic(FirebaseCrashlytics::class)
         val crashlytics = mockk<FirebaseCrashlytics>(relaxed = true)
         every { FirebaseCrashlytics.getInstance() } returns crashlytics
-        val adapter = AndroidLoggingAdapter()
+        val adapter = AndroidLoggingAdapter(enabledErrorTrackingGate())
         val throwable = RuntimeException("Test")
         adapter.error("TestTag", "Test message", throwable)
         verify(exactly = 1) { crashlytics.recordException(throwable) }
@@ -346,7 +347,7 @@ class Telemetry001InferenceTddRedTest {
         mockkStatic(FirebaseCrashlytics::class)
         val crashlytics = mockk<FirebaseCrashlytics>(relaxed = true)
         every { FirebaseCrashlytics.getInstance() } returns crashlytics
-        val adapter = AndroidLoggingAdapter()
+        val adapter = AndroidLoggingAdapter(enabledErrorTrackingGate())
         adapter.error("TestTag", "Test message", null)
         verify(exactly = 0) { crashlytics.recordException(any()) }
     }
@@ -357,7 +358,7 @@ class Telemetry001InferenceTddRedTest {
         mockkStatic(Log::class)
         every { FirebaseCrashlytics.getInstance() } throws RuntimeException("Not initialized")
         every { Log.e(any(), any(), any()) } returns 0
-        val adapter = AndroidLoggingAdapter()
+        val adapter = AndroidLoggingAdapter(enabledErrorTrackingGate())
         val throwable = RuntimeException("Test")
         adapter.error("TestTag", "Test message", throwable)
         verify { Log.e("TestTag", "Test message", throwable) }
@@ -368,7 +369,7 @@ class Telemetry001InferenceTddRedTest {
         mockkStatic(FirebaseCrashlytics::class)
         val crashlytics = mockk<FirebaseCrashlytics>(relaxed = true)
         every { FirebaseCrashlytics.getInstance() } returns crashlytics
-        val adapter = AndroidLoggingAdapter()
+        val adapter = AndroidLoggingAdapter(enabledErrorTrackingGate())
         adapter.error("TestTag", "Test message", RuntimeException("Test"))
         verify {
             crashlytics.log(match { it.contains("TestTag") && it.contains("Test message") })
@@ -597,4 +598,9 @@ class Telemetry001InferenceTddRedTest {
                 behavior(host)
             }
     }
+
+    private fun enabledErrorTrackingGate(): AutomaticErrorTrackingGate =
+        mockk {
+            every { isAutomaticErrorTrackingEnabled() } returns true
+        }
 }

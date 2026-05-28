@@ -26,6 +26,7 @@ fun ChatRoute(
     onNewChat: () -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     navigationChatId: ChatId? = null,
+    onNavigateToImportedChat: (ChatId) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -47,6 +48,7 @@ fun ChatRoute(
                         }
                     context.startActivity(Intent.createChooser(intent, "Share Chat"))
                 }
+                is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId)
             }
         }
     }

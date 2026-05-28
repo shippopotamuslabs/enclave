@@ -11,6 +11,8 @@ internal suspend fun TelemetryEventPort?.emitToolExecutionOutcome(
     toolName: String,
     success: Boolean,
     errorMessage: String? = null,
+    provider: String? = null,
+    modelId: String? = null,
 ) {
     val port = this ?: return
     val completedAtMs = System.currentTimeMillis()
@@ -24,6 +26,8 @@ internal suspend fun TelemetryEventPort?.emitToolExecutionOutcome(
                 success = success,
                 errorMessage = errorMessage,
                 severity = if (success) TelemetrySeverity.INFO else TelemetrySeverity.ERROR,
+                provider = provider,
+                modelId = modelId,
             ),
         )
     }

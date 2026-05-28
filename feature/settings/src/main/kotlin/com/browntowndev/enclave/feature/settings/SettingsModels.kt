@@ -148,6 +148,7 @@ sealed interface DataControlsPendingAction {
 data class DataControlsUiState(
     val isSheetOpen: Boolean = false,
     val allowMemories: Boolean = true,
+    val automaticErrorTrackingEnabled: Boolean = false,
     val pendingAction: DataControlsPendingAction? = null,
     val isDeleting: Boolean = false,
     val deleteError: String? = null,

@@ -373,6 +373,59 @@ class OnboardingViewModelTest {
         }
     }
 
+    // -------- OB-10b / OB-11b — NavigateToChat carries model choice --------
+
+    @Test
+    @DisplayName("OB-10b — API path emits NavigateToChat with ModelChoice.API")
+    fun `OB-10b onCompleteOnboarding API path emits NavigateToChat with API model choice`() = runTest {
+        fakeBulkAssign.resultToReturn = Result.success(ApiCredentialsId("creds-123"))
+
+        viewModel.onAgeConfirmedChange(true)
+        viewModel.onNextStep()
+        advanceUntilIdle()
+        viewModel.onModelChoiceSelected(ModelChoice.API)
+        viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+        viewModel.onApiKeyChanged("sk-valid-key")
+        viewModel.onModelSelected("openrouter/gpt-4o")
+        viewModel.onNextStep()
+        advanceUntilIdle()
+        viewModel.onSkipMedia()
+        advanceUntilIdle()
+
+        viewModel.events.test {
+            viewModel.onCompleteOnboarding()
+            advanceUntilIdle()
+
+            val event = awaitItem() as OnboardingEvent.NavigateToChat
+            assertEquals(ModelChoice.API, event.modelChoice)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    @DisplayName("OB-11b — LOCAL path emits NavigateToChat with ModelChoice.LOCAL")
+    fun `OB-11b onCompleteOnboarding LOCAL path emits NavigateToChat with LOCAL model choice`() = runTest {
+        viewModel.onAgeConfirmedChange(true)
+        viewModel.onNextStep()
+        advanceUntilIdle()
+        viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
+        viewModel.onNextStep()
+        advanceUntilIdle()
+        viewModel.onSkipMedia()
+        advanceUntilIdle()
+
+        viewModel.events.test {
+            viewModel.onCompleteOnboarding()
+            advanceUntilIdle()
+
+            val event = awaitItem() as OnboardingEvent.NavigateToChat
+            assertEquals(ModelChoice.LOCAL, event.modelChoice)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // -------- OB-DEFERRED-SAVE --------
 
     @Test

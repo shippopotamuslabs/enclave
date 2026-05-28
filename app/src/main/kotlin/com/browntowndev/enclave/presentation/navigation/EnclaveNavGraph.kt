@@ -1,9 +1,14 @@
 package com.browntowndev.enclave.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.feature.onboarding.ModelChoice
 
 @Composable
 fun EnclaveNavGraph(
@@ -30,6 +35,13 @@ fun EnclaveNavGraph(
                 navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
             },
             onShowSnackbar = onShowSnackbar,
+            onNavigateToImportedChat = { chatId ->
+                navController.navigate(
+                    Routes.CHAT_WITH_ID.replace("{chatId}", chatId.value),
+                ) {
+                    popUpTo(Routes.SHARED_CHAT) { inclusive = true }
+                }
+            },
         )
 
     val historyActions =
@@ -79,19 +91,44 @@ fun EnclaveNavGraph(
             onShowSnackbar = onShowSnackbar,
         )
 
+    // Tracks the effective models result for the download screen. Normally equals the startup
+    // modelsResult, but is filtered to utility-only assets when API onboarding completes so
+    // the download screen doesn't enqueue local LLM downloads for API users.
+    var effectiveModelsResult by remember(modelsResult) { mutableStateOf(modelsResult) }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
     ) {
         onboardingNavGraph(
-            onOnboardingComplete = {
-                navController.navigate(Routes.CHAT) {
-                    popUpTo(Routes.ONBOARDING) { inclusive = true }
+            onOnboardingComplete = { modelChoice ->
+                val filtered = if (modelChoice == ModelChoice.API) {
+                    modelsResult?.let { result ->
+                        val utilityShas = result.utilityAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
+                        result.copy(
+                            allModels = emptyMap(),
+                            modelsToDownload = result.modelsToDownload.filter { it.metadata.sha256 in utilityShas },
+                        )
+                    }
+                } else {
+                    modelsResult
+                }
+                effectiveModelsResult = filtered
+
+                val needsDownload = errorMessage != null || filtered?.modelsToDownload?.isNotEmpty() == true
+                if (needsDownload) {
+                    navController.navigate(Routes.MODEL_DOWNLOAD) {
+                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                    }
+                } else {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                    }
                 }
             },
         )
         downloadGraph(
-            modelsResult = modelsResult,
+            modelsResult = effectiveModelsResult,
             errorMessage = errorMessage,
             onReady = {
                 navController.navigate(Routes.CHAT) {

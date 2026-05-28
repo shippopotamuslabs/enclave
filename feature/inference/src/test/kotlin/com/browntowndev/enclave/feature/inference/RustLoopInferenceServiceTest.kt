@@ -1001,6 +1001,75 @@ class RustLoopInferenceServiceTest {
             assertEquals("follow up", initialMessages.last().content)
         }
 
+    @Test
+    fun `buildProviderTranscript filters out engine-internal sidecar messages`() =
+        runTest {
+            val transcriptStore = InMemoryCommittedInferenceTranscriptStore()
+            val innerService = RecordingRustCompatibleService(
+                responses = listOf(
+                    AgentModelTurnResult(
+                        assistantText = "final answer",
+                        toolCalls = emptyList(),
+                        finishReason = AgentFinishReason.Stop,
+                    )
+                )
+            )
+            val port = CapturingAgentLoopPort { host ->
+                host.completeModelTurn(
+                    sessionMessages = listOf(
+                        AgentLoopMessage(
+                            id = "u1",
+                            role = Role.USER,
+                            content = "regular user prompt"
+                        ),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.USER,
+                            content = """{"_agent":{"tool_calls_remaining":1}}""",
+                            metadataJson = """{"agent_tool_budget":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "nudge",
+                            role = Role.USER,
+                            content = """{"tools_blocked_nudge":true}""",
+                            metadataJson = """{"tools_blocked_nudge":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "parse-failure",
+                            role = Role.USER,
+                            content = """{"envelope_parse_failure":true}""",
+                            metadataJson = """{"envelope_parse_failure":true}"""
+                        ),
+                        AgentLoopMessage(
+                            id = "synthetic-agent",
+                            role = Role.USER,
+                            content = """{"_agent":{"some":"guidance"}}"""
+                        )
+                    ),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = false,
+                )
+                send(AgentLoopEvent.Finished)
+            }
+            val service = createService(
+                agentLoopPort = port,
+                inner = innerService,
+                committedInferenceTranscripts = transcriptStore,
+            )
+
+            service.sendPrompt(
+                prompt = "start",
+                options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1")),
+            ).toList()
+
+            val committed = transcriptStore.get(ChatId("chat-1"))
+            assertNotNull(committed)
+            assertEquals(2, committed!!.size)
+            assertEquals("regular user prompt", committed[0].content)
+            assertEquals("final answer", committed[1].content)
+        }
+
     private fun createService(
         agentLoopPort: AgentLoopPort,
         inner: RustCompatibleInferenceService = RecordingRustCompatibleService(),

@@ -36,6 +36,7 @@ class OnboardingViewModel
     ) : ViewModel() {
         companion object {
             const val AGE_GATE_CONTENT_DESCRIPTION = "I confirm I am 18 or older"
+            const val AUTOMATIC_ERROR_TRACKING_CONTENT_DESCRIPTION = "Allow automatic tracking of errors"
             private const val TAG = "OnboardingViewModel"
         }
 
@@ -47,6 +48,10 @@ class OnboardingViewModel
 
         fun onAgeConfirmedChange(confirmed: Boolean) {
             _uiState.update { it.copy(ageConfirmed = confirmed) }
+        }
+
+        fun onAutomaticErrorTrackingChange(enabled: Boolean) {
+            _uiState.update { it.copy(automaticErrorTrackingEnabled = enabled) }
         }
 
         fun onNextStep() {
@@ -151,6 +156,7 @@ class OnboardingViewModel
                 _uiState.update { it.copy(isSaving = true, saveError = null) }
 
                 settingsRepository.updateAgeConfirmed(true)
+                settingsRepository.updateAutomaticErrorTrackingEnabled(state.automaticErrorTrackingEnabled)
 
                 if (state.selectedModelChoice == ModelChoice.API) {
                     val provider = state.selectedProvider ?: run {
@@ -222,7 +228,7 @@ class OnboardingViewModel
 
                 settingsRepository.updateOnboardingCompleted(true)
                 _uiState.update { it.copy(isSaving = false, saveError = null) }
-                _events.send(OnboardingEvent.NavigateToChat)
+                _events.send(OnboardingEvent.NavigateToChat(state.selectedModelChoice))
             }
         }
     }

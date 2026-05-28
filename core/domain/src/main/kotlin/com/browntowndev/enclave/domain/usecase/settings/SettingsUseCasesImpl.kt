@@ -57,6 +57,7 @@ class SettingsPreferencesUseCasesImpl
         override val clearXApiKey: ClearXApiKeyUseCase,
         override val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase,
         override val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase,
+        override val updateAutomaticErrorTrackingEnabled: UpdateAutomaticErrorTrackingEnabledUseCase,
     ) : SettingsPreferencesUseCases
 
 class SettingsLocalModelUseCasesImpl

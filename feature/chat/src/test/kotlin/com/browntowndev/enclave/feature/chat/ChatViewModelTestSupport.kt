@@ -15,6 +15,7 @@ import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
@@ -55,6 +56,7 @@ object ChatViewModelTestSupport {
         playbackController: TtsPlaybackControllerPort,
         studioRepository: StudioRepositoryPort,
         shareChatUseCase: ShareChatUseCase,
+        importSharedChatUseCase: ImportSharedChatUseCase = mockk(relaxed = true),
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
@@ -74,6 +76,7 @@ object ChatViewModelTestSupport {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
+            importSharedChatUseCase = importSharedChatUseCase,
             chatRepository = chatRepository,
             exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
@@ -94,6 +97,7 @@ object ChatViewModelTestSupport {
         playbackController: TtsPlaybackControllerPort,
         studioRepository: StudioRepositoryPort,
         shareChatUseCase: ShareChatUseCase,
+        importSharedChatUseCase: ImportSharedChatUseCase = mockk(relaxed = true),
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
@@ -141,7 +145,7 @@ object ChatViewModelTestSupport {
                 exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                 loggingPort = loggingPort,
             )
-        val chatShareCoordinator = ChatShareCoordinator(shareChatUseCase = shareChatUseCase)
+        val chatShareCoordinator = ChatShareCoordinator(shareChatUseCase = shareChatUseCase, importSharedChatUseCase = importSharedChatUseCase)
         val observeMessageTelemetryUseCase = mockk<ObserveMessageTelemetryUseCase>()
         val observeChatTelemetryUseCase = mockk<ObserveChatTelemetryUseCase>()
         io.mockk.every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
