@@ -1,12 +1,15 @@
 package com.browntowndev.enclave.feature.onboarding.steps
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,8 +19,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
+import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.onboarding.OnboardingViewModel
 
@@ -25,49 +34,89 @@ import com.browntowndev.enclave.feature.onboarding.OnboardingViewModel
 fun WelcomeAgeGateStep(
     ageConfirmed: Boolean,
     onAgeConfirmedChange: (Boolean) -> Unit,
+    onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(24.dp),
+            .fillMaxSize()
+            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "Welcome to Enclave",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Your private AI assistant.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics {
-                    role = Role.Checkbox
-                    contentDescription = OnboardingViewModel.AGE_GATE_CONTENT_DESCRIPTION
-                },
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Checkbox(
-                checked = ageConfirmed,
-                onCheckedChange = onAgeConfirmedChange,
-                modifier = Modifier.semantics {
-                    role = Role.Checkbox
-                    contentDescription = OnboardingViewModel.AGE_GATE_CONTENT_DESCRIPTION
-                },
-            )
-            Text(
-                text = "I confirm I am 18 or older",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+            Spacer(modifier = Modifier.height(48.dp))
+            
+            NeoPanel(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Text(
+                        text = "WELCOME TO ENCLAVE",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Your private, local-first AI assistant.",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    NeoGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics {
+                                role = Role.Checkbox
+                                contentDescription = OnboardingViewModel.AGE_GATE_CONTENT_DESCRIPTION
+                            },
+                    ) {
+                        Checkbox(
+                            checked = ageConfirmed,
+                            onCheckedChange = onAgeConfirmedChange,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.outline
+                            ),
+                            modifier = Modifier.semantics {
+                                role = Role.Checkbox
+                                contentDescription = OnboardingViewModel.AGE_GATE_CONTENT_DESCRIPTION
+                            },
+                        )
+                        Text(
+                            text = "I confirm I am 18 or older",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                }
+            }
         }
+
+        NeoPrimaryButton(
+            text = "CONTINUE",
+            onClick = onNext,
+            enabled = ageConfirmed,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -75,7 +124,7 @@ fun WelcomeAgeGateStep(
 @Composable
 internal fun WelcomeAgeGateStepLightPreview() {
     EnclaveTheme(darkTheme = false) {
-        WelcomeAgeGateStep(ageConfirmed = false, onAgeConfirmedChange = {})
+        WelcomeAgeGateStep(ageConfirmed = false, onAgeConfirmedChange = {}, onNext = {})
     }
 }
 
@@ -83,6 +132,6 @@ internal fun WelcomeAgeGateStepLightPreview() {
 @Composable
 internal fun WelcomeAgeGateStepDarkPreview() {
     EnclaveTheme(darkTheme = true) {
-        WelcomeAgeGateStep(ageConfirmed = true, onAgeConfirmedChange = {})
+        WelcomeAgeGateStep(ageConfirmed = true, onAgeConfirmedChange = {}, onNext = {})
     }
 }

@@ -67,6 +67,7 @@ fun OnboardingScreen(
                 0 -> WelcomeAgeGateStep(
                     ageConfirmed = uiState.ageConfirmed,
                     onAgeConfirmedChange = onAgeConfirmedChange,
+                    onNext = onNextStep,
                     modifier = Modifier.fillMaxSize(),
                 )
                 1 -> ModelChoiceStep(
