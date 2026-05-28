@@ -66,7 +66,7 @@ fun WelcomeAgeGateStep(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Your private, local-first AI assistant.",
+                        text = "Your models. Your keys. Zero-Knowledge encrypted.",
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontWeight = FontWeight.Medium
                         ),
