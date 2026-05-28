@@ -44,4 +44,5 @@ data class ProviderMetric(
     val metricName: String,
     val metricValue: Double,
     val severity: TelemetrySeverity,
+    val baseUrl: String? = null,
 )

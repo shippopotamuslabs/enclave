@@ -104,6 +104,19 @@ class Telemetry001DomainTddRedTest {
                 severity = TelemetrySeverity.INFO,
             )
         assertEquals(450.0, metric.metricValue)
+        assertEquals(null, metric.baseUrl)
+
+        val metricWithUrl =
+            ProviderMetric(
+                eventId = "evt-4-url",
+                timestampMs = 1_717_000_000_000L,
+                provider = "Anthropic",
+                metricName = "cache_hit_rate",
+                metricValue = 0.85,
+                severity = TelemetrySeverity.INFO,
+                baseUrl = "https://api.anthropic.com",
+            )
+        assertEquals("https://api.anthropic.com", metricWithUrl.baseUrl)
     }
 
     @Test

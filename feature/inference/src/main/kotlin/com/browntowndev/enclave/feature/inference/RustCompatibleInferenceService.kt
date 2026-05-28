@@ -11,6 +11,9 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
  * Implementations complete a single model turn given the full session context managed by Rust.
  */
 interface RustCompatibleInferenceService : LlmInferencePort {
+    val baseUrl: String?
+        get() = null
+
     /**
      * Complete one model turn. The Rust engine manages history and compaction; this method
      * is called once per turn with the full session context it assembled.

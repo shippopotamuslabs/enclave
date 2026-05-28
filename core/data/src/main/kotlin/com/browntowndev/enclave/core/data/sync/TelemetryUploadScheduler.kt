@@ -53,6 +53,27 @@ class TelemetryUploadScheduler
             )
         }
 
+        fun triggerImmediateUpload() {
+            if (!config.isConfigured) {
+                return
+            }
+            val constraints =
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+
+            val oneTimeRequest =
+                OneTimeWorkRequestBuilder<TelemetryUploadWorker>()
+                    .setConstraints(constraints)
+                    .build()
+
+            workManager.enqueueUniqueWork(
+                ONE_TIME_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                oneTimeRequest,
+            )
+        }
+
         companion object {
             const val WORK_NAME = "telemetry_upload"
             const val ONE_TIME_WORK_NAME = "telemetry_upload_one_time"

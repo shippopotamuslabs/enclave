@@ -2,6 +2,7 @@ package com.browntowndev.enclave.core.data.repository
 
 import com.browntowndev.enclave.core.data.local.TelemetryEventDao
 import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity
+import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.domain.model.telemetry.ExceptionRecord
 import com.browntowndev.enclave.domain.model.telemetry.InferenceOutcome
 import com.browntowndev.enclave.domain.model.telemetry.ProviderMetric
@@ -18,6 +19,7 @@ class TelemetryEventRepositoryImpl
     constructor(
         private val dao: TelemetryEventDao,
         @InternalTelemetryLogging private val loggingPort: LoggingPort,
+        private val telemetryUploadScheduler: TelemetryUploadScheduler? = null,
     ) : TelemetryEventPort {
         companion object {
             private const val TAG = "TelemetryEventRepository"
@@ -48,6 +50,7 @@ class TelemetryEventRepositoryImpl
                 if (count > MAX_ROWS) {
                     dao.evictOldest(EVICTION_BATCH)
                 }
+                telemetryUploadScheduler?.triggerImmediateUpload()
             }.onFailure { error ->
                 loggingPort.warning(TAG, "Failed to persist telemetry event: ${error.message}")
             }
