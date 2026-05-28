@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.agent
 
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -9,6 +10,14 @@ import kotlin.test.assertTrue
  */
 class RustToolStreamGateContractTest {
     private val gatePort = RustToolStreamGate()
+
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun loadAgentCoreLibrary() {
+            RustToolParserTestLibrary.loadAgentCoreLibrary()
+        }
+    }
 
     private val dsmlSample =
         """
