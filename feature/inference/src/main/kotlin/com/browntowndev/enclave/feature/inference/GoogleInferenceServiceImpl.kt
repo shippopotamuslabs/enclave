@@ -15,8 +15,10 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCallingConfig
@@ -42,6 +44,7 @@ class GoogleInferenceServiceImpl(
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
     private val telemetrySupport: InferenceTelemetrySupport? = null,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -181,6 +184,7 @@ class GoogleInferenceServiceImpl(
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
+        val startedAtMs = System.currentTimeMillis()
         try {
             activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
             val timing =
@@ -339,13 +343,35 @@ class GoogleInferenceServiceImpl(
                         assistantText = assistantText,
                     ),
                 telemetry = telemetry,
-            )
+            ).also {
+                telemetryEventPort.emitInferenceExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    provider = "Google",
+                    modelId = modelId,
+                    success = true,
+                    tokenCount = outputTokenEstimate,
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: InferenceNetworkException) {
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Google",
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw e
         } catch (e: java.io.IOException) {
             loggingPort.error(TAG, "completeSingleTurn network failure: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Google",
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+            )
             throw InferenceNetworkException(
                 provider = PROVIDER,
                 message = e.message ?: "Connection error",

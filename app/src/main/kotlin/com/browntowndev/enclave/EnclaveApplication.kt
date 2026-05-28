@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.auth.AuthManager
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.sync.CloudSyncAuthListener
 import dagger.hilt.android.HiltAndroidApp
@@ -44,10 +45,15 @@ class EnclaveApplication :
     @Inject
     lateinit var toolEnvelopeParserFacadeInstaller: ToolEnvelopeParserFacadeInstaller
 
+    @Inject
+    lateinit var telemetryUploadScheduler: TelemetryUploadScheduler
+
     override fun newImageLoader(context: android.content.Context): ImageLoader = imageLoader
 
     override fun onCreate() {
         super.onCreate()
+
+        telemetryUploadScheduler.schedule()
 
         toolEnvelopeParserFacadeInstaller.install()
         ToolDefinition.schemaProvider = RustDocGenSchemaProvider()

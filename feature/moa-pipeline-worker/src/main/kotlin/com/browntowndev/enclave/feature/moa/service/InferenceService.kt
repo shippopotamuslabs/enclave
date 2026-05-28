@@ -68,6 +68,11 @@ class InferenceService : Service() {
         private const val PROGRESS_DRAFT_TWO = 50
         private const val PROGRESS_SYNTHESIS = 75
         private const val PROGRESS_FINAL = 100
+
+        private const val THERMAL_HEADROOM_FORECAST_SECONDS = 30
+        private const val THERMAL_HEADROOM_SAFE_DEFAULT = 1.0f
+        private const val THERMAL_SHUTDOWN_MIN_HEADROOM = 0.01f
+        private const val THERMAL_SHUTDOWN_MAX_HEADROOM = 0.15f
     }
 
     @Inject
@@ -385,54 +390,76 @@ class InferenceService : Service() {
             val powerManager = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
 
             service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
-                if (powerManager != null) {
-                    val headroom = try {
-                        powerManager.getThermalHeadroom(30)
-                    } catch (e: Exception) {
-                        1.0f
-                    }
-                    if (headroom in 0.01f..0.15f) {
-                        throw IllegalStateException("response was killed by Android due to thermal shutdown")
-                    }
-                }
-                when (event) {
-                    is InferenceEvent.EngineLoading -> Unit
-                    is InferenceEvent.Processing -> Unit
-                    is InferenceEvent.Thinking -> {
-                        inferenceEventBus.tryEmitPipelineState(
-                            chatId,
-                            MessageGenerationState.ThinkingLive(event.chunk, getModelTypeForStep(step)),
-                        )
-                    }
-                    is InferenceEvent.PartialResponse -> {
-                        output += event.chunk
-                        inferenceEventBus.tryEmitPipelineState(
-                            chatId,
-                            MessageGenerationState.GeneratingText(event.chunk, getModelTypeForStep(step)),
-                        )
-                    }
-                    is InferenceEvent.WebSearchResults -> Unit
-                    is InferenceEvent.Artifacts -> Unit
-                    is InferenceEvent.Media -> Unit
-                    is InferenceEvent.CompactionApplied -> Unit
-                    is InferenceEvent.PreCompact -> Unit
-                    is InferenceEvent.PostCompact -> Unit
-                    is InferenceEvent.ToolRepaired -> Unit
-                    is InferenceEvent.TelemetryCaptured -> Unit
-                    is InferenceEvent.Finished -> {
-                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
-                    }
-                    is InferenceEvent.SafetyBlocked -> {
-                        throw SecurityException("Content blocked: ${event.reason}")
-                    }
-                    is InferenceEvent.Error -> {
-                        throw event.cause
-                    }
-                }
+                powerManager?.let { enforceThermalHeadroomOrAbort(it) }
+                handlePipelineInferenceEvent(
+                    event = event,
+                    chatId = chatId,
+                    step = step,
+                    onPartialChunk = { chunk ->
+                        output += chunk
+                    },
+                )
             }
         }
 
         return StepResult(output = output)
+    }
+
+    private fun readThermalHeadroom(powerManager: android.os.PowerManager): Float =
+        try {
+            powerManager.getThermalHeadroom(THERMAL_HEADROOM_FORECAST_SECONDS)
+        } catch (e: Exception) {
+            logger.error(TAG, "getThermalHeadroom failed; assuming safe headroom", e)
+            THERMAL_HEADROOM_SAFE_DEFAULT
+        }
+
+    private fun enforceThermalHeadroomOrAbort(powerManager: android.os.PowerManager) {
+        val headroom = readThermalHeadroom(powerManager)
+        if (headroom in THERMAL_SHUTDOWN_MIN_HEADROOM..THERMAL_SHUTDOWN_MAX_HEADROOM) {
+            throw IllegalStateException("response was killed by Android due to thermal shutdown")
+        }
+    }
+
+    private fun handlePipelineInferenceEvent(
+        event: InferenceEvent,
+        chatId: String,
+        step: PipelineStep,
+        onPartialChunk: (String) -> Unit,
+    ) {
+        when (event) {
+            is InferenceEvent.EngineLoading -> Unit
+            is InferenceEvent.Processing -> Unit
+            is InferenceEvent.Thinking -> {
+                inferenceEventBus.tryEmitPipelineState(
+                    chatId,
+                    MessageGenerationState.ThinkingLive(event.chunk, getModelTypeForStep(step)),
+                )
+            }
+            is InferenceEvent.PartialResponse -> {
+                onPartialChunk(event.chunk)
+                inferenceEventBus.tryEmitPipelineState(
+                    chatId,
+                    MessageGenerationState.GeneratingText(event.chunk, getModelTypeForStep(step)),
+                )
+            }
+            is InferenceEvent.WebSearchResults -> Unit
+            is InferenceEvent.Artifacts -> Unit
+            is InferenceEvent.Media -> Unit
+            is InferenceEvent.CompactionApplied -> Unit
+            is InferenceEvent.PreCompact -> Unit
+            is InferenceEvent.PostCompact -> Unit
+            is InferenceEvent.ToolRepaired -> Unit
+            is InferenceEvent.TelemetryCaptured -> Unit
+            is InferenceEvent.Finished -> {
+                // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
+            }
+            is InferenceEvent.SafetyBlocked -> {
+                throw SecurityException("Content blocked: ${event.reason}")
+            }
+            is InferenceEvent.Error -> {
+                throw event.cause
+            }
+        }
     }
 
     /**

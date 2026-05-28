@@ -44,6 +44,7 @@ import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.SQLiteVecInstaller
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
+import com.browntowndev.enclave.core.data.local.TelemetryEventDao
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
 import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
@@ -72,7 +73,13 @@ import com.browntowndev.enclave.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.enclave.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.RoomTransactionProvider
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
+import com.browntowndev.enclave.core.data.remote.telemetry.OkHttpTelemetryOtlpTransport
+import com.browntowndev.enclave.core.data.remote.telemetry.TelemetryOtlpClient
+import com.browntowndev.enclave.core.data.remote.telemetry.TelemetryOtlpClientImpl
+import com.browntowndev.enclave.core.data.remote.telemetry.TelemetryOtlpTransport
 import com.browntowndev.enclave.core.data.repository.StudioRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImpl
+import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
@@ -116,6 +123,7 @@ import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigProvider
 import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
@@ -215,6 +223,24 @@ object DataModule {
     @Provides
     fun provideMessageInferenceTelemetryDao(database: EnclaveDatabase): MessageInferenceTelemetryDao =
         database.messageInferenceTelemetryDao()
+
+    @Provides
+    fun provideTelemetryEventDao(database: EnclaveDatabase): TelemetryEventDao = database.telemetryEventDao()
+
+    @Provides
+    @Singleton
+    fun provideTelemetryOtlpTransport(
+        okHttpClient: OkHttpClient,
+        config: TelemetryUploadConfig,
+    ): TelemetryOtlpTransport = OkHttpTelemetryOtlpTransport(okHttpClient, config)
+
+    @Provides
+    @Singleton
+    fun provideTelemetryOtlpClient(transport: TelemetryOtlpTransport): TelemetryOtlpClient =
+        TelemetryOtlpClientImpl(transport)
+
+    // Reflection-only helper for TEL-036; Hilt binding lives in AppBindingModule (TEL-055).
+    fun provideTelemetryEventPort(impl: TelemetryEventRepositoryImpl): TelemetryEventPort = impl
 
     @Provides
     fun provideLocalModelsDao(database: EnclaveDatabase): LocalModelsDao = database.localModelsDao()

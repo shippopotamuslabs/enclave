@@ -179,12 +179,6 @@ class SettingsRepositoryImpl
                 message: String,
                 throwable: Throwable?,
             ) = Unit
-
-            override fun recordException(
-                tag: String,
-                message: String,
-                throwable: Throwable,
-            ) = Unit
         }
 
         override suspend fun updateAllowMemories(allowed: Boolean) {

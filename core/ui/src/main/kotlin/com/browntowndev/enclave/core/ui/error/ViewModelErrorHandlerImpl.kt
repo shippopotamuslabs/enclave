@@ -38,7 +38,6 @@ class ViewModelErrorHandlerImpl
             if (throwable is CancellationException) return
 
             // 1. Log to Crashlytics and Logcat
-            loggingPort.recordException(tag, message, throwable)
             loggingPort.error(tag, message, throwable)
 
             // 2. Debounce and emit user-facing message

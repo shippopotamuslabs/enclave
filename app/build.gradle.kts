@@ -47,6 +47,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("boolean", "ALLOW_CANCEL_DOWNLOAD", "false")
+        buildConfigField(
+            "String",
+            "TELEMETRY_OTLP_ENDPOINT",
+            "\"${localProperties.getProperty("telemetry.otlp.endpoint", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "TELEMETRY_OTLP_API_KEY",
+            "\"${localProperties.getProperty("telemetry.otlp.api.key", "")}\"",
+        )
     }
 
     signingConfigs {

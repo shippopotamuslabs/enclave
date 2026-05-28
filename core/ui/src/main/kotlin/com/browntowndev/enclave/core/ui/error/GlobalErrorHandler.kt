@@ -40,7 +40,6 @@ class GlobalErrorHandler : CoroutineExceptionHandler {
                 )
             val loggingPort = entryPoint.loggingPort()
 
-            loggingPort.recordException("GlobalErrorHandler", "Uncaught coroutine exception", exception)
             loggingPort.error("GlobalErrorHandler", "Uncaught coroutine exception", exception)
         } catch (e: Exception) {
             // Fallback if Hilt is not yet initialized or other issues

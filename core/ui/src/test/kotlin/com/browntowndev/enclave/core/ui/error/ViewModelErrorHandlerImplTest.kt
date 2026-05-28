@@ -42,7 +42,7 @@ class ViewModelErrorHandlerImplTest {
             }
 
             verify {
-                loggingPort.recordException(tag, message, throwable)
+                loggingPort.error(tag, message, throwable)
             }
         }
 
@@ -64,7 +64,7 @@ class ViewModelErrorHandlerImplTest {
             }
 
             verify(exactly = 3) {
-                loggingPort.recordException(tag, message, throwable)
+                loggingPort.error(tag, message, throwable)
             }
         }
 
@@ -114,7 +114,6 @@ class ViewModelErrorHandlerImplTest {
             }
 
             verify {
-                loggingPort.recordException(tag, message, throwable)
                 loggingPort.error(tag, message, throwable)
             }
         }
@@ -132,7 +131,7 @@ class ViewModelErrorHandlerImplTest {
             }
 
             verify(exactly = 0) {
-                loggingPort.recordException(any(), any(), any())
+                loggingPort.error(any(), any(), any())
             }
         }
 }

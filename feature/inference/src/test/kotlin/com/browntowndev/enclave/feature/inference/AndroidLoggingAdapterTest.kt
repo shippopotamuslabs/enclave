@@ -29,23 +29,21 @@ class AndroidLoggingAdapterTest {
     }
 
     @Test
-    fun `recordException calls Crashlytics`() {
+    fun `error with throwable calls Crashlytics`() {
         val tag = "TestTag"
         val message = "Test message"
         val throwable = RuntimeException("Test exception")
 
-        adapter.recordException(tag, message, throwable)
+        adapter.error(tag, message, throwable)
 
         verify {
-            crashlytics.setCustomKey("LogTag", tag)
-            crashlytics.setCustomKey("Message", message)
+            crashlytics.log(match { it.contains(tag) && it.contains(message) })
             crashlytics.recordException(throwable)
         }
     }
 
     @Test
-    fun `recordException handles Crashlytics failure gracefully`() {
-        // Mock getInstance() to throw
+    fun `error handles Crashlytics failure gracefully`() {
         every { FirebaseCrashlytics.getInstance() } throws RuntimeException("Firebase not initialized")
 
         mockkStatic(Log::class)
@@ -55,9 +53,8 @@ class AndroidLoggingAdapterTest {
         val message = "Test message"
         val throwable = RuntimeException("Test exception")
 
-        adapter.recordException(tag, message, throwable)
+        adapter.error(tag, message, throwable)
 
-        // Verify it doesn't crash and logs to Android Log
         verify {
             Log.e("AndroidLoggingAdapter", "Crashlytics not available. Error: $message", throwable)
         }

@@ -157,10 +157,4 @@ class RecordingLoggingPort : LoggingPort {
     ) {
         errorCalls += ErrorCall(tag, message, throwable)
     }
-
-    override fun recordException(
-        tag: String,
-        message: String,
-        throwable: Throwable,
-    ) {}
 }
