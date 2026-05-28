@@ -83,6 +83,8 @@ fun OnboardingScreen(
                     onApiKeyChanged = onApiKeyChanged,
                     onDiscoverModels = onDiscoverModels,
                     onModelSelected = onModelSelected,
+                    onNext = onNextStep,
+                    onPrevious = onPreviousStep,
                     modifier = Modifier.fillMaxSize(),
                 )
                 2 -> MediaStep(
@@ -91,12 +93,15 @@ fun OnboardingScreen(
                     onSaveTtsProvider = onSaveTtsProvider,
                     onSaveMediaProvider = onSaveMediaProvider,
                     onSkipMedia = onSkipMedia,
+                    onNext = onNextStep,
+                    onPrevious = onPreviousStep,
                     modifier = Modifier.fillMaxSize(),
                 )
                 3 -> CompletionStep(
                     isSaving = uiState.isSaving,
                     saveError = uiState.saveError,
                     onCompleteOnboarding = onCompleteOnboarding,
+                    onPrevious = onPreviousStep,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
