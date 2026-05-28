@@ -132,6 +132,7 @@ import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPor
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.domain.qualifier.PipelineDataStore
 import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.SystemClock
@@ -232,7 +233,8 @@ object DataModule {
     fun provideTelemetryOtlpTransport(
         okHttpClient: OkHttpClient,
         config: TelemetryUploadConfig,
-    ): TelemetryOtlpTransport = OkHttpTelemetryOtlpTransport(okHttpClient, config)
+        @InternalTelemetryLogging loggingPort: LoggingPort,
+    ): TelemetryOtlpTransport = OkHttpTelemetryOtlpTransport(okHttpClient, config, loggingPort)
 
     @Provides
     @Singleton

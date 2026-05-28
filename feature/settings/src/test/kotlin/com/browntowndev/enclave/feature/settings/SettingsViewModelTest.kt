@@ -70,6 +70,7 @@ class SettingsViewModelTest {
     private val saveXApiKeyUseCase = mockk<SaveXApiKeyUseCase>(relaxed = true)
     private val clearXApiKeyUseCase = mockk<ClearXApiKeyUseCase>(relaxed = true)
     private val updateBackgroundInferenceEnabledUseCase = mockk<UpdateBackgroundInferenceEnabledUseCase>(relaxed = true)
+    private val updateAutomaticErrorTrackingEnabledUseCase = mockk<UpdateAutomaticErrorTrackingEnabledUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
     private val saveLocalModelPresetUseCase = mockk<SaveLocalModelPresetUseCase>(relaxed = true)
@@ -174,6 +175,7 @@ class SettingsViewModelTest {
                         clearXApiKey = clearXApiKeyUseCase,
                         updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
                         updateBackgroundInferenceEnabled = updateBackgroundInferenceEnabledUseCase,
+                        updateAutomaticErrorTrackingEnabled = updateAutomaticErrorTrackingEnabledUseCase,
                     ),
                 localModels =
                     SettingsLocalModelUseCasesImpl(
@@ -256,7 +258,7 @@ class SettingsViewModelTest {
                 cloudSyncPort,
             )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
-        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler)
+        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, settingsUseCases.preferences, errorHandler)
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val localModelsDelegate =
             SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, errorHandler)

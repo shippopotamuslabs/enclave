@@ -15,6 +15,14 @@ internal object TelemetryOtlpJsonEncoder {
     private const val INSTRUMENTATION_SCOPE = "com.browntowndev.enclave.telemetry"
     private const val NANOS_PER_MILLIS = 1_000_000L
 
+    @Suppress("SwallowedException")
+    private val deviceManufacturer: String
+        get() = try { android.os.Build.MANUFACTURER } catch (e: Throwable) { "Unknown" }
+
+    @Suppress("SwallowedException")
+    private val deviceModel: String
+        get() = try { android.os.Build.MODEL } catch (e: Throwable) { "Unknown" }
+
     fun buildExportLogsRequest(events: List<TelemetryEventEntity>): String =
         buildJsonObject {
             put(
@@ -53,6 +61,8 @@ internal object TelemetryOtlpJsonEncoder {
                 "attributes",
                 buildJsonArray {
                     add(stringAttribute("service.name", SERVICE_NAME))
+                    add(stringAttribute("device.manufacturer", deviceManufacturer))
+                    add(stringAttribute("device.model.name", deviceModel))
                 },
             )
         }

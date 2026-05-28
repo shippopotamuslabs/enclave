@@ -15,10 +15,21 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
     errorMessage: String? = null,
     tokenCount: Int? = null,
     costUsd: BigDecimal? = null,
+    inputTokens: Int? = null,
+    cacheReadInputTokens: Int? = null,
 ) {
     val port = this ?: return
     val completedAtMs = System.currentTimeMillis()
     val latencyMs = (completedAtMs - startedAtMs).coerceAtLeast(0)
+    val cacheHitRate = cacheReadInputTokens?.let { cached ->
+        val input = inputTokens ?: 0
+        val total = if (provider.equals("Anthropic", ignoreCase = true)) {
+            input + cached
+        } else {
+            input
+        }
+        if (total > 0) cached.toDouble() / total.toDouble() else 0.0
+    }
     runCatching {
         port.emitInferenceOutcome(
             InferenceOutcome(
@@ -39,6 +50,7 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
             provider = provider,
             latencyMs = latencyMs,
             tokenCount = tokenCount,
+            cacheHitRate = cacheHitRate,
             completedAtMs = completedAtMs,
         )
     }
@@ -49,6 +61,7 @@ private suspend fun emitProviderExecutionMetrics(
     provider: String,
     latencyMs: Long,
     tokenCount: Int?,
+    cacheHitRate: Double?,
     completedAtMs: Long,
 ) {
     port.emitProviderMetric(
@@ -69,6 +82,33 @@ private suspend fun emitProviderExecutionMetrics(
                 provider = provider,
                 metricName = "output_tokens",
                 metricValue = tokens.toDouble(),
+                severity = TelemetrySeverity.INFO,
+            ),
+        )
+        val tokensPerSec = if (latencyMs > 0) {
+            tokens.toDouble() / (latencyMs.toDouble() / 1000.0)
+        } else {
+            0.0
+        }
+        port.emitProviderMetric(
+            ProviderMetric(
+                eventId = UUID.randomUUID().toString(),
+                timestampMs = completedAtMs,
+                provider = provider,
+                metricName = "tokens_per_second",
+                metricValue = tokensPerSec,
+                severity = TelemetrySeverity.INFO,
+            ),
+        )
+    }
+    cacheHitRate?.let { rate ->
+        port.emitProviderMetric(
+            ProviderMetric(
+                eventId = UUID.randomUUID().toString(),
+                timestampMs = completedAtMs,
+                provider = provider,
+                metricName = "cache_hit_rate",
+                metricValue = rate,
                 severity = TelemetrySeverity.INFO,
             ),
         )

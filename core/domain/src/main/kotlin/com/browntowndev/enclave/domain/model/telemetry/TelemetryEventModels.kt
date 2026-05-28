@@ -23,6 +23,8 @@ data class ToolOutcome(
     val success: Boolean,
     val errorMessage: String?,
     val severity: TelemetrySeverity,
+    val provider: String? = null,
+    val modelId: String? = null,
 )
 
 data class ExceptionRecord(

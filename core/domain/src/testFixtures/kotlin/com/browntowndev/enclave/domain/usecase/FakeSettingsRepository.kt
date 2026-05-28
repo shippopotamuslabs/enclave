@@ -159,6 +159,10 @@ class FakeSettingsRepository : SettingsRepository {
         _settingsFlow.value = _settingsFlow.value.copy(ageConfirmed = confirmed)
     }
 
+    override suspend fun updateAutomaticErrorTrackingEnabled(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(automaticErrorTrackingEnabled = enabled)
+    }
+
     // Verification methods
     fun verifyUpdateThemeCalled(
         times: Int,

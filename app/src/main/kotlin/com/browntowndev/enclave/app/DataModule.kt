@@ -7,7 +7,10 @@ import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImp
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.app.telemetry.AutomaticErrorTrackingCoordinator
+import com.browntowndev.enclave.app.telemetry.AutomaticErrorTrackingGateImpl
 import com.browntowndev.enclave.app.telemetry.TelemetryLoggingAdapter
+import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
 import dagger.Binds
@@ -54,4 +57,8 @@ abstract class AppBindingModule {
     @Binds
     @Singleton
     abstract fun bindTelemetryEventPort(impl: TelemetryEventRepositoryImpl): TelemetryEventPort
+
+    @Binds
+    @Singleton
+    abstract fun bindAutomaticErrorTrackingGate(impl: AutomaticErrorTrackingGateImpl): AutomaticErrorTrackingGate
 }

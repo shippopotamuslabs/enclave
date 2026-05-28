@@ -511,6 +511,8 @@ class AnthropicInferenceServiceImpl(
                     modelId = resolvedModelId,
                     success = true,
                     tokenCount = response.outputTokens,
+                    inputTokens = response.inputTokens,
+                    cacheReadInputTokens = response.cacheReadInputTokens,
                 )
             }
         } catch (e: CancellationException) {

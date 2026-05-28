@@ -202,6 +202,9 @@ internal class SettingsViewModel
 
         fun onDismissDataControlsConfirmation() = dataControlsDelegate.onDismissDataControlsConfirmation(_dataControlsState)
 
+        fun onAutomaticErrorTrackingChange(enabled: Boolean) =
+            dataControlsDelegate.onAutomaticErrorTrackingChange(viewModelScope, TAG, enabled)
+
         fun onConfirmDeleteAllChats() =
             dataControlsDelegate.onConfirmDeleteAllChats(viewModelScope, TAG, _dataControlsState) { _snackbarMessages.tryEmit(it) }
 

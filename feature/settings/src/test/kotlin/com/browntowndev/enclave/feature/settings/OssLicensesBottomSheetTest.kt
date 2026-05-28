@@ -373,6 +373,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                     clearXApiKey = mockk(relaxed = true),
                     updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
                     updateBackgroundInferenceEnabled = mockk(relaxed = true),
+                    updateAutomaticErrorTrackingEnabled = mockk(relaxed = true),
                 ),
             localModels =
                 SettingsLocalModelUseCasesImpl(
@@ -484,7 +485,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                 .testUsageSpendSummaryUseCase(),
         generalDelegate = generalDelegate,
         memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler),
-        dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler),
+        dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, settingsUseCases.preferences, errorHandler),
         localModelsDelegate =
             SettingsLocalModelsDelegate(
                 settingsUseCases.localModels,

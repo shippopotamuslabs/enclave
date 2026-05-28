@@ -140,6 +140,10 @@ sealed interface ShareUiEvent {
     data class OpenShareSheet(
         val shareUrl: String,
     ) : ShareUiEvent
+
+    data class ImportedChat(
+        val chatId: com.browntowndev.enclave.domain.model.chat.ChatId,
+    ) : ShareUiEvent
 }
 
 /**

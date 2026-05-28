@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.share.SharedChat
 import com.browntowndev.enclave.domain.model.share.SharedMessage
@@ -39,7 +40,7 @@ class FirestoreShareRepository
             const val IV_LENGTH_BYTES = 12
         }
 
-        override suspend fun shareChat(messages: List<Message>): SharedChat {
+        override suspend fun shareChat(messages: List<Message>, chatId: ChatId?): SharedChat {
             val shareId =
                 java.util.UUID
                     .randomUUID()
@@ -138,6 +139,7 @@ class FirestoreShareRepository
                     createdAt = System.currentTimeMillis(),
                     expiresAt = System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L,
                     shareUrl = "", // Populated by server
+                    sourceChatId = chatId?.value,
                 )
 
             val json = Json.encodeToString(payload)

@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import com.browntowndev.enclave.core.data.DataModule
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
@@ -539,11 +543,19 @@ class Telemetry001DataTddRedTest {
             )
         scheduler.schedule()
         verify {
+            workManager.enqueueUniqueWork(
+                TelemetryUploadScheduler.ONE_TIME_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                match<OneTimeWorkRequest> { request ->
+                    request.workSpec.constraints.requiredNetworkType == NetworkType.CONNECTED
+                },
+            )
             workManager.enqueueUniquePeriodicWork(
-                any(),
-                ExistingPeriodicWorkPolicy.KEEP,
-                match { request ->
-                    request.workSpec.intervalDuration == TimeUnit.MINUTES.toMillis(15)
+                TelemetryUploadScheduler.WORK_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                match<PeriodicWorkRequest> { request ->
+                    request.workSpec.intervalDuration == TimeUnit.MINUTES.toMillis(15) &&
+                        request.workSpec.constraints.requiredNetworkType == NetworkType.CONNECTED
                 },
             )
         }
@@ -731,6 +743,28 @@ class Telemetry001DataTddRedTest {
     }
 
     @Test
+    fun `TEL-062 TelemetryEventMappers round-trip ToolOutcome`() {
+        val outcome =
+            ToolOutcome(
+                eventId = "evt-6",
+                timestampMs = 1_717_000_000_000L,
+                toolName = "search",
+                latencyMs = 1500,
+                success = true,
+                errorMessage = null,
+                severity = TelemetrySeverity.INFO,
+                provider = "Anthropic",
+                modelId = "claude-3-5-sonnet",
+            )
+        val entity = outcome.toEntity()
+        val roundTripped = entity.toDomain() as ToolOutcome
+        assertEquals("evt-6", roundTripped.eventId)
+        assertEquals("search", roundTripped.toolName)
+        assertEquals("Anthropic", roundTripped.provider)
+        assertEquals("claude-3-5-sonnet", roundTripped.modelId)
+    }
+
+    @Test
     fun `TEL-060 TelemetryEventRepositoryImpl buffers ProviderMetric`() =
         runTest {
             val dao = mockk<TelemetryEventDao>(relaxed = true)
@@ -753,9 +787,9 @@ class Telemetry001DataTddRedTest {
                     eventId = "evt-pii",
                     timestampMs = 1_717_000_000_000L,
                     tag = "Tool",
-                    message = "Failed for user@example.com at /home/user/secret.txt",
+                    message = "Failed for user@example.com with card 4111-1111-1111-1111",
                     throwableType = "RuntimeException",
-                    stackTrace = "/home/user/secret.txt:42",
+                    stackTrace = "at com.example.Tool.run(/home/user/secret.txt:42)",
                     severity = TelemetrySeverity.ERROR,
                 )
             repository.emitException(record)
@@ -763,6 +797,7 @@ class Telemetry001DataTddRedTest {
                 dao.insert(
                     match { entity ->
                         !entity.payloadJson.contains("user@example.com") &&
+                            !entity.payloadJson.contains("4111-1111-1111-1111") &&
                             !entity.payloadJson.contains("/home/user/secret.txt")
                     },
                 )
@@ -864,7 +899,7 @@ class Telemetry001DataTddRedTest {
             tag = "InferenceService",
             message = "Connection timeout",
             throwableType = "java.io.IOException",
-            stackTrace = "...",
+            stackTrace = "at com.example.InferenceService.connect(InferenceService.kt:10)",
             severity = TelemetrySeverity.ERROR,
         )
 

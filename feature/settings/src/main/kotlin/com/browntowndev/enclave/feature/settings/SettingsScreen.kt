@@ -85,6 +85,7 @@ fun SettingsScreen(
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
+    onAutomaticErrorTrackingChange: (Boolean) -> Unit,
     onRequestDeleteAllChats: () -> Unit,
     onConfirmDeleteAllChats: () -> Unit,
     onRequestDeleteAllMedia: () -> Unit,
@@ -367,6 +368,7 @@ fun SettingsScreen(
             DataControlsBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowDataControlsSheet(false) },
+                onAutomaticErrorTrackingChange = onAutomaticErrorTrackingChange,
                 onRequestDeleteAllChats = onRequestDeleteAllChats,
                 onConfirmDeleteAllChats = onConfirmDeleteAllChats,
                 onRequestDeleteAllMedia = onRequestDeleteAllMedia,
@@ -702,6 +704,7 @@ fun PreviewSettingsScreen() {
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
             onShowDataControlsSheet = {},
+            onAutomaticErrorTrackingChange = {},
             onRequestDeleteAllChats = {},
             onConfirmDeleteAllChats = {},
             onRequestDeleteAllMedia = {},

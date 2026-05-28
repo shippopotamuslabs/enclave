@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.auth.AuthManager
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.app.telemetry.AutomaticErrorTrackingCoordinator
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.sync.CloudSyncAuthListener
@@ -47,6 +48,9 @@ class EnclaveApplication :
 
     @Inject
     lateinit var telemetryUploadScheduler: TelemetryUploadScheduler
+
+    @Inject
+    lateinit var automaticErrorTrackingCoordinator: AutomaticErrorTrackingCoordinator
 
     override fun newImageLoader(context: android.content.Context): ImageLoader = imageLoader
 

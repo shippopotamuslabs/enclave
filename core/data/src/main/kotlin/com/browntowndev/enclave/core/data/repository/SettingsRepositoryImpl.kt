@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
+import com.browntowndev.enclave.domain.model.settings.SettingsPreferenceKeys
 import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
@@ -47,6 +48,8 @@ class SettingsRepositoryImpl
             private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
             private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("settings_onboarding_completed")
             private val AGE_CONFIRMED_KEY = booleanPreferencesKey("settings_age_confirmed")
+            private val AUTOMATIC_ERROR_TRACKING_ENABLED_KEY =
+                booleanPreferencesKey(SettingsPreferenceKeys.AUTOMATIC_ERROR_TRACKING_ENABLED)
             private const val TAG = "SettingsRepository"
 
             private fun customPromptTextAad(): ByteArray =
@@ -109,6 +112,8 @@ class SettingsRepositoryImpl
                         backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
                         onboardingCompleted = preferences[ONBOARDING_COMPLETED_KEY] ?: false,
                         ageConfirmed = preferences[AGE_CONFIRMED_KEY] ?: false,
+                        automaticErrorTrackingEnabled =
+                            preferences[AUTOMATIC_ERROR_TRACKING_ENABLED_KEY] ?: false,
                     )
                 }
 
@@ -275,6 +280,12 @@ class SettingsRepositoryImpl
         override suspend fun updateAgeConfirmed(confirmed: Boolean) {
             dataStore.edit { preferences ->
                 preferences[AGE_CONFIRMED_KEY] = confirmed
+            }
+        }
+
+        override suspend fun updateAutomaticErrorTrackingEnabled(enabled: Boolean) {
+            dataStore.edit { preferences ->
+                preferences[AUTOMATIC_ERROR_TRACKING_ENABLED_KEY] = enabled
             }
         }
     }

@@ -57,6 +57,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -400,10 +401,39 @@ class RustLoopInferenceService(
     ): List<ChatMessage> =
         buildList {
             sessionMessages.forEach { message ->
-                add(message.toChatMessage())
+                if (!message.isEngineInternalSidecar()) {
+                    add(message.toChatMessage())
+                }
             }
             result.toAssistantChatMessageOrNull()?.let(::add)
         }
+
+    private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean {
+        val metadata = runCatching {
+            if (metadataJson != "null" && metadataJson.isNotBlank()) {
+                Json.parseToJsonElement(metadataJson).jsonObject
+            } else {
+                null
+            }
+        }.getOrNull()
+
+        if (metadata != null) {
+            if (metadata.containsKey("agent_tool_budget") ||
+                metadata.containsKey("tools_blocked_nudge") ||
+                metadata.containsKey("envelope_parse_failure")) {
+                return true
+            }
+        }
+
+        val contentObj = runCatching {
+            Json.parseToJsonElement(content).jsonObject
+        }.getOrNull()
+        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey("_agent")) {
+            return true
+        }
+
+        return false
+    }
 
     private fun buildFallbackTranscript(
         userContent: String,

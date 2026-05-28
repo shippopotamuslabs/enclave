@@ -384,7 +384,19 @@ export const share = functions.https.onRequest(async (req, res) => {
             <div class="logo">Enclave</div>
         </div>
         <div id="messages"></div>
-        <a href="${DEEP_LINK_SCHEME}://shared/${shareId}" class="button">Open in Enclave</a>
+        <a href="${DEEP_LINK_SCHEME}://shared/${shareId}" id="open-enclave-btn" class="button">Open in Enclave</a>
+        <script>
+            (function() {
+                var queryKey = new URLSearchParams(window.location.search).get('key');
+                var hash = window.location.hash;
+                var hashKey = hash.startsWith('#key=') ? hash.substring(5) : null;
+                var key = queryKey || hashKey;
+                if (key) {
+                    var btn = document.getElementById('open-enclave-btn');
+                    if (btn) btn.href = '${DEEP_LINK_SCHEME}://shared/${shareId}?key=' + encodeURIComponent(key);
+                }
+            })();
+        </script>
         ${scriptHtml}
     </body>
     </html>

@@ -69,8 +69,12 @@ class Telemetry001DomainTddRedTest {
                 success = true,
                 errorMessage = null,
                 severity = TelemetrySeverity.INFO,
+                provider = "Anthropic",
+                modelId = "claude-3-5-sonnet",
             )
         assertEquals("search", outcome.toolName)
+        assertEquals("Anthropic", outcome.provider)
+        assertEquals("claude-3-5-sonnet", outcome.modelId)
     }
 
     @Test
@@ -82,7 +86,7 @@ class Telemetry001DomainTddRedTest {
                 tag = "InferenceService",
                 message = "Connection timeout",
                 throwableType = "java.io.IOException",
-                stackTrace = "...",
+                stackTrace = "at com.example.InferenceService.run(InferenceService.kt:42)",
                 severity = TelemetrySeverity.ERROR,
             )
         assertEquals("java.io.IOException", record.throwableType)

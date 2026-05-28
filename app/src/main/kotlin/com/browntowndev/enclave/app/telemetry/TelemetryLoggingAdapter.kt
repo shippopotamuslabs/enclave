@@ -1,20 +1,18 @@
 package com.browntowndev.enclave.app.telemetry
 
-import com.browntowndev.enclave.domain.model.telemetry.ExceptionRecord
-import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Forwards [LoggingPort.error] throwables to [TelemetryEventPort.emitException] while preserving
- * Crashlytics reporting via [AndroidLoggingAdapter].
+ * Crashlytics reporting via [AndroidLoggingAdapter] when the user has opted in.
  */
 @Singleton
 class TelemetryLoggingAdapter
@@ -22,6 +20,7 @@ class TelemetryLoggingAdapter
     constructor(
         private val delegate: AndroidLoggingAdapter,
         private val telemetryEventPort: TelemetryEventPort,
+        private val errorTrackingGate: AutomaticErrorTrackingGate,
         @param:ApplicationScope private val applicationScope: CoroutineScope,
     ) : LoggingPort {
         override fun debug(
@@ -57,14 +56,11 @@ class TelemetryLoggingAdapter
             applicationScope.launch {
                 runCatching {
                     telemetryEventPort.emitException(
-                        ExceptionRecord(
-                            eventId = UUID.randomUUID().toString(),
-                            timestampMs = System.currentTimeMillis(),
+                        ExceptionRecordFactory.create(
                             tag = tag,
                             message = message,
-                            throwableType = throwable::class.java.name,
-                            stackTrace = throwable.stackTraceToString(),
-                            severity = TelemetrySeverity.ERROR,
+                            throwable = throwable,
+                            detailedTrackingEnabled = errorTrackingGate.isAutomaticErrorTrackingEnabled(),
                         ),
                     )
                 }

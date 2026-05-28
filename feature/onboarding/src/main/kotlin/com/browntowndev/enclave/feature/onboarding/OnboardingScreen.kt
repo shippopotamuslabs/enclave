@@ -22,11 +22,12 @@ import com.browntowndev.enclave.feature.onboarding.steps.WelcomeAgeGateStep
 
 private const val ONBOARDING_STEP_COUNT = 4
 
-@Suppress("UnusedParameter")
+@Suppress("UnusedParameter", "LongParameterList")
 @Composable
 fun OnboardingScreen(
     uiState: OnboardingUiState,
     onAgeConfirmedChange: (Boolean) -> Unit,
+    onAutomaticErrorTrackingChange: (Boolean) -> Unit,
     onNextStep: () -> Unit,
     onPreviousStep: () -> Unit,
     onModelChoiceSelected: (ModelChoice) -> Unit,
@@ -67,6 +68,8 @@ fun OnboardingScreen(
                 0 -> WelcomeAgeGateStep(
                     ageConfirmed = uiState.ageConfirmed,
                     onAgeConfirmedChange = onAgeConfirmedChange,
+                    automaticErrorTrackingEnabled = uiState.automaticErrorTrackingEnabled,
+                    onAutomaticErrorTrackingChange = onAutomaticErrorTrackingChange,
                     onNext = onNextStep,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -116,6 +119,7 @@ internal fun OnboardingScreenLightPreview() {
         OnboardingScreen(
             uiState = OnboardingUiState(currentStep = 0),
             onAgeConfirmedChange = {},
+            onAutomaticErrorTrackingChange = {},
             onNextStep = {},
             onPreviousStep = {},
             onModelChoiceSelected = {},
@@ -142,6 +146,7 @@ internal fun OnboardingScreenDarkPreview() {
                 discoveredModels = listOf(DiscoveredApiModel(id = "model-1")),
             ),
             onAgeConfirmedChange = {},
+            onAutomaticErrorTrackingChange = {},
             onNextStep = {},
             onPreviousStep = {},
             onModelChoiceSelected = {},

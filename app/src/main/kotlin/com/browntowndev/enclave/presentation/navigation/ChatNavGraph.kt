@@ -110,6 +110,7 @@ private fun SharedChatRoute(
         onNewChat = actions.onNewChatFromShared,
         onNavigateToStudio = actions.onNavigateToStudio,
         onShowSnackbar = actions.onShowSnackbar,
+        onNavigateToImportedChat = actions.onNavigateToImportedChat,
         viewModel = chatViewModel,
     )
 }

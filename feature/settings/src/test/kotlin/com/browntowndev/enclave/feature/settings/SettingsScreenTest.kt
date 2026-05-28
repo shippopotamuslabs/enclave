@@ -38,6 +38,7 @@ class SettingsScreenTest {
                     onHapticResponseChange = {},
                     onBackgroundInferenceChange = {},
                     onShowDataControlsSheet = {},
+                    onAutomaticErrorTrackingChange = {},
                     onRequestDeleteAllChats = {},
                     onConfirmDeleteAllChats = {},
                     onRequestDeleteAllMedia = {},

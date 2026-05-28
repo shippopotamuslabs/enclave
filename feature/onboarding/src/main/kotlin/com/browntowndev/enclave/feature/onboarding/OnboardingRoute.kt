@@ -9,7 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun OnboardingRoute(
-    onOnboardingComplete: () -> Unit,
+    onOnboardingComplete: (ModelChoice) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
@@ -18,7 +18,7 @@ fun OnboardingRoute(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                OnboardingEvent.NavigateToChat -> onOnboardingComplete()
+                is OnboardingEvent.NavigateToChat -> onOnboardingComplete(event.modelChoice)
             }
         }
     }
@@ -26,6 +26,7 @@ fun OnboardingRoute(
     OnboardingScreen(
         uiState = uiState,
         onAgeConfirmedChange = viewModel::onAgeConfirmedChange,
+        onAutomaticErrorTrackingChange = viewModel::onAutomaticErrorTrackingChange,
         onNextStep = viewModel::onNextStep,
         onPreviousStep = viewModel::onPreviousStep,
         onModelChoiceSelected = viewModel::onModelChoiceSelected,

@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.core.data.remote.telemetry
 
 import com.browntowndev.enclave.core.data.local.TelemetryEventEntity
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -13,16 +15,18 @@ class TelemetryOtlpJsonEncoderTest {
                 listOf(
                     TelemetryEventEntity(
                         id = "evt-1",
-                        eventType = "INFERENCE_OUTCOME",
-                        timestampMs = 1L,
-                        severity = "INFO",
+                        eventType = "InferenceOutcome",
                         payloadJson = "{}",
+                        severity = "INFO",
+                        timestampMs = 1716854400000L,
                     ),
                 ),
             )
         assertTrue(payload.contains("resourceLogs"))
         assertTrue(payload.contains("enclave.event.id"))
         assertTrue(payload.contains("evt-1"))
+        assertTrue(payload.contains("device.manufacturer"))
+        assertTrue(payload.contains("device.model.name"))
     }
 
     @Test
@@ -35,6 +39,7 @@ class TelemetryOtlpJsonEncoderTest {
                         endpointUrl = "https://otlp.example.com/otlp",
                         apiKey = "test-key",
                     ),
+                loggingPort = mockk(relaxed = true),
             )
         assertEquals(
             "https://otlp.example.com/otlp/v1/logs",

@@ -428,6 +428,7 @@ class SettingsUiStateFactory
                     DataControlsUiState(
                         isSheetOpen = sheetVisibility.dataControls,
                         allowMemories = persistedSettings.allowMemories,
+                        automaticErrorTrackingEnabled = persistedSettings.automaticErrorTrackingEnabled,
                         pendingAction = dataControlsState.pendingAction,
                         isDeleting = dataControlsState.isDeleting,
                         deleteError = dataControlsState.deleteError,
