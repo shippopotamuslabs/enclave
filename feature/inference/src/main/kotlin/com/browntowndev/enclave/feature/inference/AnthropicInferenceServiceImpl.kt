@@ -239,16 +239,6 @@ class AnthropicInferenceServiceImpl(
                 builder.maxTokens(DEFAULT_MAX_TOKENS)
             }
 
-            if (!options.temperatureDisabled) {
-                options.temperature?.let { builder.temperature(it.toDouble()) }
-            }
-            if (!options.topPDisabled) {
-                options.topP?.let { builder.topP(it.toDouble()) }
-            }
-            if (!options.topKDisabled) {
-                options.topK?.let { builder.topK(it.toLong()) }
-            }
-
             resolveThinkingBudget(options)?.let {
                 builder.thinking(
                     ThinkingConfigEnabled
@@ -260,6 +250,11 @@ class AnthropicInferenceServiceImpl(
 
             val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
             val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
+            loggingPort.debug(
+                TAG,
+                @Suppress("MaxLineLength")
+                "Anthropic prompt cache config provider=$PROVIDER model=${options.modelId ?: modelId} useCaching=$useCaching stableTailIndex=$stableTailIndex sessionMessageCount=${sessionMessages.size} availableToolCount=${availableTools.size} hasSystemPrompt=${systemPrompt.isNotBlank()}",
+            )
 
             if (systemPrompt.isNotBlank()) {
                 val systemBlockBuilder = TextBlockParam.builder().text(systemPrompt)
@@ -462,6 +457,11 @@ class AnthropicInferenceServiceImpl(
                         else -> {}
                     }
                 }
+            loggingPort.debug(
+                TAG,
+                @Suppress("MaxLineLength")
+                "Anthropic cache outcome model=$modelId useCaching=$useCaching cacheCreationInputTokens=${response.cacheCreationInputTokens} cacheReadInputTokens=${response.cacheReadInputTokens} inputTokens=${response.inputTokens} stopReason=${response.stopReason}",
+            )
 
             val toolCalls =
                 response.toolUse?.let { tu ->
@@ -652,18 +652,15 @@ class AnthropicInferenceServiceImpl(
                     inputTokens = usage.inputTokens().toInt()
                     outputTokens = usage.outputTokens().toInt()
                     reasoningTokens = null
-                    cacheCreationInputTokens =
-                        usage
-                            .cacheCreationInputTokens()
-                            .orElse(0L)
-                            .toInt()
-                            .takeIf { it > 0 }
-                    cacheReadInputTokens =
-                        usage
-                            .cacheReadInputTokens()
-                            .orElse(0L)
-                            .toInt()
-                            .takeIf { it > 0 }
+                    val rawCacheCreationStart = usage.cacheCreationInputTokens().orElse(-1L)
+                    val rawCacheReadStart = usage.cacheReadInputTokens().orElse(-1L)
+                    loggingPort.debug(
+                        TAG,
+                        @Suppress("MaxLineLength")
+                        "Anthropic messageStart usage model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens rawCacheCreation=$rawCacheCreationStart rawCacheRead=$rawCacheReadStart (-1=absent, 0=present-zero)",
+                    )
+                    cacheCreationInputTokens = rawCacheCreationStart.toInt().takeIf { it > 0 }
+                    cacheReadInputTokens = rawCacheReadStart.toInt().takeIf { it > 0 }
                 }
                 val contentBlockStart = event.contentBlockStart()
                 if (contentBlockStart.isPresent) {
@@ -740,6 +737,13 @@ class AnthropicInferenceServiceImpl(
                     val usage = deltaEvent.usage()
                     outputTokens = usage.outputTokens().toInt()
                     usage.inputTokens().ifPresent { inputTokens = it.toInt() }
+                    val rawCacheCreationDelta = usage.cacheCreationInputTokens().orElse(-1L)
+                    val rawCacheReadDelta = usage.cacheReadInputTokens().orElse(-1L)
+                    loggingPort.debug(
+                        TAG,
+                        @Suppress("MaxLineLength")
+                        "Anthropic messageDelta usage model=$modelId rawCacheCreation=$rawCacheCreationDelta rawCacheRead=$rawCacheReadDelta priorCacheCreation=$cacheCreationInputTokens priorCacheRead=$cacheReadInputTokens (-1=absent, 0=present-zero)",
+                    )
                     cacheCreationInputTokens =
                         usage
                             .cacheCreationInputTokens()

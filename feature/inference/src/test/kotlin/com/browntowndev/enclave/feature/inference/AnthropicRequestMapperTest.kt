@@ -58,9 +58,9 @@ class AnthropicRequestMapperTest {
                 .asEnabled()
                 .budgetTokens(),
         )
-        assertEquals(0.7, params.temperature().get(), 0.0001)
-        assertEquals(0.9, params.topP().get(), 0.0001)
-        assertEquals(32L, params.topK().get())
+        assertFalse(params.temperature().isPresent)
+        assertFalse(params.topP().isPresent)
+        assertFalse(params.topK().isPresent)
         assertEquals(512L, params.maxTokens())
         assertFalse(params.toString().contains("Error: API Error"))
     }

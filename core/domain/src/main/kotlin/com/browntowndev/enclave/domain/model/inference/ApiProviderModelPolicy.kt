@@ -103,7 +103,9 @@ object ApiProviderModelPolicy {
         if (provider == ApiProvider.ANTHROPIC) {
             return ApiModelParameterSupport(
                 reasoningPolicy = reasoningPolicy,
-                supportsTopK = true,
+                supportsTemperature = false,
+                supportsTopP = false,
+                supportsTopK = false,
                 supportsMinP = false,
                 supportsFrequencyPenalty = false,
                 supportsPresencePenalty = false,

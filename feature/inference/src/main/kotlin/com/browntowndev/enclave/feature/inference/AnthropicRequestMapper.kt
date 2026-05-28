@@ -50,16 +50,6 @@ object AnthropicRequestMapper {
             builder.maxTokens(DEFAULT_MAX_TOKENS)
         }
 
-        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
-            options.temperature?.let { builder.temperature(it.toDouble()) }
-        }
-        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
-            options.topP?.let { builder.topP(it.toDouble()) }
-        }
-        if (!options.topKDisabled && parameterSupport?.supportsTopK != false) {
-            options.topK?.let { builder.topK(it.toLong()) }
-        }
-
         resolveThinkingBudgetTokens(options)?.let {
             builder.thinking(
                 ThinkingConfigEnabled
