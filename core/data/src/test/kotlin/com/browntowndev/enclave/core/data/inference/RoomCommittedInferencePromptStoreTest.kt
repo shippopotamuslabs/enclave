@@ -88,8 +88,14 @@ class RoomCommittedInferencePromptStoreTest {
             // Then the in-memory cache must return immediately when calling store.get()
             assertEquals("Expanded user query with RAG contexts", store.get(messageId))
 
-            // And the database table must contain the record
-            val entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+            // And the database table must contain the record (wait for async insert to propagate)
+            var entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+            var attempts = 0
+            while (entity == null && attempts < 20) {
+                kotlinx.coroutines.delay(50)
+                entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+                attempts++
+            }
             assertEquals("Expanded user query with RAG contexts", entity?.inferenceContent)
         }
 
@@ -145,7 +151,15 @@ class RoomCommittedInferencePromptStoreTest {
 
             // Then
             assertNull(store.get(messageId))
-            assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
+            // Wait for DB delete to propagate
+            var entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+            var attempts = 0
+            while (entity != null && attempts < 20) {
+                kotlinx.coroutines.delay(50)
+                entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
+                attempts++
+            }
+            assertNull(entity)
         }
 
     @Test
