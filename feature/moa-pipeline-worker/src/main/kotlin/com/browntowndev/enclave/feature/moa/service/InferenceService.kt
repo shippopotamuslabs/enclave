@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
+import com.browntowndev.enclave.core.ui.R as CoreUiR
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
@@ -735,7 +736,7 @@ Produce the final polished response for the user. Output ONLY the essay itself â
             .Builder(this, channelId)
             .setContentTitle(contentTitle)
             .setContentText("$contentText - $nextStepText")
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(CoreUiR.drawable.ic_notification)
             .setOngoing(true)
             .setProgress(100, progress, false)
             .setContentIntent(pendingIntent)
@@ -780,7 +781,7 @@ Produce the final polished response for the user. Output ONLY the essay itself â
                 .Builder(this, completionChannelId)
                 .setContentTitle("Crew finished thinking")
                 .setContentText("Completed in ${thinkingDurationSeconds}s - tap to see response")
-                .setSmallIcon(android.R.drawable.ic_menu_compass)
+                .setSmallIcon(CoreUiR.drawable.ic_notification)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setDefaults(NotificationCompat.DEFAULT_SOUND)
