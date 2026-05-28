@@ -322,6 +322,10 @@ class InferenceService : Service() {
             // Check if this was the final step
             if (currentStep == PipelineStep.FINAL) {
                 logger.info(TAG, "Pipeline complete for chat: $chatId")
+                inferenceEventBus.emitPipelineState(
+                    chatId,
+                    MessageGenerationState.Finished(getModelTypeForStep(currentStep)),
+                )
                 showCompletionNotification(currentState.durationSeconds())
                 break
             }
@@ -378,7 +382,19 @@ class InferenceService : Service() {
                     chatId = ChatId(chatId),
                 )
 
+            val powerManager = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+
             service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
+                if (powerManager != null) {
+                    val headroom = try {
+                        powerManager.getThermalHeadroom(30)
+                    } catch (e: Exception) {
+                        1.0f
+                    }
+                    if (headroom in 0.01f..0.15f) {
+                        throw IllegalStateException("response was killed by Android due to thermal shutdown")
+                    }
+                }
                 when (event) {
                     is InferenceEvent.EngineLoading -> Unit
                     is InferenceEvent.Processing -> Unit
