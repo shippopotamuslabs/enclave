@@ -685,25 +685,7 @@ class MainViewModelTest {
                 Result.success(Unit)
             }
 
-            viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+            viewModel = createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()

@@ -138,5 +138,4 @@ class FakeLoggingPort : LoggingPort {
     override fun info(tag: String, message: String) {}
     override fun warning(tag: String, message: String) {}
     override fun error(tag: String, message: String, throwable: Throwable?) {}
-    override fun recordException(tag: String, message: String, throwable: Throwable) {}
 }
