@@ -110,7 +110,6 @@ tasks.withType<Test> {
 
 // Disable connectedAndroidTest for unit test coverage
 tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTest") }.configureEach {
-    tasks.getByName("collectDebugCoverage").dependsOn(this)
     enabled = false
 }
 
