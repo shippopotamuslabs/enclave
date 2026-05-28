@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.browntowndev.enclave.core.ui.R as CoreUiR
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -536,8 +537,8 @@ class ChatInferenceService : Service() {
         return NotificationCompat
             .Builder(this, CHANNEL_ID)
             .setContentTitle("Enclave")
-            .setContentText("Generating AI response...")
-            .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
+            .setContentText("Replying to your prompt...")
+            .setSmallIcon(CoreUiR.drawable.ic_notification)
             .setOngoing(true)
             .setSilent(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
@@ -582,8 +583,8 @@ class ChatInferenceService : Service() {
             NotificationCompat
                 .Builder(this, COMPLETION_CHANNEL_ID)
                 .setContentTitle("Enclave")
-                .setContentText("AI response complete.")
-                .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
+                .setContentText("Response ready — tap to view")
+                .setSmallIcon(CoreUiR.drawable.ic_notification)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(deepLinkPendingIntent)
