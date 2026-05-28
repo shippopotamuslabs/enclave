@@ -45,6 +45,8 @@ class SettingsRepositoryImpl
             private val X_API_KEY_PRESENT_KEY = booleanPreferencesKey("settings_x_api_key_present")
             private val SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY = booleanPreferencesKey("settings_show_search_provider_switch_alert")
             private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
+            private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("settings_onboarding_completed")
+            private val AGE_CONFIRMED_KEY = booleanPreferencesKey("settings_age_confirmed")
             private const val TAG = "SettingsRepository"
 
             private fun customPromptTextAad(): ByteArray =
@@ -105,6 +107,8 @@ class SettingsRepositoryImpl
                                 ?: apiKeyManager.has(ApiKeyManager.X_SEARCH_ALIAS),
                         showSearchProviderSwitchAlert = preferences[SHOW_SEARCH_PROVIDER_SWITCH_ALERT_KEY] ?: true,
                         backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
+                        onboardingCompleted = preferences[ONBOARDING_COMPLETED_KEY] ?: false,
+                        ageConfirmed = preferences[AGE_CONFIRMED_KEY] ?: false,
                     )
                 }
 
@@ -259,6 +263,18 @@ class SettingsRepositoryImpl
         override suspend fun updateBackgroundInferenceEnabled(enabled: Boolean) {
             dataStore.edit { preferences ->
                 preferences[BACKGROUND_INFERENCE_ENABLED_KEY] = enabled
+            }
+        }
+
+        override suspend fun updateOnboardingCompleted(completed: Boolean) {
+            dataStore.edit { preferences ->
+                preferences[ONBOARDING_COMPLETED_KEY] = completed
+            }
+        }
+
+        override suspend fun updateAgeConfirmed(confirmed: Boolean) {
+            dataStore.edit { preferences ->
+                preferences[AGE_CONFIRMED_KEY] = confirmed
             }
         }
     }

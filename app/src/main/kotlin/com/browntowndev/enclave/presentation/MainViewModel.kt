@@ -9,6 +9,7 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -30,6 +31,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.crypto.Cipher
@@ -60,14 +62,14 @@ sealed interface AppStartupState {
         val cloudSyncDeferred: Boolean = false,
         val unlockSyncProgress: Float? = null,
         val unlockSyncStatus: String? = null,
+        val onboardingCompleted: Boolean = true,
     ) : AppStartupState {
-        val initialRoute =
-            if (initializationError != null ||
-                modelsResult?.modelsToDownload?.isNotEmpty() == true
-            ) {
-                Routes.MODEL_DOWNLOAD
-            } else {
-                Routes.CHAT
+        val initialRoute: String
+            get() = when {
+                !onboardingCompleted -> Routes.ONBOARDING
+                initializationError != null ||
+                    modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
+                else -> Routes.CHAT
             }
     }
 }
@@ -93,6 +95,7 @@ class MainViewModel
         private val startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MainViewModel"
@@ -159,6 +162,10 @@ class MainViewModel
             isVaultLocked: Boolean,
             isBiometricUnlockPossible: Boolean,
         ) {
+            val onboardingCompleted = settingsRepository
+                .settingsFlow
+                .first()
+                .onboardingCompleted
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
                 val vaultLockedNow = !cryptoManager.hasCachedKey()
@@ -175,6 +182,7 @@ class MainViewModel
                             initializationError = initializationError,
                             isVaultLocked = isVaultLocked,
                             isBiometricUnlockPossible = isBiometricUnlockPossible,
+                            onboardingCompleted = onboardingCompleted,
                         )
                     }
                 }

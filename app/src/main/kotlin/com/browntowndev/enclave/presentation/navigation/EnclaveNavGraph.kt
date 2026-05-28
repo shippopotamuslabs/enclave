@@ -83,6 +83,13 @@ fun EnclaveNavGraph(
         navController = navController,
         startDestination = startDestination,
     ) {
+        onboardingNavGraph(
+            onOnboardingComplete = {
+                navController.navigate(Routes.CHAT) {
+                    popUpTo(Routes.ONBOARDING) { inclusive = true }
+                }
+            },
+        )
         downloadGraph(
             modelsResult = modelsResult,
             errorMessage = errorMessage,

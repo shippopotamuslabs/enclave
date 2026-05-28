@@ -23,6 +23,8 @@ data class SettingsData(
     val xApiKeyPresent: Boolean = false,
     val showSearchProviderSwitchAlert: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
+    val onboardingCompleted: Boolean = false,
+    val ageConfirmed: Boolean = false,
 )
 
 /**
@@ -68,4 +70,8 @@ interface SettingsRepository {
     suspend fun updateShowSearchProviderSwitchAlert(show: Boolean)
 
     suspend fun updateBackgroundInferenceEnabled(enabled: Boolean)
+
+    suspend fun updateOnboardingCompleted(completed: Boolean)
+
+    suspend fun updateAgeConfirmed(confirmed: Boolean)
 }

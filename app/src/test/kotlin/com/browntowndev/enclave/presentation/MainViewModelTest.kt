@@ -22,6 +22,8 @@ import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliatio
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
+import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,6 +37,7 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -88,7 +91,46 @@ class MainViewModelTest {
                 ),
         )
 
+    private val settingsRepository = FakeSettingsRepository()
     private lateinit var viewModel: MainViewModel
+
+    private fun createViewModel(
+        getAuthState: GetAuthStateUseCase = getAuthStateUseCase,
+        loginWithGoogle: LoginWithGoogleUseCase = loginWithGoogleUseCase,
+        initializeModels: InitializeModelsUseCase = initializeModelsUseCase,
+        crypto: CryptoManagerPort = cryptoManager,
+        cloudSync: CloudSyncPort = cloudSyncPort,
+        vaultMetadata: VaultMetadataPort = vaultMetadataPort,
+        biometric: BiometricPort = biometricPort,
+        bioManager: AndroidBiometricManager = biometricManager,
+        createVault: CreateVaultUseCase = createVaultUseCase,
+        unlockVault: UnlockVaultUseCase = unlockVaultUseCase,
+        detectReconciliation: DetectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
+        adoptCloud: AdoptCloudVaultUseCase = adoptCloudVaultUseCase,
+        bootstrapCloud: BootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+        startCloudSync: StartCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
+        logging: LoggingPort = loggingPort,
+        errHandler: ViewModelErrorHandler = errorHandler,
+        settings: SettingsRepository = settingsRepository,
+    ): MainViewModel = MainViewModel(
+        getAuthState,
+        loginWithGoogle,
+        initializeModels,
+        crypto,
+        cloudSync,
+        vaultMetadata,
+        biometric,
+        bioManager,
+        createVault,
+        unlockVault,
+        detectReconciliation,
+        adoptCloud,
+        bootstrapCloud,
+        startCloudSync,
+        logging,
+        errHandler,
+        settings,
+    )
 
     @BeforeEach
     fun setUp() {
@@ -128,25 +170,11 @@ class MainViewModelTest {
         every { cloudSyncPort.startListening() } returns Unit
         coEvery { startCloudSyncListeningUseCase(any(), any()) } returns Result.success(Unit)
 
-        viewModel =
-            MainViewModel(
-                getAuthStateUseCase,
-                loginWithGoogleUseCase,
-                initializeModelsUseCase,
-                cryptoManager,
-                cloudSyncPort,
-                vaultMetadataPort,
-                biometricPort,
-                biometricManager,
-                createVaultUseCase,
-                unlockVaultUseCase,
-                detectVaultReconciliationStateUseCase,
-                adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase,
-                loggingPort,
-                errorHandler,
-            )
+        runBlocking {
+            settingsRepository.updateOnboardingCompleted(true)
+        }
+
+        viewModel = createViewModel()
     }
 
     @AfterEach
@@ -204,24 +232,7 @@ class MainViewModelTest {
             every { biometricPort.hasSecureValue(any()) } returns true
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
 
             val state = viewModel.startupState.value
@@ -244,24 +255,7 @@ class MainViewModelTest {
             every { biometricPort.hasSecureValue(any()) } returnsMany listOf(false, true)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
 
             val before = viewModel.startupState.value as AppStartupState.Ready
@@ -292,24 +286,7 @@ class MainViewModelTest {
             every { cryptoManager.encrypt(any()) } returns Result.success(byteArrayOf())
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password", enableBiometric = true)
             advanceUntilIdle()
@@ -328,24 +305,7 @@ class MainViewModelTest {
             every { biometricPort.hasSecureValue(any()) } returns false
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             coEvery { detectVaultReconciliationStateUseCase("password") } coAnswers {
                 val ready = viewModel.startupState.value as AppStartupState.Ready
@@ -455,24 +415,7 @@ class MainViewModelTest {
                 Result.success(LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
 
@@ -520,24 +463,7 @@ class MainViewModelTest {
             every { android.util.Base64.decode(cloudVerification, android.util.Base64.DEFAULT) } returns ciphertextBytes
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
             advanceUntilIdle()
@@ -571,24 +497,7 @@ class MainViewModelTest {
                 Result.failure(IllegalStateException("stale dek"))
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
             advanceUntilIdle()
@@ -622,24 +531,7 @@ class MainViewModelTest {
             coEvery { vaultMetadataPort.getVaultVerificationData() } returns null
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockWithBiometricCipher(cipher)
             advanceUntilIdle()
@@ -669,24 +561,7 @@ class MainViewModelTest {
             coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -742,24 +617,7 @@ class MainViewModelTest {
             every { biometricPort.isBiometricAvailable() } returns true
             every { biometricPort.hasSecureValue(any()) } returns true
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
 
             val dek = ByteArray(32) { 0x55.toByte() }
@@ -900,24 +758,7 @@ class MainViewModelTest {
 
             // Recreate VM so init picks up the new auth state stub and the real use case
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    realStartUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel(startCloudSync = realStartUseCase)
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -943,24 +784,7 @@ class MainViewModelTest {
                 Result.failure(IllegalStateException("replay failed"))
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -985,24 +809,7 @@ class MainViewModelTest {
             coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -1039,24 +846,7 @@ class MainViewModelTest {
             val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    realStartUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel(startCloudSync = realStartUseCase)
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -1089,24 +879,7 @@ class MainViewModelTest {
             coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(payload)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -1129,24 +902,7 @@ class MainViewModelTest {
                 Result.success(VaultReconciliationOutcome.NoCloudVault)
 
             viewModel =
-                MainViewModel(
-                    getAuthStateUseCase,
-                    loginWithGoogleUseCase,
-                    initializeModelsUseCase,
-                    cryptoManager,
-                    cloudSyncPort,
-                    vaultMetadataPort,
-                    biometricPort,
-                    biometricManager,
-                    createVaultUseCase,
-                    unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase,
-                    loggingPort,
-                    errorHandler,
-                )
+                createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
