@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.Base64ImageSource
+import com.anthropic.models.messages.CacheControlEphemeral
 import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.ImageBlockParam
 import com.anthropic.models.messages.MessageCreateParams
@@ -22,6 +23,7 @@ object AnthropicRequestMapper {
     private const val THINKING_BUDGET_MEDIUM = 1536L
     private const val THINKING_BUDGET_XHIGH = 3072L
 
+    @Suppress("CyclomaticComplexMethod")
     fun mapToMessageParams(
         modelId: String,
         prompt: String,
@@ -48,16 +50,6 @@ object AnthropicRequestMapper {
             builder.maxTokens(DEFAULT_MAX_TOKENS)
         }
 
-        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
-            options.temperature?.let { builder.temperature(it.toDouble()) }
-        }
-        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
-            options.topP?.let { builder.topP(it.toDouble()) }
-        }
-        if (!options.topKDisabled && parameterSupport?.supportsTopK != false) {
-            options.topK?.let { builder.topK(it.toLong()) }
-        }
-
         resolveThinkingBudgetTokens(options)?.let {
             builder.thinking(
                 ThinkingConfigEnabled
@@ -67,24 +59,63 @@ object AnthropicRequestMapper {
             )
         }
 
-        buildSystemPrompt(history, options.systemPrompt)
-            .takeIf { it.isNotBlank() }
-            ?.let { builder.system(it) }
+        val systemPromptStr = buildSystemPrompt(history, options.systemPrompt)
+        val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(modelId)
+        if (systemPromptStr.isNotBlank()) {
+            if (useCaching) {
+                val systemBlock =
+                    TextBlockParam
+                        .builder()
+                        .text(systemPromptStr)
+                        .cacheControl(CacheControlEphemeral.builder().build())
+                        .build()
+                builder.systemOfTextBlockParams(listOf(systemBlock))
+            } else {
+                builder.system(systemPromptStr)
+            }
+        }
 
-        history
-            .filterNot(::isSyntheticAssistantError)
-            .forEach { message ->
-                val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
+        val activeHistory = history.filterNot(::isSyntheticAssistantError)
+        activeHistory.forEachIndexed { index, message ->
+            val isLast = index == activeHistory.size - 1
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
+            if (useCaching && isLast) {
+                val textBlockBuilder =
+                    TextBlockParam
+                        .builder()
+                        .text(sanitizedContent)
+                        .cacheControl(CacheControlEphemeral.builder().build())
+                val role =
+                    when (message.role) {
+                        Role.USER -> MessageParam.Role.USER
+                        Role.ASSISTANT -> MessageParam.Role.ASSISTANT
+                        Role.SYSTEM -> null
+                    }
+                if (role != null) {
+                    builder.addMessage(
+                        MessageParam
+                            .builder()
+                            .role(role)
+                            .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                            .build(),
+                    )
+                }
+            } else {
                 when (message.role) {
                     Role.SYSTEM -> Unit
                     Role.USER -> builder.addUserMessage(sanitizedContent)
                     Role.ASSISTANT -> builder.addAssistantMessage(sanitizedContent)
                 }
             }
+        }
 
         builder.addMessage(buildUserMessage(prompt, options.imageUris))
-        if (options.toolingEnabled) {
-            options.availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        if (options.toolingEnabled && options.activeTools.isNotEmpty()) {
+            options.activeTools.forEachIndexed { idx, toolDef ->
+                val isLast = idx == options.activeTools.size - 1
+                val cacheControl = if (useCaching && isLast) CacheControlEphemeral.builder().build() else null
+                builder.addTool(toolDef.toAnthropicTool(cacheControl))
+            }
         }
 
         return builder.build()
@@ -116,6 +147,7 @@ object AnthropicRequestMapper {
             else ->
                 when (options.reasoningEffort) {
                     null -> null
+                    ApiReasoningEffort.NONE -> null
                     ApiReasoningEffort.LOW -> 1024L
                     ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
                     ApiReasoningEffort.HIGH -> 2048L
@@ -175,20 +207,25 @@ object AnthropicRequestMapper {
         }
 }
 
-internal fun ToolDefinition.toAnthropicTool(): Tool =
-    Tool
-        .builder()
-        .name(name)
-        .description(description)
-        .inputSchema(
-            Tool.InputSchema
-                .builder()
-                .type(JsonValue.from("object"))
-                .properties(anthropicToolProperties())
-                .required(schema.required)
-                .build(),
-        ).strict(true)
-        .build()
+internal fun ToolDefinition.toAnthropicTool(cacheControl: CacheControlEphemeral? = null): Tool {
+    val builder =
+        Tool
+            .builder()
+            .name(name)
+            .description(description)
+            .inputSchema(
+                Tool.InputSchema
+                    .builder()
+                    .type(JsonValue.from("object"))
+                    .properties(anthropicToolProperties())
+                    .required(schema.required)
+                    .build(),
+            ).strict(true)
+    if (cacheControl != null) {
+        builder.cacheControl(cacheControl)
+    }
+    return builder.build()
+}
 
 private fun ToolDefinition.anthropicToolProperties(): Tool.InputSchema.Properties {
     val builder = Tool.InputSchema.Properties.builder()

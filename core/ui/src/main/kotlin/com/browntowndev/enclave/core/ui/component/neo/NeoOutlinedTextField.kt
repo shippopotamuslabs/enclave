@@ -12,9 +12,9 @@ import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation.Companion.None
+import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 /**

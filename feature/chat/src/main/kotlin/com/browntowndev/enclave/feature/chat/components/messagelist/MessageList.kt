@@ -16,9 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,11 +40,16 @@ import kotlinx.coroutines.launch
 
 // ~2–3 message rows ahead/behind at typical density; avoids retaining ~30 screens off-screen.
 private val MessageListLazyCacheWindow = 360.dp
+private val MessageListTopContentPadding = 12.dp
 
 /** Test-visible alias for [MessageListLazyCacheWindow]. */
 internal val MessageListLazyCacheWindowDp = MessageListLazyCacheWindow
 
+/** Test-visible alias for [MessageListTopContentPadding]. */
+internal val MessageListTopContentPaddingDp = MessageListTopContentPadding
+
 @OptIn(ExperimentalFoundationApi::class)
+@Suppress("LongParameterList")
 @Composable
 fun MessageList(
     modifier: Modifier = Modifier,
@@ -53,10 +58,14 @@ fun MessageList(
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
     hasTtsProviderAssigned: Boolean = false,
+    isPlayingTts: Boolean = false,
+    isLoadingTts: Boolean = false,
+    isPausedTts: Boolean = false,
     isPreview: Boolean = false,
     chatMode: ChatModeUi = ChatModeUi.FAST,
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
+    onPauseAudio: () -> Unit = {},
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (
         ids: List<String>,
@@ -65,22 +74,27 @@ fun MessageList(
         prompts: List<String>,
     ) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val onEditMessageRef = rememberUpdatedState(onEditMessage)
     val onPlayAudioRef = rememberUpdatedState(onPlayAudio)
+    val onPauseAudioRef = rememberUpdatedState(onPauseAudio)
     val onArtifactCardClickRef = rememberUpdatedState(onArtifactCardClick)
     val onNavigateToStudioRef = rememberUpdatedState(onNavigateToStudio)
     val onShareClickRef = rememberUpdatedState(onShareClick)
+    val onStatsClickRef = rememberUpdatedState(onStatsClick)
     val callbacks =
         remember {
             MessageListCallbacks(
                 onEditMessage = { onEditMessageRef.value(it) },
                 onPlayAudio = { onPlayAudioRef.value(it) },
+                onPauseAudio = { onPauseAudioRef.value() },
                 onArtifactCardClick = { messageId, card -> onArtifactCardClickRef.value(messageId, card) },
                 onNavigateToStudio = { ids, uris, types, prompts ->
                     onNavigateToStudioRef.value(ids, uris, types, prompts)
                 },
                 onShareClick = { onShareClickRef.value(it) },
+                onStatsClick = { onStatsClickRef.value(it) },
             )
         }
     val listState =
@@ -119,6 +133,9 @@ fun MessageList(
             activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeToolCallBanner,
             hasTtsProviderAssigned = hasTtsProviderAssigned,
+            isPlayingTts = isPlayingTts,
+            isLoadingTts = isLoadingTts,
+            isPausedTts = isPausedTts,
             chatMode = chatMode,
             callbacks = callbacks,
             isPreview = isPreview,
@@ -136,17 +153,21 @@ private fun MessageListContent(
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     chatMode: ChatModeUi,
     callbacks: MessageListCallbacks,
     isPreview: Boolean,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val topContentPadding = MessageListTopContentPadding
         val bottomContentPadding = 16.dp
         val itemSpacing = 12.dp
         val activeInteractionMinHeight =
             activeInteractionMinHeight(
                 viewportHeight = maxHeight,
-                bottomContentPadding = bottomContentPadding,
+                bottomContentPadding = topContentPadding + bottomContentPadding,
             )
         val density = LocalDensity.current
         val targetMinHeightPx = with(density) { activeInteractionMinHeight.toPx() }
@@ -233,7 +254,7 @@ private fun MessageListContent(
             verticalArrangement = Arrangement.spacedBy(itemSpacing),
             contentPadding =
                 PaddingValues(
-                    top = 0.dp,
+                    top = topContentPadding,
                     bottom = bottomContentPadding,
                 ),
         ) {
@@ -261,6 +282,9 @@ private fun MessageListContent(
                             activeToolCallBanner = activeToolCallBanner,
                         ),
                     hasTtsProviderAssigned = hasTtsProviderAssigned,
+                    isPlayingTts = isPlayingTts,
+                    isLoadingTts = isLoadingTts,
+                    isPausedTts = isPausedTts,
                     chatMode = chatMode,
                     callbacks = callbacks,
                     isPreview = isPreview,

@@ -14,9 +14,7 @@ import androidx.core.view.WindowCompat
  * Paints the status bar with [color] so edge-to-edge app bars blend with system chrome.
  */
 @Composable
-fun NeoSystemBarStyle(
-    color: Color = MaterialTheme.colorScheme.surface,
-) {
+fun NeoSystemBarStyle(color: Color = MaterialTheme.colorScheme.surface) {
     val view = LocalView.current
     if (view.isInEditMode) return
 

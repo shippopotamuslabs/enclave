@@ -24,17 +24,14 @@ class UtilityModelRepositoryImpl
         override suspend fun getByUtilityType(utilityType: UtilityType): UtilityModelMetadata? =
             utilityModelsDao.getByUtilityType(utilityType)?.toDomain()
 
-        override suspend fun getAllActive(): List<UtilityModelMetadata> =
-            utilityModelsDao.getAll().map { it.toDomain() }
+        override suspend fun getAllActive(): List<UtilityModelMetadata> = utilityModelsDao.getAll().map { it.toDomain() }
 
         override fun observeAllActive(): Flow<List<UtilityModelMetadata>> =
             utilityModelsDao.observeAllActive().map { entities -> entities.map { it.toDomain() } }
 
-        override suspend fun getById(id: UtilityModelId): UtilityModelMetadata? =
-            utilityModelsDao.getById(id)?.toDomain()
+        override suspend fun getById(id: UtilityModelId): UtilityModelMetadata? = utilityModelsDao.getById(id)?.toDomain()
 
-        override suspend fun getBySha256(sha256: String): UtilityModelMetadata? =
-            utilityModelsDao.getBySha256(sha256)?.toDomain()
+        override suspend fun getBySha256(sha256: String): UtilityModelMetadata? = utilityModelsDao.getBySha256(sha256)?.toDomain()
 
         @OptIn(ExperimentalUuidApi::class)
         override suspend fun upsert(metadata: UtilityModelMetadata): UtilityModelId {

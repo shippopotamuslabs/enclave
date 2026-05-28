@@ -1,16 +1,53 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class XaiRequestMapperTest {
+    @Test
+    fun `mapToChatCompletionParams sets grok conversation header from chat id`() {
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals(listOf("chat-123"), params._headers().values("x-grok-conv-id"))
+    }
+
+    @Test
+    fun `mapToResponseParams sets prompt cache key from chat id`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+        assertEquals(listOf("chat-123"), params._headers().values("x-grok-conv-id"))
+    }
+
     @Test
     fun `mapToResponseParams omits max output tokens for xai multi agent model`() {
         val params =
@@ -127,6 +164,82 @@ class XaiRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams allows reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                    ),
+            )
+
+        assertTrue(params.reasoning().isPresent)
+        assertEquals(
+            "high",
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
+    fun `mapToResponseParams maps NONE reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.NONE,
+                    ),
+            )
+
+        assertTrue(params.reasoning().isPresent)
+        assertEquals(
+            "none",
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
+    fun `mapToChatCompletionParams allows reasoning effort for grok 4_3`() {
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-4.3",
+                prompt = "hello",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        reasoningEffort = ApiReasoningEffort.MEDIUM,
+                    ),
+            )
+
+        assertTrue(params.reasoningEffort().isPresent)
+        assertEquals(
+            "medium",
+            params
+                .reasoningEffort()
+                .get()
+                .toString(),
+        )
+    }
+
+    @Test
     fun `mapToChatCompletionParams removes reasoning effort for grok 3`() {
         val params =
             XaiRequestMapper.mapToChatCompletionParams(
@@ -231,7 +344,7 @@ class XaiRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -250,7 +363,7 @@ class XaiRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -264,6 +377,33 @@ class XaiRequestMapperTest {
     }
 
     @Test
+    fun `LTD-04 xAI request mapper uses activeTools only`() {
+        val params =
+            XaiRequestMapper.mapToChatCompletionParams(
+                modelId = "grok-3",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog =
+                            listOf(
+                                catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                            ),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val toolsPayload = params._additionalBodyProperties()["tools"].toString()
+
+        assertTrue(toolsPayload.contains("disclose_tool_schemas"))
+        assertTrue(toolsPayload.contains("web_search"))
+        assertFalse(toolsPayload.contains("\"append_blocks\""))
+    }
+
+    @Test
     fun `mapToChatCompletionParams sends xai compatible non strict tool schema`() {
         val params =
             XaiRequestMapper.mapToChatCompletionParams(
@@ -274,7 +414,7 @@ class XaiRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -295,11 +435,21 @@ class XaiRequestMapperTest {
         assertFalse(params.logprobs().isPresent)
     }
 
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
+
     @Test
-    fun `chat fallback is disabled only for multi agent models`() {
+    fun `chat fallback is disabled for grok 420 family`() {
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent"))
         assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-multi-agent-0309"))
-        assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-reasoning"))
+        assertFalse(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.20-reasoning"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-4.3"))
         assertTrue(XaiRequestMapper.shouldAllowChatCompletionsFallback("grok-code-fast-1"))
     }

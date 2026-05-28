@@ -4,7 +4,6 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.settings.ApiPresetDraft
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraft
@@ -64,7 +63,11 @@ class ByokModelOnPresetDomainTest {
                     "presencePenaltyDisabled" -> false
                     "customHeaders" -> emptyMap<String, String>()
                     "openRouterRouting" ->
-                        com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration()
+                        com.browntowndev.enclave.domain.model.config
+                            .OpenRouterRoutingConfiguration()
+                    "pricing" ->
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiModelSavedPricing()
                     else -> if (param.isOptional) null else error("Missing preset config arg: ${param.name}")
                 }
         }

@@ -43,15 +43,13 @@ fun NeoToggleRow(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .then(
+                ).then(
                     if (enabled) {
                         Modifier.clickable { onCheckedChange(!checked) }
                     } else {
                         Modifier
                     },
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                ).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

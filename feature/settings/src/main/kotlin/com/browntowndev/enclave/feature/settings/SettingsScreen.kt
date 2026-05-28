@@ -1,20 +1,22 @@
 package com.browntowndev.enclave.feature.settings
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Feedback
@@ -40,22 +42,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.component.vault.VaultReauthBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultUserUiState
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -67,6 +71,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
@@ -80,6 +85,7 @@ fun SettingsScreen(
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
+    onAutomaticErrorTrackingChange: (Boolean) -> Unit,
     onRequestDeleteAllChats: () -> Unit,
     onConfirmDeleteAllChats: () -> Unit,
     onRequestDeleteAllMedia: () -> Unit,
@@ -100,6 +106,8 @@ fun SettingsScreen(
     onDeleteMemory: (String) -> Unit,
     onShowTosSheet: (Boolean) -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowUsageSpendSheet: (Boolean) -> Unit,
+    onUsageSpendPeriodChange: (UsagePeriodUi) -> Unit,
     onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
@@ -124,8 +132,8 @@ fun SettingsScreen(
     onSaveXSearchSettings: (onSuccess: () -> Unit) -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
-    onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
-    onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
+    onDeleteApiModelAsset: (ApiCredentialsId, () -> Unit) -> Unit,
+    onDeleteApiModelConfig: (ApiModelConfigurationId, () -> Unit) -> Unit,
     onShowTtsProvidersSheet: (Boolean) -> Unit,
     onNavigateToTtsConfigure: () -> Unit,
     onStartCreateTtsProviderAsset: () -> Unit,
@@ -174,6 +182,7 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
+            contentPadding = WindowInsets.navigationBars.asPaddingValues(),
             verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             item {
@@ -281,6 +290,12 @@ fun SettingsScreen(
                 NeoSectionHeader(text = "Data & Privacy")
                 NeoSettingsSection {
                     NeoNavRow(
+                        title = "Usage & Spend",
+                        icon = Icons.Default.BarChart,
+                        onClick = { onShowUsageSpendSheet(true) },
+                        modifier = Modifier.testTag("usage_spend_row"),
+                    )
+                    NeoNavRow(
                         title = "Memories",
                         icon = Icons.Default.SmartToy,
                         onClick = { onShowMemoriesSheet(true) },
@@ -313,8 +328,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
         if (uiState.home.isVisionSettingsSheetOpen) {
@@ -355,6 +368,7 @@ fun SettingsScreen(
             DataControlsBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowDataControlsSheet(false) },
+                onAutomaticErrorTrackingChange = onAutomaticErrorTrackingChange,
                 onRequestDeleteAllChats = onRequestDeleteAllChats,
                 onConfirmDeleteAllChats = onConfirmDeleteAllChats,
                 onRequestDeleteAllMedia = onRequestDeleteAllMedia,
@@ -440,6 +454,12 @@ fun SettingsScreen(
         if (uiState.home.isTosSheetOpen) {
             TosBottomSheet(onDismiss = { onShowTosSheet(false) })
         }
+
+        UsageSpendBottomSheet(
+            state = uiState.usageSpend,
+            onDismiss = { onShowUsageSpendSheet(false) },
+            onPeriodChange = onUsageSpendPeriodChange,
+        )
 
         when (val sheet = uiState.vaultReauthSheet) {
             VaultReauthSheetState.Hidden -> Unit
@@ -572,12 +592,7 @@ fun AccountSection(
             }
         }
         AuthStateUi.Unauthenticated -> {
-            NeoNavRow(
-                title = "Login with Google",
-                subtitle = "Sync your data across devices",
-                icon = Icons.Default.AccountCircle,
-                onClick = onLoginClick,
-            )
+            GoogleSignInButton(onClick = onLoginClick)
         }
         AuthStateUi.Loading -> {
             NeoPanel {
@@ -689,6 +704,7 @@ fun PreviewSettingsScreen() {
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
             onShowDataControlsSheet = {},
+            onAutomaticErrorTrackingChange = {},
             onRequestDeleteAllChats = {},
             onConfirmDeleteAllChats = {},
             onRequestDeleteAllMedia = {},
@@ -709,6 +725,8 @@ fun PreviewSettingsScreen() {
             onDeleteMemory = {},
             onShowTosSheet = {},
             onShowFeedbackSheet = {},
+            onShowUsageSpendSheet = {},
+            onUsageSpendPeriodChange = {},
             onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
@@ -733,8 +751,8 @@ fun PreviewSettingsScreen() {
             onSaveXSearchSettings = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
-            onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {},
+            onDeleteApiModelAsset = { _, _ -> },
+            onDeleteApiModelConfig = { _, _ -> },
             onShowTtsProvidersSheet = {},
             onNavigateToTtsConfigure = {},
             onStartCreateTtsProviderAsset = {},

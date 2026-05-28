@@ -11,6 +11,8 @@ import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.settings.AppTheme
+import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -31,6 +33,8 @@ import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCas
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
+import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
+import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,6 +42,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -46,6 +51,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import java.math.BigDecimal
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -64,6 +70,7 @@ class SettingsViewModelTest {
     private val saveXApiKeyUseCase = mockk<SaveXApiKeyUseCase>(relaxed = true)
     private val clearXApiKeyUseCase = mockk<ClearXApiKeyUseCase>(relaxed = true)
     private val updateBackgroundInferenceEnabledUseCase = mockk<UpdateBackgroundInferenceEnabledUseCase>(relaxed = true)
+    private val updateAutomaticErrorTrackingEnabledUseCase = mockk<UpdateAutomaticErrorTrackingEnabledUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
     private val saveLocalModelPresetUseCase = mockk<SaveLocalModelPresetUseCase>(relaxed = true)
@@ -168,6 +175,7 @@ class SettingsViewModelTest {
                         clearXApiKey = clearXApiKeyUseCase,
                         updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
                         updateBackgroundInferenceEnabled = updateBackgroundInferenceEnabledUseCase,
+                        updateAutomaticErrorTrackingEnabled = updateAutomaticErrorTrackingEnabledUseCase,
                     ),
                 localModels =
                     SettingsLocalModelUseCasesImpl(
@@ -250,7 +258,7 @@ class SettingsViewModelTest {
                 cloudSyncPort,
             )
         val memoriesDelegate = SettingsMemoriesDelegate(settingsUseCases.preferences, settingsUseCases.memories, errorHandler)
-        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, errorHandler)
+        val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, settingsUseCases.preferences, errorHandler)
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val localModelsDelegate =
             SettingsLocalModelsDelegate(settingsUseCases.localModels, deletionHelper, errorHandler)
@@ -277,7 +285,9 @@ class SettingsViewModelTest {
                         mediaProviderAssetUiMapper,
                         ApiDiscoveryUiFilter(),
                         applyApiModelMetadataDefaultsUseCase,
+                        UsageSpendUiMapper(),
                     ),
+                observeUsageSpendSummaryUseCase = testUsageSpendSummaryUseCase(),
                 generalDelegate = generalDelegate,
                 memoriesDelegate = memoriesDelegate,
                 dataControlsDelegate = dataControlsDelegate,
@@ -376,7 +386,8 @@ class SettingsViewModelTest {
             }
             assertEquals(
                 listOf("gemini-2.5-flash-preview-tts"),
-                viewModel.uiState.value.apiProviderEditor.discovery.models.map { it.modelId },
+                viewModel.uiState.value.apiProviderEditor.discovery.models
+                    .map { it.modelId },
             )
         }
 
@@ -982,4 +993,21 @@ class SettingsViewModelTest {
             assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
             assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
         }
+}
+
+internal fun testUsageSpendSummaryUseCase(): ObserveUsageSpendSummaryUseCase {
+    val useCase = io.mockk.mockk<ObserveUsageSpendSummaryUseCase>()
+    every { useCase.invoke(any()) } returns
+        flowOf(
+            UsageSpendSummary(
+                period = UsagePeriod.LIFETIME,
+                periodStartUtcMs = null,
+                periodEndUtcMs = null,
+                totalCostUsd = BigDecimal.ZERO,
+                telemetryBackedTurnCount = 0,
+                missingCostTurnCount = 0,
+                providerBreakdown = emptyList(),
+            ),
+        )
+    return useCase
 }

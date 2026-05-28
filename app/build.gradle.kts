@@ -19,6 +19,28 @@ val localProperties =
         }
     }
 
+/** Strips optional wrapping quotes and escapes for a Java string literal in BuildConfig. */
+fun String.toBuildConfigStringLiteral(): String {
+    val unquoted =
+        trim().let { value ->
+            when {
+                value.length >= 2 && value.startsWith("\"") && value.endsWith("\"") ->
+                    value.substring(1, value.length - 1)
+                value.length >= 2 && value.startsWith("'") && value.endsWith("'") ->
+                    value.substring(1, value.length - 1)
+                else -> value
+            }
+        }
+    val escaped =
+        unquoted
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
+fun Properties.buildConfigString(propertyName: String): String =
+    getProperty(propertyName, "").toBuildConfigStringLiteral()
+
 kotlin {
     jvmToolchain(17)
 }
@@ -47,6 +69,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("boolean", "ALLOW_CANCEL_DOWNLOAD", "false")
+        buildConfigField(
+            "String",
+            "TELEMETRY_OTLP_ENDPOINT",
+            localProperties.buildConfigString("OTEL_EXPORTER_OTLP_ENDPOINT"),
+        )
+        buildConfigField(
+            "String",
+            "TELEMETRY_OTLP_API_KEY",
+            localProperties.buildConfigString("OTEL_EXPORTER_OTLP_API_KEY"),
+        )
     }
 
     signingConfigs {
@@ -110,7 +142,6 @@ tasks.withType<Test> {
 
 // Disable connectedAndroidTest for unit test coverage
 tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTest") }.configureEach {
-    tasks.getByName("collectDebugCoverage").dependsOn(this)
     enabled = false
 }
 
@@ -123,6 +154,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:agent"))
     implementation(project(":core:ui"))
+    implementation(project(":feature:onboarding"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:history"))
     implementation(project(":feature:download"))
@@ -176,6 +208,7 @@ dependencies {
     implementation(libs.media3.datasource)
     testImplementation(project(":core:data"))
     testImplementation(project(":core:testing"))
+    testImplementation(testFixtures(project(":core:domain")))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.mockk)

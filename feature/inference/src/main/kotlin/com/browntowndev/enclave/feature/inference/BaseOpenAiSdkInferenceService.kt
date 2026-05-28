@@ -12,27 +12,46 @@ import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.feature.inference.appendonly.OpenAiCompatibleVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
+import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
+import com.browntowndev.enclave.feature.inference.openai.OpenAiResponseStreamHandler
+import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
+import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
+import com.browntowndev.enclave.feature.inference.openai.StreamState
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
+import com.browntowndev.enclave.feature.inference.openai.accumulateOpenAiStreamUsage
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
 import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import com.openai.models.responses.ResponseCreateParams
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.isActive
@@ -43,22 +62,29 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.math.BigDecimal
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 
-@Suppress("LargeClass")
+@Suppress("LargeClass", "TooManyFunctions")
 abstract class BaseOpenAiSdkInferenceService(
     protected val client: OpenAIClient,
     protected val modelId: String,
     protected val provider: String,
     protected val modelType: ModelType,
-    protected val baseUrl: String? = null,
+    override val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
+    private val telemetrySupport: InferenceTelemetrySupport? = null,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
+        private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
+        private const val XAI_WIRE_LOG_HEAD_MESSAGE_COUNT = 3
+        private const val XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS = 48
+        private const val XAI_WIRE_LOG_USER_PREVIEW_CHARS = 24
     }
 
     protected abstract val tag: String
@@ -68,6 +94,11 @@ abstract class BaseOpenAiSdkInferenceService(
     protected open val useStrictToolSchemas: Boolean = false
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
+
+    private val appendOnlyContexts = mutableMapOf<String, ProviderAppendOnlyContext>()
+    private var activeAppendOnlyKey: String? = null
+
+    internal fun appendOnlyContextForTests(): ProviderAppendOnlyContext? = activeAppendOnlyKey?.let(appendOnlyContexts::get)
 
     override fun sendPrompt(
         prompt: String,
@@ -83,106 +114,345 @@ abstract class BaseOpenAiSdkInferenceService(
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
         conversationHistory.addAll(messages)
+        resetAppendOnlyForNewPrompt()
     }
+
+    internal fun clearAppendOnlyOnRustCompactionBoundary() {
+        appendOnlyContexts.values.forEach { it.clearOnRustCompactionBoundary() }
+    }
+
+    internal fun resetAppendOnlyForNewPrompt() = Unit
 
     override suspend fun closeSession() {
         conversationHistory.clear()
+        appendOnlyContexts.values.forEach { it.invalidate() }
+        appendOnlyContexts.clear()
+        activeAppendOnlyKey = null
     }
 
+    private fun ensureAppendOnlyContext(chatId: ChatId?): ProviderAppendOnlyContext {
+        val key = appendOnlyKey(chatId)
+        activeAppendOnlyKey = key
+        appendOnlyContexts[key]?.let { return it }
+        return ProviderAppendOnlyContextFactory
+            .create(
+                onLogCleared = { reason ->
+                    loggingPort.warning(
+                        tag,
+                        "Append-only message log cleared: $reason",
+                    )
+                },
+            ).also { appendOnlyContexts[key] = it }
+    }
+
+    private fun appendOnlyKey(chatId: ChatId?): String = chatId?.value ?: "__no_chat__"
+
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val lastUserIndex = sessionMessages.indexOfLast { msg ->
-            msg.role == Role.USER && run {
-                val meta = msg.metadataJson
-                if (meta == "null" || meta.isBlank()) return@run true
-                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-            }
-        }
-        val imageUris = options.imageUris.take(maxImages)
-        val mappedMessages = sessionMessages.toOpenAiChatParams(
-            imageUris = imageUris,
-            imageTargetIndex = lastUserIndex,
-        )
-        val messages =
-            if (systemPrompt.isNotBlank() && mappedMessages.none { it.isSystem() }) {
-                val systemMessage =
-                    ChatCompletionMessageParam.ofSystem(
-                        ChatCompletionSystemMessageParam.builder().content(systemPrompt).build(),
-                    )
-                listOf(systemMessage) + mappedMessages
-            } else {
-                mappedMessages
-            }
-        val requestModelId = options.modelId ?: modelId
-        val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
+        val startedAtMs = System.currentTimeMillis()
+        val resolvedModelId = options.modelId ?: modelId
+        try {
+            val timing = telemetrySupport?.let { InferenceTurnTiming() }
+            val captureContext =
+                telemetrySupport?.captureContext(
+                    options = options,
+                    sequenceIndex = options.telemetrySequenceIndex,
+                )
+            val lastUserIndex =
+                sessionMessages.indexOfLast { msg ->
+                    msg.role == Role.USER &&
+                        run {
+                            val meta = msg.metadataJson
+                            if (meta == "null" || meta.isBlank()) return@run true
+                            val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
+                            obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
+                        }
+                }
+            val imageUris = options.imageUris.take(maxImages)
+            val requestModelId = options.modelId ?: modelId
+            val requestProvider = provider.toApiProviderOrNull()
+            val useOpenRouterCacheControl =
+                if (requestProvider == ApiProvider.OPENROUTER) {
+                    OpenRouterPromptCacheSupport.supportsExplicitCacheControl(requestModelId)
+                } else {
+                    false
+                }
+            val cacheControlIndex =
+                if (useOpenRouterCacheControl) {
+                    sessionMessages.dropLast(1).indexOfLast { it.role == Role.USER }.takeIf { it >= 0 }
+                } else {
+                    null
+                }
+            val mappedSession =
+                sessionMessages.toMappedSessionBody(
+                    imageUris = imageUris,
+                    imageTargetIndex = lastUserIndex,
+                    cacheControlIndex = cacheControlIndex,
+                )
+            val mappedBody = mappedSession.params
 
-        val builder =
-            ChatCompletionCreateParams
-                .builder()
-                .model(requestModelId)
-                .messages(messages)
-
-        if (allowToolCall && availableTools.isNotEmpty() && supportsClientTools(requestModelId)) {
-            availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
-            builder.parallelToolCalls(false)
-        }
-
-        if (parameterSupport?.supportsReasoningEffort != false) {
-            options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        }
-        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
-            options.temperature?.let { builder.temperature(it.toDouble()) }
-        }
-        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
-            options.topP?.let { builder.topP(it.toDouble()) }
-        }
-        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
-            options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
-        }
-
-        val response =
-            streamChatCompletions(
-                params = builder.build(),
-                emitEvent = { event ->
-                    when (event) {
-                        is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                        else -> {}
-                    }
-                },
+            val appendOnly = ensureAppendOnlyContext(options.chatId)
+            appendOnly.ensureStablePrefix(
+                systemPrompt = systemPrompt,
+                toolsFingerprint = availableTools.toToolsFingerprint(),
             )
+            appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
 
-        val toolCalls =
-            response.functionCalls.mapIndexed { index, call ->
-                AgentRawToolCall(
-                    id = response.providerToolCallIds.getOrElse(index) { "" },
-                    name = call.toolName,
-                    argumentsJson = call.argumentsJson,
+            val systemPromptPrepended =
+                systemPrompt.isNotBlank() &&
+                    mappedBody.none { it.isStableSessionSystemMessage() }
+            val stableSystemMessage =
+                if (systemPromptPrepended) {
+                    ChatCompletionMessageParam.ofSystem(
+                        buildSystemPromptMessage(
+                            content = systemPrompt,
+                            useCacheControl = useOpenRouterCacheControl,
+                        ),
+                    )
+                } else {
+                    null
+                }
+            val tailInsertIndex =
+                resolveTailMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                )
+            val preRetrievalInsertIndex =
+                resolvePreRetrievalMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                )
+            val preRetrievalSidecarText =
+                options.volatileTurnContext
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(PreRetrievalContextSidecar::format)
+            if (
+                !preRetrievalSidecarText.isNullOrBlank() &&
+                preRetrievalInsertIndex != null &&
+                !appendOnly.hasFrozenPreRetrievalSidecar()
+            ) {
+                appendOnly.endTurnFreezeSidecar(
+                    sidecarText = preRetrievalSidecarText,
+                    mappedInsertIndex = preRetrievalInsertIndex,
                 )
             }
-        val bufferedText = response.assistantMessageText
-
-        return AgentModelTurnResult(
-            assistantText = bufferedText.takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason =
-                if (toolCalls.isNotEmpty()) {
-                    AgentFinishReason.ToolUse
+            val livePreRetrievalSidecarText =
+                if (appendOnly.hasFrozenPreRetrievalSidecar()) {
+                    null
                 } else {
-                    response.finishReason
-                        ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
-                        ?: AgentFinishReason.Stop
-                },
-            providerReasoningContent = response.providerReasoningContent,
-        )
+                    preRetrievalSidecarText
+                }
+            val messages =
+                buildList {
+                    stableSystemMessage?.let(::add)
+                    addAll(
+                        OpenAiCompatibleVolatilePlacement.buildMappedBodyWithSidecars(
+                            mappedBody = mappedBody,
+                            frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                            preRetrievalSidecarText = livePreRetrievalSidecarText,
+                            preRetrievalInsertIndex = preRetrievalInsertIndex,
+                            currentSidecarText = contextSidecars,
+                            tailInsertIndex = tailInsertIndex,
+                        ),
+                    )
+                }
+            if (!contextSidecars.isNullOrBlank()) {
+                appendOnly.endTurnFreezeSidecar(
+                    sidecarText = contextSidecars,
+                    mappedInsertIndex = tailInsertIndex,
+                )
+            }
+
+            val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
+
+            val builder =
+                ChatCompletionCreateParams
+                    .builder()
+                    .model(requestModelId)
+                    .messages(messages)
+
+            val toolsAvailable = availableTools.isNotEmpty() && supportsClientTools(requestModelId)
+            if (toolsAvailable) {
+                availableTools.forEach { builder.addTool(it.toChatCompletionTool(strict = useStrictToolSchemas)) }
+                builder.parallelToolCalls(false)
+                val toolChoice =
+                    if (allowToolCall) {
+                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
+                    } else {
+                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
+                    }
+                builder.toolChoice(toolChoice)
+            }
+
+            if (parameterSupport?.supportsReasoningEffort != false) {
+                options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
+            }
+            if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+                options.temperature?.let { builder.temperature(it.toDouble()) }
+            }
+            if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+                options.topP?.let { builder.topP(it.toDouble()) }
+            }
+            if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+                options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+            }
+            applyPromptCacheRouting(builder = builder, options = options)
+
+            builder.streamOptions(
+                ChatCompletionStreamOptions.builder().includeUsage(true).build(),
+            )
+
+            val emitProviderEvent: suspend (InferenceEvent) -> Unit = { event ->
+                when (event) {
+                    is InferenceEvent.PartialResponse -> {
+                        timing?.markFirstOutput()
+                        onTextToken(event.chunk)
+                    }
+                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    else -> {}
+                }
+            }
+            val chatParams = builder.build()
+            val response =
+                streamResponsesFirst(
+                    messages = messages,
+                    requestProvider = requestProvider,
+                    requestModelId = requestModelId,
+                    availableTools = availableTools,
+                    options = options,
+                    chatParams = chatParams,
+                    emitEvent = emitProviderEvent,
+                )
+
+            val toolCalls =
+                response.functionCalls.mapIndexed { index, call ->
+                    AgentRawToolCall(
+                        id = response.providerToolCallIds.getOrElse(index) { "" },
+                        name = call.toolName,
+                        argumentsJson = call.argumentsJson,
+                    )
+                }
+            val bufferedText = response.assistantMessageText
+
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport
+                        .openAiTurnTelemetry(
+                            context = captureContext,
+                            providerLabel = telemetrySupport.providerLabel(provider),
+                            modelId = modelId,
+                            modelLabel = modelId,
+                            timing = timing,
+                            inputTokens = response.inputTokens,
+                            outputTokens = response.outputTokens,
+                            reasoningTokens = response.reasoningTokens,
+                            cacheReadInputTokens = response.cacheReadInputTokens,
+                            cacheWriteInputTokens = response.cacheWriteInputTokens,
+                            costUsd = response.costUsd,
+                            savedPricing = options.apiModelPricing,
+                        ).also { row ->
+                            if (provider.toApiProviderOrNull() == ApiProvider.XAI) {
+                                val wireHead =
+                                    messages
+                                        .take(XAI_WIRE_LOG_HEAD_MESSAGE_COUNT)
+                                        .joinToString(" | ") { param ->
+                                            when {
+                                                param.isSystem() ->
+                                                    "sys:${
+                                                        param.asSystem().content().asText()
+                                                            .take(XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS)
+                                                    }"
+                                                param.isUser() ->
+                                                    "user:${
+                                                        param.asUser().content().asText()
+                                                            .take(XAI_WIRE_LOG_USER_PREVIEW_CHARS)
+                                                    }"
+                                                param.isAssistant() -> "asst"
+                                                param.isTool() -> "tool"
+                                                else -> "other"
+                                            }
+                                        }
+                                loggingPort.debug(
+                                    tag,
+                                    "xAI telemetry turn seq=${row.sequenceIndex} allowToolCall=$allowToolCall " +
+                                        "toolCalls=${toolCalls.size} wireMsgs=${messages.size} " +
+                                        "appendOnlyClears=${appendOnly.clearCount} wireHead=[$wireHead] " +
+                                        "input=${row.inputTokens} cacheRead=${row.cacheReadInputTokens} " +
+                                        "output=${row.outputTokens}",
+                                )
+                            }
+                        }
+                } else {
+                    null
+                }
+
+            return AgentModelTurnResult(
+                assistantText = bufferedText.takeIf { it.isNotBlank() },
+                toolCalls = toolCalls,
+                finishReason =
+                    if (toolCalls.isNotEmpty()) {
+                        AgentFinishReason.ToolUse
+                    } else {
+                        response.finishReason
+                            ?.let { ProviderFinishReasonMapper.fromOpenAiChatStream(it, bufferedText).finishReason }
+                            ?: AgentFinishReason.Stop
+                    },
+                providerReasoningContent = response.providerReasoningContent,
+                telemetry = telemetry,
+            ).also {
+                telemetryEventPort.emitInferenceExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    provider = provider,
+                    modelId = resolvedModelId,
+                    success = true,
+                    tokenCount = response.outputTokens,
+                    costUsd = response.costUsd,
+                    inputTokens = response.inputTokens,
+                    cacheReadInputTokens = response.cacheReadInputTokens,
+                    baseUrl = baseUrl,
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: InferenceNetworkException) {
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = provider,
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
+            throw e
+        } catch (e: java.io.IOException) {
+            loggingPort.error(tag, "completeSingleTurn network failure: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = provider,
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
+            throw InferenceNetworkException(
+                provider = provider,
+                message = e.message ?: "Connection error",
+                cause = e,
+            )
+        } catch (e: Exception) {
+            loggingPort.error(tag, "completeSingleTurn failed: ${e.message}", e)
+            throw e
+        }
     }
 
     private fun parameterSupport(
@@ -200,26 +470,245 @@ abstract class BaseOpenAiSdkInferenceService(
         return requestProvider != ApiProvider.XAI || !ApiProviderModelPolicy.isXaiMultiAgentModel(requestModelId)
     }
 
-    private fun List<AgentLoopMessage>.toOpenAiChatParams(
+    private suspend fun streamResponsesFirst(
+        messages: List<ChatCompletionMessageParam>,
+        requestProvider: ApiProvider?,
+        requestModelId: String,
+        availableTools: List<ToolDefinition>,
+        options: GenerationOptions,
+        chatParams: ChatCompletionCreateParams,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ): StreamedOpenAiResponse {
+        val responseParams =
+            buildResponseParams(
+                messages = messages,
+                requestProvider = requestProvider,
+                requestModelId = requestModelId,
+                availableTools = availableTools,
+                options = options,
+            ) ?: return streamChatCompletions(params = chatParams, emitEvent = emitEvent)
+
+        return try {
+            streamResponses(
+                params = responseParams,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+                assistantMessageId = options.assistantMessageId,
+                emitEvent = emitEvent,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (!chatFallbackAllowed(requestProvider, requestModelId)) {
+                throw error
+            }
+            loggingPort.warning(
+                tag,
+                "Responses API failed; falling back to Chat Completions provider=$provider model=$requestModelId " +
+                    "error=${error.message ?: error::class.java.simpleName}",
+            )
+            streamChatCompletions(params = chatParams, emitEvent = emitEvent)
+        }
+    }
+
+    private fun buildResponseParams(
+        messages: List<ChatCompletionMessageParam>,
+        requestProvider: ApiProvider?,
+        requestModelId: String,
+        availableTools: List<ToolDefinition>,
+        options: GenerationOptions,
+    ): ResponseCreateParams? {
+        if (requestProvider != ApiProvider.XAI && requestProvider != ApiProvider.OPENAI) {
+            return null
+        }
+        val mapperInput = messages.toResponseMapperInput()
+        val responseOptions =
+            options.copy(
+                apiProvider = requestProvider,
+                modelId = requestModelId,
+                toolingEnabled = availableTools.isNotEmpty(),
+                activeTools = availableTools,
+            )
+        return if (requestProvider == ApiProvider.XAI) {
+            XaiRequestMapper.mapToResponseParams(
+                modelId = requestModelId,
+                prompt = mapperInput.prompt,
+                history = mapperInput.history,
+                options = responseOptions,
+            )
+        } else {
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = requestModelId,
+                prompt = mapperInput.prompt,
+                history = mapperInput.history,
+                options = responseOptions,
+            )
+        }
+    }
+
+    private fun chatFallbackAllowed(
+        requestProvider: ApiProvider?,
+        requestModelId: String,
+    ): Boolean =
+        when (requestProvider) {
+            ApiProvider.XAI -> XaiRequestMapper.shouldAllowChatCompletionsFallback(requestModelId)
+            ApiProvider.OPENAI -> true
+            else -> true
+        }
+
+    private data class ResponseMapperInput(
+        val history: List<ChatMessage>,
+        val prompt: String,
+    )
+
+    private fun List<ChatCompletionMessageParam>.toResponseMapperInput(): ResponseMapperInput {
+        val mapped = mapNotNull { it.toChatMessageOrNull() }
+        val latestUserIndex = mapped.indexOfLast { it.role == Role.USER }
+        if (latestUserIndex < 0) {
+            return ResponseMapperInput(history = mapped, prompt = "")
+        }
+        val latestUser = mapped[latestUserIndex]
+        return ResponseMapperInput(
+            history = mapped.take(latestUserIndex) + mapped.drop(latestUserIndex + 1),
+            prompt = latestUser.content,
+        )
+    }
+
+    private fun ChatCompletionMessageParam.toChatMessageOrNull(): ChatMessage? =
+        when {
+            isSystem() -> ChatMessage(Role.SYSTEM, asSystem().content().asText())
+            isUser() -> ChatMessage(Role.USER, asUser().content().asPlainText())
+            isAssistant() -> ChatMessage(Role.ASSISTANT, asAssistant().content().asPlainTextOrEmpty())
+            isTool() -> ChatMessage(Role.USER, asTool().content().asText())
+            else -> null
+        }
+
+    private fun ChatCompletionUserMessageParam.Content.asPlainText(): String =
+        when {
+            isText() -> asText()
+            isArrayOfContentParts() ->
+                asArrayOfContentParts()
+                    .mapNotNull { part ->
+                        if (part.isText()) {
+                            part.asText().text()
+                        } else {
+                            null
+                        }
+                    }.joinToString(separator = "\n\n")
+            else -> toString()
+        }
+
+    private fun Optional<ChatCompletionAssistantMessageParam.Content>.asPlainTextOrEmpty(): String {
+        if (!isPresent) return ""
+        val content = get()
+        return when {
+            content.isText() -> content.asText()
+            else -> content.toString()
+        }
+    }
+
+    private fun buildSystemPromptMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionSystemMessageParam =
+        if (useCacheControl) {
+            ChatCompletionSystemMessageParam
+                .builder()
+                .contentOfArrayOfContentParts(
+                    listOf(OpenRouterPromptCacheSupport.cachedSystemTextPart(content)),
+                ).build()
+        } else {
+            ChatCompletionSystemMessageParam.builder().content(content).build()
+        }
+
+    private fun applyPromptCacheRouting(
+        builder: ChatCompletionCreateParams.Builder,
+        options: GenerationOptions,
+    ) {
+        val conversationId = options.chatId?.value?.takeIf { it.isNotBlank() } ?: return
+        when (provider.toApiProviderOrNull()) {
+            ApiProvider.XAI -> builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+            ApiProvider.OPENAI -> builder.promptCacheKey(conversationId)
+            else -> Unit
+        }
+    }
+
+    private data class MappedSessionBody(
+        val params: List<ChatCompletionMessageParam>,
+        val sessionIndexToMappedIndex: IntArray,
+    )
+
+    private fun List<AgentLoopMessage>.toMappedSessionBody(
         imageUris: List<String>,
         imageTargetIndex: Int,
-    ): List<ChatCompletionMessageParam> {
+        cacheControlIndex: Int?,
+    ): MappedSessionBody {
+        val sessionIndexToMappedIndex = IntArray(size) { -1 }
         val pendingToolCallIds = mutableSetOf<String>()
-        return mapIndexedNotNull { index, message ->
+        val params = mutableListOf<ChatCompletionMessageParam>()
+        forEachIndexed { index, message ->
             val attachImages = index == imageTargetIndex && imageUris.isNotEmpty()
+            val wireContent = message.content
             val mappedMessage =
-                message.toOpenAiChatParam(
+                message.copy(content = wireContent).toOpenAiChatParam(
                     pendingToolCallIds = pendingToolCallIds,
                     imageUris = if (attachImages) imageUris else emptyList(),
+                    useCacheControl = index == cacheControlIndex && !attachImages,
                 )
-            mappedMessage?.toolCallIds?.let { pendingToolCallIds.addAll(it) }
-            mappedMessage?.param
+            if (mappedMessage != null) {
+                sessionIndexToMappedIndex[index] = params.size
+                mappedMessage.toolCallIds.let { pendingToolCallIds.addAll(it) }
+                params.add(mappedMessage.param)
+            }
         }
+        return MappedSessionBody(
+            params = params,
+            sessionIndexToMappedIndex = sessionIndexToMappedIndex,
+        )
+    }
+
+    /**
+     * Live tail anchor: last session message that maps to provider history, excluding engine-internal
+     * payloads (tool budget, nudges) that would shift the sidecar away from the tool-result tail.
+     */
+    private fun resolvePreRetrievalMappedInsertIndex(
+        sessionMessages: List<AgentLoopMessage>,
+        sessionIndexToMappedIndex: IntArray,
+    ): Int? {
+        val userSessionIndex =
+            sessionMessages.indexOfLast { message ->
+                message.role == Role.USER && !message.metadataJson.isToolCallMetadata()
+            }
+        if (userSessionIndex < 0) return null
+        return sessionIndexToMappedIndex.getOrNull(userSessionIndex)?.takeIf { it >= 0 }
+    }
+
+    private fun resolveTailMappedInsertIndex(
+        sessionMessages: List<AgentLoopMessage>,
+        sessionIndexToMappedIndex: IntArray,
+    ): Int {
+        if (sessionMessages.isEmpty()) return 0
+        val anchorSessionIndex =
+            sessionMessages.indices.lastOrNull { index ->
+                val metadata = sessionMessages[index].metadataJson.toMetadataJsonObject()
+                !metadata.isEngineInternalToolSidecar()
+            } ?: 0
+        val mappedIndex = sessionIndexToMappedIndex.getOrNull(anchorSessionIndex) ?: -1
+        if (mappedIndex >= 0) {
+            return OpenAiCompatibleVolatilePlacement.tailMappedInsertIndex(
+                mappedBodySize = mappedIndex + 1,
+            )
+        }
+        val lastMappedIndex = sessionIndexToMappedIndex.lastOrNull { it >= 0 } ?: -1
+        return OpenAiCompatibleVolatilePlacement.tailMappedInsertIndex(
+            mappedBodySize = (lastMappedIndex + 1).coerceAtLeast(0),
+        )
     }
 
     private fun AgentLoopMessage.toOpenAiChatParam(
         pendingToolCallIds: MutableSet<String>,
         imageUris: List<String> = emptyList(),
+        useCacheControl: Boolean = false,
     ): MappedChatMessage? {
         val metadata = metadataJson.toMetadataJsonObject()
         if (metadata.isEngineInternalToolSidecar()) {
@@ -243,7 +732,10 @@ abstract class BaseOpenAiSdkInferenceService(
                 MappedChatMessage(
                     param =
                         ChatCompletionMessageParam.ofSystem(
-                            ChatCompletionSystemMessageParam.builder().content(content).build(),
+                            buildSystemPromptMessage(
+                                content = content,
+                                useCacheControl = useCacheControl,
+                            ),
                         ),
                 )
             Role.USER ->
@@ -251,7 +743,10 @@ abstract class BaseOpenAiSdkInferenceService(
                     param =
                         if (imageUris.isEmpty()) {
                             ChatCompletionMessageParam.ofUser(
-                                ChatCompletionUserMessageParam.builder().content(content).build(),
+                                buildUserMessage(
+                                    content = content,
+                                    useCacheControl = useCacheControl,
+                                ),
                             )
                         } else {
                             ChatCompletionMessageParam.ofUser(buildUserMessageWithImages(content, imageUris))
@@ -291,12 +786,50 @@ abstract class BaseOpenAiSdkInferenceService(
         return ChatCompletionUserMessageParam.builder().contentOfArrayOfContentParts(parts).build()
     }
 
+    private fun buildUserMessage(
+        content: String,
+        useCacheControl: Boolean,
+    ): ChatCompletionUserMessageParam =
+        if (useCacheControl) {
+            ChatCompletionUserMessageParam
+                .builder()
+                .contentOfArrayOfContentParts(
+                    listOf(OpenRouterPromptCacheSupport.cachedUserTextPart(content)),
+                ).build()
+        } else {
+            ChatCompletionUserMessageParam.builder().content(content).build()
+        }
+
     private fun String.toMetadataJsonObject() =
         if (this != "null" && isNotBlank()) {
             runCatching { Json.parseToJsonElement(this).jsonObject }.getOrNull()
         } else {
             null
         }
+
+    /**
+     * True for real transcript system rows, not volatile sidecars or engine-internal system rows
+     * (budget, compaction summary) that must not suppress the stable system prompt prepend.
+     */
+    private fun ChatCompletionMessageParam.isStableSessionSystemMessage(): Boolean = isSystem() && !isVolatileOrEngineSystemMessage()
+
+    private fun ChatCompletionMessageParam.isVolatileOrEngineSystemMessage(): Boolean {
+        if (!isSystem()) return false
+        val text = asSystem().content().asText()
+        return PreRetrievalContextSidecar.isSidecarText(text) ||
+            text.startsWith("State ledger JSON:") ||
+            text.startsWith("Context management sidecars:") ||
+            text.startsWith("Tool context index JSON:") ||
+            text.startsWith("File context index JSON:") ||
+            text.startsWith("Cache hints:") ||
+            text.startsWith("[Agent]") ||
+            text.startsWith("[Conversation summary]")
+    }
+
+    private fun String.isToolCallMetadata(): Boolean {
+        val metadata = toMetadataJsonObject() ?: return false
+        return metadata["call_id"]?.jsonPrimitive?.contentOrNull != null
+    }
 
     /** Engine-injected payloads without a provider `tool_call_id` (budget, nudges, parse errors). */
     private fun JsonObject?.isEngineInternalToolSidecar(): Boolean =
@@ -459,6 +992,7 @@ abstract class BaseOpenAiSdkInferenceService(
                         argumentsJson = argsJson,
                         provider = provider,
                         modelType = modelType,
+                        modelId = params.model()?.toString() ?: modelId,
                         chatId = chatId,
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
@@ -478,7 +1012,52 @@ abstract class BaseOpenAiSdkInferenceService(
             assistantMessageText = state.accumulatedText.toString(),
             finishReason = state.finishReason,
             providerReasoningContent = state.accumulatedReasoning.toString().takeIf { it.isNotBlank() },
+            inputTokens = state.inputTokens,
+            outputTokens = state.outputTokens,
+            reasoningTokens = state.reasoningTokens,
+            cacheReadInputTokens = state.cacheReadInputTokens,
+            cacheWriteInputTokens = state.cacheWriteInputTokens,
+            costUsd = state.costUsd,
         )
+    }
+
+    protected open suspend fun streamResponses(
+        params: ResponseCreateParams,
+        chatId: ChatId? = null,
+        userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ): StreamedOpenAiResponse {
+        logResponsesRequest(params)
+        val handler =
+            OpenAiResponseStreamHandler(
+                provider = provider,
+                modelId = params.model().map { it.toString() }.orElse(modelId),
+                modelType = modelType,
+                loggingPort = loggingPort,
+                tag = tag,
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                emitEvent = emitEvent,
+            )
+        var state = StreamState()
+
+        try {
+            client.responses().createStreaming(params).use { streamResponse ->
+                val iterator = streamResponse.stream().iterator()
+                while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
+                    val event = runInterruptible { iterator.next() }
+                    state = handler.handleEvent(event, state)
+                }
+            }
+        } catch (e: OpenAIServiceException) {
+            val detail = describeException(e)
+            loggingPort.error(tag, "Responses stream failed model=$modelId $detail", e)
+            throw RuntimeException(detail, e)
+        }
+
+        return handler.toStreamedResponse(state)
     }
 
     /**
@@ -493,6 +1072,7 @@ abstract class BaseOpenAiSdkInferenceService(
         if (state.responseId == null) {
             state.responseId = event.id()
         }
+        accumulateOpenAiStreamUsage(event, state.usageAccumulator)
         val choices = event.choices()
         if (choices.isEmpty()) {
             loggingPort.debug(tag, "Chat stream chunk had no choices model=$modelId")
@@ -604,7 +1184,15 @@ abstract class BaseOpenAiSdkInferenceService(
         var outputTextDeltaCount: Int = 0,
         val accumulatedReasoning: StringBuilder = StringBuilder(),
         val trackedToolCalls: MutableMap<Long, TrackedToolCall> = mutableMapOf(),
-    )
+        val usageAccumulator: OpenAiStreamUsageAccumulator = OpenAiStreamUsageAccumulator(),
+        var costUsd: BigDecimal? = null,
+    ) {
+        val inputTokens: Int? get() = usageAccumulator.inputTokens
+        val outputTokens: Int? get() = usageAccumulator.outputTokens
+        val reasoningTokens: Int? get() = usageAccumulator.reasoningTokens
+        val cacheReadInputTokens: Int? get() = usageAccumulator.cacheReadInputTokens
+        val cacheWriteInputTokens: Int? get() = usageAccumulator.cacheWriteInputTokens
+    }
 
     private data class TrackedToolCall(
         var id: String? = null,
@@ -618,6 +1206,16 @@ abstract class BaseOpenAiSdkInferenceService(
             tag,
             @Suppress("MaxLineLength")
             "Chat Completions request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(
+                serializeBody(params._body()),
+            )}",
+        )
+    }
+
+    private fun logResponsesRequest(params: ResponseCreateParams) {
+        loggingPort.debug(
+            tag,
+            @Suppress("MaxLineLength")
+            "Responses request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(
                 serializeBody(params._body()),
             )}",
         )

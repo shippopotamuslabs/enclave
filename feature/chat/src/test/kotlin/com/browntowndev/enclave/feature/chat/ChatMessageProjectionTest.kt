@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -46,6 +47,40 @@ class ChatMessageProjectionTest {
                 .content.text,
         )
         assertFalse(result.handoffReady)
+    }
+
+    @Test
+    fun `projectChatMessages merges web search sources from snapshot when Room row is complete but has no sources`() {
+        val sources =
+            listOf(
+                WebSearchSource(
+                    messageId = assistantMessageId,
+                    title = "ML Ops jobs",
+                    url = "https://example.com/jobs",
+                    content = "Charleston market overview",
+                ),
+            )
+        val result =
+            projectChatMessages(
+                dbMessages =
+                    listOf(
+                        assistantMessage(
+                            content = "final answer",
+                            state = MessageState.COMPLETE,
+                        ),
+                    ),
+                activeSnapshot =
+                    snapshot(
+                        assistantMessageId = assistantMessageId,
+                        content = "final answer",
+                        state = MessageState.COMPLETE,
+                        webSearchSources = sources,
+                    ),
+                activeKey = ActiveChatTurnKey(chatId, assistantMessageId),
+            )
+
+        assertEquals(sources, result.messages.single().webSearchSources)
+        assertTrue(result.handoffReady)
     }
 
     @Test
@@ -334,6 +369,7 @@ class ChatMessageProjectionTest {
         assistantMessageId: MessageId,
         content: String,
         state: MessageState,
+        webSearchSources: List<WebSearchSource> = emptyList(),
     ): AccumulatedMessages =
         AccumulatedMessages(
             messages =
@@ -343,6 +379,7 @@ class ChatMessageProjectionTest {
                             assistantMessageId = assistantMessageId,
                             content = content,
                             state = state,
+                            webSearchSources = webSearchSources,
                         ),
                 ),
         )
@@ -351,6 +388,7 @@ class ChatMessageProjectionTest {
         assistantMessageId: MessageId,
         content: String,
         state: MessageState,
+        webSearchSources: List<WebSearchSource> = emptyList(),
     ): MessageSnapshot =
         MessageSnapshot(
             messageId = assistantMessageId,
@@ -359,5 +397,6 @@ class ChatMessageProjectionTest {
             thinkingRaw = "",
             messageState = state,
             isComplete = state == MessageState.COMPLETE,
+            webSearchSources = webSearchSources,
         )
 }

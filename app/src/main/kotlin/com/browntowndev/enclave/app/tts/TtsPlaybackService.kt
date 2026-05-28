@@ -60,14 +60,24 @@ class TtsPlaybackService : MediaSessionService() {
         startId: Int,
     ): Int {
         logger.debug(TAG, "TtsPlaybackService onStartCommand action=${intent?.action}")
-        if (intent?.action == ACTION_PLAY_REQUEST) {
-            val requestId = intent.getStringExtra(EXTRA_REQUEST_ID)
-            if (requestId != null) {
-                logger.debug(TAG, "Received play request for: $requestId")
-                startPlayback(requestId)
-            } else {
-                logger.error(TAG, "Missing request ID in play intent")
-                stopSelf()
+        when (intent?.action) {
+            ACTION_PLAY_REQUEST -> {
+                val requestId = intent.getStringExtra(EXTRA_REQUEST_ID)
+                if (requestId != null) {
+                    logger.debug(TAG, "Received play request for: $requestId")
+                    startPlayback(requestId)
+                } else {
+                    logger.error(TAG, "Missing request ID in play intent")
+                    stopSelf()
+                }
+            }
+            ACTION_PAUSE -> {
+                logger.debug(TAG, "Received pause request")
+                player?.pause()
+            }
+            ACTION_RESUME -> {
+                logger.debug(TAG, "Received resume request")
+                player?.play()
             }
         }
         return super.onStartCommand(intent, flags, startId)
@@ -151,6 +161,11 @@ class TtsPlaybackService : MediaSessionService() {
                     logger.debug(TAG, "TTS isPlaying changed: $isPlaying")
                     if (isPlaying) {
                         currentRequestId?.let { registry.publishStatus(it, TtsPlaybackStatus.Playing) }
+                    } else {
+                        val state = player?.playbackState
+                        if (state == Player.STATE_READY) {
+                            currentRequestId?.let { registry.publishStatus(it, TtsPlaybackStatus.Paused) }
+                        }
                     }
                 }
 
@@ -230,6 +245,8 @@ class TtsPlaybackService : MediaSessionService() {
     companion object {
         private const val TAG = "TtsPlaybackService"
         internal const val ACTION_PLAY_REQUEST = "com.browntowndev.enclave.tts.PLAY"
+        internal const val ACTION_PAUSE = "com.browntowndev.enclave.tts.PAUSE"
+        internal const val ACTION_RESUME = "com.browntowndev.enclave.tts.RESUME"
         internal const val EXTRA_REQUEST_ID = "request_id"
     }
 }

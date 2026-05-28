@@ -3,7 +3,6 @@ package com.browntowndev.enclave.core.data.local.dao.message
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
-import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState

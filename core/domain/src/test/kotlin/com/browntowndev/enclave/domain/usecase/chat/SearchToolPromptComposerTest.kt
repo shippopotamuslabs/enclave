@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -11,204 +13,73 @@ class SearchToolPromptComposerTest {
     private val composer = SearchToolPromptComposer()
 
     @Test
-    fun `compose appends the canonical search contract without mutating the base prompt`() {
-        val basePrompt = "Be concise."
-
-        val composed = composer.compose(basePrompt)
-
-        assertTrue(composed.contains("Be concise."))
-        assertTrue(
-            composed.contains(
-                """ActionResult{"name":"web_search","arguments":{""",
-            ),
-        )
-        assertEquals("Be concise.", basePrompt)
-    }
-
-    @Test
-    fun `compose can include the image inspect contract when requested`() {
-        val composed = composer.compose("Be concise.", includeImageInspectTool = true)
-
-        assertTrue(composed.contains("web_search"))
-        assertTrue(composed.contains("attached_image_inspect"))
-    }
-
-    @Test
-    fun `compose only includes image inspect when search is disabled but image tool is requested`() {
-        val composed =
+    fun `LTD-02 JSON XML prompt keeps deferred examples out of the base prompt`() {
+        val prompt =
             composer.compose(
                 baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = true,
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.WEB_SEARCH,
+                        ToolDefinition.WEB_EXTRACT,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertFalse(composed.contains("web_search"), "Should not contain search contract")
-        assertTrue(composed.contains("attached_image_inspect"), "Should contain image inspect contract")
-        assertTrue(composed.contains("Be concise."), "Should contain base prompt")
+        assertTrue(prompt.contains("# TOOL CATALOG:"))
+        assertTrue(prompt.contains("# SCHEMA DISCLOSURE:"))
+        assertTrue(prompt.contains("ActionResult{\"name\":\"web_search\""))
+        assertTrue(prompt.contains("ActionResult{\"name\":\"disclose_tool_schemas\""))
+        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("ActionResult{\"name\":\"search_current_artifact\""))
     }
 
     @Test
-    fun `compose uses LiteRT native format when strategy is LITE_RT_NATIVE`() {
-        val composed =
+    fun `LTD-03 LiteRT prompt keeps deferred native examples out of the base prompt`() {
+        val prompt =
             composer.compose(
                 baseSystemPrompt = "Be concise.",
-                includeSearchTool = true,
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.WEB_SEARCH,
+                        ToolDefinition.WEB_EXTRACT,
+                    ),
                 strategy = ToolCallStrategy.LITE_RT_NATIVE,
             )
 
-        assertTrue(composed.contains("call:web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(composed.contains("web_extract. Note that 'urls' must be a SINGLE string"))
-        assertFalse(composed.contains("May 3, 2026"))
-        assertTrue(composed.contains("# TEMPORAL CONTEXT:"))
-        // tool_call may appear in strict rules
+        assertTrue(prompt.contains("call:web_search{query: <|\"|>...<|\"|>}"))
+        assertTrue(prompt.contains("call:disclose_tool_schemas{tool_names: <|\"|>[\"append_blocks\"]<|\"|>}"))
+        assertFalse(prompt.contains("call:append_blocks{"))
+        assertFalse(prompt.contains("call:search_current_artifact{"))
     }
 
     @Test
-    fun `compose uses LiteRT native format for both search and image tools`() {
-        val composed =
+    fun `MUT-02 base prompt never prints deferred examples`() {
+        val prompt =
             composer.compose(
                 baseSystemPrompt = "Be concise.",
-                includeSearchTool = true,
-                includeImageInspectTool = true,
-                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+                toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.WEB_SEARCH,
+                        ToolDefinition.WEB_EXTRACT,
+                    ),
             )
 
-        assertTrue(composed.contains("call:web_search"))
-        assertTrue(composed.contains("call:attached_image_inspect"))
-        assertTrue(composed.contains("STRICT EXECUTION RULES:"))
-        assertTrue(composed.contains("Use exactly the 'call:tool_name{...}' format"))
-        assertTrue(composed.contains("NEVER wrap the tool call in special tokens"))
-    }
-
-    @Test
-    fun `compose returns empty tool contract for SDK_NATIVE strategy`() {
-        val basePrompt = "API Model Prompt"
-        val composed =
-            composer.compose(
-                baseSystemPrompt = basePrompt,
-                includeSearchTool = true,
-                includeImageInspectTool = true,
-                strategy = ToolCallStrategy.SDK_NATIVE,
-            )
-
-        assertEquals(basePrompt, composed)
-        assertFalse(composed.contains("mandate", ignoreCase = true))
-        assertFalse(composed.contains("tool_call"))
-    }
-
-    @Test
-    fun `compose with no tools enabled returns only base prompt`() {
-        val basePrompt = "Base only."
-        val composed =
-            composer.compose(
-                baseSystemPrompt = basePrompt,
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = false,
-            )
-
-        assertEquals(basePrompt, composed)
-    }
-
-    @Test
-    fun `compose includes memory tools contract by default`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-            )
-
-        assertTrue(composed.contains("search_chat_history"))
-        assertTrue(composed.contains("search_chat"))
-        assertFalse(composed.contains("web_search"))
-    }
-
-    @Test
-    fun `compose includes LiteRT memory tools format for LITE_RT_NATIVE strategy`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-                strategy = ToolCallStrategy.LITE_RT_NATIVE,
-            )
-
-        assertTrue(composed.contains("call:search_chat_history"))
-        assertTrue(composed.contains("call:search_chat"))
-    }
-
-    @Test
-    fun `compose includes current chat ID in memory tools contract when provided`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-                currentChatId = "chat-123",
-            )
-
-        assertTrue(composed.contains("chat-123"))
-        assertTrue(composed.contains("search_chat"))
-        assertTrue(composed.contains("chat_id"))
-    }
-
-    @Test
-    fun `compose omits current chat ID when not provided`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-                currentChatId = null,
-            )
-
-        assertFalse(composed.contains("The current chat ID is"))
-    }
-
-    @Test
-    fun `compose includes get_message_context in JSON_XML_ENVELOPE memory tools contract`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-            )
-
-        assertTrue(composed.contains("get_message_context"))
-        assertTrue(composed.contains("message_id"))
-    }
-
-    @Test
-    fun `compose includes get_message_context in LITE_RT_NATIVE memory tools contract`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeSearchTool = false,
-                includeImageInspectTool = false,
-                includeMemoryTools = true,
-                strategy = ToolCallStrategy.LITE_RT_NATIVE,
-            )
-
-        assertTrue(composed.contains("call:get_message_context"))
-        assertTrue(composed.contains("message_id"))
-    }
-
-    @Test
-    fun `compose includes manage_memories in memory tools contract`() {
-        val composed =
-            composer.compose(
-                baseSystemPrompt = "Be concise.",
-                includeMemoryTools = true,
-            )
-
-        assertTrue(composed.contains("manage_memories"))
-        assertTrue(composed.contains("save, update, delete, or search long-term memories"))
+        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("call:append_blocks{"))
     }
 
     @Test
@@ -221,6 +92,8 @@ class SearchToolPromptComposerTest {
         val composed =
             composer.compose(
                 baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
                 coreMemories = memories,
             )
 
@@ -232,7 +105,23 @@ class SearchToolPromptComposerTest {
     }
 
     @Test
-    fun `compose formats retrieved memories correctly`() {
+    fun `composeVolatileTurnContext formats retrieved memories correctly`() {
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.FACTS, content = "The sky is blue."),
+            )
+        val composed =
+            composer.composeVolatileTurnContext(
+                retrievedMemories = memories,
+            )
+
+        assertTrue(composed!!.contains("# RELEVANT FACTS & CONTEXT:"))
+        assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
+        assertTrue(composed.contains("- The sky is blue."))
+    }
+
+    @Test
+    fun `compose omits retrieved memories from stable system prompt`() {
         val memories =
             listOf(
                 Memory(category = MemoryCategory.FACTS, content = "The sky is blue."),
@@ -240,11 +129,79 @@ class SearchToolPromptComposerTest {
         val composed =
             composer.compose(
                 baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
                 retrievedMemories = memories,
             )
 
-        assertTrue(composed.contains("# RELEVANT FACTS & CONTEXT:"))
-        assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
-        assertTrue(composed.contains("- The sky is blue."))
+        assertFalse(composed.contains("# RELEVANT FACTS & CONTEXT:"))
     }
+
+    @Test
+    fun `IGTA-10 JSON XML prompt includes search_x_recent example when intent-activated`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("search_x_recent", ToolDisclosureMode.INTENT_ACTIVATED),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.WEB_SEARCH,
+                        ToolDefinition.WEB_EXTRACT,
+                        ToolDefinition.X_SEARCH,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("ActionResult{\"name\":\"search_x_recent\""))
+        assertTrue(prompt.contains("[intent-activated]"))
+    }
+
+    @Test
+    fun `IGTA-11 JSON XML prompt includes start_artifact example when intent-activated`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("start_artifact", ToolDisclosureMode.INTENT_ACTIVATED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.START_ARTIFACT,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("ActionResult{\"name\":\"start_artifact\""))
+        assertFalse(prompt.contains("tool_names\":[\"start_artifact\"]"))
+    }
+
+    @Test
+    fun `composeVolatileTurnContext formats retrieved X search results correctly`() {
+        val composed =
+            composer.composeVolatileTurnContext(
+                retrievedXSearchResults = "Mock X Search Result Data",
+            )
+
+        assertTrue(composed!!.contains("# RELEVANT X SEARCH RESULTS:"))
+        assertTrue(composed.contains("The following X search results were automatically retrieved based on the user's query:"))
+        assertTrue(composed.contains("Mock X Search Result Data"))
+    }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
 }

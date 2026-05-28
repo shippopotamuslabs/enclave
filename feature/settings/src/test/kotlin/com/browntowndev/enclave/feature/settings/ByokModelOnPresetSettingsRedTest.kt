@@ -6,9 +6,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
-import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraft
@@ -26,7 +24,6 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -35,11 +32,9 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
-import kotlin.reflect.jvm.isAccessible
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
@@ -73,6 +68,9 @@ class ByokModelOnPresetSettingsRedTest {
                 mediaProviderAssetUiMapper = mockk(relaxed = true),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper =
+                    com.browntowndev.enclave.feature.settings.usage
+                        .UsageSpendUiMapper(),
             )
     }
 
@@ -100,12 +98,14 @@ class ByokModelOnPresetSettingsRedTest {
         val config = apiConfiguration(modelId = "grok-4", isMultimodal = true)
         val ui = mapper.mapConfig(config)
         val modelId =
-            ApiModelConfigUi::class.memberProperties
+            ApiModelConfigUi::class
+                .memberProperties
                 .first { it.name == "modelId" }
                 .getter
                 .call(ui) as String
         val isMultimodal =
-            ApiModelConfigUi::class.memberProperties
+            ApiModelConfigUi::class
+                .memberProperties
                 .first { it.name == "isMultimodal" }
                 .getter
                 .call(ui) as Boolean
@@ -169,7 +169,8 @@ class ByokModelOnPresetSettingsRedTest {
                 )
             }
         val subtitle =
-            ReusableApiCredentialUi::class.memberProperties
+            ReusableApiCredentialUi::class
+                .memberProperties
                 .firstOrNull { it.name == "providerLabel" }
                 ?.getter
                 ?.call(reusable) as? String

@@ -33,6 +33,12 @@ val fileFilter = mutableListOf(
     "**/*Module_*Factory.class",
     "**/*_Factory*.*",
     "**/*_Provide*Factory*.*",
+    "**/*_Impl*.*",
+    "**/*_Impl.class",
+    "**/*_Impl$*.class",
+    "**/Hilt_*.*",
+    "**/*Hilt*.*",
+    "**/*_HiltModules*.*",
     "**/*Extensions*.*",
     "**/*$Result.class",
     "**/*$Result$*.class",
@@ -59,6 +65,7 @@ subprojects {
     }
 
     tasks.withType<Test> {
+        jvmArgs("-noverify")
         configure<JacocoTaskExtension> {
             isIncludeNoLocationClasses = true
             excludes = listOf("jdk.internal.*")
@@ -81,17 +88,23 @@ subprojects {
 
             val buildDir = layout.buildDirectory.get().asFile
             
-            val javaClasses = fileTree("$buildDir/intermediates/javac/$variantName/classes") {
-                exclude(fileFilter)
-            }
-            val kotlinClasses = fileTree("$buildDir/tmp/kotlin-classes/$variantName") {
-                exclude(fileFilter)
-            }
-            val builtInKotlinClasses = fileTree("$buildDir/intermediates/built_in_kotlinc/$variantName/compile${variantName.capitalize()}Kotlin/classes") {
-                exclude(fileFilter)
+            val asmClassesDir = "$buildDir/intermediates/classes/$variantName/transform${variantName.capitalize()}ClassesWithAsm/dirs"
+            val classesDir = if (file(asmClassesDir).exists()) {
+                fileTree(asmClassesDir) { exclude(fileFilter) }
+            } else {
+                val javaClasses = fileTree("$buildDir/intermediates/javac/$variantName/classes") {
+                    exclude(fileFilter)
+                }
+                val kotlinClasses = fileTree("$buildDir/tmp/kotlin-classes/$variantName") {
+                    exclude(fileFilter)
+                }
+                val builtInKotlinClasses = fileTree("$buildDir/intermediates/built_in_kotlinc/$variantName/compile${variantName.capitalize()}Kotlin/classes") {
+                    exclude(fileFilter)
+                }
+                files(javaClasses, kotlinClasses, builtInKotlinClasses)
             }
 
-            classDirectories.setFrom(files(javaClasses, kotlinClasses, builtInKotlinClasses))
+            classDirectories.setFrom(classesDir)
 
             sourceDirectories.setFrom(files(
                 "$projectDir/src/main/java",
@@ -160,6 +173,7 @@ subprojects {
         tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
             exclude("**/docgen_core.kt")
             exclude("**/agent_core.kt")
+            exclude("**/classifier_core.kt")
         }
 
         tasks.matching { it.name.startsWith("assemble") }.configureEach {

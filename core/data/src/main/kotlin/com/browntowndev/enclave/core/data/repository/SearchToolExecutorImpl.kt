@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,12 +21,14 @@ class SearchToolExecutorImpl
         private val settingsRepository: SettingsRepository,
         private val tavilySearchRepository: TavilySearchRepository,
         private val exaSearchRepository: ExaSearchRepository,
+        private val telemetryEventPort: TelemetryEventPort? = null,
     ) : ToolExecutorPort {
         companion object {
             private const val TAG = "SearchToolExecutor"
         }
 
         override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+            val startedAtMs = System.currentTimeMillis()
             requireSupportedTool(request.toolName)
             val params = request.parameters as WebSearchParams
             val query = params.query.trim()
@@ -48,9 +51,23 @@ class SearchToolExecutorImpl
             )
 
             val resultJson =
-                when (settings.searchProvider) {
-                    SearchProvider.TAVILY -> tavilySearchRepository.search(query)
-                    SearchProvider.EXA -> exaSearchRepository.search(query)
+                try {
+                    when (settings.searchProvider) {
+                        SearchProvider.TAVILY -> tavilySearchRepository.search(query)
+                        SearchProvider.EXA -> exaSearchRepository.search(query)
+                    }
+                } catch (e: java.io.IOException) {
+                    loggingPort.warning(TAG, "Search failed with network error: ${e.message}")
+                    telemetryEventPort.emitToolExecutionOutcome(
+                        startedAtMs = startedAtMs,
+                        toolName = request.toolName,
+                        success = false,
+                        errorMessage = e.message,
+                    )
+                    return ToolExecutionResult(
+                        toolName = request.toolName,
+                        resultJson = "{\"success\":false,\"error\":\"Network error: ${e.message}\"}",
+                    )
                 }
 
             loggingPort.info(
@@ -58,6 +75,12 @@ class SearchToolExecutorImpl
                 "Search tool execution complete provider=${request.provider} " +
                     "modelType=${request.modelType} tool=${request.toolName} " +
                     "resultChars=${resultJson.length}",
+            )
+
+            telemetryEventPort.emitToolExecutionOutcome(
+                startedAtMs = startedAtMs,
+                toolName = request.toolName,
+                success = true,
             )
 
             return ToolExecutionResult(

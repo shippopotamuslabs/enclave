@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.browntowndev.enclave.core.ui.R as CoreUiR
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -21,12 +22,16 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -92,6 +97,12 @@ class ChatInferenceService : Service() {
     lateinit var loggingPort: LoggingPort
 
     @Inject
+    lateinit var searchIntentClassifier: SearchIntentClassifierPort
+
+    @Inject
+    lateinit var toolExecutor: ToolExecutorPort
+
+    @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
 
     @Inject
@@ -109,6 +120,12 @@ class ChatInferenceService : Service() {
     @Inject
     lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
 
+    @Inject
+    lateinit var monotonicToolActivation: MonotonicToolActivationPort
+
+    @Inject
+    lateinit var committedInferencePrompts: CommittedInferencePromptPort
+
     private lateinit var historyRehydrator: ChatHistoryRehydrator
     private lateinit var inferenceRequestPreparer: ChatInferenceRequestPreparer
 
@@ -125,7 +142,12 @@ class ChatInferenceService : Service() {
         super.onCreate()
         loggingPort.info(TAG, "onCreate")
         createNotificationChannels()
-        historyRehydrator = ChatHistoryRehydrator(messageRepository, loggingPort)
+        historyRehydrator =
+            ChatHistoryRehydrator(
+                messageRepository = messageRepository,
+                loggingPort = loggingPort,
+                committedInferencePrompts = committedInferencePrompts,
+            )
         inferenceRequestPreparer =
             ChatInferenceRequestPreparer(
                 activeModelProvider,
@@ -139,6 +161,9 @@ class ChatInferenceService : Service() {
                 mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase,
                 loggingPort,
+                searchIntentClassifier = searchIntentClassifier,
+                toolExecutor = toolExecutor,
+                monotonicToolActivation = monotonicToolActivation,
             )
     }
 
@@ -282,6 +307,14 @@ class ChatInferenceService : Service() {
                         state = MessageGenerationState.Failed(e, modelType),
                         persistenceSession = persistenceSession,
                     )
+                } catch (e: Throwable) {
+                    loggingPort.error(TAG, "Inference failed in service due to system error", e)
+                    publishState(
+                        chatId = chatId,
+                        assistantMessageId = assistantMessageId,
+                        state = MessageGenerationState.Failed(RuntimeException(e), modelType),
+                        persistenceSession = persistenceSession,
+                    )
                 } finally {
                     stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
                     stopSelf(latestStartId)
@@ -313,6 +346,20 @@ class ChatInferenceService : Service() {
                 assistantMessageId = assistantMessageId,
                 modelType = modelType,
             )
+
+        if (preparedRequest.preRetrievalSources.isNotEmpty()) {
+            publishState(
+                chatId = chatId,
+                assistantMessageId = assistantMessageId,
+                state =
+                    MessageGenerationState.WebSearchSourcesAttached(
+                        preparedRequest.preRetrievalSources,
+                        modelType,
+                    ),
+                persistenceSession = persistenceSession,
+            )
+        }
+
         loggingPort.debug(
             TAG,
             "request prepared chat=${chatId.value} " +
@@ -329,8 +376,8 @@ class ChatInferenceService : Service() {
                 service = service,
             )
             loggingPort.debug(TAG, "history rehydration complete chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+        } catch (e: Throwable) {
+            loggingPort.error(TAG, "Failed to rehydrate history", e)
         }
 
         loggingPort.info(TAG, "sendPrompt begin chat=${chatId.value} assistantMessageId=${assistantMessageId.value}")
@@ -368,6 +415,11 @@ class ChatInferenceService : Service() {
                         is InferenceEvent.PreCompact -> null
                         is InferenceEvent.PostCompact -> null
                         is InferenceEvent.ToolRepaired -> null
+                        is InferenceEvent.TelemetryCaptured ->
+                            MessageGenerationState.TelemetryCaptured(
+                                telemetry = event.telemetry,
+                                modelType = event.modelType,
+                            )
                         is InferenceEvent.Finished -> {
                             maybeShowCompletionNotification(chatId)
                             MessageGenerationState.Finished(event.modelType)
@@ -485,8 +537,8 @@ class ChatInferenceService : Service() {
         return NotificationCompat
             .Builder(this, CHANNEL_ID)
             .setContentTitle("Enclave")
-            .setContentText("Generating AI response...")
-            .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
+            .setContentText("Replying to your prompt...")
+            .setSmallIcon(CoreUiR.drawable.ic_notification)
             .setOngoing(true)
             .setSilent(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
@@ -531,8 +583,8 @@ class ChatInferenceService : Service() {
             NotificationCompat
                 .Builder(this, COMPLETION_CHANNEL_ID)
                 .setContentTitle("Enclave")
-                .setContentText("AI response complete.")
-                .setSmallIcon(android.R.drawable.ic_menu_edit) // Placeholder
+                .setContentText("Response ready — tap to view")
+                .setSmallIcon(CoreUiR.drawable.ic_notification)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(deepLinkPendingIntent)

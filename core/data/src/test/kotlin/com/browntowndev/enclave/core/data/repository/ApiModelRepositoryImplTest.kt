@@ -169,7 +169,8 @@ class ApiModelRepositoryImplTest {
             assertTrue(id.value.isNotEmpty())
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.OPENAI,baseUrl = "https://api.openai.com/v1",
+                    provider = ApiProvider.OPENAI,
+                    baseUrl = "https://api.openai.com/v1",
                     apiKey = "sk-test",
                 )
             coVerify {
@@ -184,6 +185,41 @@ class ApiModelRepositoryImplTest {
                 )
             }
             verify { apiKeyManager.save("my_key", "sk-test") }
+        }
+
+    @Test
+    fun `saveCredentials generates credential alias when draft alias is blank`() =
+        runTest {
+            val storedCredentials = mutableListOf<ApiCredentialsEntity>()
+            coEvery { credentialsDao.insert(any()) } answers {
+                storedCredentials.add(firstArg())
+                1L
+            }
+            coEvery { credentialsDao.getById(any()) } answers {
+                val requestedId =
+                    when (val idArg = invocation.args[0]) {
+                        is ApiCredentialsId -> idArg
+                        is String -> ApiCredentialsId(idArg)
+                        else -> error("Unexpected getById arg: $idArg")
+                    }
+                storedCredentials.find { it.id == requestedId }
+            }
+
+            val id =
+                repo.saveCredentials(
+                    ApiCredentials(
+                        id = ApiCredentialsId(""),
+                        displayName = "Test",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = "https://api.openai.com/v1",
+                        credentialAlias = "",
+                    ),
+                    apiKey = "sk-test",
+                )
+
+            val expectedAlias = "api-${id.value}"
+            assertEquals(expectedAlias, storedCredentials.single().credentialAlias)
+            verify { apiKeyManager.save(expectedAlias, "sk-test") }
         }
 
     @Test
@@ -299,7 +335,8 @@ class ApiModelRepositoryImplTest {
             val credId = ApiCredentialsId("11")
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = ApiProvider.XAI,baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                    provider = ApiProvider.XAI,
+                    baseUrl = ApiProvider.XAI.defaultBaseUrl(),
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -314,7 +351,8 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = ApiProvider.XAI,baseUrl = null,
+                    provider = ApiProvider.XAI,
+                    baseUrl = null,
                     apiKey = "xai-key",
                 )
 
@@ -331,7 +369,8 @@ class ApiModelRepositoryImplTest {
             val defaultBaseUrl = provider.defaultBaseUrl()
             val expectedSignature =
                 buildApiCredentialsIdentitySignature(
-                    provider = provider,baseUrl = defaultBaseUrl,
+                    provider = provider,
+                    baseUrl = defaultBaseUrl,
                     apiKey = "xai-key",
                 )
             coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns
@@ -346,7 +385,8 @@ class ApiModelRepositoryImplTest {
 
             val result =
                 repo.findMatchingCredentials(
-                    provider = provider,baseUrl = "  ",
+                    provider = provider,
+                    baseUrl = "  ",
                     apiKey = "xai-key",
                 )
 

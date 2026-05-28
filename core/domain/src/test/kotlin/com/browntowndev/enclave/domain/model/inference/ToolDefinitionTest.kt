@@ -63,6 +63,42 @@ class ToolDefinitionTest {
     }
 
     @Test
+    fun `catalogEntry exposes compact projection with disclosure metadata for preloaded tools`() {
+        val entry = ToolDefinition.WEB_SEARCH.catalogEntry()
+
+        assertEquals("web_search", entry.name)
+        assertEquals(ToolDefinition.WEB_SEARCH.description, entry.description)
+        assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
+        assertTrue(entry.requiredArguments.any { it.name == "query" && it.type == "string" })
+    }
+
+    @Test
+    fun `catalogEntry marks deferred tools as disclose on demand`() {
+        val entry = ToolDefinition.APPEND_BLOCKS.catalogEntry()
+
+        assertEquals("append_blocks", entry.name)
+        assertEquals(ToolDefinition.APPEND_BLOCKS.description, entry.description)
+        assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, entry.disclosureMode)
+        assertTrue(
+            entry.requiredArguments.any { it.name == "artifactId" } ||
+                entry.optionalArguments.isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun `DISCLOSE_TOOL_SCHEMAS is preloaded and not lazily disclosable`() {
+        val tool = ToolDefinition.DISCLOSE_TOOL_SCHEMAS
+
+        assertEquals("disclose_tool_schemas", tool.name)
+        assertEquals(ToolDisclosureMode.PRELOADED, tool.disclosureMode)
+        assertEquals(false, tool.supportsLazyDisclosure)
+
+        val entry = tool.catalogEntry()
+        assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
+        assertTrue(entry.requiredArguments.any { it.name == "tool_names" })
+    }
+
+    @Test
     fun `web_extract constant has correct name and description`() {
         assertEquals("web_extract", ToolDefinition.WEB_EXTRACT.name)
         assertTrue(

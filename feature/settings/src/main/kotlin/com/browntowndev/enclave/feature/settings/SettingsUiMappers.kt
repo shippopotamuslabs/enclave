@@ -3,11 +3,12 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
-import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelSource
@@ -62,6 +63,18 @@ class ApiModelAssetUiMapper
                 thinkingEnabled = false,
                 systemPrompt = config.systemPrompt,
                 reasoningEffort = config.reasoningEffort,
+                promptPriceUsdPerMillion =
+                    config.pricing.promptUsdPerMillion
+                        ?.let(ApiModelPricingFormat::formatUsdPerMillion)
+                        .orEmpty(),
+                completionPriceUsdPerMillion =
+                    config.pricing.completionUsdPerMillion
+                        ?.let(ApiModelPricingFormat::formatUsdPerMillion)
+                        .orEmpty(),
+                cachedPromptPriceUsdPerMillion =
+                    config.pricing.cachedPromptUsdPerMillion
+                        ?.let(ApiModelPricingFormat::formatUsdPerMillion)
+                        .orEmpty(),
             )
     }
 
@@ -287,6 +300,7 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         created = created,
         promptPrice = promptPrice,
         completionPrice = completionPrice,
+        cachedPromptPrice = cachedPromptPrice,
         providerName = provider,
         isMultimodal = isMultimodal,
         isChatCapable = isChatCapable,

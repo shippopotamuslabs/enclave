@@ -46,8 +46,7 @@ fun NeoThemeChip(
                     withShadow = !selected,
                     shadowColor = shadowColor,
                     shadowOffset = neoButtonShadowOffset(),
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

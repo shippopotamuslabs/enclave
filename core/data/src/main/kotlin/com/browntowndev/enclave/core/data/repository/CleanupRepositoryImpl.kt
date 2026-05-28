@@ -1,6 +1,9 @@
 package com.browntowndev.enclave.core.data.repository
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.port.repository.CleanupRepository
 import kotlinx.coroutines.Dispatchers
@@ -13,12 +16,20 @@ class CleanupRepositoryImpl
         private val database: EnclaveDatabase,
         private val apiKeyManager: com.browntowndev.enclave.core.data.security.ApiKeyManager,
         private val syncTrigger: CloudSyncTrigger,
+        private val preferencesDataStore: DataStore<Preferences>,
+        private val userIdProvider: () -> String?,
     ) : CleanupRepository {
         override suspend fun clearAllData() {
             withContext(Dispatchers.IO) {
                 database.cleanupDao().clearUserData()
                 clearSearchKeys()
+                resetCloudSyncCursor()
             }
+        }
+
+        private suspend fun resetCloudSyncCursor() {
+            val userId = userIdProvider() ?: return
+            FirestoreSyncStateStore(preferencesDataStore).setLastAppliedSequence(userId, 0L)
         }
 
         override suspend fun clearUserContent() {

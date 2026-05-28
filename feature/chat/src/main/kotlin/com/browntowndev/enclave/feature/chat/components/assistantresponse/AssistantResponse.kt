@@ -18,17 +18,24 @@ import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.DetailBottomSheetConfig
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.rememberDetailBottomSheetController
 
+@Suppress("LongParameterList")
 @Composable
 fun AssistantResponse(
     modifier: Modifier = Modifier,
     message: ChatMessage,
     isPreview: Boolean = false,
     hasTtsProviderAssigned: Boolean = false,
+    isPlayingTts: Boolean = false,
+    isLoadingTts: Boolean = false,
+    isPausedTts: Boolean = false,
     toolCallBanner: ToolCallBannerUi? = null,
+    trailingStatusIndicator: @Composable (() -> Unit)? = null,
     onPlayAudio: (String) -> Unit = {},
+    onPauseAudio: () -> Unit = {},
     onArtifactCardClick: (MessageId, ArtifactCardUiModel) -> Unit = { _, _ -> },
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val contentText = message.content.text
     val pipelineStep = message.content.pipelineStep
@@ -88,11 +95,17 @@ fun AssistantResponse(
                 isStreaming = isStreaming,
                 isPreview = isPreview,
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
+                isPlayingTts = isPlayingTts,
+                isLoadingTts = isLoadingTts,
+                isPausedTts = isPausedTts,
                 toolCallBanner = toolCallBanner,
+                trailingStatusIndicator = trailingStatusIndicator,
                 onPlayAudio = onPlayAudio,
+                onPauseAudio = onPauseAudio,
                 onArtifactCardClick = onArtifactCardClick,
                 onNavigateToStudio = onNavigateToStudio,
                 onShareClick = onShareClick,
+                onStatsClick = onStatsClick,
                 onShowSources = { showSources = true },
             )
         }

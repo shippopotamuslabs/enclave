@@ -166,9 +166,7 @@ private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> =
             ),
     )
 
-fun darkMarkdownTheme(
-    bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
-): MarkdownTheme =
+fun darkMarkdownTheme(bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = DarkOnBackground)): MarkdownTheme =
     MarkdownTheme(
         headingStyles = darkHeadingStyles(),
         bodyStyle = bodyStyle,

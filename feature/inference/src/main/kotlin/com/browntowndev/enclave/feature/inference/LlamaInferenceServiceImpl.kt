@@ -62,6 +62,7 @@ class LlamaInferenceServiceImpl
         private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
         @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
         private val toolStreamGatePort: ToolStreamGatePort,
+        private val telemetrySupport: com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport? = null,
     ) : RustCompatibleInferenceService {
         companion object {
             private const val TAG = "LlamaInferenceService"
@@ -267,6 +268,7 @@ class LlamaInferenceServiceImpl
         override suspend fun completeSingleTurn(
             sessionMessages: List<AgentLoopMessage>,
             systemPrompt: String,
+            contextSidecars: String?,
             availableTools: List<ToolDefinition>,
             allowToolCall: Boolean,
             onTextToken: suspend (String) -> Unit,
@@ -277,13 +279,19 @@ class LlamaInferenceServiceImpl
             if (options.imageUris.isNotEmpty()) {
                 loggingPort.warning(TAG, "Images are not supported in Llama agent loop turns; imageUris will be ignored")
             }
+            val mergedSystemPrompt =
+                if (!contextSidecars.isNullOrBlank()) {
+                    "$systemPrompt\n\n$contextSidecars"
+                } else {
+                    systemPrompt
+                }
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
-                    availableTools = availableTools,
-                    systemPrompt = systemPrompt.ifBlank { options.systemPrompt },
+                    activeTools = availableTools,
+                    systemPrompt = mergedSystemPrompt.ifBlank { options.systemPrompt },
                 )
-            val domainHistory = sessionMessages.map(::toLlamaDomainMessage)
+            val domainHistory = sessionMessages.map { message -> toLlamaDomainMessage(message) }
 
             mutex.withLock {
                 history = domainHistory
@@ -310,10 +318,31 @@ class LlamaInferenceServiceImpl
                 }
             }
             val rawText = buffered.fullText
+            val timing =
+                telemetrySupport?.let {
+                    com.browntowndev.enclave.feature.inference.telemetry
+                        .InferenceTurnTiming()
+                }
+            val captureContext = telemetrySupport?.captureContext(turnOptions)
+            val outputTokenEstimate =
+                rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport.localTurnTelemetry(
+                        context = captureContext,
+                        providerLabel = "LiteRT",
+                        modelLabel = turnOptions.modelId ?: "local",
+                        timing = timing,
+                        outputTokens = outputTokenEstimate,
+                    )
+                } else {
+                    null
+                }
             return AgentModelTurnResult(
                 assistantText = rawText.takeIf { it.isNotBlank() },
                 toolCalls = emptyList(),
                 finishReason = AgentFinishReason.Stop,
+                telemetry = telemetry,
             )
         }
 

@@ -1,16 +1,13 @@
 package com.browntowndev.enclave.feature.chat.components.assistantresponse
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.markdown.StreamableMarkdownText
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
-import com.browntowndev.enclave.feature.chat.components.ToolCallBanner
 import com.browntowndev.enclave.feature.chat.components.messagelist.ThoughtForHeader
 import com.browntowndev.enclave.feature.chat.components.messagelist.formatThinkingDuration
 
@@ -21,6 +18,7 @@ internal fun AssistantResponseTranscript(
     isStreaming: Boolean,
     isPreview: Boolean,
     toolCallBanner: ToolCallBannerUi?,
+    trailingStatusIndicator: @Composable (() -> Unit)?,
     onOpenThinkingSheet: (
         text: String,
         durationSeconds: Long?,
@@ -41,16 +39,7 @@ internal fun AssistantResponseTranscript(
         return
     }
 
-    val insertAfterIndex = toolCallBannerInsertAfterSegmentIndex(segments)
-    val showBannerBeforeSegments = toolCallBanner != null && insertAfterIndex == null
-    if (showBannerBeforeSegments) {
-        ToolCallBanner(
-            banner = toolCallBanner,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-    }
-
-    segments.forEachIndexed { index, segment ->
+    segments.forEach { segment ->
         key(segment.ordinal) {
             when (segment) {
                 is TranscriptSegmentUi.ThinkingBlock -> {
@@ -58,15 +47,15 @@ internal fun AssistantResponseTranscript(
                         LiveThinkingTranscriptRow(
                             segment = segment,
                             isPreview = isPreview,
-                            onToggleDetails = {
-                                onOpenThinkingSheet(
-                                    segment.text,
-                                    null,
-                                    true,
-                                    0,
-                                )
-                            },
-                        )
+                            toolCallBanner = toolCallBanner,
+                        ) {
+                            onOpenThinkingSheet(
+                                segment.text,
+                                null,
+                                true,
+                                0,
+                            )
+                        }
                     } else {
                         ThoughtForHeader(
                             durationText =
@@ -74,15 +63,14 @@ internal fun AssistantResponseTranscript(
                                     (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
                                 ),
                             isExpanded = false,
-                            onViewFullThinking = {
-                                onOpenThinkingSheet(
-                                    segment.text,
-                                    segment.durationSeconds,
-                                    false,
-                                    (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
-                                )
-                            },
-                        )
+                        ) {
+                            onOpenThinkingSheet(
+                                segment.text,
+                                segment.durationSeconds,
+                                false,
+                                (segment.durationSeconds ?: 0L).toInt().coerceAtLeast(0),
+                            )
+                        }
                     }
                 }
                 is TranscriptSegmentUi.AnswerBlock -> {
@@ -97,11 +85,7 @@ internal fun AssistantResponseTranscript(
                 }
             }
         }
-        if (toolCallBanner != null && insertAfterIndex == index) {
-            ToolCallBanner(
-                banner = toolCallBanner,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
     }
+
+    trailingStatusIndicator?.invoke()
 }

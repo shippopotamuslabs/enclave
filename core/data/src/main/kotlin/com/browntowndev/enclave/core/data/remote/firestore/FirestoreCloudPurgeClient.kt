@@ -37,6 +37,7 @@ internal class FirestoreCloudPurgeClient(
                     "documents",
                     "chat_summaries",
                     "message_transcript_segments",
+                    "message_inference_telemetry",
                     "message_vision_analysis",
                     "message_files",
                     "web_search_sources",

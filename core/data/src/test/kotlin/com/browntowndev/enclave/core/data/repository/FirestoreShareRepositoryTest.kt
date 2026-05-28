@@ -228,6 +228,87 @@ class FirestoreShareRepositoryTest {
         }
 
     @Test
+    fun `shareChat with chatId includes sourceChatId in encrypted payload and getSharedChat recovers it`() =
+        runTest {
+            val sourceChatId = ChatId("original-chat-99")
+            val messages =
+                listOf(
+                    Message(
+                        id = MessageId("msg1"),
+                        chatId = sourceChatId,
+                        content = Content(text = "Hello"),
+                        role = Role.USER,
+                        createdAt = 1000L,
+                    ),
+                )
+
+            val callable = mockk<HttpsCallableReference>(relaxed = true)
+            val result = mockk<HttpsCallableResult>(relaxed = true)
+            val uploadPayload = slot<Map<String, Any>>()
+            every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+            every { callable.call(capture(uploadPayload)) } returns Tasks.forResult(result)
+            every { result.getData() } returns serverResultData()
+
+            val sharedChat = repository.shareChat(messages, sourceChatId)
+            val oneTimeKey = sharedChat.shareUrl.substringAfter("key=")
+
+            val mockDoc = mockk<com.google.firebase.firestore.DocumentSnapshot>(relaxed = true)
+            val docRef = mockk<com.google.firebase.firestore.DocumentReference>(relaxed = true)
+            val collection = mockk<com.google.firebase.firestore.CollectionReference>(relaxed = true)
+            every { firestore.collection("shared_chats") } returns collection
+            every { collection.document("share123") } returns docRef
+            every { docRef.get() } returns Tasks.forResult(mockDoc)
+            every { mockDoc.exists() } returns true
+            every { mockDoc.getString("encryptedPayload") } returns
+                uploadPayload.captured.getValue("encryptedPayload") as String
+            every { mockDoc.getString("iv") } returns uploadPayload.captured.getValue("iv") as String
+
+            val decrypted = repository.getSharedChat("share123", oneTimeKey)
+
+            assertEquals(sourceChatId.value, decrypted?.sourceChatId)
+        }
+
+    @Test
+    fun `shareChat without chatId has null sourceChatId`() =
+        runTest {
+            val messages =
+                listOf(
+                    Message(
+                        id = MessageId("msg1"),
+                        chatId = ChatId("chat1"),
+                        content = Content(text = "Hello"),
+                        role = Role.USER,
+                        createdAt = 1000L,
+                    ),
+                )
+
+            val callable = mockk<HttpsCallableReference>(relaxed = true)
+            val result = mockk<HttpsCallableResult>(relaxed = true)
+            val uploadPayload = slot<Map<String, Any>>()
+            every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+            every { callable.call(capture(uploadPayload)) } returns Tasks.forResult(result)
+            every { result.getData() } returns serverResultData()
+
+            val sharedChat = repository.shareChat(messages, null)
+            val oneTimeKey = sharedChat.shareUrl.substringAfter("key=")
+
+            val mockDoc = mockk<com.google.firebase.firestore.DocumentSnapshot>(relaxed = true)
+            val docRef = mockk<com.google.firebase.firestore.DocumentReference>(relaxed = true)
+            val collection = mockk<com.google.firebase.firestore.CollectionReference>(relaxed = true)
+            every { firestore.collection("shared_chats") } returns collection
+            every { collection.document("share123") } returns docRef
+            every { docRef.get() } returns Tasks.forResult(mockDoc)
+            every { mockDoc.exists() } returns true
+            every { mockDoc.getString("encryptedPayload") } returns
+                uploadPayload.captured.getValue("encryptedPayload") as String
+            every { mockDoc.getString("iv") } returns uploadPayload.captured.getValue("iv") as String
+
+            val decrypted = repository.getSharedChat("share123", oneTimeKey)
+
+            assertEquals(null, decrypted?.sourceChatId)
+        }
+
+    @Test
     fun `shareChat with file attachment inlines content`() =
         runTest {
             val messages =

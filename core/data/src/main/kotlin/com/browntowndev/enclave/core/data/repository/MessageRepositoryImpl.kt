@@ -51,9 +51,8 @@ class MessageRepositoryImpl
             modelType: ModelType,
         ) = vision.saveVisionAnalysis(userMessageId, imageUri, promptText, analysisText, modelType)
 
-        override suspend fun getVisionAnalysesForMessages(
-            userMessageIds: List<MessageId>,
-        ): Map<MessageId, List<MessageVisionAnalysis>> = vision.getVisionAnalysesForMessages(userMessageIds)
+        override suspend fun getVisionAnalysesForMessages(userMessageIds: List<MessageId>): Map<MessageId, List<MessageVisionAnalysis>> =
+            vision.getVisionAnalysesForMessages(userMessageIds)
 
         override suspend fun resolveLatestImageBearingUserMessage(
             chatId: ChatId,

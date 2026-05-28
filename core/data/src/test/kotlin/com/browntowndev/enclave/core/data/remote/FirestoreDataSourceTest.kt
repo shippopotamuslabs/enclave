@@ -5,9 +5,7 @@ import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.ChatSummaryDao
 import com.browntowndev.enclave.core.data.local.DocumentDao
-import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
-import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
@@ -16,20 +14,14 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Tasks
-import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.QueryDocumentSnapshot
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
@@ -56,7 +48,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.Date
-import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FirestoreDataSourceTest {
@@ -832,10 +823,13 @@ class FirestoreDataSourceTest {
         @Test
         fun `SCN-ANDROID-001 fresh hydrate applies events after sequence zero`() =
             runTest {
-                val localEncryption = com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService()
+                val localEncryption =
+                    com.browntowndev.enclave.core.data.repository
+                        .FakeLocalDataEncryptionService()
                 val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
                 val captured =
-                    com.browntowndev.enclave.core.data.remote.firestore.captureChatUpserts(chatDao)
+                    com.browntowndev.enclave.core.data.remote.firestore
+                        .captureChatUpserts(chatDao)
                 val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
                 every { cryptoManager.hasCachedKey() } returns true
                 val stateStore = FakeFirestoreSyncStateStore(sequence = 0)
@@ -876,7 +870,8 @@ class FirestoreDataSourceTest {
                 val replay = result.getOrThrow()
                 assertEquals(1, replay.eventsApplied)
                 assertEquals(1, replay.lastAppliedSequence)
-                org.junit.jupiter.api.Assertions.assertFalse(replay.hasMore)
+                org.junit.jupiter.api.Assertions
+                    .assertFalse(replay.hasMore)
                 assertEquals(1, captured.size)
                 assertEquals("chat-1", captured.first().id.value)
                 val decryptedName =
@@ -910,10 +905,12 @@ class FirestoreDataSourceTest {
         fun `SCN-LIVE-002 live event applies and advances sequence once`() =
             runTest {
                 val localEncryption =
-                    com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService()
+                    com.browntowndev.enclave.core.data.repository
+                        .FakeLocalDataEncryptionService()
                 val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
                 val captured =
-                    com.browntowndev.enclave.core.data.remote.firestore.captureChatUpserts(chatDao)
+                    com.browntowndev.enclave.core.data.remote.firestore
+                        .captureChatUpserts(chatDao)
                 val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
                 every { cryptoManager.hasCachedKey() } returns true
                 val stateStore = FakeFirestoreSyncStateStore(sequence = 20)
@@ -986,7 +983,8 @@ class FirestoreDataSourceTest {
                     }
                 advanceUntilIdle()
 
-                org.junit.jupiter.api.Assertions.assertFalse(dispatcher.secondStartedBeforeFirstReleased)
+                org.junit.jupiter.api.Assertions
+                    .assertFalse(dispatcher.secondStartedBeforeFirstReleased)
                 dispatcher.releaseFirst.complete(Unit)
                 first.join()
                 second.join()
@@ -1092,7 +1090,36 @@ class FirestoreDataSourceTest {
                 assertEquals("sequence > 200", harness.feedGateway.fetchQueries[1].filter)
                 assertEquals(202, first.eventsApplied + second.eventsApplied)
                 assertEquals(202, second.lastAppliedSequence)
-                org.junit.jupiter.api.Assertions.assertFalse(second.hasMore)
+                org.junit.jupiter.api.Assertions
+                    .assertFalse(second.hasMore)
+            }
+
+        @Test
+        fun `SCN-HYDRATION-001 replay resets stale cursor when Room is empty`() =
+            runTest {
+                val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
+                coEvery { chatDao.countActiveChats() } returns 0
+                val harness =
+                    EventFeedHarness(
+                        userId = "alice",
+                        vaultUnlocked = true,
+                        lastAppliedSequence = 500,
+                        chatDao = chatDao,
+                    )
+                harness.feedGateway.pages.add(
+                    listOf(syncEvent(1L, "chats", "chat-1")),
+                )
+
+                val replay = harness.dataSource.syncRemoteChangesFromCloud().getOrThrow()
+
+                assertEquals(
+                    "sequence > 0",
+                    harness.feedGateway.fetchQueries
+                        .single()
+                        .filter,
+                )
+                assertEquals(1, replay.eventsApplied)
+                assertEquals(1L, replay.lastAppliedSequence)
             }
 
         @Test
@@ -1150,6 +1177,10 @@ class FirestoreDataSourceTest {
             userId: String,
             vaultUnlocked: Boolean,
             lastAppliedSequence: Long,
+            chatDao: com.browntowndev.enclave.core.data.local.ChatDao =
+                mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true).also {
+                    coEvery { it.countActiveChats() } returns 1
+                },
             eventDispatcher: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher =
                 RecordOnlyDispatcher(),
             syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore =
@@ -1168,6 +1199,7 @@ class FirestoreDataSourceTest {
                 dataSource =
                     createTestFirestoreDataSource(
                         firestore = firestore,
+                        chatDao = chatDao,
                         cryptoManager = cm,
                         userIdProvider = { userId },
                         externalScope = testScope,
@@ -1191,7 +1223,6 @@ class FirestoreDataSourceTest {
                 every { collection.limit(any()) } returns collection
                 every { collection.get() } returns Tasks.forResult(emptySnapshot)
             }
-
         }
 
         private inner class RecordingFeedGateway :
@@ -1357,7 +1388,8 @@ class FirestoreDataSourceTest {
                 assertTrue(result.isSuccess)
                 assertEquals("cipher-name", capture.writeMap["name"])
                 assertEquals("device-a", capture.writeMap["_sync_device_id"])
-                org.junit.jupiter.api.Assertions.assertFalse(capture.writeMap.values.contains("Roadmap"))
+                org.junit.jupiter.api.Assertions
+                    .assertFalse(capture.writeMap.values.contains("Roadmap"))
             }
 
         private fun pendingChatDataSource(capture: PendingChatUploadCapture): FirestoreDataSource {

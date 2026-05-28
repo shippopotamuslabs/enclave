@@ -24,7 +24,6 @@ import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 @Composable
 internal fun SettingsProviderCard(
@@ -41,8 +40,7 @@ internal fun SettingsProviderCard(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = neoBorderColor(),
                     withShadow = false,
-                )
-                .clickable(onClick = onClick)
+                ).clickable(onClick = onClick)
                 .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -80,8 +78,7 @@ internal fun SettingsAssignmentRow(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = neoBorderColor(),
                     withShadow = false,
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                ).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

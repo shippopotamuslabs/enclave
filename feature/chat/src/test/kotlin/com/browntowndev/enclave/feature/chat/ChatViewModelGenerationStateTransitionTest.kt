@@ -21,11 +21,11 @@ import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
+import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
@@ -259,7 +259,8 @@ class ChatViewModelGenerationStateTransitionTest {
             )
             advanceUntilIdle()
             assertTrue(
-                viewModel.uiState.value.messages.any { message -> message.id == sentAssistantId },
+                viewModel.uiState.value.messages
+                    .any { message -> message.id == sentAssistantId },
                 "Expected orphan assistant row before Room catch-up; messages=" +
                     viewModel.uiState.value.messages.map { message ->
                         message.id.value to message.indicatorState

@@ -3,10 +3,8 @@ package com.browntowndev.enclave.core.ui.component.neo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -18,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 @Composable
@@ -28,6 +25,7 @@ fun NeoSheetHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBackClick: (() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
 ) {
     Row(
         modifier =
@@ -43,8 +41,6 @@ fun NeoSheetHeader(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
             )
-        } else {
-            Spacer(modifier = Modifier.width(EnclaveNeoTokens.iconButtonSize))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -62,11 +58,15 @@ fun NeoSheetHeader(
                 )
             }
         }
-        NeoIconButton(
-            onClick = onDismiss,
-            icon = Icons.Default.Close,
-            contentDescription = "Close",
-        )
+        if (trailingContent != null) {
+            trailingContent()
+        } else {
+            NeoIconButton(
+                onClick = onDismiss,
+                icon = Icons.Default.Close,
+                contentDescription = "Close",
+            )
+        }
     }
 }
 

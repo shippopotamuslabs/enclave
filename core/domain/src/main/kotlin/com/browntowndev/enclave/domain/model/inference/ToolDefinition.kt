@@ -22,6 +22,8 @@ data class ToolDefinition(
     val parametersClass: KClass<out ToolParameters>,
     val displayName: String? = null,
     val schemaOverride: ToolSchema? = null,
+    val disclosureMode: ToolDisclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+    val supportsLazyDisclosure: Boolean = true,
 ) {
     val schema: ToolSchema by lazy {
         schemaProvider?.getSchema(name)?.let { ToolSchema.fromFullSchema(it) }
@@ -45,6 +47,17 @@ data class ToolDefinition(
             }
             ToolCallStrategy.SDK_NATIVE -> ""
         }
+
+    fun catalogEntry(): ToolCatalogEntry {
+        val (required, optional) = ToolParameters.extractArgumentHints(schema)
+        return ToolCatalogEntry(
+            name = name,
+            description = description,
+            disclosureMode = disclosureMode,
+            requiredArguments = required,
+            optionalArguments = optional,
+        )
+    }
 
     private fun buildExampleJsonMap(): String {
         val properties = schema.properties
@@ -167,6 +180,7 @@ data class ToolDefinition(
                 description = "Search the web and return ranked results.",
                 parametersClass = WebSearchParams::class,
                 displayName = "Searching the web...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
         @Suppress("MaxLineLength")
@@ -178,6 +192,7 @@ data class ToolDefinition(
                         "Use this to read the details of webpages returned by web_search.",
                 parametersClass = WebExtractParams::class,
                 displayName = "Reading webpage content...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
         val ATTACHED_IMAGE_INSPECT =
@@ -186,6 +201,27 @@ data class ToolDefinition(
                 description = "Inspect an attached image to answer a question about it.",
                 parametersClass = AttachedImageInspectParams::class,
                 displayName = "Inspecting image...",
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+            )
+
+        val DISCLOSE_TOOL_SCHEMAS =
+            ToolDefinition(
+                name = "disclose_tool_schemas",
+                description = "Disclose full schemas for deferred tools before calling them.",
+                parametersClass = DiscloseToolSchemasParams::class,
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+                supportsLazyDisclosure = false,
+            )
+
+        val READ_CONTEXT_REFERENCE =
+            ToolDefinition(
+                name = "read_context_reference",
+                description =
+                    "Retrieve the full content of a context reference by its ID. " +
+                        "Use when context sidecars list references with truncated previews that you need to read in full.",
+                parametersClass = ReadContextReferenceParams::class,
+                disclosureMode = ToolDisclosureMode.PRELOADED,
+                supportsLazyDisclosure = false,
             )
 
         @Suppress("MaxLineLength")
@@ -221,39 +257,40 @@ data class ToolDefinition(
             ToolDefinition(
                 name = "start_artifact",
                 description =
-                    "Initialize a new professional document. " +
-                        "Returns an artifact_id to be used with append_blocks. " +
-                        "Use this as the first step for generating any report, plan, or summary. " +
+                    "Start creating a downloadable document for the user (exported as PDF or Word .docx). " +
+                        "Use when they ask to make or write a document, report, plan, PDF, or Word file — " +
+                        "not for casual chat replies. Returns artifact_id for append_blocks. " +
+                        "Call once per document before any append_blocks. " +
                         "Required: top-level `title` (string). Optional: `author`. " +
                         "Do not put the title only inside nested metadata; " +
-                        "after this call succeeds once, use append_blocks only (do not call start_artifact again).",
+                        "after this succeeds once, use append_blocks only (do not call start_artifact again).",
                 parametersClass = StartArtifactParams::class,
-                displayName = "Starting Artifact...",
+                displayName = "Creating document...",
             )
 
         val APPEND_BLOCKS =
             ToolDefinition(
                 name = "append_blocks",
                 description =
-                    "Append content blocks to an existing artifact. " +
+                    "Add content to the in-progress PDF/Word document started with start_artifact. " +
                         "ONLY include NEW blocks in each call. Do NOT resend previously appended blocks. " +
-                        "Use artifactId for the artifact identifier. " +
-                        "Include the final blocks AND set isComplete:true in the same call - " +
+                        "Use artifactId from start_artifact. " +
+                        "Include the final blocks AND set isComplete:true in the same call — " +
                         "do not make a separate empty-blocks finalization call. " +
-                        "Set isComplete to true only when the entire document is finished.",
+                        "When isComplete is true, the user can export the finished PDF or Word document.",
                 parametersClass = AppendBlocksParams::class,
-                displayName = "Appending blocks...",
+                displayName = "Writing document...",
             )
 
         val SEARCH_CURRENT_ARTIFACT =
             ToolDefinition(
                 name = "search_current_artifact",
                 description =
-                    "Semantically search for specific details, names, or sections " +
-                        "in the artifact currently being generated. Use this to recall context " +
-                        "that might have been compressed away.",
+                    "Search within the PDF/Word document currently being written for names, " +
+                        "figures, or sections that may have been compressed out of context. " +
+                        "Requires artifactId from start_artifact.",
                 parametersClass = SearchArtifactParams::class,
-                displayName = "Searching artifact...",
+                displayName = "Searching document...",
             )
 
         @Suppress("MaxLineLength")
@@ -301,8 +338,53 @@ data class ToolDefinition(
                 displayName = "Generating Music...",
             )
 
+        val X_GET_THREAD =
+            ToolDefinition(
+                name = "x_get_thread",
+                description =
+                    "Fetch a tweet by URL or ID. Returns requested_post (the exact post from the link) and " +
+                        "ancestor_posts (the full chain of posts it replies to, oldest first). " +
+                        "data contains both in chronological order. anchor_tweet_id marks the linked post.",
+                parametersClass = XGetThreadParams::class,
+                displayName = "Reading X Thread...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_TRENDING =
+            ToolDefinition(
+                name = "x_trending",
+                description = "Get trending topics for a specific location.",
+                parametersClass = XTrendingParams::class,
+                displayName = "Checking X Trends...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_USER_TWEETS =
+            ToolDefinition(
+                name = "x_user_tweets",
+                description =
+                    "Retrieve a user's posts in reverse-chronological order (newest first). " +
+                        "Use max_results for page size (5–100, default 10). For page 2+, pass both " +
+                        "next_token and pagination_source from the prior response (timeline or search). " +
+                        "A null next_token means no further pages. search_text filters by keyword (search API).",
+                parametersClass = XUserTweetsParams::class,
+                displayName = "Searching X User's Tweets...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
+        val X_MENTION_SEARCH =
+            ToolDefinition(
+                name = "x_mention_search",
+                description = "Search mentions of a specific user.",
+                parametersClass = XMentionSearchParams::class,
+                displayName = "Searching X Mentions...",
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+            )
+
         val ALL_TOOLS =
             listOf(
+                DISCLOSE_TOOL_SCHEMAS,
+                READ_CONTEXT_REFERENCE,
                 WEB_SEARCH,
                 WEB_EXTRACT,
                 ATTACHED_IMAGE_INSPECT,
@@ -317,6 +399,10 @@ data class ToolDefinition(
                 GENERATE_IMAGE,
                 GENERATE_VIDEO,
                 GENERATE_MUSIC,
+                X_GET_THREAD,
+                X_TRENDING,
+                X_USER_TWEETS,
+                X_MENTION_SEARCH,
             )
 
         fun fromName(name: String): ToolDefinition? = ALL_TOOLS.find { it.name == name }
@@ -341,13 +427,13 @@ private fun JsonArray.resolveArraySchemaType(): String? {
 }
 
 private fun JsonArray.resolveCompositeSchemaType(): String? =
-    mapNotNull { candidate ->
+    firstNotNullOfOrNull { candidate ->
         when (candidate) {
             is JsonObject -> candidate.resolveSchemaType()
             is JsonPrimitive -> candidate.content.takeIf { it != "null" }
             else -> null
         }
-    }.firstOrNull()
+    }
 
 private fun JsonObject.firstEnumValue(): JsonElement? = (this["enum"] as? JsonArray)?.firstOrNull()
 

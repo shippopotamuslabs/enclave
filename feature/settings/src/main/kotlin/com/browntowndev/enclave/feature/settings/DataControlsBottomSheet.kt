@@ -1,12 +1,13 @@
 package com.browntowndev.enclave.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -22,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -30,6 +30,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoDestructiveRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
@@ -45,10 +46,12 @@ private data class DataControlRow(
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun DataControlsBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
+    onAutomaticErrorTrackingChange: (Boolean) -> Unit,
     onRequestDeleteAllChats: () -> Unit,
     onConfirmDeleteAllChats: () -> Unit,
     onRequestDeleteAllMedia: () -> Unit,
@@ -129,6 +132,15 @@ fun DataControlsBottomSheet(
                 title = "Data Controls",
                 subtitle = "Manage or permanently remove your data.",
                 onDismiss = onDismiss,
+            )
+
+            NeoSectionHeader(text = "Privacy")
+            NeoToggleRow(
+                title = "Allow automatic tracking of errors",
+                subtitle = "Send error diagnostics to improve the app.",
+                icon = Icons.Default.BugReport,
+                checked = dc.automaticErrorTrackingEnabled,
+                onCheckedChange = onAutomaticErrorTrackingChange,
             )
 
             NeoSectionHeader(text = "Data")
@@ -232,6 +244,7 @@ fun PreviewDataControlsBottomSheetLight() {
                         ),
                 ),
             onDismiss = {},
+            onAutomaticErrorTrackingChange = {},
             onRequestDeleteAllChats = {},
             onConfirmDeleteAllChats = {},
             onRequestDeleteAllMedia = {},
@@ -258,6 +271,7 @@ fun PreviewDataControlsBottomSheetDark() {
                     dataControls = DataControlsUiState(isSheetOpen = true),
                 ),
             onDismiss = {},
+            onAutomaticErrorTrackingChange = {},
             onRequestDeleteAllChats = {},
             onConfirmDeleteAllChats = {},
             onRequestDeleteAllMedia = {},

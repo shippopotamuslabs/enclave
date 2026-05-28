@@ -1,0 +1,184 @@
+{
+  "tools": [
+    {
+      "name": "disclose_tool_schemas",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": {
+        "required_fields": [
+          {
+            "name": "tool_names",
+            "ty": "array",
+            "description": "Deferred tool names whose full schemas should be disclosed"
+          }
+        ],
+        "defaults": {}
+      }
+    },
+    {
+      "name": "web_search",
+      "aliases": ["websearch"],
+      "reproducible": true,
+      "schema_hint": {
+        "required_fields": [
+          {
+            "name": "query",
+            "ty": "string",
+            "description": "Search query"
+          }
+        ],
+        "defaults": {}
+      }
+    },
+    {
+      "name": "web_extract",
+      "aliases": ["web_fetch"],
+      "reproducible": true,
+      "schema_hint": {
+        "required_fields": [
+          {
+            "name": "urls",
+            "ty": "array",
+            "description": "URLs to extract"
+          }
+        ],
+        "defaults": {
+          "extract_depth": "basic",
+          "format": "markdown"
+        }
+      }
+    },
+    {
+      "name": "attached_image_inspect",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "search_chat_history",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "search_chat",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "get_message_context",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "search_current_artifact",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "search_x_recent",
+      "aliases": ["x_search"],
+      "reproducible": true,
+      "schema_hint": {
+        "required_fields": [],
+        "defaults": {
+          "keywords": [],
+          "any_keywords": [],
+          "exclude_keywords": [],
+          "phrases": [],
+          "hashtags": [],
+          "mentions": [],
+          "query": "",
+          "has_geo": false,
+          "has_media": false,
+          "has_images": false,
+          "has_videos": false,
+          "has_links": false,
+          "language": "en",
+          "sort_order": "relevancy"
+        }
+      }
+    },
+    {
+      "name": "start_artifact",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": {
+        "required_fields": [
+          { "name": "title", "ty": "string", "description": "Human-readable artifact title" }
+        ],
+        "defaults": {}
+      }
+    },
+    {
+      "name": "append_blocks",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": {
+        "required_fields": [
+          { "name": "artifactId", "ty": "string", "description": "ID returned by start_artifact" },
+          { "name": "blocks",     "ty": "array",  "description": "Content blocks to append" }
+        ],
+        "defaults": {
+          "isComplete": false
+        }
+      }
+    },
+    {
+      "name": "manage_memories",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": {
+        "required_fields": [
+          { "name": "action", "ty": "string", "description": "Memory action (add, update, delete, list)" }
+        ],
+        "defaults": {}
+      }
+    },
+    {
+      "name": "generate_image",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": null
+    },
+    {
+      "name": "generate_video",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": null
+    },
+    {
+      "name": "generate_music",
+      "aliases": [],
+      "reproducible": false,
+      "schema_hint": null
+    },
+    {
+      "name": "x_get_thread",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "x_trending",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "x_user_tweets",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    },
+    {
+      "name": "x_mention_search",
+      "aliases": [],
+      "reproducible": true,
+      "schema_hint": null
+    }
+  ]
+}

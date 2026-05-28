@@ -144,6 +144,14 @@ sealed interface InferenceEvent {
     ) : InferenceEvent
 
     /**
+     * Emitted when normalized per-request telemetry is available for persistence and UI.
+     */
+    data class TelemetryCaptured(
+        val telemetry: com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry,
+        val modelType: ModelType,
+    ) : InferenceEvent
+
+    /**
      * Emitted when the generation is complete.
      * @param modelType The type of model used to generate this chunk.
      */

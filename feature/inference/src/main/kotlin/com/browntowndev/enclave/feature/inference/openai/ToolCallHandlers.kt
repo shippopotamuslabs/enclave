@@ -39,6 +39,7 @@ internal fun OpenAiStreamHandlerContext.handleFunctionCallArgumentsDone(
             argumentsJson = argumentsJson,
             provider = provider,
             modelType = modelType,
+            modelId = modelId,
             chatId = chatId,
             userMessageId = userMessageId,
             assistantMessageId = assistantMessageId,

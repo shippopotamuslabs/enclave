@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Coerces common model output mistakes (e.g. `"false"` strings for boolean fields)
@@ -19,19 +18,28 @@ internal object ToolArgumentsJsonNormalizer {
     ): String {
         val root =
             runCatching {
-                kotlinx.serialization.json.Json.parseToJsonElement(argumentsJson).jsonObject
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(argumentsJson)
+                    .jsonObject
             }.getOrElse {
                 return argumentsJson
             }
-        return normalizeObject(schema.properties, root).toString()
+        return normalizeObject(schema.properties, schema.required, root).toString()
     }
 
     private fun normalizeObject(
         properties: JsonObject,
+        required: List<String>,
         obj: JsonObject,
     ): JsonObject =
         buildJsonObject {
             obj.forEach { (key, value) ->
+                if (key !in required && value is JsonPrimitive && value.isString) {
+                    val content = value.content.trim()
+                    if (content.isEmpty() || content.equals("null", ignoreCase = true)) {
+                        return@forEach
+                    }
+                }
                 val propSchema = properties[key]?.jsonObject
                 put(key, normalizeValue(propSchema, value))
             }
@@ -60,7 +68,8 @@ internal object ToolArgumentsJsonNormalizer {
         return when (typeElement) {
             is JsonPrimitive -> typeElement.content
             is JsonArray ->
-                typeElement.mapNotNull { (it as? JsonPrimitive)?.content }
+                typeElement
+                    .mapNotNull { (it as? JsonPrimitive)?.content }
                     .firstOrNull { it != "null" }
             else -> null
         }

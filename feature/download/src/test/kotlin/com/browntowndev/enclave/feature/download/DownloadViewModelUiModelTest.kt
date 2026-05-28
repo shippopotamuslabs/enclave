@@ -12,8 +12,8 @@ import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.every
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
+import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

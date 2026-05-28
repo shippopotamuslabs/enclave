@@ -99,4 +99,36 @@ class XSearchToolExecutorImplTest {
                 )
             }
         }
+
+    @Test
+    fun `execute returns error JSON when search throws IOException`() =
+        runTest {
+            val settingsRepository = mockk<SettingsRepository>()
+            val xSearchRepository = mockk<XSearchRepository>()
+            val buildXQueryUseCase = mockk<BuildXQueryUseCase>()
+
+            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(xSearchEnabled = true))
+            every { buildXQueryUseCase(any()) } returns "AI news"
+            coEvery { xSearchRepository.search("AI news", any()) } throws java.io.IOException("Connection refused")
+
+            val executor =
+                XSearchToolExecutorImpl(
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    settingsRepository = settingsRepository,
+                    xSearchRepository = xSearchRepository,
+                    buildXQueryUseCase = buildXQueryUseCase,
+                )
+
+            val result =
+                executor.execute(
+                    ToolCallRequest(
+                        toolName = "search_x_recent",
+                        argumentsJson = """{"query":"AI news"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertEquals("""{"success":false,"error":"Network error: Connection refused"}""", result.resultJson)
+        }
 }

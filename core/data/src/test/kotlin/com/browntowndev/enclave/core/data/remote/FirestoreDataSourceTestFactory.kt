@@ -10,7 +10,6 @@ import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
-import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
@@ -20,16 +19,17 @@ import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.remote.firestore.ChatSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.ConfigSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
@@ -76,6 +76,9 @@ internal fun createTestFirestoreDataSource(
     syncEventFeedClient: FirestoreSyncEventFeedClient = FirestoreSyncEventFeedClient(),
     syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
     syncStateStore: FirestoreSyncStateStore = DeterministicTestSyncStateStore(),
+    // Default to a relaxed no-op mock so existing tests don't trigger live Firestore calls during
+    // cache prefetch in applyLiveEvents, which would cause UncompletedCoroutinesError.
+    documentCache: FirestoreSyncDocumentCache = mockk(relaxed = true),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
     val facade =
@@ -89,6 +92,7 @@ internal fun createTestFirestoreDataSource(
                     messageFileDao = messageFileDao,
                     messageVisionAnalysisDao = messageVisionAnalysisDao,
                     messageTranscriptSegmentDao = messageTranscriptSegmentDao,
+                    messageInferenceTelemetryDao = mockk(relaxed = true),
                     webSearchSourceDao = webSearchSourceDao,
                     documentDao = documentDao,
                     embeddingDao = embeddingDao,
@@ -122,6 +126,7 @@ internal fun createTestFirestoreDataSource(
             syncEventFeedClient = syncEventFeedClient,
             syncEventApplier = syncEventApplier,
             syncStateStore = syncStateStore,
+            documentCache = documentCache,
         )
     return FirestoreDataSource(facade, externalScope)
 }
@@ -134,13 +139,11 @@ internal fun createTestFirestoreDataSource(
  * production envelope so encryption-required call sites see a sensible blob.
  */
 internal class LenientFakeLocalDataEncryptionService : LocalDataEncryptionService {
-    override fun encryptString(plaintext: String): String =
-        if (isEncrypted(plaintext)) plaintext else "PCENC:v1:aes-gcm:$plaintext"
+    override fun encryptString(plaintext: String): String = if (isEncrypted(plaintext)) plaintext else "PCENC:v1:aes-gcm:$plaintext"
 
     override fun decryptString(stored: String): String = stored.removePrefix("PCENC:v1:aes-gcm:")
 
-    override fun isEncrypted(stored: String): Boolean =
-        stored.startsWith("PCENC:v1:aes-gcm:") || stored.startsWith("cipher-")
+    override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:") || stored.startsWith("cipher-")
 
     override fun encryptString(
         plaintext: String,
@@ -209,6 +212,7 @@ internal fun testFirestoreSyncDaos(
                 messageFileDao = messageFileDao,
                 messageVisionAnalysisDao = messageVisionAnalysisDao,
                 messageTranscriptSegmentDao = messageTranscriptSegmentDao,
+                messageInferenceTelemetryDao = mockk(relaxed = true),
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 embeddingDao = embeddingDao,

@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.inference
 
 import android.util.Log
+import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
+import com.browntowndev.enclave.domain.util.telemetry.TelemetryPiiScrubber
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.mockk.every
 import io.mockk.mockk
@@ -14,13 +16,18 @@ import org.junit.jupiter.api.Test
 class AndroidLoggingAdapterTest {
     private lateinit var adapter: AndroidLoggingAdapter
     private lateinit var crashlytics: FirebaseCrashlytics
+    private lateinit var errorTrackingGate: AutomaticErrorTrackingGate
 
     @BeforeEach
     fun setup() {
         mockkStatic(FirebaseCrashlytics::class)
         crashlytics = mockk(relaxed = true)
         every { FirebaseCrashlytics.getInstance() } returns crashlytics
-        adapter = AndroidLoggingAdapter()
+        errorTrackingGate =
+            mockk {
+                every { isAutomaticErrorTrackingEnabled() } returns true
+            }
+        adapter = AndroidLoggingAdapter(errorTrackingGate)
     }
 
     @AfterEach
@@ -29,23 +36,47 @@ class AndroidLoggingAdapterTest {
     }
 
     @Test
-    fun `recordException calls Crashlytics`() {
+    fun `error with throwable calls Crashlytics when tracking enabled`() {
         val tag = "TestTag"
         val message = "Test message"
         val throwable = RuntimeException("Test exception")
 
-        adapter.recordException(tag, message, throwable)
+        adapter.error(tag, message, throwable)
 
         verify {
-            crashlytics.setCustomKey("LogTag", tag)
-            crashlytics.setCustomKey("Message", message)
+            crashlytics.log(match { it.contains(tag) && it.contains(message) })
             crashlytics.recordException(throwable)
         }
     }
 
     @Test
-    fun `recordException handles Crashlytics failure gracefully`() {
-        // Mock getInstance() to throw
+    fun `error with throwable skips Crashlytics when tracking disabled`() {
+        every { errorTrackingGate.isAutomaticErrorTrackingEnabled() } returns false
+        adapter.error("TestTag", "Test message", RuntimeException("Test exception"))
+        verify(exactly = 0) { crashlytics.log(any()) }
+        verify(exactly = 0) { crashlytics.recordException(any()) }
+    }
+
+    @Test
+    fun `error scrubs email from Crashlytics breadcrumb`() {
+        val tag = "TestTag"
+        val message = "Failed for user@example.com"
+        val throwable = RuntimeException("Test exception")
+
+        adapter.error(tag, message, throwable)
+
+        verify {
+            crashlytics.log(
+                match {
+                    it.contains(TelemetryPiiScrubber.REDACTED_EMAIL) &&
+                        !it.contains("user@example.com")
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `error handles Crashlytics failure gracefully`() {
         every { FirebaseCrashlytics.getInstance() } throws RuntimeException("Firebase not initialized")
 
         mockkStatic(Log::class)
@@ -55,9 +86,8 @@ class AndroidLoggingAdapterTest {
         val message = "Test message"
         val throwable = RuntimeException("Test exception")
 
-        adapter.recordException(tag, message, throwable)
+        adapter.error(tag, message, throwable)
 
-        // Verify it doesn't crash and logs to Android Log
         verify {
             Log.e("AndroidLoggingAdapter", "Crashlytics not available. Error: $message", throwable)
         }

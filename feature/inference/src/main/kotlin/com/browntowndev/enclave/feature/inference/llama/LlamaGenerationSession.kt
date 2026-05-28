@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.llama
 
 import android.util.Log
 import com.browntowndev.enclave.domain.model.inference.GenerationEvent
+
 /**
  * Builds native chat payloads and bridges JNI token callbacks into [GenerationEvent] flows.
  */

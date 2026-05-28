@@ -29,7 +29,11 @@ class ToolEnvelopeParserFacadeInstallerTest {
     private class RecordingToolEnvelopeParserPort : ToolEnvelopeParserPort {
         val parseCalls = mutableListOf<String>()
 
-        override fun parse(raw: String): ToolEnvelopeBatch {
+        override fun parse(
+            raw: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
+        ): ToolEnvelopeBatch {
             parseCalls.add(raw)
             return ToolEnvelopeBatch(
                 successes =
@@ -50,6 +54,8 @@ class ToolEnvelopeParserFacadeInstallerTest {
         override fun coerceProviderArguments(
             toolName: String,
             argsJson: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
         ): ToolEnvelopeField =
             ToolEnvelopeField(
                 toolName = toolName,
@@ -58,7 +64,10 @@ class ToolEnvelopeParserFacadeInstallerTest {
                 repairs = emptyList(),
             )
 
-        override fun hasLocalToolContract(systemPrompt: String?): Boolean = false
+        override fun hasLocalToolContract(
+            systemPrompt: String?,
+            toolCatalogJson: String,
+        ): Boolean = false
 
         override fun buildToolResultMessage(resultJson: String): String = "<tool_result>$resultJson</tool_result>"
     }

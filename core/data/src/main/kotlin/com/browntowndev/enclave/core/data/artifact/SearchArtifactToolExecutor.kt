@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.artifact
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
@@ -9,14 +10,13 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import androidx.sqlite.db.SimpleSQLiteQuery
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
 

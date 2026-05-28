@@ -81,14 +81,11 @@ internal interface FirestoreSyncEventListenerRegistration {
 }
 
 private object ThrowingFirestoreSyncEventQueryGateway : FirestoreSyncEventQueryGateway {
-    override suspend fun fetchEvents(queryShape: FirestoreSyncEventFeedClient.QueryShape): List<FirestoreSyncEvent> {
+    override suspend fun fetchEvents(queryShape: FirestoreSyncEventFeedClient.QueryShape): List<FirestoreSyncEvent> =
         throw IllegalStateException("FirestoreSyncEventQueryGateway not wired in this context")
-    }
 
     override fun listen(
         queryShape: FirestoreSyncEventFeedClient.QueryShape,
         onEvents: suspend (List<FirestoreSyncEvent>) -> Unit,
-    ): FirestoreSyncEventListenerRegistration {
-        throw IllegalStateException("FirestoreSyncEventQueryGateway not wired in this context")
-    }
+    ): FirestoreSyncEventListenerRegistration = throw IllegalStateException("FirestoreSyncEventQueryGateway not wired in this context")
 }

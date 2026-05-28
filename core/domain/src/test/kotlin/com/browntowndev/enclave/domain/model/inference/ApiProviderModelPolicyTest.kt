@@ -38,6 +38,18 @@ class ApiProviderModelPolicyTest {
     }
 
     @Test
+    fun `supportsAnthropicPromptCaching matches documented Claude families`() {
+        assertTrue(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-sonnet-4-20250514"))
+        assertTrue(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-3-5-sonnet-20241022"))
+        assertTrue(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-3-7-sonnet-20250219"))
+        assertTrue(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-haiku-4-5-20251001"))
+        assertTrue(ApiProviderModelPolicy.supportsAnthropicPromptCaching("anthropic/claude-opus-4-20250514"))
+        assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-2.1"))
+        assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-instant-1.2"))
+        assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("gpt-4o"))
+    }
+
+    @Test
     fun `anthropic parameter support keeps the standard preset controls but hides unsupported sliders`() {
         val support =
             ApiProviderModelPolicy.parameterSupport(
@@ -46,8 +58,10 @@ class ApiProviderModelPolicyTest {
             )
 
         assertTrue(support.supportsReasoningEffort)
-        assertTrue(support.supportsTopK)
         assertTrue(support.supportsMaxTokens)
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
+        assertFalse(support.supportsTopK)
         assertFalse(support.supportsMinP)
         assertFalse(support.supportsFrequencyPenalty)
         assertFalse(support.supportsPresencePenalty)

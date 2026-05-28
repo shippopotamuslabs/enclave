@@ -1,13 +1,13 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.compose.ui.test.assertIsDisplayed
-import com.browntowndev.enclave.feature.chat.artifactexport.ArtifactExportWizardContent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.feature.chat.artifactexport.ArtifactExportWizardContent
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

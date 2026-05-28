@@ -54,6 +54,7 @@ interface SettingsPreferencesUseCases {
     val clearXApiKey: ClearXApiKeyUseCase
     val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase
     val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
+    val updateAutomaticErrorTrackingEnabled: UpdateAutomaticErrorTrackingEnabledUseCase
 }
 
 interface SettingsLocalModelUseCases {

@@ -31,7 +31,10 @@ class FirestoreSyncEventApplierTest {
             assertEquals(0, harness.localStore.placeholderInsertCount)
             assertEquals("Parent Chat", harness.localStore.decryptedChatNames["chat-1"])
             assertEquals("hello", harness.localStore.decryptedMessageContents["message-1"])
-            assertFalse(harness.localStore.decryptedChatNames.values.contains("Syncing..."))
+            assertFalse(
+                harness.localStore.decryptedChatNames.values
+                    .contains("Syncing..."),
+            )
         }
 
     @Test
@@ -220,8 +223,14 @@ class FirestoreSyncEventApplierTest {
             )
 
             assertEquals(0, harness.localStore.placeholderInsertCount)
-            assertFalse(harness.localStore.decryptedChatNames.values.contains("Syncing..."))
-            assertFalse(harness.localStore.decryptedMessageContents.values.contains("Syncing..."))
+            assertFalse(
+                harness.localStore.decryptedChatNames.values
+                    .contains("Syncing..."),
+            )
+            assertFalse(
+                harness.localStore.decryptedMessageContents.values
+                    .contains("Syncing..."),
+            )
         }
 
     @Test
@@ -250,8 +259,14 @@ class FirestoreSyncEventApplierTest {
 
             assertEquals("users/alice/sync_events", listenerRecorder.lastListenerQuery?.collectionPath)
             assertEquals(0, harness.localStore.placeholderInsertCount)
-            assertFalse(harness.localStore.decryptedChatNames.values.contains("Syncing..."))
-            assertFalse(harness.localStore.decryptedMessageContents.values.contains("Syncing..."))
+            assertFalse(
+                harness.localStore.decryptedChatNames.values
+                    .contains("Syncing..."),
+            )
+            assertFalse(
+                harness.localStore.decryptedMessageContents.values
+                    .contains("Syncing..."),
+            )
         }
 
     private fun syncEvent(
@@ -349,8 +364,7 @@ private class RecordingSyncEventQueryGateway : FirestoreSyncEventQueryGateway {
     var lastListenerQuery: FirestoreSyncEventFeedClient.QueryShape? = null
     private var callback: (suspend (List<FirestoreSyncEvent>) -> Unit)? = null
 
-    override suspend fun fetchEvents(queryShape: FirestoreSyncEventFeedClient.QueryShape): List<FirestoreSyncEvent> =
-        emptyList()
+    override suspend fun fetchEvents(queryShape: FirestoreSyncEventFeedClient.QueryShape): List<FirestoreSyncEvent> = emptyList()
 
     override fun listen(
         queryShape: FirestoreSyncEventFeedClient.QueryShape,

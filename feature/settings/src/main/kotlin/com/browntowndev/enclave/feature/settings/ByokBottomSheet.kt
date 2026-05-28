@@ -5,31 +5,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
-import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -46,10 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
@@ -83,8 +74,8 @@ fun ByokBottomSheet(
     onStartCreateApiModelAsset: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
-    onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
-    onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
+    onDeleteApiModelAsset: (ApiCredentialsId, () -> Unit) -> Unit,
+    onDeleteApiModelConfig: (ApiModelConfigurationId, () -> Unit) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
 ) {
@@ -173,7 +164,13 @@ fun ByokBottomSheet(
                         ReassignmentView(
                             modelTypes = state.modelTypes,
                             reassignmentOptions = state.options,
-                            onConfirm = onConfirmDeletionWithReassignment,
+                            onConfirm = { local, api ->
+                                onConfirmDeletionWithReassignment(local, api)
+                                scope.launch {
+                                    sheetState.hide()
+                                    onDismiss()
+                                }
+                            },
                             onDismiss = onDismissDeletionSafety,
                         )
                     }
@@ -210,11 +207,17 @@ fun ByokBottomSheet(
                     },
                 confirmLabel = "Delete",
                 onConfirm = {
-                    when (deleteTarget) {
-                        is ByokDeleteTarget.Asset -> onDeleteApiModelAsset(deleteTarget.id)
-                        is ByokDeleteTarget.Config -> onDeleteApiModelConfig(deleteTarget.id)
-                    }
                     pendingDeleteTarget = null
+                    val hideSheet: () -> Unit = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    }
+                    when (deleteTarget) {
+                        is ByokDeleteTarget.Asset -> onDeleteApiModelAsset(deleteTarget.id, hideSheet)
+                        is ByokDeleteTarget.Config -> onDeleteApiModelConfig(deleteTarget.id, hideSheet)
+                    }
                 },
                 onDismiss = { pendingDeleteTarget = null },
             )
@@ -321,48 +324,45 @@ private fun ByokConfigListView(
             "Presets"
         }
 
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            NeoSheetHeader(
-                title = asset.displayName,
-                subtitle = presetSubtitle,
-                onDismiss = onDismiss,
-                onBackClick = onBack,
-            )
-            Box(modifier = Modifier.align(Alignment.CenterEnd)) {
-                var menuExpanded by remember { mutableStateOf(false) }
-
-                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        Icons.Default.MoreVert,
+        NeoSheetHeader(
+            title = asset.displayName,
+            subtitle = presetSubtitle,
+            onDismiss = onDismiss,
+            onBackClick = onBack,
+            trailingContent = {
+                Box {
+                    NeoIconButton(
+                        onClick = { menuExpanded = true },
+                        icon = Icons.Default.MoreVert,
                         contentDescription = "Options",
-                        tint = MaterialTheme.colorScheme.onSurface,
                     )
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onEditAsset()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRequestDeleteAsset(asset)
+                            },
+                        )
+                    }
                 }
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Edit") },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onEditAsset()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onRequestDeleteAsset(asset)
-                        },
-                    )
-                }
-            }
-        }
+            },
+        )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
@@ -462,8 +462,8 @@ fun PreviewByokBottomSheetAssets() {
             onStartCreateApiModelAsset = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
-            onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {},
+            onDeleteApiModelAsset = { _, _ -> },
+            onDeleteApiModelConfig = { _, _ -> },
             onDismissDeletionSafety = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
         )
@@ -487,8 +487,8 @@ fun PreviewByokBottomSheetContext() {
             onStartCreateApiModelAsset = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
-            onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {},
+            onDeleteApiModelAsset = { _, _ -> },
+            onDeleteApiModelConfig = { _, _ -> },
             onDismissDeletionSafety = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
         )

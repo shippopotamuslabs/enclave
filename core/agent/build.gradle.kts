@@ -43,5 +43,6 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
     testRuntimeOnly("net.java.dev.jna:jna:${libs.versions.jna.get()}")
 }

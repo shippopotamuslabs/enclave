@@ -4,43 +4,47 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCallingConfig
 import com.google.genai.types.FunctionCallingConfigMode
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
+import com.google.genai.types.ThinkingConfig
 import com.google.genai.types.ToolConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.CopyOnWriteArrayList
 
 class GoogleInferenceServiceImpl(
     private val sdkClient: GoogleGenAiSdkClient,
     private val modelId: String,
     private val modelType: ModelType,
-    private val baseUrl: String? = null,
+    override val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
     private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
     private val toolStreamGatePort: ToolStreamGatePort,
+    private val telemetrySupport: InferenceTelemetrySupport? = null,
+    private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -50,6 +54,19 @@ class GoogleInferenceServiceImpl(
     }
 
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
+
+    private var appendOnlyContext: ProviderAppendOnlyContext? = null
+
+    @Volatile
+    private var activeToolCatalogJson: String = AgentLoopToolCatalogJson.EMPTY_ARRAY
+
+    private val promptCacheSession =
+        GooglePromptCacheSession(
+            modelId = modelId,
+            sdkClient = sdkClient,
+            loggingPort = loggingPort,
+            tag = TAG,
+        )
 
     override fun sendPrompt(
         prompt: String,
@@ -103,6 +120,7 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
+        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
         logImagePayloads(options)
 
         val request =
@@ -133,185 +151,250 @@ class GoogleInferenceServiceImpl(
         emitEvent(InferenceEvent.Finished(modelType))
     }
 
-    private fun buildFunctionResponsePart(
-        toolName: String,
-        resultJson: String,
-    ): Part =
-        Part.fromFunctionResponse(
-            toolName,
-            mapOf("output" to resultJson),
-        )
-
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
         conversationHistory.addAll(messages)
+        resetAppendOnlyForNewPrompt()
+    }
+
+    internal fun clearAppendOnlyOnRustCompactionBoundary() {
+        appendOnlyContext?.clearOnRustCompactionBoundary()
+    }
+
+    internal fun resetAppendOnlyForNewPrompt() {
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     override suspend fun closeSession() {
         conversationHistory.clear()
+        promptCacheSession.close()
+        appendOnlyContext?.invalidate()
+        appendOnlyContext = null
     }
 
     @Suppress("CyclomaticComplexMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
+        contextSidecars: String?,
         availableTools: List<ToolDefinition>,
         allowToolCall: Boolean,
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
     ): AgentModelTurnResult {
-        val contents = mutableListOf<Content>()
-        val imageUris = options.imageUris.take(3600)
-        val lastUserIndex = sessionMessages.indexOfLast { msg ->
-            msg.role == Role.USER && run {
-                val meta = msg.metadataJson
-                if (meta == "null" || meta.isBlank()) return@run true
-                val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-            }
-        }
+        val startedAtMs = System.currentTimeMillis()
+        try {
+            activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
+            val timing =
+                telemetrySupport?.let {
+                    com.browntowndev.enclave.feature.inference.telemetry
+                        .InferenceTurnTiming()
+                }
+            val captureContext = telemetrySupport?.captureContext(options)
+            val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
+            val imageUris = options.imageUris.take(3600)
 
-        sessionMessages.forEachIndexed { index, msg ->
-            val metadata =
-                if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
-                    runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
+            val stableHistory = sessionMessages.dropLast(1)
+            val latestMessage =
+                sessionMessages.lastOrNull()
+                    ?: throw IllegalArgumentException("sessionMessages cannot be empty")
+            val latestIndex = sessionMessages.lastIndex
+
+            val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
+
+            fun mapAtIndex(
+                message: AgentLoopMessage,
+                index: Int,
+                prependVolatile: Boolean,
+                attachImages: Boolean,
+            ): Content? =
+                GoogleAgentLoopContentMapper.mapMessage(
+                    message = message,
+                    index = index,
+                    lastUserIndex = if (attachImages) lastUserIndex else -1,
+                    imageUris = if (attachImages) imageUris else emptyList(),
+                    prependedText = if (prependVolatile) latestUserPrepends else null,
+                )
+
+            val activeCacheName =
+                promptCacheSession.ensureCacheForStablePrefix(
+                    systemPrompt = systemPrompt,
+                    stableHistory = stableHistory,
+                    availableTools = availableTools,
+                    mapToContent = { msg ->
+                        val index = sessionMessages.indexOfFirst { it.id == msg.id }
+                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)
+                    },
+                )
+
+            val configBuilder = GenerateContentConfig.builder()
+            options.temperature?.let { configBuilder.temperature(it) }
+            options.topP?.let { configBuilder.topP(it) }
+            options.topK?.let { configBuilder.topK(it.toFloat()) }
+            options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
+            resolveThinkingConfig(options)?.let { configBuilder.thinkingConfig(it) }
+
+            if (availableTools.isNotEmpty()) {
+                configBuilder.tools(availableTools.map { it.toGoogleTool() })
+                val mode =
+                    if (allowToolCall) {
+                        FunctionCallingConfigMode.Known.AUTO
+                    } else {
+                        FunctionCallingConfigMode.Known.NONE
+                    }
+                configBuilder.toolConfig(
+                    ToolConfig
+                        .builder()
+                        .functionCallingConfig(
+                            FunctionCallingConfig
+                                .builder()
+                                .mode(mode)
+                                .build(),
+                        ).build(),
+                )
+            }
+
+            if (activeCacheName != null) {
+                configBuilder.cachedContent(activeCacheName)
+            } else if (systemPrompt.isNotBlank()) {
+                configBuilder.systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
+            }
+
+            val deltaHistory = promptCacheSession.deltaHistory(stableHistory)
+            val contentsToSend =
+                buildList {
+                    deltaHistory.forEach { msg ->
+                        val index = sessionMessages.indexOfFirst { it.id == msg.id }
+                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)?.let(::add)
+                    }
+                    mapAtIndex(
+                        latestMessage,
+                        latestIndex,
+                        prependVolatile = !latestUserPrepends.isNullOrBlank(),
+                        attachImages = true,
+                    )?.let(::add)
+                }
+
+            val response =
+                sdkClient.generateContentStream(
+                    modelId = modelId,
+                    contents = contentsToSend,
+                    config = configBuilder.build(),
+                    allowToolCall = allowToolCall,
+                    emitEvent = { event ->
+                        when (event) {
+                            is InferenceEvent.PartialResponse -> {
+                                timing?.markFirstOutput()
+                                onTextToken(event.chunk)
+                            }
+                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                            else -> {}
+                        }
+                    },
+                )
+
+            val toolCalls =
+                response.functionCall?.let { fc ->
+                    val name = fc.name().orElse(null) ?: return@let null
+                    val argsJson =
+                        toolEnvelopeParserPort
+                            .coerceProviderArguments(
+                                toolName = name,
+                                argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
+                                toolCatalogJson = activeToolCatalogJson,
+                            ).argumentsJson
+                    listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
+                } ?: emptyList()
+
+            val assistantTextParts = mutableListOf<String>()
+            response.assistantContent?.parts()?.orElse(null)?.forEach { part ->
+                if (!part.thought().orElse(false)) {
+                    part.text().ifPresent { assistantTextParts.add(it) }
+                }
+            }
+            val assistantText = assistantTextParts.joinToString("").takeIf { it.isNotBlank() }
+
+            val outputTokenEstimate =
+                assistantText
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { text -> (text.length / 4).coerceAtLeast(1) }
+            val telemetry =
+                if (telemetrySupport != null && timing != null && captureContext != null) {
+                    telemetrySupport.localTurnTelemetry(
+                        context = captureContext,
+                        providerLabel = "Google",
+                        modelLabel = modelId,
+                        timing = timing,
+                        outputTokens = outputTokenEstimate,
+                    )
                 } else {
                     null
                 }
 
-            when (msg.role) {
-                Role.SYSTEM -> {} // handled via systemInstruction in config
-                Role.USER -> {
-                    val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
-                    val parts =
-                        if (!attachImages) {
-                            listOf(Part.fromText(msg.content))
-                        } else {
-                            buildList {
-                                add(Part.fromText(msg.content))
-                                ImagePayloads.fromUris(imageUris).forEach { payload ->
-                                    add(Part.fromBytes(payload.bytes, payload.mimeType))
-                                }
-                            }
-                        }
-                    contents.add(
-                        Content
-                            .builder()
-                            .role("user")
-                            .parts(parts)
-                            .build(),
-                    )
-                }
-                Role.ASSISTANT -> {
-                    if (msg.id.startsWith("compact-summary-")) {
-                        contents.add(
-                            Content
-                                .builder()
-                                .role("user")
-                                .parts(listOf(Part.fromText("[Conversation summary]\n${msg.content}")))
-                                .build(),
-                        )
-                        return@forEachIndexed
-                    }
-                    val callId = metadata?.get("call_id")?.jsonPrimitive?.content
-                    if (callId != null) {
-                        contents.add(
-                            Content
-                                .builder()
-                                .role("user")
-                                .parts(listOf(buildFunctionResponsePart(callId, msg.content)))
-                                .build(),
-                        )
-                        return@forEachIndexed
-                    }
-                    val rawCalls = metadata?.get("raw_tool_calls")
-                    val parts = mutableListOf<Part>()
-                    if (msg.content.isNotBlank()) parts.add(Part.fromText(msg.content))
-                    if (rawCalls is JsonArray) {
-                        rawCalls.forEach { tc ->
-                            val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEach
-                            val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEach
-                            val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-                            val args =
-                                runCatching {
-                                    @Suppress("UNCHECKED_CAST")
-                                    com.fasterxml.jackson.databind
-                                        .ObjectMapper()
-                                        .readValue(argsJson, Map::class.java) as Map<String, Any>
-                                }.getOrElse { emptyMap() }
-                            parts.add(Part.fromFunctionCall(callName, args))
-                        }
-                    }
-                    if (parts.isNotEmpty()) {
-                        contents.add(
-                            Content
-                                .builder()
-                                .role("model")
-                                .parts(parts)
-                                .build(),
-                        )
-                    }
-                }
+            return AgentModelTurnResult(
+                assistantText = assistantText,
+                toolCalls = toolCalls,
+                finishReason =
+                    googleFinishReason(
+                        toolCalls = toolCalls,
+                        finishReason = response.finishReason,
+                        assistantText = assistantText,
+                    ),
+                telemetry = telemetry,
+            ).also {
+                telemetryEventPort.emitInferenceExecutionOutcome(
+                    startedAtMs = startedAtMs,
+                    provider = "Google",
+                    modelId = modelId,
+                    success = true,
+                    tokenCount = outputTokenEstimate,
+                    baseUrl = baseUrl,
+                )
             }
-        }
-
-        val configBuilder = GenerateContentConfig.builder()
-        systemPrompt.takeIf { it.isNotBlank() }?.let {
-            configBuilder.systemInstruction(Content.fromParts(Part.fromText(it)))
-        }
-        options.temperature?.let { configBuilder.temperature(it) }
-        options.topP?.let { configBuilder.topP(it) }
-        options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
-
-        if (allowToolCall && availableTools.isNotEmpty()) {
-            configBuilder.tools(availableTools.map { it.toGoogleTool() })
-            configBuilder.toolConfig(
-                ToolConfig
-                    .builder()
-                    .functionCallingConfig(
-                        FunctionCallingConfig.builder().mode(FunctionCallingConfigMode.Known.AUTO).build(),
-                    ).build(),
-            )
-        }
-
-        val accumulatedText = StringBuilder()
-        val result =
-            sdkClient.generateContentStream(
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: InferenceNetworkException) {
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Google",
                 modelId = modelId,
-                contents = contents,
-                config = configBuilder.build(),
-                allowToolCall = allowToolCall,
-                emitEvent = { event ->
-                    when (event) {
-                        is InferenceEvent.PartialResponse -> {
-                            accumulatedText.append(event.chunk)
-                            onTextToken(event.chunk)
-                        }
-                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                        else -> {}
-                    }
-                },
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
             )
+            throw e
+        } catch (e: java.io.IOException) {
+            loggingPort.error(TAG, "completeSingleTurn network failure: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Google",
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
+            throw InferenceNetworkException(
+                provider = PROVIDER,
+                message = e.message ?: "Connection error",
+                cause = e,
+            )
+        } catch (e: Exception) {
+            loggingPort.error(TAG, "completeSingleTurn failed: ${e.message}", e)
+            throw e
+        }
+    }
 
-        val toolCalls =
-            result.functionCall?.let { fc ->
-                val name = fc.name().orElse(null) ?: return@let null
-                val argsJson =
-                    toolEnvelopeParserPort
-                        .coerceProviderArguments(
-                            toolName = name,
-                            argsJson = TOOL_ARGUMENT_JSON_MAPPER.writeValueAsString(fc.args().orElse(emptyMap())),
-                        ).argumentsJson
-                listOf(AgentRawToolCall(id = "", name = name, argumentsJson = argsJson))
-            } ?: emptyList()
-        val bufferedText = accumulatedText.toString()
-
-        return AgentModelTurnResult(
-            assistantText = bufferedText.takeIf { it.isNotBlank() },
-            toolCalls = toolCalls,
-            finishReason = googleFinishReason(toolCalls, result.finishReason, bufferedText),
-        )
+    private fun resolveThinkingConfig(options: GenerationOptions): ThinkingConfig? {
+        if (options.reasoningBudget <= 0) {
+            return null
+        }
+        return ThinkingConfig
+            .builder()
+            .thinkingBudget(options.reasoningBudget)
+            .includeThoughts(true)
+            .build()
     }
 
     private fun googleFinishReason(

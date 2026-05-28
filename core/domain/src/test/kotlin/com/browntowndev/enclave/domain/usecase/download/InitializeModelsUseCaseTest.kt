@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.download
 
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -17,11 +18,12 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
+import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
-import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -54,6 +56,9 @@ class InitializeModelsUseCaseTest {
         logPort = mockk(relaxed = true)
         syncUtilityModelRegistryUseCase =
             SyncUtilityModelRegistryUseCase(utilityModelRepository, logPort)
+
+        // Default: no active config for any slot — treated as "include for local download"
+        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
         useCase =
             InitializeModelsUseCase(
@@ -248,6 +253,153 @@ class InitializeModelsUseCaseTest {
 
             assertNull(utilityModelRepository.getByUtilityType(UtilityType.WHISPER))
         }
+
+    // -------- API slot filtering (SCN-INIT-API-*) --------
+
+    @Test
+    @DisplayName("SCN-INIT-API-01 — slot with API active config excluded from expectedModels")
+    fun `scnInitApi01 slot configured as API is excluded from checkModelsUseCase expectedModels`() =
+        runTest {
+            val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns apiConfig
+
+            coEvery { checkModelsUseCase(any(), any()) } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = emptyList())
+            }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-API-02 — slot with null active config is included in expectedModels")
+    fun `scnInitApi02 slot with no active config is included in checkModelsUseCase expectedModels`() =
+        runTest {
+            val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            // activeModelProvider already returns null for all slots from @BeforeEach
+
+            coEvery { checkModelsUseCase(any(), any()) } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(
+                    expectedModels = mapOf(ModelType.MAIN to localAsset),
+                    utilityAssets = emptyList(),
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-API-03 — slot with local active config is included in expectedModels")
+    fun `scnInitApi03 slot configured as local is included in checkModelsUseCase expectedModels`() =
+        runTest {
+            val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val localConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns true }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns localConfig
+
+            coEvery { checkModelsUseCase(any(), any()) } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(
+                    expectedModels = mapOf(ModelType.MAIN to localAsset),
+                    utilityAssets = emptyList(),
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-API-04 — mixed slots: API-configured excluded, unconfigured included")
+    fun `scnInitApi04 mixed slots only unconfigured slot passed to checkModelsUseCase`() =
+        runTest {
+            val mainAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
+            val visionAsset =
+                LocalModelAsset(
+                    metadata =
+                        mainAsset.metadata.copy(
+                            id = LocalModelId("vision-id"),
+                            sha256 = "sha-vision",
+                            localFileName = "vision.gguf",
+                            remoteFileName = "vision.gguf",
+                        ),
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                id = LocalModelConfigurationId("config-vision"),
+                                localModelId = LocalModelId("vision-id"),
+                                displayName = "Vision Config",
+                                maxTokens = 2048,
+                                contextWindow = 4096,
+                                temperature = 0.7,
+                                topP = 0.95,
+                                topK = 40,
+                                repetitionPenalty = 1.1,
+                                systemPrompt = "",
+                                defaultAssignments = listOf(ModelType.VISION),
+                            ),
+                        ),
+                )
+
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(listOf(mainAsset, visionAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns apiConfig
+            // VISION returns null (from @BeforeEach default) → included
+
+            coEvery { checkModelsUseCase(any(), any()) } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(
+                    expectedModels = mapOf(ModelType.VISION to visionAsset),
+                    utilityAssets = emptyList(),
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("SCN-INIT-API-05 — soft-deleted asset with API config excluded via soft-delete path")
+    fun `scnInitApi05 soft-deleted asset is excluded regardless of API config`() =
+        runTest {
+            val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
+            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns listOf(localAsset)
+
+            // API config set, but should never even be reached (soft-delete check is first)
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns apiConfig
+
+            coEvery { checkModelsUseCase(any(), any()) } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = emptyList())
+            }
+        }
+
+    private fun emptyDownloadResult() =
+        DownloadModelsResult(
+            allModels = emptyMap(),
+            modelsToDownload = emptyList(),
+            scanResult = ModelScanResult(emptyList(), emptyMap(), true),
+            availableToRedownload = emptyList(),
+        )
 
     private fun createMockAsset(
         sha: String,

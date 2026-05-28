@@ -15,6 +15,10 @@ import com.anthropic.models.messages.TextBlock
 import com.anthropic.models.messages.TextDelta
 import com.anthropic.models.messages.ThinkingDelta
 import com.anthropic.services.blocking.MessageService
+import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -196,4 +200,39 @@ class AnthropicInferenceServiceImplTest {
         every { event.contentBlockStop() } returns contentBlockStop
         return event
     }
+
+    @Test
+    fun `completeSingleTurn throws InferenceNetworkException when client throws IOException`() =
+        runTest {
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } throws java.io.IOException("Socket timeout")
+
+            val service =
+                AnthropicInferenceServiceImpl(
+                    client = client,
+                    modelId = "claude-sonnet-4-20250514",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+
+            val exception =
+                org.junit.jupiter.api.assertThrows<InferenceNetworkException> {
+                    service.completeSingleTurn(
+                        sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
+                        systemPrompt = "",
+                        contextSidecars = null,
+                        availableTools = emptyList(),
+                        allowToolCall = false,
+                        onTextToken = {},
+                        onThinkingToken = {},
+                        options = GenerationOptions(reasoningBudget = 0),
+                    )
+                }
+
+            assertEquals("ANTHROPIC", exception.provider)
+            assertEquals("[ANTHROPIC] Network error: Socket timeout", exception.message)
+            assertTrue(exception.cause is java.io.IOException)
+        }
 }

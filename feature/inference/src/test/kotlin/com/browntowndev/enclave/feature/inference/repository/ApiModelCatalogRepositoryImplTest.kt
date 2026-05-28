@@ -1,15 +1,8 @@
 package com.browntowndev.enclave.feature.inference.repository
 
-import com.anthropic.client.AnthropicClient
-import com.anthropic.core.AutoPager
-import com.anthropic.models.models.CapabilitySupport
-import com.anthropic.models.models.ModelCapabilities
-import com.anthropic.models.models.ModelInfo
-import com.anthropic.models.models.ModelListPage
-import com.anthropic.services.blocking.ModelService
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.feature.inference.anthropic.AnthropicClientProvider
+import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
 import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
 import com.google.genai.types.Model
@@ -18,6 +11,11 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import okhttp3.Call
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,19 +25,8 @@ import java.util.Optional
 
 class ApiModelCatalogRepositoryImplTest {
     private val openAiClientProvider = mockk<OpenAiClientProvider>()
-    private val anthropicClientProvider = mockk<AnthropicClientProvider>()
     private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
     private val httpClient = mockk<Call.Factory>()
-    private val anthropicClient = mockk<AnthropicClient>()
-    private val modelService = mockk<ModelService>()
-    private val modelListPage = mockk<ModelListPage>()
-    private val autoPager = mockk<AutoPager<ModelInfo>>()
-    private val modelInfoA = mockk<ModelInfo>()
-    private val modelInfoB = mockk<ModelInfo>()
-    private val capabilitiesA = mockk<ModelCapabilities>()
-    private val capabilitiesB = mockk<ModelCapabilities>()
-    private val imageInputA = mockk<CapabilitySupport>()
-    private val imageInputB = mockk<CapabilitySupport>()
     private val googleModelA = mockk<Model>()
     private val googleModelB = mockk<Model>()
 
@@ -50,28 +37,9 @@ class ApiModelCatalogRepositoryImplTest {
         repo =
             ApiModelCatalogRepositoryImpl(
                 openAiClientProvider = openAiClientProvider,
-                anthropicClientProvider = anthropicClientProvider,
                 googleGenAiClientProvider = googleGenAiClientProvider,
                 httpClient = httpClient,
             )
-
-        every { anthropicClientProvider.getClient(any(), any(), any()) } returns anthropicClient
-        every { anthropicClient.models() } returns modelService
-        every { modelService.list() } returns modelListPage
-        every { modelListPage.autoPager() } returns autoPager
-        every { autoPager.iterator() } returns listOf(modelInfoA, modelInfoB).iterator()
-        every { modelInfoA.id() } returns "claude-sonnet-4-20250514"
-        every { modelInfoA.displayName() } returns "Claude Sonnet 4"
-        every { modelInfoA.createdAt() } returns OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC)
-        every { modelInfoA.capabilities() } returns Optional.of(capabilitiesA)
-        every { capabilitiesA.imageInput() } returns imageInputA
-        every { imageInputA.supported() } returns true
-        every { modelInfoB.id() } returns "claude-haiku-4-5-20251001"
-        every { modelInfoB.displayName() } returns "Claude Haiku 4.5"
-        every { modelInfoB.createdAt() } returns OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC)
-        every { modelInfoB.capabilities() } returns Optional.of(capabilitiesB)
-        every { capabilitiesB.imageInput() } returns imageInputB
-        every { imageInputB.supported() } returns false
 
         every { googleGenAiClientProvider.listModels(any(), any(), any(), any()) } returns listOf(googleModelA, googleModelB)
         every { googleModelA.name() } returns Optional.of("models/gemini-2.5-flash")
@@ -85,19 +53,49 @@ class ApiModelCatalogRepositoryImplTest {
     }
 
     @Test
-    fun `fetchModels uses anthropic model discovery path for anthropic provider`() =
+    fun `fetchModels filters compatible model discovery to native Anthropic shape`() =
         runTest {
-            val models = repo.fetchModels(ApiProvider.ANTHROPIC, apiKey = "key", baseUrl = null)
+            val call = mockk<Call>()
+            val requestSlot = io.mockk.slot<Request>()
+            every { httpClient.newCall(capture(requestSlot)) } returns call
+            every { call.execute() } returns
+                jsonResponse(
+                    request = Request.Builder().url("https://opencode.ai/zen/go/v1/models").build(),
+                    body =
+                        """
+                        {
+                          "data": [
+                            {
+                              "id": "claude-sonnet-4-20250514",
+                              "display_name": "Claude Sonnet 4",
+                              "created_at": "2025-05-14T00:00:00Z",
+                              "capabilities": {
+                                "image_input": {
+                                  "supported": true
+                                }
+                              }
+                            },
+                            {
+                              "id": "opencode-go-default",
+                              "object": "model",
+                              "created": 1764547200,
+                              "context_window": 262144,
+                              "max_output_tokens": 32768
+                            }
+                          ]
+                        }
+                        """.trimIndent(),
+                )
+
+            val models =
+                repo.fetchModels(
+                    provider = ApiProvider.ANTHROPIC,
+                    apiKey = "key",
+                    baseUrl = "https://opencode.ai/zen/go/v1",
+                )
 
             assertEquals(
                 listOf(
-                    DiscoveredApiModel(
-                        id = "claude-haiku-4-5-20251001",
-                        name = "Claude Haiku 4.5",
-                        created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
-                        isMultimodal = false,
-                        isChatCapable = true,
-                    ),
                     DiscoveredApiModel(
                         id = "claude-sonnet-4-20250514",
                         name = "Claude Sonnet 4",
@@ -105,10 +103,69 @@ class ApiModelCatalogRepositoryImplTest {
                         isMultimodal = true,
                         isChatCapable = true,
                     ),
+                    DiscoveredApiModel(
+                        id = "opencode-go-default",
+                        name = "opencode-go-default",
+                        created = 1764547200,
+                        contextWindowTokens = 262_144,
+                        maxOutputTokens = 32_768,
+                        isChatCapable = true,
+                    ),
                 ),
                 models,
             )
+            assertEquals("https://opencode.ai/zen/go/v1/models", requestSlot.captured.url.toString())
+            assertEquals("key", requestSlot.captured.header("x-api-key"))
+            assertEquals("Bearer key", requestSlot.captured.header("Authorization"))
         }
+
+    @Test
+    fun `normalize trims version segment from Anthropic-compatible base URLs`() {
+        assertEquals(
+            "https://opencode.ai/zen/go",
+            AnthropicSdkBaseUrl.normalize("https://opencode.ai/zen/go/v1"),
+        )
+        assertEquals(
+            "https://opencode.ai/zen/go",
+            AnthropicSdkBaseUrl.normalize(" https://opencode.ai/zen/go/v1/ "),
+        )
+        assertEquals(
+            "https://api.anthropic.com",
+            AnthropicSdkBaseUrl.normalize("https://api.anthropic.com"),
+        )
+    }
+
+    @Test
+    fun `parseAnthropicModels keeps compatible model payload without display name`() {
+        val models =
+            repo.parseAnthropicModels(
+                """
+                {
+                  "data": [
+                    {
+                      "id": "opencode-go-default",
+                      "object": "model",
+                      "created": 1764547200,
+                      "context_length": 128000
+                    }
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        assertEquals(
+            listOf(
+                DiscoveredApiModel(
+                    id = "opencode-go-default",
+                    name = "opencode-go-default",
+                    created = 1764547200,
+                    contextWindowTokens = 128_000,
+                    isChatCapable = true,
+                ),
+            ),
+            models,
+        )
+    }
 
     @Test
     fun `fetchModels uses google model discovery path for google provider`() =
@@ -405,4 +462,18 @@ class ApiModelCatalogRepositoryImplTest {
             assertEquals(1, models.size)
             assertEquals("gpt-4o", models[0].id)
         }
+
+    private fun jsonResponse(
+        request: Request,
+        body: String,
+        code: Int = 200,
+    ): Response =
+        Response
+            .Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message("OK")
+            .body(body.toResponseBody("application/json".toMediaType()))
+            .build()
 }

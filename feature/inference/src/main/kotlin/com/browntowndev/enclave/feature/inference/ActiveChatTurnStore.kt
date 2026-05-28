@@ -248,8 +248,7 @@ private fun MessageSnapshot.mergeWith(incoming: MessageSnapshot): MessageSnapsho
 }
 
 /** Active turn still streaming — presentation fields must not be pinned to a prior snapshot. */
-private fun MessageSnapshot.isLiveSnapshot(): Boolean =
-    !isComplete && messageState != MessageState.COMPLETE
+private fun MessageSnapshot.isLiveSnapshot(): Boolean = !isComplete && messageState != MessageState.COMPLETE
 
 private fun List<ArtifactGenerationRequest>.mergeArtifacts(incoming: List<ArtifactGenerationRequest>): List<ArtifactGenerationRequest> {
     if (incoming.isEmpty()) return this

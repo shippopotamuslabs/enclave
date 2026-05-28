@@ -117,6 +117,31 @@ class MediaToolExecutorTest {
             assertEquals("Unsupported media tool: unknown_tool", thrown.message)
         }
 
+    @Test
+    fun `Image tool IOException failure JSON contains success false and Network error prefix`() =
+        runTest {
+            val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
+            coEvery { generateMediaUseCase(any()) } returns
+                Result.failure(java.io.IOException("Service Unavailable"))
+
+            val result = executor.execute(request)
+
+            assertTrue(result.resultJson.contains("\"success\":false"))
+            assertTrue(result.resultJson.contains("Network error: Service Unavailable"))
+        }
+
+    @Test
+    fun `Image tool direct IOException throwing failure JSON contains success false and Network error prefix`() =
+        runTest {
+            val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
+            coEvery { generateMediaUseCase(any()) } throws java.io.IOException("Gateway timeout")
+
+            val result = executor.execute(request)
+
+            assertTrue(result.resultJson.contains("\"success\":false"))
+            assertTrue(result.resultJson.contains("Network error: Gateway timeout"))
+        }
+
     private fun imageToolRequest(argumentsJson: String): ToolCallRequest =
         ToolCallRequest(
             toolName = ToolDefinition.GENERATE_IMAGE.name,

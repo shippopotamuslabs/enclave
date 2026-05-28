@@ -93,6 +93,30 @@ class ApiKeyManagerTest {
     }
 
     @Test
+    fun `blank alias is ignored and not queued`() =
+        runTest {
+            apiKeyManager.save("   ", "secret")
+            apiKeyManager.delete("")
+            apiKeyManager.claimPending()
+
+            assertNull(apiKeyManager.get(""))
+            assertFalse(apiKeyManager.getClaimedSyncAliases().contains(""))
+            assertFalse(apiKeyManager.getClaimedDeleteAliases().contains(""))
+        }
+
+    @Test
+    fun `aliases are trimmed before storage and pending sync`() =
+        runTest {
+            apiKeyManager.save("  trimmed_key  ", " secret ")
+            apiKeyManager.claimPending()
+
+            assertEquals("secret", apiKeyManager.get("trimmed_key"))
+            assertEquals("secret", apiKeyManager.get("  trimmed_key  "))
+            assertTrue(apiKeyManager.getClaimedSyncAliases().contains("trimmed_key"))
+            assertFalse(apiKeyManager.getClaimedSyncAliases().contains("  trimmed_key  "))
+        }
+
+    @Test
     fun `save tracks pending sync`() =
         runTest {
             apiKeyManager.save("new_key", "secret")

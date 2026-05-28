@@ -61,6 +61,7 @@ class TtsProviderRepositoryImpl
                 } else {
                     asset.id
                 }
+            val credentialAlias = asset.credentialAlias.trim().ifBlank { "tts-${id.value}" }
 
             val entity =
                 SensitiveEntityFieldEncryptors.encrypt(
@@ -71,7 +72,7 @@ class TtsProviderRepositoryImpl
                         voiceName = asset.voiceName,
                         modelName = asset.modelName,
                         baseUrl = asset.baseUrl,
-                        credentialAlias = asset.credentialAlias,
+                        credentialAlias = credentialAlias,
                         pendingSync = 1,
                     ),
                     healer,
@@ -80,7 +81,7 @@ class TtsProviderRepositoryImpl
             ttsProviderDao.upsertTtsProvider(entity)
 
             if (!apiKey.isNullOrBlank()) {
-                apiKeyManager.save(asset.credentialAlias, apiKey)
+                apiKeyManager.save(credentialAlias, apiKey)
             }
 
             triggerSync()

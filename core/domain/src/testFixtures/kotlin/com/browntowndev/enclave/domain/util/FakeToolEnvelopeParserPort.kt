@@ -40,7 +40,11 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
     /** Optional override for [buildToolResultMessage]; defaults to the existing wrapper. */
     var buildToolResultMessageImpl: (String) -> String = { "<tool_result>$it</tool_result>" }
 
-    override fun parse(raw: String): ToolEnvelopeBatch {
+    override fun parse(
+        raw: String,
+        toolSemanticsJson: String,
+        toolCatalogJson: String,
+    ): ToolEnvelopeBatch {
         parseCalls.add(raw)
         return parseResponses[raw] ?: defaultParseResponse
     }
@@ -48,6 +52,8 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
     override fun coerceProviderArguments(
         toolName: String,
         argsJson: String,
+        toolSemanticsJson: String,
+        toolCatalogJson: String,
     ): ToolEnvelopeField {
         coerceProviderArgumentsCalls.add(toolName to argsJson)
         return coerceProviderArgumentsResponses[toolName to argsJson]
@@ -59,7 +65,10 @@ class FakeToolEnvelopeParserPort : ToolEnvelopeParserPort {
             )
     }
 
-    override fun hasLocalToolContract(systemPrompt: String?): Boolean {
+    override fun hasLocalToolContract(
+        systemPrompt: String?,
+        toolCatalogJson: String,
+    ): Boolean {
         hasLocalToolContractCalls.add(systemPrompt)
         return hasLocalToolContractResponses[systemPrompt] ?: (
             systemPrompt != null &&

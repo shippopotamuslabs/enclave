@@ -50,7 +50,11 @@ data class RemoteModelAsset(
  */
 fun RemoteModelAsset.effectiveDisplayName(): String {
     displayName.takeIf { it.isNotBlank() }?.let { return it }
-    configurations.firstOrNull()?.displayName?.takeIf { it.isNotBlank() }?.let { return it }
+    configurations
+        .firstOrNull()
+        ?.displayName
+        ?.takeIf { it.isNotBlank() }
+        ?.let { return it }
     if (huggingFaceModelName.isBlank()) return ""
     return huggingFaceModelName
         .substringAfterLast('/')

@@ -15,6 +15,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.feature.chat.artifactexport.ArtifactExportWizardContent
+import com.browntowndev.enclave.feature.chat.stats.ChatStatsBottomSheet
+import com.browntowndev.enclave.feature.chat.stats.ResponseStatsBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +26,7 @@ fun ChatRoute(
     onNewChat: () -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     navigationChatId: ChatId? = null,
+    onNavigateToImportedChat: (ChatId) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -45,6 +48,7 @@ fun ChatRoute(
                         }
                     context.startActivity(Intent.createChooser(intent, "Share Chat"))
                 }
+                is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId)
             }
         }
     }
@@ -56,6 +60,16 @@ fun ChatRoute(
     }
 
     val exportSheet = uiState.artifactExportSheet
+
+    ResponseStatsBottomSheet(
+        state = uiState.responseStatsSheet,
+        onDismiss = viewModel::dismissResponseStatsSheet,
+    )
+
+    ChatStatsBottomSheet(
+        state = uiState.chatStatsSheet,
+        onDismiss = viewModel::dismissChatStatsSheet,
+    )
 
     if (exportSheet is ArtifactExportSheetState.Visible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -89,6 +103,7 @@ fun ChatRoute(
             onInputChange = viewModel::onInputChange,
             onEditMessage = viewModel::onEditMessage,
             onPlayAudio = viewModel::onPlayTts,
+            onPauseAudio = viewModel::onPauseTts,
             onImagesSelected = viewModel::onImagesSelected,
             onRemoveImage = viewModel::removeImage,
             onFileSelected = viewModel::onFileSelected,
@@ -105,6 +120,8 @@ fun ChatRoute(
             onShareTurn = viewModel::onShareTurn,
             onShareFullChat = viewModel::onShareFullChat,
             onDismissShareSheet = viewModel::onDismissShareSheet,
+            onStatsClick = viewModel::onResponseStatsClick,
+            onViewChatStatsClick = viewModel::onChatStatsClick,
         )
     }
 }

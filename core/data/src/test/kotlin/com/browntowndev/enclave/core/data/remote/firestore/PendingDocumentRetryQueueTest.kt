@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 
 class PendingDocumentRetryQueueTest {
     private val drops = mutableListOf<Pair<String, Throwable>>()
+
     private fun newQueue(maxAttempts: Int = 3) =
         PendingDocumentRetryQueue(maxAttempts = maxAttempts) { key, cause ->
             drops += key to cause

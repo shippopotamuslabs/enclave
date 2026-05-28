@@ -21,6 +21,7 @@ class EmbeddingRegenerationCoordinator
         private val pendingDocumentIds = mutableSetOf<String>()
         private var fullScanPending = false
         private var workScheduled = false
+        private var debounceJob: kotlinx.coroutines.Job? = null
         private val mutex = kotlinx.coroutines.sync.Mutex()
 
         fun enqueueMessage(messageId: String) {
@@ -61,26 +62,34 @@ class EmbeddingRegenerationCoordinator
 
         private fun triggerWorker() {
             if (workScheduled) return
-            workScheduled = true
+            debounceJob?.cancel()
+            debounceJob =
+                externalScope.launch {
+                    kotlinx.coroutines.delay(500)
+                    mutex.withLock {
+                        if (workScheduled) return@withLock
+                        workScheduled = true
 
-            val constraints =
-                androidx.work.Constraints
-                    .Builder()
-                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                    .setRequiresBatteryNotLow(true)
-                    .build()
+                        val constraints =
+                            androidx.work.Constraints
+                                .Builder()
+                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                .setRequiresBatteryNotLow(true)
+                                .build()
 
-            val request =
-                OneTimeWorkRequestBuilder<EmbeddingRegenerationWorker>()
-                    .setConstraints(constraints)
-                    .build()
+                        val request =
+                            OneTimeWorkRequestBuilder<EmbeddingRegenerationWorker>()
+                                .setConstraints(constraints)
+                                .build()
 
-            // Unique work + in-memory gate: one WM request per burst of sync enqueues.
-            workManager.enqueueUniqueWork(
-                "enclave_embedding_regen",
-                ExistingWorkPolicy.KEEP,
-                request,
-            )
+                        // Unique work + in-memory gate: one WM request per burst of sync enqueues.
+                        workManager.enqueueUniqueWork(
+                            "enclave_embedding_regen",
+                            ExistingWorkPolicy.KEEP,
+                            request,
+                        )
+                    }
+                }
         }
 
         /** Called when [EmbeddingRegenerationWorker] finishes so a new burst can schedule again. */
@@ -93,8 +102,7 @@ class EmbeddingRegenerationCoordinator
             }
         }
 
-        suspend fun hasPendingWork(): Boolean =
-            mutex.withLock { hasPendingLocked() }
+        suspend fun hasPendingWork(): Boolean = mutex.withLock { hasPendingLocked() }
 
         private fun hasPendingLocked(): Boolean =
             fullScanPending ||

@@ -94,7 +94,7 @@ class EmbeddingRegenerationWorkerTest {
                     messageIds = listOf("msg1", "msg2"),
                     memoryIds = listOf("mem1"),
                     documentIds = emptyList(),
-                )
+                ) andThen PendingWork(emptyList(), emptyList(), emptyList())
 
             val worker = createWorker()
             worker.doWork()

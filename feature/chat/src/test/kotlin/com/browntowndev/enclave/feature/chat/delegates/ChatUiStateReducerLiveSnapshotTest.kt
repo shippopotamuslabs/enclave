@@ -113,13 +113,28 @@ class ChatUiStateReducerLiveSnapshotTest {
                 activeTurnKey = turnKey,
             )
 
-        val firstBlock = first.uiState.messages.single().transcriptSegments.single() as TranscriptSegmentUi.ThinkingBlock
+        val firstBlock =
+            first.uiState.messages
+                .single()
+                .transcriptSegments
+                .single() as TranscriptSegmentUi.ThinkingBlock
         val secondBlock =
-            second.uiState.messages.single().transcriptSegments.single() as TranscriptSegmentUi.ThinkingBlock
+            second.uiState.messages
+                .single()
+                .transcriptSegments
+                .single() as TranscriptSegmentUi.ThinkingBlock
         assertEquals("hello", firstBlock.text)
         assertEquals("hello world", secondBlock.text)
-        assertTrue(first.uiState.messages.single().indicatorState is IndicatorState.Thinking)
-        assertTrue(second.uiState.messages.single().indicatorState is IndicatorState.Thinking)
+        assertTrue(
+            first.uiState.messages
+                .single()
+                .indicatorState is IndicatorState.Thinking,
+        )
+        assertTrue(
+            second.uiState.messages
+                .single()
+                .indicatorState is IndicatorState.Thinking,
+        )
     }
 
     @Test
@@ -145,7 +160,11 @@ class ChatUiStateReducerLiveSnapshotTest {
                 activeTurnKey = turnKey,
             )
 
-        assertTrue(streaming.uiState.messages.single().indicatorState is IndicatorState.Thinking)
+        assertTrue(
+            streaming.uiState.messages
+                .single()
+                .indicatorState is IndicatorState.Thinking,
+        )
     }
 
     @Test

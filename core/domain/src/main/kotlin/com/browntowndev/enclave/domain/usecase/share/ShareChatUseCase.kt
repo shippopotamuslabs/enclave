@@ -65,7 +65,7 @@ class ShareChatUseCase
                     is ShareOption.FullConversation -> allMessages
                 }
 
-            return shareRepository.shareChat(messagesToShare)
+            return shareRepository.shareChat(messagesToShare, chatId)
         }
 
         private data class ShareReference(

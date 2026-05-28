@@ -91,6 +91,12 @@ sealed interface AgentLoopEvent {
         val trigger: String,
         val summaryRef: String?,
         val historyRef: String?,
+        val transcriptRevisionAfter: Long,
+    ) : AgentLoopEvent
+
+    /** Emitted when Rust records a destructive compaction rewrite (transcript revision bumped). */
+    data class CompactionBoundaryApplied(
+        val revisionAfter: Long,
     ) : AgentLoopEvent
 
     data object Finished : AgentLoopEvent

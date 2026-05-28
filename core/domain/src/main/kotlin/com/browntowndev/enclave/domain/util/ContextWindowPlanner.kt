@@ -47,10 +47,32 @@ object ContextWindowPlanner {
     ): Budget {
         val outputReserve = outputReserveFor(contextWindowTokens, options.maxTokens)
         val reasoningReserve = options.reasoningBudget.coerceAtLeast(0)
-        val toolSchemaTokens =
-            options.availableTools.sumOf { tool ->
-                tokenCounter.countTokens("${tool.name}\n${tool.description}\n${tool.schema}", modelId)
+        val catalogTokens =
+            if (options.toolCatalog.isNotEmpty()) {
+                val compactCatalogPayload =
+                    options.toolCatalog.joinToString(separator = "\n") { entry ->
+                        val args =
+                            (
+                                entry.requiredArguments.map { it.name to "required" } +
+                                    entry.optionalArguments.map { it.name to "optional" }
+                            ).joinToString(", ") { (n, k) -> "$n:$k" }
+                        "TOOL CATALOG ${entry.name} ${entry.description} $args"
+                    }
+                tokenCounter.countTokens(compactCatalogPayload, modelId)
+            } else {
+                0
             }
+        val activePayload =
+            options.activeTools.joinToString(separator = "\n") { tool ->
+                "${tool.name}\n${tool.description}\n${tool.schema}"
+            }
+        val activeSchemaTokens =
+            if (activePayload.isNotEmpty()) {
+                tokenCounter.countTokens(activePayload, modelId)
+            } else {
+                0
+            }
+        val toolSchemaTokens = catalogTokens + activeSchemaTokens
         val mediaReserve = options.imageUris.size * DEFAULT_IMAGE_RESERVE_TOKENS
 
         return Budget(

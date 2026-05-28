@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.port.inference
 
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
+import com.browntowndev.enclave.domain.model.inference.AgentLoopToolSemanticsResources
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeBatch
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeField
 
@@ -9,14 +11,23 @@ import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeField
  * adapter; tests provide a Fake.
  */
 interface ToolEnvelopeParserPort {
-    fun parse(raw: String): ToolEnvelopeBatch
+    fun parse(
+        raw: String,
+        toolSemanticsJson: String = AgentLoopToolSemanticsResources.enclaveDefaultJson,
+        toolCatalogJson: String = AgentLoopToolCatalogJson.fullCatalogFileJson,
+    ): ToolEnvelopeBatch
 
     fun coerceProviderArguments(
         toolName: String,
         argsJson: String,
+        toolSemanticsJson: String = AgentLoopToolSemanticsResources.enclaveDefaultJson,
+        toolCatalogJson: String = AgentLoopToolCatalogJson.fullCatalogFileJson,
     ): ToolEnvelopeField
 
-    fun hasLocalToolContract(systemPrompt: String?): Boolean
+    fun hasLocalToolContract(
+        systemPrompt: String?,
+        toolCatalogJson: String = AgentLoopToolCatalogJson.fullCatalogFileJson,
+    ): Boolean
 
     fun buildToolResultMessage(resultJson: String): String
 }

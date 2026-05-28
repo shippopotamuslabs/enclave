@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -98,7 +99,10 @@ fun JumpFreeModalBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        modifier = modifier.nestedScroll(nestedScrollInterceptor),
+        modifier =
+            modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .nestedScroll(nestedScrollInterceptor),
         sheetState = sheetState,
         shape = shape,
         containerColor = containerColor,
@@ -106,7 +110,7 @@ fun JumpFreeModalBottomSheet(
         tonalElevation = tonalElevation,
         scrimColor = scrimColor,
         dragHandle = dragHandle,
-        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) },
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         Column(
             modifier =

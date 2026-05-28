@@ -4,7 +4,7 @@ import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.MessageState
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -22,7 +22,6 @@ import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicy
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import javax.inject.Inject
 
 class ChatUiStateReducer
@@ -49,6 +48,8 @@ class ChatUiStateReducer
             val activeToolCallBanner: ToolCallBannerUi?,
             val hasTtsProviderAssigned: Boolean,
             val isPlayingTts: Boolean,
+            val isLoadingTts: Boolean = false,
+            val isPausedTts: Boolean = false,
             val studioMediaMap: Map<String, StudioMediaAsset>,
             val shareState: ShareState,
             val isReadOnly: Boolean,
@@ -169,6 +170,8 @@ class ChatUiStateReducer
                     backgroundInferenceEnabled = params.settings.backgroundInferenceEnabled,
                     hasTtsProviderAssigned = params.hasTtsProviderAssigned,
                     isPlayingTts = params.isPlayingTts,
+                    isLoadingTts = params.isLoadingTts,
+                    isPausedTts = params.isPausedTts,
                     shareState = params.shareState,
                     isReadOnly = params.isReadOnly,
                     artifactExportSheet = params.artifactExportSheet,

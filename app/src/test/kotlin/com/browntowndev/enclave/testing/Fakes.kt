@@ -223,12 +223,6 @@ class FakeLoggingPort : LoggingPort {
         message: String,
         throwable: Throwable?,
     ) {}
-
-    override fun recordException(
-        tag: String,
-        message: String,
-        throwable: Throwable,
-    ) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

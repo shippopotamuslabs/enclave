@@ -4,4 +4,7 @@ interface EmbeddingEnginePort {
     suspend fun getEmbedding(text: String): FloatArray
 
     suspend fun close()
+
+    val maxConcurrentEmbeddings: Int
+        get() = 1
 }

@@ -63,9 +63,10 @@ class MediaProviderRepositoryImpl
                 } else {
                     asset.id
                 }
+            val credentialAlias = asset.credentialAlias.trim().ifBlank { "media-${id.value}" }
 
             if (!apiKey.isNullOrBlank()) {
-                apiKeyManager.save(asset.credentialAlias, apiKey)
+                apiKeyManager.save(credentialAlias, apiKey)
             }
 
             val entity =
@@ -77,7 +78,7 @@ class MediaProviderRepositoryImpl
                         capability = asset.capability,
                         modelName = asset.modelName,
                         baseUrl = asset.baseUrl,
-                        credentialAlias = asset.credentialAlias,
+                        credentialAlias = credentialAlias,
                         pendingSync = 1,
                     ),
                     healer,

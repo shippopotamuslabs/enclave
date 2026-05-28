@@ -9,12 +9,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,18 +38,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
+import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
+import com.browntowndev.enclave.core.ui.component.UniversalInputBar
+import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
+import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.enclave.core.ui.component.neo.NeoActionRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
-import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
@@ -59,12 +60,8 @@ import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
 import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
-import com.browntowndev.enclave.core.ui.component.UniversalInputBar
-import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
-import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
-import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import com.browntowndev.enclave.feature.chat.ChatModeUi
@@ -186,8 +183,7 @@ fun InputBar(
                                 borderColor = neoBorderColor(),
                                 withShadow = false,
                                 shape = EnclaveNeoTokens.shape,
-                            )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            ).padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -308,6 +304,7 @@ fun InputBar(
                     }
                 },
                 isGlobalInferenceBlocked = isGlobalInferenceBlocked,
+                onCollapse = { isExpanded = false },
             )
         },
     )
@@ -335,4 +332,3 @@ private fun AttachmentMenuItem(
         )
     }
 }
-

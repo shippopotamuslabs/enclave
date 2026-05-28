@@ -25,4 +25,7 @@ sealed class TtsPlaybackStatus {
 
     /** Playback was explicitly stopped by the user. */
     data object Stopped : TtsPlaybackStatus()
+
+    /** Playback was paused by the user. */
+    data object Paused : TtsPlaybackStatus()
 }

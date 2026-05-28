@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.chat.components.assistantresponse
 import android.content.ClipData
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,7 +14,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,13 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.ChatMessage
-import com.browntowndev.enclave.feature.chat.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,9 +46,14 @@ internal fun AssistantResponseActionRow(
     contentText: String,
     isComplete: Boolean,
     hasTtsProviderAssigned: Boolean,
+    isPlayingTts: Boolean,
+    isLoadingTts: Boolean,
+    isPausedTts: Boolean,
     onPlayAudio: (String) -> Unit,
+    onPauseAudio: () -> Unit,
     onShareClick: (MessageId) -> Unit,
     onShowSources: () -> Unit,
+    onStatsClick: (MessageId) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -85,7 +96,7 @@ internal fun AssistantResponseActionRow(
                             .size(32.dp),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.content_copy),
+                        imageVector = Icons.Filled.ContentCopy,
                         contentDescription = "Copy response",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp),
@@ -93,16 +104,81 @@ internal fun AssistantResponseActionRow(
                 }
 
                 if (hasTtsProviderAssigned) {
+                    when {
+                        isLoadingTts -> {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        isPlayingTts -> {
+                            IconButton(
+                                onClick = onPauseAudio,
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Pause,
+                                    contentDescription = "Pause audio",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        isPausedTts -> {
+                            IconButton(
+                                onClick = { onPlayAudio(contentText) },
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = "Resume audio",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        else -> {
+                            IconButton(
+                                onClick = { onPlayAudio(contentText) },
+                                modifier =
+                                    Modifier
+                                        .offset(x = (-8).dp)
+                                        .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Read aloud",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isComplete) {
                     IconButton(
-                        onClick = { onPlayAudio(contentText) },
-                        modifier =
-                            Modifier
-                                .offset(x = (-8).dp)
-                                .size(32.dp),
+                        onClick = { onStatsClick(message.id) },
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Read aloud",
+                            imageVector = Icons.Outlined.BarChart,
+                            contentDescription = "Response statistics",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp),
                         )
@@ -124,7 +200,7 @@ internal fun AssistantResponseActionRow(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.link),
+                                imageVector = Icons.Filled.Link,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                             )

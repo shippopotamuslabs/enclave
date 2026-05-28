@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.studio
 
+import app.cash.turbine.test
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
@@ -21,14 +22,13 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
-import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
-import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
-import app.cash.turbine.test
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -182,6 +182,39 @@ class MultimodalViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `ST1 generation completes with media visible and isGenerating false`() =
+        runTest {
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.onPromptChange("sunset mountains")
+            viewModel.generate()
+            assertTrue(viewModel.uiState.value.isGenerating)
+
+            ephemeralMediaFlow.value =
+                listOf(
+                    StudioMediaAsset(
+                        id = "gen-1",
+                        localUri = "cache://generated.jpg",
+                        prompt = "sunset mountains",
+                        mediaType = "IMAGE",
+                        createdAt = 1L,
+                    ),
+                )
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.isGenerating)
+            assertEquals(1, state.gallery.size)
+            assertEquals("gen-1", state.gallery.first().id)
+            assertEquals("cache://generated.jpg", state.gallery.first().localUri)
+
+            job.cancel()
+        }
 
     @Test
     fun `uiState emits typed studio state without generation error`() =

@@ -4,7 +4,9 @@ import com.anthropic.models.messages.MessageParam
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,7 +19,7 @@ class AnthropicRequestMapperTest {
     fun `mapToMessageParams maps system prompt history and reasoning budget`() {
         val params =
             AnthropicRequestMapper.mapToMessageParams(
-                modelId = "claude-sonnet-4-20250514",
+                modelId = "claude-2.1",
                 prompt = "How are you?",
                 history =
                     listOf(
@@ -38,7 +40,7 @@ class AnthropicRequestMapperTest {
                     ),
             )
 
-        assertEquals("claude-sonnet-4-20250514", params.model().toString())
+        assertEquals("claude-2.1", params.model().toString())
         assertEquals(
             listOf(MessageParam.Role.USER, MessageParam.Role.ASSISTANT, MessageParam.Role.USER),
             params.messages().map { message -> message.role() },
@@ -56,9 +58,9 @@ class AnthropicRequestMapperTest {
                 .asEnabled()
                 .budgetTokens(),
         )
-        assertEquals(0.7, params.temperature().get(), 0.0001)
-        assertEquals(0.9, params.topP().get(), 0.0001)
-        assertEquals(32L, params.topK().get())
+        assertFalse(params.temperature().isPresent)
+        assertFalse(params.topP().isPresent)
+        assertFalse(params.topK().isPresent)
         assertEquals(512L, params.maxTokens())
         assertFalse(params.toString().contains("Error: API Error"))
     }
@@ -92,6 +94,36 @@ class AnthropicRequestMapperTest {
     }
 
     @Test
+    fun `LTD-04 Anthropic request mapper uses activeTools only`() {
+        val params =
+            AnthropicRequestMapper.mapToMessageParams(
+                modelId = "claude-sonnet-4-20250514",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog =
+                            listOf(
+                                catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                            ),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val registeredToolNames =
+            params
+                .tools()
+                .orElse(emptyList())
+                .mapNotNull { union -> union.tool().orElse(null)?.name() }
+
+        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertEquals(2, registeredToolNames.size)
+    }
+
+    @Test
     fun `mapToMessageParams serializes web_search when tooling is enabled`() {
         val params =
             AnthropicRequestMapper.mapToMessageParams(
@@ -102,7 +134,7 @@ class AnthropicRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -121,13 +153,23 @@ class AnthropicRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+                        activeTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
                     ),
             )
 
         assertTrue(params.toString().contains("attached_image_inspect"))
         assertTrue(params.toString().contains("question"))
     }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
 
     @Test
     fun `mapToMessageParams includes image blocks when image uris are present`() {

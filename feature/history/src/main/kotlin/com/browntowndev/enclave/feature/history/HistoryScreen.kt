@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,12 +59,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -135,6 +137,7 @@ fun HistoryScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
+            contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             item {
                 NeoSettingsSection(
@@ -353,12 +356,10 @@ private fun HistoryChatItem(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .combinedClickable(
+                ).combinedClickable(
                     onClick = onClick,
                     onLongClick = onShowOptions,
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -405,8 +406,7 @@ private fun HistoryChatSkeletonItem(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -562,4 +562,3 @@ private fun BottomSheetOption(
         Icon(imageVector = icon, contentDescription = null)
     }
 }
-

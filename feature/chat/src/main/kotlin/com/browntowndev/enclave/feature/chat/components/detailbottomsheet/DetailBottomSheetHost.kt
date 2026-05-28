@@ -2,11 +2,11 @@ package com.browntowndev.enclave.feature.chat.components.detailbottomsheet
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.platform.LocalInspectionMode
 
 /**
@@ -27,7 +27,11 @@ fun ProvideDetailBottomSheet(content: @Composable () -> Unit) {
                     val userDismiss = config.onDismiss
                     activeSheet =
                         HostedDetailSheet(
-                            config = config.withDismiss { userDismiss(); activeSheet = null },
+                            config =
+                                config.withDismiss {
+                                    userDismiss()
+                                    activeSheet = null
+                                },
                             elapsedSeconds = elapsedSeconds,
                         )
                 },

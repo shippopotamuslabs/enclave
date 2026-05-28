@@ -34,7 +34,8 @@ cargo run --release --bin uniffi-bindgen generate \
     --library "$RUST_ROOT/target/$TARGET_ARCH/release/libagent_core.so" \
     --language kotlin \
     --out-dir "$PROJECT_ROOT/core/agent/src/main/kotlin" \
-    --config "$PROJECT_ROOT/core/agent/uniffi.toml"
+    --config "$PROJECT_ROOT/core/agent/uniffi.toml" \
+    --no-format
 
 echo "Copying library to jniLibs..."
 mkdir -p "$PROJECT_ROOT/core/agent/src/main/jniLibs/arm64-v8a"

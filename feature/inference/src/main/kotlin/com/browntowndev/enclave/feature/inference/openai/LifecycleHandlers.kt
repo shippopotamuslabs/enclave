@@ -6,12 +6,13 @@ internal fun OpenAiStreamHandlerContext.handleCompleted(
     event: ResponseStreamEvent,
     state: StreamState,
 ): StreamState {
-    state.responseId =
+    val response =
         event
             .completed()
             .get()
             .response()
-            .id()
+    state.responseId = response.id()
+    state.applyResponseUsage(response)
     loggingPort.debug(
         tag,
         "Responses stream completed model=$modelId " +
@@ -30,6 +31,7 @@ internal fun OpenAiStreamHandlerContext.handleIncomplete(
     val incompleteEvent = event.incomplete().get()
     val response = incompleteEvent.response()
     state.responseId = response.id()
+    state.applyResponseUsage(response)
     val details = response.incompleteDetails().map { it.toString() }.orElse("none")
     loggingPort.debug(
         tag,

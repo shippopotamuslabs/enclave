@@ -83,5 +83,10 @@ internal class OpenAiResponseStreamHandler(
             providerToolCallIds = state.providerToolCallIds.toList(),
             providerToolItemIds = state.providerToolItemIds.toList(),
             assistantMessageText = state.streamedAssistantMessage.toString(),
+            inputTokens = state.inputTokens,
+            outputTokens = state.outputTokens,
+            reasoningTokens = state.reasoningTokens,
+            cacheReadInputTokens = state.cacheReadInputTokens,
+            cacheWriteInputTokens = state.cacheWriteInputTokens,
         )
 }

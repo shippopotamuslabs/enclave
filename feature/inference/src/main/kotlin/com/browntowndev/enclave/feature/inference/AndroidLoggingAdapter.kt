@@ -2,6 +2,8 @@ package com.browntowndev.enclave.feature.inference
 
 import android.util.Log
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
+import com.browntowndev.enclave.domain.util.telemetry.TelemetryPiiScrubber
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,7 +15,9 @@ import javax.inject.Singleton
 @Singleton
 class AndroidLoggingAdapter
     @Inject
-    constructor() : LoggingPort {
+    constructor(
+        private val errorTrackingGate: AutomaticErrorTrackingGate,
+    ) : LoggingPort {
         override fun debug(
             tag: String,
             message: String,
@@ -41,20 +45,15 @@ class AndroidLoggingAdapter
             throwable: Throwable?,
         ) {
             Log.e(tag, message, throwable)
-        }
-
-        override fun recordException(
-            tag: String,
-            message: String,
-            throwable: Throwable,
-        ) {
+            if (throwable == null || !errorTrackingGate.isAutomaticErrorTrackingEnabled()) {
+                return
+            }
             runCatching {
                 val crashlytics = FirebaseCrashlytics.getInstance()
-                crashlytics.setCustomKey("LogTag", tag)
-                crashlytics.setCustomKey("Message", message)
+                val scrubbedMessage = TelemetryPiiScrubber.scrub(message).orEmpty()
+                crashlytics.log("$tag: $scrubbedMessage")
                 crashlytics.recordException(throwable)
             }.onFailure {
-                // Graceful degradation: If Crashlytics is unavailable, fallback to standard log
                 Log.e("AndroidLoggingAdapter", "Crashlytics not available. Error: $message", throwable)
             }
         }

@@ -10,10 +10,14 @@ import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -23,6 +27,7 @@ import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
@@ -30,6 +35,7 @@ import com.browntowndev.enclave.domain.usecase.inference.InferenceType
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +51,7 @@ import javax.inject.Provider
  * Resolves the correct inference service (Llama, LiteRT) dynamically
  * based on the active model's file extension at inference time.
  */
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 class InferenceFactoryImpl
     @Inject
     constructor(
@@ -69,6 +75,10 @@ class InferenceFactoryImpl
         private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
         private val toolStreamGatePort: ToolStreamGatePort,
         private val inferenceFactoryProvider: Provider<InferenceFactoryPort>? = null,
+        private val telemetrySupport: InferenceTelemetrySupport,
+        private val telemetryEventPort: TelemetryEventPort,
+        private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
+        private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -117,6 +127,8 @@ class InferenceFactoryImpl
                 withInferenceServiceImpl(modelType, block)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: InferenceIOException) {
+                throw e
             } catch (e: java.io.IOException) {
                 throw InferenceIOException(message = e.message, cause = e)
             }
@@ -164,7 +176,7 @@ class InferenceFactoryImpl
                 else -> InferenceType.ON_DEVICE
             }
 
-        @Suppress("ReturnCount", "CyclomaticComplexMethod")
+        @Suppress("ReturnCount", "CyclomaticComplexMethod", "LongMethod")
         private suspend fun resolveService(
             modelType: ModelType,
             defaultAssignment: DefaultModelAssignment? = null,
@@ -222,6 +234,8 @@ class InferenceFactoryImpl
                                     loggingPort = loggingPort,
                                     toolEnvelopeParserPort = toolEnvelopeParserPort,
                                     toolStreamGatePort = toolStreamGatePort,
+                                    telemetrySupport = telemetrySupport,
+                                    telemetryEventPort = telemetryEventPort,
                                 )
                             ApiProvider.GOOGLE -> {
                                 val client =
@@ -232,7 +246,7 @@ class InferenceFactoryImpl
                                     )
                                 val sdkClient =
                                     GoogleGenAiSdkClientImpl(
-                                        modelsApiProvider = { client.models },
+                                        clientProvider = { client },
                                         modelType = modelType,
                                         loggingPort = loggingPort,
                                     )
@@ -244,6 +258,8 @@ class InferenceFactoryImpl
                                     loggingPort = loggingPort,
                                     toolEnvelopeParserPort = toolEnvelopeParserPort,
                                     toolStreamGatePort = toolStreamGatePort,
+                                    telemetrySupport = telemetrySupport,
+                                    telemetryEventPort = telemetryEventPort,
                                 )
                             }
                             ApiProvider.OPENROUTER ->
@@ -259,6 +275,8 @@ class InferenceFactoryImpl
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
                                     toolStreamGatePort = toolStreamGatePort,
+                                    telemetrySupport = telemetrySupport,
+                                    telemetryEventPort = telemetryEventPort,
                                 )
                             ApiProvider.XAI ->
                                 XaiInferenceServiceImpl(
@@ -273,6 +291,8 @@ class InferenceFactoryImpl
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
                                     toolStreamGatePort = toolStreamGatePort,
+                                    telemetrySupport = telemetrySupport,
+                                    telemetryEventPort = telemetryEventPort,
                                 )
                             else ->
                                 ApiInferenceServiceImpl(
@@ -288,6 +308,8 @@ class InferenceFactoryImpl
                                     baseUrl = resolvedBaseUrl,
                                     loggingPort = loggingPort,
                                     toolStreamGatePort = toolStreamGatePort,
+                                    telemetrySupport = telemetrySupport,
+                                    telemetryEventPort = telemetryEventPort,
                                 )
                         }
 
@@ -347,6 +369,8 @@ class InferenceFactoryImpl
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                        telemetryEventPort = telemetryEventPort,
                                     )
                                 ApiProvider.GOOGLE -> {
                                     val client =
@@ -357,7 +381,7 @@ class InferenceFactoryImpl
                                         )
                                     val sdkClient =
                                         GoogleGenAiSdkClientImpl(
-                                            modelsApiProvider = { client.models },
+                                            clientProvider = { client },
                                             modelType = modelType,
                                             loggingPort = loggingPort,
                                         )
@@ -369,6 +393,8 @@ class InferenceFactoryImpl
                                         loggingPort = loggingPort,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                        telemetryEventPort = telemetryEventPort,
                                     )
                                 }
                                 ApiProvider.OPENROUTER ->
@@ -384,6 +410,8 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                        telemetryEventPort = telemetryEventPort,
                                     )
                                 ApiProvider.XAI ->
                                     XaiInferenceServiceImpl(
@@ -398,6 +426,8 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                        telemetryEventPort = telemetryEventPort,
                                     )
                                 else ->
                                     ApiInferenceServiceImpl(
@@ -413,6 +443,8 @@ class InferenceFactoryImpl
                                         baseUrl = resolvedBaseUrl,
                                         loggingPort = loggingPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                        telemetryEventPort = telemetryEventPort,
                                     )
                             }
 
@@ -493,6 +525,7 @@ class InferenceFactoryImpl
                                         modelType = modelType,
                                         toolEnvelopeParserPort = toolEnvelopeParserPort,
                                         toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
                                     ),
                                 provider = "LLAMA",
                                 modelType = modelType,
@@ -504,6 +537,7 @@ class InferenceFactoryImpl
                                 processThinkingTokens = processThinkingTokens,
                                 toolExecutionEventPort = toolExecutionEventPort,
                                 modelType = modelType,
+                                telemetrySupport = telemetrySupport,
                             )
                         }
                         else -> {
@@ -512,6 +546,7 @@ class InferenceFactoryImpl
                                 processThinkingTokens = processThinkingTokens,
                                 toolExecutionEventPort = toolExecutionEventPort,
                                 modelType = modelType,
+                                telemetrySupport = telemetrySupport,
                             )
                         }
                     }
@@ -539,6 +574,9 @@ class InferenceFactoryImpl
                     rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
                     resolveCompactionSummaryModel =
                         ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter),
+                    committedInferencePrompts = committedInferencePrompts,
+                    committedInferenceTranscripts = committedInferenceTranscripts,
+                    telemetryEventPort = telemetryEventPort,
                 )
             } else {
                 service

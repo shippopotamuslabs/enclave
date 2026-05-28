@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
+import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
@@ -31,13 +32,26 @@ internal fun ApiProvidersTransientState.discoveredModelFor(preset: ApiModelConfi
 internal fun ApiProvidersTransientState.normalizeVisionCapability(
     preset: ApiModelConfigUi?,
     models: List<DiscoveredApiModel> = discoveredApiModels,
+): ApiModelConfigUi? = normalizePresetFromDiscovery(preset, models)
+
+internal fun ApiProvidersTransientState.normalizePresetFromDiscovery(
+    preset: ApiModelConfigUi?,
+    models: List<DiscoveredApiModel> = discoveredApiModels,
 ): ApiModelConfigUi? {
     if (preset == null) return null
-    val discoveredVisionCapability =
-        models
-            .find { it.id == preset.modelId }
-            ?.isMultimodal
-    return discoveredVisionCapability?.let { preset.copy(isMultimodal = it) } ?: preset
+    val discovered = models.find { it.id == preset.modelId } ?: return preset
+    return preset.copy(
+        isMultimodal = discovered.isMultimodal ?: preset.isMultimodal,
+        contextWindow = discovered.contextWindowTokens?.toString() ?: preset.contextWindow,
+        promptPriceUsdPerMillion =
+            discovered.promptPrice?.let(ApiModelPricingFormat::formatUsdPerMillion) ?: preset.promptPriceUsdPerMillion,
+        completionPriceUsdPerMillion =
+            discovered.completionPrice?.let(ApiModelPricingFormat::formatUsdPerMillion)
+                ?: preset.completionPriceUsdPerMillion,
+        cachedPromptPriceUsdPerMillion =
+            discovered.cachedPromptPrice?.let(ApiModelPricingFormat::formatUsdPerMillion)
+                ?: preset.cachedPromptPriceUsdPerMillion,
+    )
 }
 
 internal fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
@@ -58,8 +72,7 @@ internal fun List<DiscoveredApiModel>.mergeSelectedModel(preset: ApiModelConfigU
         else -> listOf(DiscoveredApiModel(id = preset.modelId)) + this
     }
 
-internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
-    filter { it.id.isGoogleTtsModelCandidate() }
+internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> = filter { it.id.isGoogleTtsModelCandidate() }
 
 internal fun List<DiscoveredApiModel>.filterChatModels(): List<DiscoveredApiModel> = filter { it.isChatCapable }
 
@@ -86,5 +99,4 @@ internal fun apiConnectionFingerprint(
     baseUrl: String?,
     apiKey: String,
     credentialAlias: String?,
-): String =
-    "${provider.name}|${baseUrl.normalizedDiscoveryBaseUrl()}|${apiKey.ifBlank { credentialAlias.orEmpty() }}"
+): String = "${provider.name}|${baseUrl.normalizedDiscoveryBaseUrl()}|${apiKey.ifBlank { credentialAlias.orEmpty() }}"

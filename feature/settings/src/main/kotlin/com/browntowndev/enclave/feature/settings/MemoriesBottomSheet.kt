@@ -235,8 +235,7 @@ private fun MemoryItem(
                         backgroundColor = MaterialTheme.colorScheme.surface,
                         borderColor = neoBorderColor(),
                         withShadow = false,
-                    )
-                    .clickable(onClick = onEdit)
+                    ).clickable(onClick = onEdit)
                     .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

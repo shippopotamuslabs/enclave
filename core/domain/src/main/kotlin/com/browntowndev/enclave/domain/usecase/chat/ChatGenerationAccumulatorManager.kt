@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 
@@ -88,6 +89,10 @@ internal class ChatGenerationAccumulatorManager(
                         }
                     }
                 }
+            }
+
+            is MessageGenerationState.TelemetryCaptured -> {
+                getOrCreateAccumulator(state.modelType).addTelemetry(state.telemetry)
             }
 
             is MessageGenerationState.StepCompleted,
@@ -270,6 +275,7 @@ internal class MessageAccumulator(
     generatedMediaAssetIds: MutableList<String> = mutableListOf(),
     generatedMediaTypes: MutableList<String> = mutableListOf(),
     generatedMediaPrompts: MutableList<String> = mutableListOf(),
+    val telemetryRows: MutableList<TurnTelemetry> = mutableListOf(),
     private val transcriptSegmentsMutable: MutableList<MutableTranscriptSegment> = mutableListOf(),
 ) {
     private val webSearchSourcesList = SnapshotMutableList(webSearchSources)
@@ -288,6 +294,7 @@ internal class MessageAccumulator(
     private var cachedTranscriptSegmentsVersion = -1
     private var cachedTranscriptSegments: List<MessageTranscriptSegment> = emptyList()
     private var scalarVersion = 0
+    private var telemetryRowsVersion = 0
     private var cachedSnapshotVersion = -1L
     private var cachedSnapshot: MessageSnapshot? = null
 
@@ -446,6 +453,11 @@ internal class MessageAccumulator(
         markScalarDirty()
     }
 
+    fun addTelemetry(row: TurnTelemetry) {
+        telemetryRows.add(row)
+        telemetryRowsVersion += 1
+    }
+
     private fun finalizeOpenThinkingSegment(now: Long = System.currentTimeMillis()) {
         val last = transcriptSegmentsMutable.lastOrNull() ?: return
         if (last.kind == TranscriptSegmentKind.THINKING && last.thinkingEndMs == null && last.thinkingStartMs != null) {
@@ -535,6 +547,7 @@ internal class MessageAccumulator(
             generatedMediaTypes = generatedMediaTypesSnapshot.value(),
             generatedMediaPrompts = generatedMediaPromptsSnapshot.value(),
             transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
+            telemetryRows = telemetryRows.toList(),
         ).also { snapshot ->
             cachedSnapshot = snapshot
             cachedSnapshotVersion = snapshotVersion
@@ -557,7 +570,8 @@ internal class MessageAccumulator(
             generatedMediaAssetIdsList.version +
             generatedMediaTypesList.version +
             generatedMediaPromptsList.version +
-            transcriptSegmentsVersion
+            transcriptSegmentsVersion +
+            telemetryRowsVersion
 }
 
 internal enum class TranscriptSegmentKind {

@@ -415,6 +415,13 @@ internal class SettingsGeneralDelegate
             sheetVisibility.update { it.copy(feedback = show) }
         }
 
+        fun onShowUsageSpendSheet(
+            sheetVisibility: MutableStateFlow<SheetVisibilityState>,
+            show: Boolean,
+        ) {
+            sheetVisibility.update { it.copy(usageSpend = show) }
+        }
+
         fun onShowOssLicensesSheet(
             sheetVisibility: MutableStateFlow<SheetVisibilityState>,
             show: Boolean,

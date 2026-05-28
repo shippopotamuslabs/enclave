@@ -3,7 +3,9 @@ package com.browntowndev.enclave.domain.util
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -39,6 +41,74 @@ class ContextWindowPlannerTest {
         parametersClass = WebSearchParams::class,
     )
 
+    @Test
+    fun `LTD-07 deferred full schemas are excluded from tooling budget`() {
+        val budget =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolCatalog = listOf(catalogEntry("append_blocks")),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+                tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
+            )
+
+        assertEquals(52, budget.toolSchemaTokens)
+        assertFalse(352 == budget.toolSchemaTokens)
+    }
+
+    @Test
+    fun `MUT-03 deferred nested schema changes do not increase active budget`() {
+        val budgetA =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolCatalog = listOf(catalogEntry("append_blocks")),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+                tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
+            )
+        val budgetB =
+            ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolCatalog = listOf(catalogEntry("append_blocks")),
+                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                    ),
+                tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 900),
+            )
+
+        assertEquals(52, budgetA.toolSchemaTokens)
+        assertEquals(52, budgetB.toolSchemaTokens)
+    }
+
+    private class LazyDisclosureTokenCounter(
+        private val deferredSchemaTokens: Int,
+    ) : TokenCounter {
+        override fun countTokens(
+            text: String,
+            modelName: String?,
+        ): Int =
+            when {
+                text.contains("TOOL CATALOG") -> 12
+                text.contains("append_blocks") -> deferredSchemaTokens
+                else -> 40
+            }
+    }
+
+    private fun catalogEntry(name: String): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+        )
+
     // ── budgetFor ──────────────────────────────────────────────────────────
 
     @Nested
@@ -50,7 +120,7 @@ class ContextWindowPlannerTest {
                 GenerationOptions(
                     reasoningBudget = 512,
                     toolingEnabled = true,
-                    availableTools = listOf(makeTool("search", "web search")),
+                    activeTools = listOf(makeTool("search", "web search")),
                     imageUris = listOf("file:///1.jpg", "file:///2.jpg"),
                 )
             val budget =

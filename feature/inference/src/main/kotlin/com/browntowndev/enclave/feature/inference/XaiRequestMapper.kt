@@ -21,6 +21,7 @@ import com.openai.models.responses.ResponseInputItem
 
 object XaiRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
+    private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
 
     private data class SanitizedXaiRequestOptions(
         val reasoningEffort: ApiReasoningEffort?,
@@ -88,12 +89,13 @@ object XaiRequestMapper {
             toolsPayload.add(mapOf("type" to "code_execution"))
         }
 
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+        val xaiToolsToRegister = options.activeTools
+        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
             if (isMultiAgentModel(modelId)) {
                 // NOTE: Client-side tools are not currently available for multi-agent models
                 // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
             } else {
-                toolsPayload.addAll(options.availableTools.map { it.toChatCompletionToolMap() })
+                toolsPayload.addAll(xaiToolsToRegister.map { it.toChatCompletionToolMap() })
                 builder.parallelToolCalls(false)
             }
         }
@@ -102,6 +104,9 @@ object XaiRequestMapper {
             builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
+        options.chatId?.value?.takeIf { it.isNotBlank() }?.let { conversationId ->
+            builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+        }
         return builder.build()
     }
 
@@ -172,12 +177,13 @@ object XaiRequestMapper {
             toolsPayload.add(mapOf("type" to "code_execution"))
         }
 
-        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+        val xaiToolsToRegister = options.activeTools
+        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
             if (isMultiAgentModel(modelId)) {
                 // NOTE: Client-side tools are not currently available for multi-agent models
                 // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
             } else {
-                toolsPayload.addAll(options.availableTools.map { it.toResponseToolPayloadMap() })
+                toolsPayload.addAll(xaiToolsToRegister.map { it.toResponseToolPayloadMap() })
             }
         }
 
@@ -185,12 +191,19 @@ object XaiRequestMapper {
             builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
+        options.chatId
+            ?.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let { conversationId ->
+                builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+            }
         return builder.build()
     }
 
     fun isMultiAgentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
-    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean = !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
+    fun shouldAllowChatCompletionsFallback(modelId: String): Boolean =
+        !modelId.startsWith("grok-4.20") && !ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
 
     fun isChatReasoningContentModel(modelId: String): Boolean = ApiProviderModelPolicy.isXaiChatReasoningContentModel(modelId)
 
@@ -219,20 +232,22 @@ object XaiRequestMapper {
         if (reasoningEffort == null) {
             return null
         }
-        if (ApiProviderModelPolicy.isXaiGrok420Family(modelId)) {
-            return if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
-        }
-        if (ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId)) {
-            return reasoningEffort
-        }
-        if (
+        return when {
+            ApiProviderModelPolicy.isXaiGrok420Family(modelId) -> {
+                if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
+            }
+            ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId) || modelId.startsWith("grok-4.3") -> {
+                reasoningEffort
+            }
             ApiProviderModelPolicy.isXaiGrok3Model(modelId) ||
-            ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId) ||
-            ApiProviderModelPolicy.isXaiGrok4NonReasoningFamily(modelId)
-        ) {
-            return null
+                ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId) ||
+                ApiProviderModelPolicy.isXaiGrok4NonReasoningFamily(modelId) -> {
+                null
+            }
+            else -> {
+                reasoningEffort
+            }
         }
-        return reasoningEffort
     }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =

@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
@@ -23,6 +24,7 @@ import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.BadRequestException
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.responses.ResponseCreateParams
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -564,14 +566,15 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
-    fun `completeSingleTurn omits unsupported xAI multi-agent chat parameters`() =
+    fun `completeSingleTurn routes xAI multi-agent through Responses API only`() =
         runTest {
-            var capturedParams: ChatCompletionCreateParams? = null
+            var capturedParams: ResponseCreateParams? = null
             val service =
                 createSingleTurnService(
                     provider = "XAI",
                     modelId = "grok-4.20-multi-agent",
-                    onParams = { capturedParams = it },
+                    onResponseParams = { capturedParams = it },
+                    responseFailure = null,
                     response = emptyTextResponse("ok"),
                 )
 
@@ -595,11 +598,10 @@ class BaseOpenAiSdkInferenceServiceTest {
             )
 
             val params = requireNotNull(capturedParams)
-            assertTrue(params.reasoningEffort().isPresent)
+            assertTrue(params.reasoning().isPresent)
             assertTrue(params.temperature().isPresent)
             assertTrue(params.topP().isPresent)
-            assertFalse(params.maxCompletionTokens().isPresent)
-            assertFalse(params.tools().isPresent)
+            assertFalse(params.maxOutputTokens().isPresent)
             assertFalse(params.parallelToolCalls().isPresent)
         }
 
@@ -1018,6 +1020,142 @@ class BaseOpenAiSdkInferenceServiceTest {
             }
         }
 
+    @Test
+    fun `completeSingleTurn enables streaming usage in stream options`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse(),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = emptyList(),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val streamOptions = requireNotNull(capturedParams).streamOptions()
+            assertTrue(streamOptions.isPresent)
+            assertEquals(true, streamOptions.get().includeUsage().orElse(false))
+        }
+
+    @Test
+    fun `completeSingleTurn uses Responses API before Chat Completions for xai`() =
+        runTest {
+            var responseParams: ResponseCreateParams? = null
+            var chatCalled = false
+            val service =
+                createSingleTurnService(
+                    provider = "XAI",
+                    modelId = "grok-4.3",
+                    response = emptyTextResponse("ok"),
+                    responseFailure = null,
+                    onResponseParams = { responseParams = it },
+                    onParams = { chatCalled = true },
+                )
+
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi")),
+                    systemPrompt = "system",
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            apiProvider = ApiProvider.XAI,
+                            modelId = "grok-4.3",
+                            chatId = ChatId("chat-123"),
+                        ),
+                )
+
+            assertEquals("ok", result.assistantText)
+            assertFalse(chatCalled)
+            assertEquals(listOf("chat-123"), responseParams!!._headers().values("x-grok-conv-id"))
+        }
+
+    @Test
+    fun `completeSingleTurn falls back to Chat Completions when Responses API fails for eligible xai model`() =
+        runTest {
+            var responseCalled = false
+            var chatCalled = false
+            val service =
+                createSingleTurnService(
+                    provider = "XAI",
+                    modelId = "grok-4.3",
+                    response = emptyTextResponse("fallback ok"),
+                    responseFailure = RuntimeException("responses unavailable"),
+                    onResponseParams = { responseCalled = true },
+                    onParams = { chatCalled = true },
+                )
+
+            val result =
+                service.completeSingleTurn(
+                    sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi")),
+                    systemPrompt = "system",
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            apiProvider = ApiProvider.XAI,
+                            modelId = "grok-4.3",
+                        ),
+                )
+
+            assertEquals("fallback ok", result.assistantText)
+            assertTrue(responseCalled)
+            assertTrue(chatCalled)
+        }
+
+    @Test
+    fun `completeSingleTurn does not fall back to Chat Completions for xai grok 420 family`() =
+        runTest {
+            listOf("grok-4.20-multi-agent", "grok-4.20-reasoning").forEach { model ->
+                var chatCalled = false
+                val service =
+                    createSingleTurnService(
+                        provider = "XAI",
+                        modelId = model,
+                        response = emptyTextResponse("unused"),
+                        responseFailure = RuntimeException("responses unavailable"),
+                        onParams = { chatCalled = true },
+                    )
+
+                val error =
+                    kotlin
+                        .runCatching {
+                            service.completeSingleTurn(
+                                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi")),
+                                systemPrompt = "system",
+                                availableTools = emptyList(),
+                                allowToolCall = false,
+                                onTextToken = {},
+                                onThinkingToken = {},
+                                options =
+                                    GenerationOptions(
+                                        reasoningBudget = 0,
+                                        apiProvider = ApiProvider.XAI,
+                                        modelId = model,
+                                    ),
+                            )
+                        }.exceptionOrNull()
+
+                assertTrue(error!!.message!!.contains("responses unavailable"))
+                assertFalse(chatCalled)
+            }
+        }
+
     // ── Helper ──────────────────────────────────────────────────────────────────
 
     private fun createSingleTurnService(
@@ -1025,6 +1163,8 @@ class BaseOpenAiSdkInferenceServiceTest {
         provider: String = "OPENAI",
         modelId: String = "openai/gpt-5.2",
         onParams: (ChatCompletionCreateParams) -> Unit = {},
+        onResponseParams: (ResponseCreateParams) -> Unit = {},
+        responseFailure: Throwable? = RuntimeException("force chat fallback"),
         toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
     ): TestableSingleTurnService =
         TestableSingleTurnService(
@@ -1034,6 +1174,8 @@ class BaseOpenAiSdkInferenceServiceTest {
             loggingPort = loggingPort,
             stubResponse = response,
             onParams = onParams,
+            onResponseParams = onResponseParams,
+            responseFailure = responseFailure,
             toolStreamGatePort = toolStreamGatePort,
         )
 
@@ -1064,6 +1206,8 @@ class BaseOpenAiSdkInferenceServiceTest {
         loggingPort: LoggingPort,
         private val stubResponse: StreamedOpenAiResponse,
         private val onParams: (ChatCompletionCreateParams) -> Unit,
+        private val onResponseParams: (ResponseCreateParams) -> Unit,
+        private val responseFailure: Throwable?,
         toolStreamGatePort: ToolStreamGatePort,
     ) : TestableBaseOpenAiSdkInferenceService(
             client = client,
@@ -1074,6 +1218,21 @@ class BaseOpenAiSdkInferenceServiceTest {
             loggingPort = loggingPort,
             toolStreamGatePort = toolStreamGatePort,
         ) {
+        override suspend fun streamResponses(
+            params: ResponseCreateParams,
+            chatId: ChatId?,
+            userMessageId: MessageId?,
+            assistantMessageId: MessageId?,
+            emitEvent: suspend (InferenceEvent) -> Unit,
+        ): StreamedOpenAiResponse {
+            onResponseParams(params)
+            responseFailure?.let { throw it }
+            stubResponse.assistantMessageText.takeIf { it.isNotBlank() }?.let {
+                emitEvent(InferenceEvent.PartialResponse(it, ModelType.FAST))
+            }
+            return stubResponse
+        }
+
         override suspend fun streamChatCompletions(
             params: ChatCompletionCreateParams,
             chatId: ChatId?,
@@ -1111,6 +1270,53 @@ class BaseOpenAiSdkInferenceServiceTest {
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = ""
     }
+
+    @Test
+    fun `completeSingleTurn throws InferenceNetworkException when client throws IOException`() =
+        runTest {
+            val service =
+                object : TestableBaseOpenAiSdkInferenceService(
+                    client = client,
+                    modelId = "gpt-4o",
+                    provider = "OPENAI",
+                    modelType = ModelType.FAST,
+                    baseUrl = null,
+                    loggingPort = loggingPort,
+                ) {
+                    override suspend fun streamResponses(
+                        params: ResponseCreateParams,
+                        chatId: ChatId?,
+                        userMessageId: MessageId?,
+                        assistantMessageId: MessageId?,
+                        emitEvent: suspend (InferenceEvent) -> Unit,
+                    ): StreamedOpenAiResponse = throw java.io.IOException("Connection reset")
+
+                    override suspend fun streamChatCompletions(
+                        params: ChatCompletionCreateParams,
+                        chatId: ChatId?,
+                        userMessageId: MessageId?,
+                        assistantMessageId: MessageId?,
+                        emitEvent: suspend (InferenceEvent) -> Unit,
+                    ): StreamedOpenAiResponse = throw java.io.IOException("Connection reset")
+                }
+
+            val exception =
+                org.junit.jupiter.api.assertThrows<InferenceNetworkException> {
+                    service.completeSingleTurn(
+                        sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                        systemPrompt = "",
+                        availableTools = emptyList(),
+                        allowToolCall = false,
+                        onTextToken = {},
+                        onThinkingToken = {},
+                        options = GenerationOptions(reasoningBudget = 0),
+                    )
+                }
+
+            assertEquals("OPENAI", exception.provider)
+            assertEquals("[OPENAI] Network error: Connection reset", exception.message)
+            assertTrue(exception.cause is java.io.IOException)
+        }
 
     private fun createTempPngFile(): File {
         val file = File.createTempFile("test_image", ".png")

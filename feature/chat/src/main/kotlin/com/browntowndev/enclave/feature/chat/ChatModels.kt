@@ -8,6 +8,8 @@ import androidx.core.content.ContextCompat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.port.media.SpeechState
+import com.browntowndev.enclave.feature.chat.stats.ChatStatsSheetUiState
+import com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
 
 enum class ChatModeUi(
     @param:StringRes val displayNameRes: Int,
@@ -109,9 +111,13 @@ data class ChatUiState(
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
     val isPlayingTts: Boolean = false,
+    val isLoadingTts: Boolean = false,
+    val isPausedTts: Boolean = false,
     val shareState: ShareState = ShareState.Idle,
     val isReadOnly: Boolean = false,
     val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,
+    val responseStatsSheet: ResponseStatsSheetUiState = ResponseStatsSheetUiState(),
+    val chatStatsSheet: ChatStatsSheetUiState = ChatStatsSheetUiState(),
 )
 
 sealed interface ShareState {
@@ -133,6 +139,10 @@ sealed interface ShareState {
 sealed interface ShareUiEvent {
     data class OpenShareSheet(
         val shareUrl: String,
+    ) : ShareUiEvent
+
+    data class ImportedChat(
+        val chatId: com.browntowndev.enclave.domain.model.chat.ChatId,
     ) : ShareUiEvent
 }
 

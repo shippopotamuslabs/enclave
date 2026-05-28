@@ -156,7 +156,11 @@ class CompleteSingleTurnRawSubmitTest {
     private class RecordingEnvelopeParserPort : ToolEnvelopeParserPort {
         val parseCalls = mutableListOf<String>()
 
-        override fun parse(raw: String): ToolEnvelopeBatch {
+        override fun parse(
+            raw: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
+        ): ToolEnvelopeBatch {
             parseCalls.add(raw)
             error("MD-01/K-03: parse must not run in completeSingleTurn")
         }
@@ -164,9 +168,14 @@ class CompleteSingleTurnRawSubmitTest {
         override fun coerceProviderArguments(
             toolName: String,
             argsJson: String,
+            toolSemanticsJson: String,
+            toolCatalogJson: String,
         ) = ToolEnvelopeField(toolName, argsJson, false, emptyList())
 
-        override fun hasLocalToolContract(systemPrompt: String?) = false
+        override fun hasLocalToolContract(
+            systemPrompt: String?,
+            toolCatalogJson: String,
+        ) = false
 
         override fun buildToolResultMessage(resultJson: String) = resultJson
     }

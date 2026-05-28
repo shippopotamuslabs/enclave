@@ -6,23 +6,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -31,10 +24,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,20 +36,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
+import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
-import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
@@ -583,37 +570,44 @@ fun ContextConfiguration(
     supportsMaxTokens: Boolean,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        NeoOutlinedTextField(
-            modifier = Modifier.weight(1f),
-            value = config.contextWindow,
-            onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
-            readOnly = hasReadonlyContextWindow,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Context Window")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
-        )
-
-        if (supportsMaxTokens) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
             NeoOutlinedTextField(
-                modifier = Modifier.weight(1f),
-                value = config.maxTokens,
-                onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
-                enabled = !config.maxTokensDisabled,
+                value = config.contextWindow,
+                onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
+                readOnly = hasReadonlyContextWindow,
                 label = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Max Tokens")
+                        Text("Context Window")
                         Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                        PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
                     }
                 },
+                modifier = Modifier.fillMaxWidth().testTag("ApiContextWindowField"),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             )
+        }
+
+        if (supportsMaxTokens) {
+            Box(modifier = Modifier.weight(1f)) {
+                NeoOutlinedTextField(
+                    value = config.maxTokens,
+                    onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                    enabled = !config.maxTokensDisabled,
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Max Tokens")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("ApiMaxTokensField"),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                )
+            }
         }
     }
 }
@@ -621,6 +615,7 @@ fun ContextConfiguration(
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ParameterExclusionSection(
+    parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
@@ -638,41 +633,55 @@ fun ParameterExclusionSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            ParameterExclusionChip(
-                label = "Max Tokens",
-                selected = config.maxTokensDisabled,
-                onSelectedChange = { onConfigChange(config.copy(maxTokensDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Temperature",
-                selected = config.temperatureDisabled,
-                onSelectedChange = { onConfigChange(config.copy(temperatureDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Top P",
-                selected = config.topPDisabled,
-                onSelectedChange = { onConfigChange(config.copy(topPDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Top K",
-                selected = config.topKDisabled,
-                onSelectedChange = { onConfigChange(config.copy(topKDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Min P",
-                selected = config.minPDisabled,
-                onSelectedChange = { onConfigChange(config.copy(minPDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Freq. Penalty",
-                selected = config.frequencyPenaltyDisabled,
-                onSelectedChange = { onConfigChange(config.copy(frequencyPenaltyDisabled = it)) },
-            )
-            ParameterExclusionChip(
-                label = "Pres. Penalty",
-                selected = config.presencePenaltyDisabled,
-                onSelectedChange = { onConfigChange(config.copy(presencePenaltyDisabled = it)) },
-            )
+            if (parameterSupport.supportsMaxTokens) {
+                ParameterExclusionChip(
+                    label = "Max Tokens",
+                    selected = config.maxTokensDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(maxTokensDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTemperature) {
+                ParameterExclusionChip(
+                    label = "Temperature",
+                    selected = config.temperatureDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(temperatureDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTopP) {
+                ParameterExclusionChip(
+                    label = "Top P",
+                    selected = config.topPDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(topPDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsTopK) {
+                ParameterExclusionChip(
+                    label = "Top K",
+                    selected = config.topKDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(topKDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsMinP) {
+                ParameterExclusionChip(
+                    label = "Min P",
+                    selected = config.minPDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(minPDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsFrequencyPenalty) {
+                ParameterExclusionChip(
+                    label = "Freq. Penalty",
+                    selected = config.frequencyPenaltyDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(frequencyPenaltyDisabled = it)) },
+                )
+            }
+            if (parameterSupport.supportsPresencePenalty) {
+                ParameterExclusionChip(
+                    label = "Pres. Penalty",
+                    selected = config.presencePenaltyDisabled,
+                    onSelectedChange = { onConfigChange(config.copy(presencePenaltyDisabled = it)) },
+                )
+            }
         }
     }
 }
@@ -896,6 +905,15 @@ fun PresetConfigurationForm(
             )
         }
 
+        ConfigurationHeader("Telemetry pricing")
+
+        ApiModelPricingConfiguration(
+            provider = provider,
+            config = config,
+            selectedModelMetadata = selectedModelMetadata,
+            onConfigChange = onConfigChange,
+        )
+
         ConfigurationHeader("Context")
 
         ContextConfiguration(
@@ -914,6 +932,7 @@ fun PresetConfigurationForm(
         )
 
         ParameterExclusionSection(
+            parameterSupport = parameterSupport,
             config = config,
             onConfigChange = onConfigChange,
         )
