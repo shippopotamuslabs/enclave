@@ -7,6 +7,7 @@ enum class MemoryCategory {
     PREFERENCES,
     FACTS,
     PROJECT_CONTEXT,
+    PSYCH_PROFILE,
 }
 
 data class Memory(

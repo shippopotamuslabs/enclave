@@ -50,7 +50,7 @@ class DeviceEnvironmentRepository
          *
          * @return true if network is available (WiFi, cellular, or ethernet), false otherwise
          */
-        fun isNetworkAvailable(): Boolean {
+        override suspend fun isNetworkAvailable(): Boolean {
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
             return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&

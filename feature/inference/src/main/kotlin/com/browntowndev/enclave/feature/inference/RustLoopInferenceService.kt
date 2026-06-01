@@ -34,6 +34,8 @@ import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceProm
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
@@ -67,6 +69,17 @@ private const val TAG = "RustLoopInferenceService"
 private const val DEFAULT_CONTEXT_WINDOW = 128_000
 private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
 
+private val INTERNET_DEPENDENT_TOOL_NAMES =
+    setOf(
+        ToolDefinition.WEB_SEARCH.name,
+        ToolDefinition.WEB_EXTRACT.name,
+        ToolDefinition.X_SEARCH.name,
+        ToolDefinition.X_GET_THREAD.name,
+        ToolDefinition.X_TRENDING.name,
+        ToolDefinition.X_USER_TWEETS.name,
+        ToolDefinition.X_MENTION_SEARCH.name,
+    )
+
 /**
  * Wraps a [RustCompatibleInferenceService] (provider model turn) and [AgentLoopPort]
  * (Rust session engine) into a single [LlmInferencePort].
@@ -88,6 +101,7 @@ class RustLoopInferenceService(
     private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     private val telemetryEventPort: TelemetryEventPort? = null,
+    private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
 ) : RustCompatibleInferenceService {
     override val baseUrl: String?
         get() = inner.baseUrl
@@ -629,6 +643,15 @@ class RustLoopInferenceService(
         if (call.name == ToolDefinition.READ_CONTEXT_REFERENCE.name) {
             return handleReadContextReference(call)
         }
+        if (call.name in INTERNET_DEPENDENT_TOOL_NAMES && !deviceEnvironmentRepository.isNetworkAvailable()) {
+            return AgentToolResult(
+                callId = call.callId,
+                resultJson = "{\"error\":\"network_unavailable\"," +
+                    "\"message\":\"No internet access. Web search and X tools are currently disabled.\"}",
+                truncated = false,
+                softFailure = true,
+            )
+        }
         return try {
             val request =
                 ToolCallRequest(
@@ -753,7 +776,7 @@ class RustLoopInferenceService(
             }
         }
 
-    private fun buildContextSidecars(
+    private suspend fun buildContextSidecars(
         contextReferences: List<AgentContextReference>,
         stateLedgerJson: String?,
         toolContextIndexJson: String?,
@@ -765,13 +788,25 @@ class RustLoopInferenceService(
             toolContextIndexJson?.let(ContextSidecarCompaction::compactToolContextIndexJson)
         val compactFileIndex =
             fileContextIndexJson?.let(ContextSidecarCompaction::compactFileContextIndexJson)
+
+        val isNetworkAvailable = deviceEnvironmentRepository.isNetworkAvailable()
+        val networkStatus = if (isNetworkAvailable) {
+            "Internet status: Online"
+        } else {
+            "Internet status: Offline. The following tools are currently disabled due to no internet access: " +
+                "web_search, web_extract, search_x_recent, x_get_thread, x_trending, " +
+                "x_user_tweets, x_mention_search. Do not attempt to use them."
+        }
+
         val jsonSidecars = listOfNotNull(compactLedger, compactToolIndex, compactFileIndex)
-        if (contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()) {
+        val isAllEmpty = contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()
+        if (isAllEmpty && networkStatus.isBlank()) {
             return null
         }
 
         return buildString {
             appendLine("Context management sidecars:")
+            appendLine(networkStatus)
             if (contextReferences.isNotEmpty()) {
                 appendLine("References:")
                 contextReferences.forEach { reference ->

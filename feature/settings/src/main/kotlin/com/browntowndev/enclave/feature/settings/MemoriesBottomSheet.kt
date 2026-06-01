@@ -361,6 +361,7 @@ private val MemoryCategory.displayName: String
             MemoryCategory.PREFERENCES -> "Preferences"
             MemoryCategory.FACTS -> "Facts"
             MemoryCategory.PROJECT_CONTEXT -> "Project Context"
+            MemoryCategory.PSYCH_PROFILE -> "Psychological Profile"
         }
 
 @Preview(showBackground = true)

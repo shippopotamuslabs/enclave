@@ -18,6 +18,7 @@ object MemoryRetrievalPolicy {
         setOf(
             MemoryCategory.CORE_IDENTITY,
             MemoryCategory.PREFERENCES,
+            MemoryCategory.PSYCH_PROFILE,
         )
 
     /**

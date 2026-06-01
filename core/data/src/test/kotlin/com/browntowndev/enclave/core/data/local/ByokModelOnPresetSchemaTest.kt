@@ -35,7 +35,7 @@ class ByokModelOnPresetSchemaTest {
 
     @Test
     fun `SCN-SCHEMA-001 Credentials Table Without Model Columns`() {
-        assertEquals(5, database.openHelper.readableDatabase.version)
+        assertEquals(8, database.openHelper.readableDatabase.version)
         val columns = tableColumns("api_credentials")
         assertFalse("model_id" in columns)
         assertFalse("is_multimodal" in columns)

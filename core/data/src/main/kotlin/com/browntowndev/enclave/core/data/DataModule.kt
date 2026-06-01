@@ -37,6 +37,9 @@ import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageCommittedInferencePromptDao
+import com.browntowndev.enclave.core.data.local.ProfileCorpusDao
+import com.browntowndev.enclave.core.data.local.ProfileAnalysisRunDao
+import com.browntowndev.enclave.core.data.local.ProfileFindingsDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
@@ -289,6 +292,15 @@ object DataModule {
     @Provides
     fun provideMessageCommittedInferencePromptDao(database: EnclaveDatabase): MessageCommittedInferencePromptDao =
         database.messageCommittedInferencePromptDao()
+
+    @Provides
+    fun provideProfileCorpusDao(database: EnclaveDatabase): ProfileCorpusDao = database.profileCorpusDao()
+
+    @Provides
+    fun provideProfileFindingsDao(database: EnclaveDatabase): ProfileFindingsDao = database.profileFindingsDao()
+
+    @Provides
+    fun provideProfileAnalysisRunDao(database: EnclaveDatabase): ProfileAnalysisRunDao = database.profileAnalysisRunDao()
 
     @Provides
     @Singleton
@@ -594,4 +606,22 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCommittedInferencePromptPort(impl: RoomCommittedInferencePromptStore): CommittedInferencePromptPort
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileExportIngestionPort(
+        impl: com.browntowndev.enclave.core.data.profile.ProfileExportIngestionService,
+    ): com.browntowndev.enclave.domain.port.profile.ProfileExportIngestionPort
+
+    @Binds
+    @Singleton
+    abstract fun bindConversationCorpusScorerPort(
+        impl: com.browntowndev.enclave.core.data.profile.ProfileCorpusScorerImpl,
+    ): com.browntowndev.enclave.domain.port.profile.ConversationCorpusScorerPort
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileAnalysisPort(
+        impl: com.browntowndev.enclave.core.data.profile.analysis.ProfileAnalysisManager,
+    ): com.browntowndev.enclave.domain.port.profile.ProfileAnalysisPort
 }

@@ -195,6 +195,84 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("Mock X Search Result Data"))
     }
 
+    // Phase 0 — PSYCH_PROFILE injection
+
+    @Test
+    fun `PP-01 compose renders PSYCHOLOGICAL PROFILE section when profile memory present`() {
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.PSYCH_PROFILE, content = "User avoids confrontation in disagreements."),
+            )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = memories,
+            )
+
+        assertTrue(composed.contains("# PSYCHOLOGICAL PROFILE:"))
+        assertTrue(composed.contains("User avoids confrontation in disagreements."))
+    }
+
+    @Test
+    fun `PP-02 compose omits PSYCHOLOGICAL PROFILE section when no profile memory present`() {
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.CORE_IDENTITY, content = "Software engineer."),
+            )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = memories,
+            )
+
+        assertFalse(composed.contains("# PSYCHOLOGICAL PROFILE:"))
+    }
+
+    @Test
+    fun `PP-03 compose renders PSYCH_PROFILE section after ABOUT THE USER block`() {
+        val memories =
+            listOf(
+                Memory(category = MemoryCategory.CORE_IDENTITY, content = "Developer."),
+                Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Tends toward perfectionism."),
+            )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = memories,
+            )
+
+        val aboutIndex = composed.indexOf("# ABOUT THE USER:")
+        val profileIndex = composed.indexOf("# PSYCHOLOGICAL PROFILE:")
+        assertTrue(aboutIndex >= 0)
+        assertTrue(profileIndex > aboutIndex)
+    }
+
+    @Test
+    fun `PP-04 PSYCH_PROFILE content appears in stable compose output not volatile context`() {
+        // The retrieval layer already excludes PSYCH_PROFILE (MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES).
+        // This test verifies the stable system prompt is the correct injection path.
+        val profileMemory = Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Avoids vulnerability.")
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Base",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = listOf(profileMemory),
+            )
+        assertTrue(composed.contains("Avoids vulnerability."))
+
+        // composeVolatileTurnContext receives only retrieved memories (FACTS/PROJECT_CONTEXT)
+        // — PSYCH_PROFILE never reaches it. Volatile context with no retrieved memories is null.
+        val volatile = composer.composeVolatileTurnContext(retrievedMemories = emptyList())
+        assertTrue(volatile == null || !volatile.contains("Avoids vulnerability."))
+    }
+
     private fun catalogEntry(
         name: String,
         disclosureMode: ToolDisclosureMode,
