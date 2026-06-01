@@ -3,11 +3,13 @@ package com.browntowndev.enclave.core.data.remote.firestore
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
+import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
@@ -29,6 +31,11 @@ internal class FirestoreSyncContext(
     val embeddingCoordinator: EmbeddingRegenerationCoordinator,
     val userIdProvider: () -> String?,
     val purgeInProgress: AtomicBoolean,
+    // Both optional in the constructor for test factories that don't exercise the
+    // search-tool-settings sync path. Production wiring always supplies them via
+    // `DataModule`.
+    val searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue? = null,
+    val settingsRepository: SettingsRepositoryImpl? = null,
 ) {
     companion object {
         const val TAG = "FirestoreDataSource"

@@ -6,7 +6,9 @@ import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
 import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.FirestoreSyncDependenciesFacade
+import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
@@ -125,6 +127,12 @@ class FirestoreSyncDocumentCacheTest {
                 syncEventApplier = syncEventApplier,
                 syncStateStore = syncStateStore,
                 documentCache = documentCache,
+                searchToolSettingsSyncQueue = SearchToolSettingsSyncQueue(
+                    dataStore = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
+                        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
+                    ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
+                ),
+                settingsRepository = mockk<SettingsRepositoryImpl>(relaxed = true),
             )
         return FirestoreDataSource(facade, externalScope)
     }
