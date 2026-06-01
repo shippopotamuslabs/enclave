@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
@@ -275,11 +276,12 @@ class MultimodalViewModel
         }
 
         fun onMediaTypeChange(type: MediaCapability) {
+            val currentRefUri = (_settings.value as? VisualGenerationSettings)?.referenceImageUri
             _mediaType.value = type
             _settings.value =
                 when (type) {
-                    MediaCapability.IMAGE -> ImageGenerationSettings()
-                    MediaCapability.VIDEO -> VideoGenerationSettings()
+                    MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = currentRefUri)
+                    MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = currentRefUri)
                     MediaCapability.MUSIC -> MusicGenerationSettings()
                 }
             _selectedTemplateId.value = null

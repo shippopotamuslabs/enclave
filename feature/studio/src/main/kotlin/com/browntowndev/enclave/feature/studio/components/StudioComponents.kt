@@ -450,7 +450,7 @@ private fun VideoSettingsSection(
             if (caps.supportedVideoDurations.isNotEmpty()) {
                 SettingRow(
                     label = "Duration",
-                    controlFullWidth = caps.supportedVideoDurations.size > 2,
+                    controlFullWidth = true,
                 ) {
                     PillSelector(
                         selected = "${settings.videoDuration}s",
@@ -459,12 +459,7 @@ private fun VideoSettingsSection(
                             val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
                             onUpdateSettings(settings.copy(videoDuration = duration))
                         },
-                        modifier =
-                            if (caps.supportedVideoDurations.size > 2) {
-                                Modifier.fillMaxWidth()
-                            } else {
-                                Modifier
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -474,7 +469,7 @@ private fun VideoSettingsSection(
             if (caps.supportedVideoResolutions.isNotEmpty()) {
                 SettingRow(
                     label = "Resolution",
-                    controlFullWidth = caps.supportedVideoResolutions.size > 2,
+                    controlFullWidth = true,
                 ) {
                     PillSelector(
                         selected = settings.videoResolution,
@@ -482,12 +477,7 @@ private fun VideoSettingsSection(
                         onSelected = { res ->
                             onUpdateSettings(settings.copy(videoResolution = res))
                         },
-                        modifier =
-                            if (caps.supportedVideoResolutions.size > 2) {
-                                Modifier.fillMaxWidth()
-                            } else {
-                                Modifier
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
