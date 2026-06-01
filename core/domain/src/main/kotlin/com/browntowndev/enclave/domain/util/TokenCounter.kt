@@ -41,6 +41,6 @@ object JTokkitTokenCounter : TokenCounter {
                 cl100kBaseEncoding
             }
 
-        return encoding.countTokens(text)
+        return encoding.countTokensOrdinary(text)
     }
 }

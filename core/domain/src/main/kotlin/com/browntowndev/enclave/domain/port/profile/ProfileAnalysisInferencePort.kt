@@ -26,4 +26,12 @@ interface ProfileAnalysisInferencePort {
         tools: List<ToolDefinition>,
         onTextToken: suspend (String) -> Unit = {},
     ): AgentModelTurnResult
+
+    /**
+     * Returns the context-window size in tokens for [configId].
+     * Used by the extraction pass to size conversation batches so a single turn never
+     * overflows the model's context. Falls back to a conservative default if the
+     * configuration cannot be resolved.
+     */
+    suspend fun getContextWindowTokens(configId: ApiModelConfigurationId): Int
 }

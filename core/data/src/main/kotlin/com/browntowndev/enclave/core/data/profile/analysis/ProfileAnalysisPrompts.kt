@@ -90,5 +90,17 @@ Then write your FINAL, revised profile using the same six-section structure. Cal
 The final profile must be honest, specific, and immediately useful to any model that reads it at the start of a conversation with this person.
     """.trimIndent()
 
+    val EXTRACTION_BATCH = """
+You are extracting psychological evidence from a set of AI conversations.
+
+Look for: pushback or disagreement with the AI, vulnerability or self-disclosure, emotional moments, recurring preoccupations, reaction to challenge or being wrong, avoidance or deflection, how they frame problems (locus of control), relationship to uncertainty. Cross-reference patterns you notice across multiple conversations in this batch.
+
+For each noteworthy behavioural moment: call record_finding with category=EVIDENCE. Keep each finding under 80 words — paraphrase rather than quoting verbatim. Note which conversation it comes from. Be specific — one finding per distinct moment.
+
+Skip conversations that reveal nothing about the user's psychology (e.g. purely technical lookups with no personal signal).
+
+Do not be flattering. Do not infer what cannot be evidenced.
+    """.trimIndent()
+
     val ALL = listOf(EXTRACTION, CLUSTERING, SYNTHESIS, CRITIQUE)
 }
