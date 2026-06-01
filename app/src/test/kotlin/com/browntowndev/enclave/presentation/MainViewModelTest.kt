@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.presentation
 
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
+import com.browntowndev.enclave.domain.security.VaultKeystoreAliases
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
@@ -43,6 +44,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -269,6 +271,7 @@ class MainViewModelTest {
 
             val after = viewModel.startupState.value as AppStartupState.Ready
             assertTrue(after.isBiometricUnlockPossible)
+            assertFalse(after.isVaultLocked)
         }
 
     @Test
@@ -321,7 +324,7 @@ class MainViewModelTest {
 
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertTrue(state.isBiometricEnrollmentPending)
-            assertFalse(state.isVaultLocked)
+            assertTrue(state.isVaultLocked)
             coVerifyOrder {
                 detectVaultReconciliationStateUseCase("password")
                 startCloudSyncListeningUseCase(eq(true), any())
@@ -386,6 +389,58 @@ class MainViewModelTest {
             advanceUntilIdle()
 
             io.mockk.coVerify(exactly = 0) { biometricManager.storeSecureBytesWithCipher(any(), any(), any()) }
+        }
+
+    @Test
+    fun `cancelBiometricEnrollment clears pending and unlocks vault`() =
+        runTest(testDispatcher) {
+            every { cryptoManager.hasCachedKey() } returns false
+            every { biometricPort.isBiometricAvailable() } returns true
+            every { biometricPort.hasSecureValue(any()) } returns false
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            stubAuthenticatedExistingVaultUnlock()
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            viewModel.unlockVault("password", enableBiometric = true)
+            advanceUntilIdle()
+
+            val pendingState = viewModel.startupState.value as AppStartupState.Ready
+            assertTrue(pendingState.isBiometricEnrollmentPending)
+            assertTrue(pendingState.isVaultLocked)
+
+            viewModel.cancelBiometricEnrollment()
+            advanceUntilIdle()
+
+            val finalState = viewModel.startupState.value as AppStartupState.Ready
+            assertFalse(finalState.isBiometricEnrollmentPending)
+            assertFalse(finalState.isVaultLocked)
+        }
+
+    @Test
+    fun `getBiometricDecryptCipher invalidates stale biometric when cipher is null but has secure value`() =
+        runTest(testDispatcher) {
+            every { cryptoManager.hasCachedKey() } returns false
+            every { biometricPort.isBiometricAvailable() } returns true
+            every { biometricPort.hasSecureValue(any()) } returns true
+            every { biometricManager.getDecryptCipher(any()) } returns null
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val before = viewModel.startupState.value as AppStartupState.Ready
+            assertTrue(before.isBiometricUnlockPossible)
+
+            val cipher = viewModel.getBiometricDecryptCipher()
+            assertNull(cipher)
+            advanceUntilIdle()
+
+            verify { biometricPort.clearSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY) }
+            val after = viewModel.startupState.value as AppStartupState.Ready
+            assertFalse(after.isBiometricUnlockPossible)
+            assertTrue(after.isVaultLocked)
+            assertEquals("Biometric key invalidated. Enter your vault password.", after.vaultErrorMessage)
         }
 
     @Test
