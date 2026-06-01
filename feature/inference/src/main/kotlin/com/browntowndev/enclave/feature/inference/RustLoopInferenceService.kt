@@ -110,6 +110,7 @@ class RustLoopInferenceService(
     private val disclosureResolver = ToolSchemaDisclosureResolver()
     private var lastSeenRevision = 0L
     private var latestProviderTranscript: List<ChatMessage> = emptyList()
+    private var hasBeenOfflineInSession = false
 
     override fun sendPrompt(
         prompt: String,
@@ -398,6 +399,7 @@ class RustLoopInferenceService(
         conversationHistory.addAll(messages)
         latestProviderTranscript = emptyList()
         lastSeenRevision = 0L
+        hasBeenOfflineInSession = false
         inner.setHistory(messages)
     }
 
@@ -405,6 +407,7 @@ class RustLoopInferenceService(
         conversationHistory.clear()
         latestProviderTranscript = emptyList()
         lastSeenRevision = 0L
+        hasBeenOfflineInSession = false
         inner.closeSession()
     }
 
@@ -791,8 +794,13 @@ class RustLoopInferenceService(
 
         val isNetworkAvailable = deviceEnvironmentRepository.isNetworkAvailable()
         val networkStatus = if (isNetworkAvailable) {
-            "Internet status: Online"
+            if (hasBeenOfflineInSession) {
+                "Internet status: Online. Search and X tools are now re-enabled. You may use them if needed."
+            } else {
+                ""
+            }
         } else {
+            hasBeenOfflineInSession = true
             "Internet status: Offline. The following tools are currently disabled due to no internet access: " +
                 "web_search, web_extract, search_x_recent, x_get_thread, x_trending, " +
                 "x_user_tweets, x_mention_search. Do not attempt to use them."
@@ -806,7 +814,9 @@ class RustLoopInferenceService(
 
         return buildString {
             appendLine("Context management sidecars:")
-            appendLine(networkStatus)
+            if (networkStatus.isNotBlank()) {
+                appendLine(networkStatus)
+            }
             if (contextReferences.isNotEmpty()) {
                 appendLine("References:")
                 contextReferences.forEach { reference ->
