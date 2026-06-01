@@ -143,7 +143,12 @@ fun UniversalInputBar(
                 val density = LocalDensity.current
                 var attachmentHeight by remember { mutableStateOf(0.dp) }
                 var inputHeight by remember { mutableStateOf(0.dp) }
+                val inputScrollState = rememberScrollState()
                 val innerTopHeight by remember { derivedStateOf { attachmentHeight + inputHeight } }
+
+                LaunchedEffect(inputHeight) {
+                    inputScrollState.scrollTo(Int.MAX_VALUE)
+                }
 
                 val expandFraction by animateFloatAsState(
                     targetValue = if (isExpanded) 1f else 0f,
@@ -209,7 +214,7 @@ fun UniversalInputBar(
                                 Modifier
                                     .fillMaxWidth()
                                     .weight(1f, fill = false)
-                                    .verticalScroll(rememberScrollState()),
+                                    .verticalScroll(inputScrollState),
                         ) {
                             Box(modifier = Modifier.onSizeChanged { inputHeight = with(density) { it.height.toDp() } }) {
                                 Row(
