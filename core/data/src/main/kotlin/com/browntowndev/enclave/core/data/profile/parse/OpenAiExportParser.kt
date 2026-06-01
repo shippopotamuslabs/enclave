@@ -10,11 +10,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Parses OpenAI's `conversations.json` export format.
@@ -134,15 +132,15 @@ class OpenAiExportParser
         return when (element) {
             is JsonObject -> {
                 when (element.stringOrNull("content_type")) {
-                    "text" -> element["parts"]?.jsonArray?.joinToString("") { part ->
+                    "text" -> (element["parts"] as? JsonArray)?.joinToString("") { part ->
                         when (part) {
-                            is kotlinx.serialization.json.JsonPrimitive -> part.contentOrNull ?: ""
+                            is JsonPrimitive -> part.contentOrNull ?: ""
                             else -> ""
                         }
                     }
-                    "multimodal_text" -> element["parts"]?.jsonArray?.joinToString("") { part ->
+                    "multimodal_text" -> (element["parts"] as? JsonArray)?.joinToString("") { part ->
                         when (part) {
-                            is kotlinx.serialization.json.JsonPrimitive -> part.contentOrNull ?: ""
+                            is JsonPrimitive -> part.contentOrNull ?: ""
                             is JsonObject -> part.stringOrNull("text") ?: ""
                             else -> ""
                         }
@@ -151,7 +149,7 @@ class OpenAiExportParser
                     else -> element.stringOrNull("text") ?: element.stringOrNull("content")
                 }
             }
-            is kotlinx.serialization.json.JsonPrimitive -> element.contentOrNull
+            is JsonPrimitive -> element.contentOrNull
             else -> null
         }
     }
@@ -167,10 +165,10 @@ class OpenAiExportParser
 }
 
 private fun JsonObject.stringOrNull(key: String): String? =
-    this[key]?.jsonPrimitive?.contentOrNull
+    (this[key] as? JsonPrimitive)?.contentOrNull
 
 private fun JsonObject.doubleOrNull(key: String): Double? =
-    this[key]?.jsonPrimitive?.doubleOrNull
+    (this[key] as? JsonPrimitive)?.doubleOrNull
 
 private fun String.toMessageRole() = when (lowercase()) {
     "user" -> MessageRole.USER

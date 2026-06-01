@@ -8,10 +8,8 @@ import com.browntowndev.enclave.domain.model.profile.ParseHealthReport
 import com.browntowndev.enclave.domain.port.profile.ConversationExportParser
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Last-resort parser for JSON exports with no matching provider parser.
@@ -120,7 +118,7 @@ class GenericFallbackParser
 }
 
 private fun JsonObject.stringOrNull(key: String): String? =
-    this[key]?.jsonPrimitive?.contentOrNull
+    (this[key] as? JsonPrimitive)?.contentOrNull
 
 private fun String.toGenericRole() = when (lowercase()) {
     "user", "human", "person" -> MessageRole.USER

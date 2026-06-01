@@ -8,10 +8,8 @@ import com.browntowndev.enclave.domain.model.profile.ParseHealthReport
 import com.browntowndev.enclave.domain.port.profile.ConversationExportParser
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Parses Anthropic's `conversations.json` export format.
@@ -79,7 +77,7 @@ class AnthropicExportParser
         val createdAt = obj.stringOrNull("created_at")?.parseIso8601Ms()
 
         // Multi-path: chat_messages, messages
-        val messagesArray = (obj["chat_messages"] ?: obj["messages"])?.jsonArray
+        val messagesArray = (obj["chat_messages"] ?: obj["messages"]) as? JsonArray
             ?: return null
 
         val messages = messagesArray.mapIndexedNotNull { index, msgElement ->
@@ -116,7 +114,7 @@ class AnthropicExportParser
 
     private fun extractContentBlocks(obj: JsonObject): String? {
         // Newer Anthropic format may use content array with {type, text} blocks
-        val blocks = obj["content"]?.jsonArray ?: return null
+        val blocks = obj["content"] as? JsonArray ?: return null
         return blocks.mapNotNull { block ->
             (block as? JsonObject)?.let {
                 if (it.stringOrNull("type") == "text") it.stringOrNull("text") else null
@@ -135,7 +133,7 @@ class AnthropicExportParser
 }
 
 private fun JsonObject.stringOrNull(key: String): String? =
-    this[key]?.jsonPrimitive?.contentOrNull
+    (this[key] as? JsonPrimitive)?.contentOrNull
 
 private fun String.anthropicToRole() = when (lowercase()) {
     "human" -> MessageRole.USER
