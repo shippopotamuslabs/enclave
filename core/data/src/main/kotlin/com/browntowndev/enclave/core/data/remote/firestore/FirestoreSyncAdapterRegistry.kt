@@ -16,6 +16,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageFileS
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageInferenceTelemetrySyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageTranscriptSegmentSyncHandler
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioAlbumSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioMediaSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.TtsProviderSyncHandler
@@ -49,5 +50,6 @@ internal class FirestoreSyncAdapterRegistry(
             StudioAlbumSyncHandler(ctx),
             StudioMediaSyncHandler(ctx),
             DocumentSyncHandler(ctx),
+            SearchToolSettingsSyncHandler(ctx),
         )
 }

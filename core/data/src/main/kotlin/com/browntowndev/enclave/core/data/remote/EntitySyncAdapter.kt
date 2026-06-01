@@ -5,6 +5,15 @@ import com.google.firebase.firestore.DocumentSnapshot
 internal interface EntitySyncAdapter<RoomT> {
     val collectionPath: String
 
+    /**
+     * Atomically reserve any locally-pending writes for upload.
+     *
+     * Adapters whose pending state lives in a separate DataStore queue
+     * (currently only the search-tool-settings queue) may capture the claim
+     * result in a private field and surface it via [getClaimedForSync] —
+     * the return value of this method is `Unit` to keep the existing
+     * 20-adapter contract stable.
+     */
     suspend fun claimPending()
 
     suspend fun getClaimedForSync(): List<RoomT>

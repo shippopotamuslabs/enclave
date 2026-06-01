@@ -411,6 +411,17 @@ object DataModule {
     @Provides
     @Singleton
     fun provideSensitiveFieldCatalog(): SensitiveFieldCatalog = StaticSensitiveFieldCatalog()
+
+    @Provides
+    @Singleton
+    internal fun provideSearchToolSettingsSyncQueue(
+        dataStore: DataStore<Preferences>,
+        @ApplicationScope externalScope: CoroutineScope,
+    ): com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue =
+        com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue(
+            dataStore = dataStore,
+            syncScope = externalScope,
+        )
 }
 
 @Module

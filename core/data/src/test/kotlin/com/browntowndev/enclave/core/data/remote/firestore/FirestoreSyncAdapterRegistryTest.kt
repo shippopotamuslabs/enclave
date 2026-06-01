@@ -22,8 +22,10 @@ class FirestoreSyncAdapterRegistryTest {
         val ctx = createMinimalContext()
         val registry = FirestoreSyncAdapterRegistry(ctx)
 
-        assertEquals(21, registry.adapters.size)
-        assertTrue(registry.adapters.any { it is ChatSyncHandler })
+        // 22 = the production handler list after `SearchToolSettingsSyncHandler` is
+        // registered (21 prior + 1 new). See `FirestoreSyncDependencyGraphTest` for the
+        // matching assertion on the graph side.
+        assertEquals(22, registry.adapters.size)
         assertTrue(registry.adapters.any { it.collectionPath == "memories" })
         assertTrue(registry.adapters.any { it.collectionPath == "api_keys" })
     }
@@ -36,6 +38,18 @@ class FirestoreSyncAdapterRegistryTest {
         val paths = registry.adapters.map(EntitySyncAdapter<*>::collectionPath)
 
         assertEquals(paths.size, paths.toSet().size)
+    }
+
+    @Test
+    @DisplayName("S-HANDLER-001 registry registers the search_tool_settings handler")
+    fun `S-HANDLER-001 registry registers a handler for the search_tool_settings collection`() {
+        val ctx = createMinimalContext()
+        val registry = FirestoreSyncAdapterRegistry(ctx)
+
+        assertTrue(
+            registry.adapters.any { it.collectionPath == "search_tool_settings" },
+            "FirestoreSyncAdapterRegistry must register a handler for the search_tool_settings collection",
+        )
     }
 
     private fun createMinimalContext(): FirestoreSyncContext {
