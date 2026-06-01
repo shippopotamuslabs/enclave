@@ -145,5 +145,6 @@ fun EnclaveNavGraph(
             actions = studioActions,
         )
         settingsNavGraph(navController)
+        profileBuilderNavGraph(navController)
     }
 }

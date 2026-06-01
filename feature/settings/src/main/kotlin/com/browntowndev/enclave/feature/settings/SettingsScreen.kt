@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Feedback
@@ -79,6 +80,7 @@ import com.browntowndev.enclave.feature.settings.usage.UsageSpendBottomSheet
 fun SettingsScreen(
     uiState: SettingsUiState,
     onCloseClick: () -> Unit,
+    onNavigateToProfileBuilder: () -> Unit = {},
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
@@ -289,6 +291,12 @@ fun SettingsScreen(
             item {
                 NeoSectionHeader(text = "Data & Privacy")
                 NeoSettingsSection {
+                    NeoNavRow(
+                        title = "Psychological Profile",
+                        subtitle = "Build a profile from your AI conversation exports",
+                        icon = Icons.Default.Psychology,
+                        onClick = onNavigateToProfileBuilder,
+                    )
                     NeoNavRow(
                         title = "Usage & Spend",
                         icon = Icons.Default.BarChart,

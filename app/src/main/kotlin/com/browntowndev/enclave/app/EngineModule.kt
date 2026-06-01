@@ -4,11 +4,13 @@ import android.content.Context
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.profile.ProfileAnalysisInferencePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.ConversationManager
 import com.browntowndev.enclave.feature.inference.ConversationManagerImpl
 import com.browntowndev.enclave.feature.inference.InferenceFactoryImpl
+import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -28,6 +30,10 @@ abstract class EngineModule {
     @Binds
     @Singleton
     abstract fun bindInferenceFactory(impl: InferenceFactoryImpl): InferenceFactoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindProfileAnalysisInference(impl: ProfileAnalysisInferenceAdapter): ProfileAnalysisInferencePort
 
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry

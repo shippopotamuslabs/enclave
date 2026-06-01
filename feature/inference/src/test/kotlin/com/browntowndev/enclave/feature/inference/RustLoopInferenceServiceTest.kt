@@ -34,6 +34,8 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferenceTranscriptStore
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
@@ -1070,6 +1072,63 @@ class RustLoopInferenceServiceTest {
             assertEquals("final answer", committed[1].content)
         }
 
+    @Test
+    fun `web search and X tools are marked disabled in sidecars when offline and fail fast`() =
+        runTest {
+            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
+            coEvery { deviceEnvironment.isNetworkAvailable() } returns false
+
+            val innerService = RecordingRustCompatibleService(
+                responses = listOf(
+                    AgentModelTurnResult(
+                        assistantText = "let's search",
+                        toolCalls = emptyList(),
+                        finishReason = AgentFinishReason.Stop,
+                    )
+                )
+            )
+
+            val port = CapturingAgentLoopPort { host ->
+                // 1. Verify buildContextSidecars appends the Offline status
+                host.completeModelTurn(
+                    sessionMessages = emptyList(),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = true,
+                )
+
+                // 2. Verify executeTools fails fast for web_search
+                val calls = listOf(
+                    AgentToolCall("call-1", "web_search", """{"query":"weather"}""")
+                )
+                val toolResults = host.executeTools(calls)
+                val capturedToolResult = toolResults.firstOrNull()
+
+                assertNotNull(capturedToolResult)
+                assertTrue(capturedToolResult!!.softFailure)
+                assertTrue(capturedToolResult.resultJson.contains("network_unavailable"))
+
+                send(AgentLoopEvent.Finished)
+            }
+
+            val service = createService(
+                agentLoopPort = port,
+                inner = innerService,
+                toolExecutor = object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+                        throw AssertionError("Should not execute tool when offline")
+                    }
+                },
+                deviceEnvironmentRepository = deviceEnvironment,
+            )
+
+            service.sendPrompt("start").toList()
+
+            assertNotNull(innerService.lastContextSidecars)
+            assertTrue(innerService.lastContextSidecars!!.contains("Internet status: Offline"))
+            assertTrue(innerService.lastContextSidecars!!.contains("disabled due to no internet access: web_search"))
+        }
+
     private fun createService(
         agentLoopPort: AgentLoopPort,
         inner: RustCompatibleInferenceService = RecordingRustCompatibleService(),
@@ -1087,6 +1146,7 @@ class RustLoopInferenceServiceTest {
             resolveCompactionSummaryModel(fastConfig = null),
         committedInferenceTranscripts: InMemoryCommittedInferenceTranscriptStore =
             InMemoryCommittedInferenceTranscriptStore(),
+        deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -1099,6 +1159,7 @@ class RustLoopInferenceServiceTest {
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferenceTranscripts = committedInferenceTranscripts,
+            deviceEnvironmentRepository = deviceEnvironmentRepository,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
@@ -1207,6 +1268,13 @@ class RustLoopInferenceServiceTest {
             block: suspend (LlmInferencePort) -> T,
         ): T {
             requestedModelType = modelType
+            return block(service)
+        }
+
+        override suspend fun <T> withRawApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T {
             return block(service)
         }
     }

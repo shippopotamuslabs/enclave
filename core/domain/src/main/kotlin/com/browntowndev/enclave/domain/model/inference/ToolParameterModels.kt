@@ -200,3 +200,52 @@ data class XMentionSearchParams(
     @ToolParam(description = "Optional pagination token to retrieve subsequent pages.", required = false)
     val next_token: String? = null,
 ) : ToolParameters
+
+// ── Profile analysis tools (used only in the psychoanalysis session, never in chat) ──────────
+
+@Serializable
+data class ListConversationsParams(
+    @ToolParam(description = "Page number (1-based).", required = false)
+    val page: Int = 1,
+    @ToolParam(description = "Number of conversations per page (max 50).", required = false)
+    val page_size: Int = 20,
+    @ToolParam(description = "Only return conversations with signal_score >= this value.", required = false)
+    val min_score: Float? = null,
+) : ToolParameters
+
+@Serializable
+data class ReadConversationParams(
+    @ToolParam(description = "Internal conversation ID from list_conversations.")
+    val conversation_id: String,
+    @ToolParam(description = "Page of messages to retrieve (1-based, 15 messages per page).", required = false)
+    val page: Int = 1,
+) : ToolParameters
+
+@Serializable
+data class SearchConversationsParams(
+    @ToolParam(description = "Keyword or phrase to search across conversation titles and user messages.")
+    val query: String,
+    @ToolParam(description = "Maximum number of results to return.", required = false)
+    val limit: Int = 5,
+) : ToolParameters
+
+enum class FindingCategory {
+    EVIDENCE,
+    PATTERN,
+    SYNTHESIS,
+    CRITIQUE,
+}
+
+@Serializable
+data class RecordFindingParams(
+    @ToolParam(description = "The finding content to record.")
+    val content: String,
+    @ToolParam(description = "Category: EVIDENCE, PATTERN, SYNTHESIS, or CRITIQUE.", required = false)
+    val category: FindingCategory = FindingCategory.EVIDENCE,
+) : ToolParameters
+
+@Serializable
+data class ReadFindingsParams(
+    @ToolParam(description = "Optional category filter: EVIDENCE, PATTERN, SYNTHESIS, or CRITIQUE.", required = false)
+    val category: FindingCategory? = null,
+) : ToolParameters
