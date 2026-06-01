@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.profile.analysis
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -12,6 +13,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.browntowndev.enclave.core.data.R
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import dagger.assisted.Assisted
@@ -53,18 +55,17 @@ class ProfileAnalysisWorker
             }
         }
 
-        private fun handleRetry(e: Exception): Result {
-            return if (runAttemptCount < 3) {
+        private fun handleRetry(e: Exception): Result =
+            if (runAttemptCount < 3) {
                 Result.retry()
             } else {
                 Result.failure(
                     workDataOf(
                         KEY_STATUS to "failed",
-                        KEY_ERROR to "Max retries exceeded: ${e.message}"
-                    )
+                        KEY_ERROR to "Max retries exceeded: ${e.message}",
+                    ),
                 )
             }
-        }
 
         private fun ensureNotificationChannel() {
             val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -76,13 +77,7 @@ class ProfileAnalysisWorker
         }
 
         private fun buildForegroundInfo(text: String): ForegroundInfo {
-            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setContentTitle("Building psychological profile")
-                .setContentText(text)
-                .setSmallIcon(context.applicationInfo.icon)
-                .setOngoing(true)
-                .setSilent(true)
-                .build()
+            val notification = ProfileAnalysisNotificationFactory.build(context, text)
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
@@ -101,3 +96,18 @@ class ProfileAnalysisWorker
             const val NOTIFICATION_ID = 2001
         }
     }
+
+internal object ProfileAnalysisNotificationFactory {
+    fun build(
+        context: Context,
+        text: String,
+    ): Notification =
+        NotificationCompat
+            .Builder(context, ProfileAnalysisWorker.CHANNEL_ID)
+            .setContentTitle("Building psychological profile")
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+}
