@@ -37,4 +37,11 @@ class ProviderExportDetectorTest {
         val parser = detector.detect("readme.txt", "This is a readme file.")
         assertNull(parser)
     }
+
+    @Test
+    fun `PP-14 detects xAI prod-grok-backend json by object wrapper with conversations and anon_user_id`() {
+        val preview = """{"conversations":[{"conversation":{"id":"c1","anon_user_id":null,"title":"T"},"responses":[]}]}"""
+        val parser = detector.detect("prod-grok-backend.json", preview)
+        assertEquals(ConversationProvider.XAI, parser?.provider)
+    }
 }
