@@ -154,6 +154,13 @@ class ProfileBuilderViewModel
                             currentStep = PROFILE_BUILDER_STEP_REVIEW,
                         )
                     }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isAnalysisComplete = false,
+                            analysisError = "Analysis completed but no profile was generated. Please try again.",
+                        )
+                    }
                 }
             }
         }
@@ -184,9 +191,9 @@ class ProfileBuilderViewModel
                             content,
                         )
                     }
-                    // Purge all raw corpus data now that the profile is saved
-                    runCatching { ingestionPort.clearAll(state.corpusRunId) }
                     _uiState.update { it.copy(isSaving = false, saved = true) }
+                    // Purge raw corpus data in the background — does not block navigation
+                    launch { runCatching { ingestionPort.clearAll(state.corpusRunId) } }
                 } catch (e: Exception) {
                     _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
                 }
