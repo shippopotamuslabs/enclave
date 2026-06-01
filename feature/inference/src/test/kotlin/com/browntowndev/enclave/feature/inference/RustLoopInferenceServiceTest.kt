@@ -66,6 +66,7 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -1127,6 +1128,82 @@ class RustLoopInferenceServiceTest {
             assertNotNull(innerService.lastContextSidecars)
             assertTrue(innerService.lastContextSidecars!!.contains("Internet status: Offline"))
             assertTrue(innerService.lastContextSidecars!!.contains("disabled due to no internet access: web_search"))
+        }
+
+    @Test
+    fun `web search and X tools dynamic connectivity state transitions`() =
+        runTest {
+            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
+            val networkStates = mutableListOf(true, false, true)
+            coEvery { deviceEnvironment.isNetworkAvailable() } answers {
+                networkStates.removeFirst()
+            }
+
+            val sidecarsList = mutableListOf<String?>()
+            val innerService = object : RustCompatibleInferenceService {
+                override val baseUrl: String? = null
+                override fun sendPrompt(prompt: String, closeConversation: Boolean) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+                override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+                override suspend fun setHistory(messages: List<ChatMessage>) {}
+                override suspend fun closeSession() {}
+                override suspend fun completeSingleTurn(
+                    sessionMessages: List<AgentLoopMessage>,
+                    systemPrompt: String,
+                    contextSidecars: String?,
+                    availableTools: List<ToolDefinition>,
+                    allowToolCall: Boolean,
+                    onTextToken: suspend (String) -> Unit,
+                    onThinkingToken: suspend (String) -> Unit,
+                    options: GenerationOptions,
+                ): AgentModelTurnResult {
+                    sidecarsList.add(contextSidecars)
+                    return AgentModelTurnResult(
+                        assistantText = "turn",
+                        toolCalls = emptyList(),
+                        finishReason = AgentFinishReason.Stop,
+                    )
+                }
+            }
+
+            val port = CapturingAgentLoopPort { host ->
+                host.completeModelTurn(
+                    sessionMessages = emptyList(),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = true,
+                )
+
+                host.completeModelTurn(
+                    sessionMessages = emptyList(),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = true,
+                )
+
+                host.completeModelTurn(
+                    sessionMessages = emptyList(),
+                    systemPrompt = "",
+                    toolsSchemaJson = "[]",
+                    allowToolCall = true,
+                )
+
+                send(AgentLoopEvent.Finished)
+            }
+
+            val service = createService(
+                agentLoopPort = port,
+                inner = innerService,
+                deviceEnvironmentRepository = deviceEnvironment,
+            )
+
+            service.sendPrompt("start").toList()
+
+            assertEquals(3, sidecarsList.size)
+            assertNull(sidecarsList[0])
+            assertNotNull(sidecarsList[1])
+            assertTrue(sidecarsList[1]!!.contains("Internet status: Offline"))
+            assertNotNull(sidecarsList[2])
+            assertTrue(sidecarsList[2]!!.contains("Internet status: Online. Search and X tools are now re-enabled."))
         }
 
     private fun createService(
