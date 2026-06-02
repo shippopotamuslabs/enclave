@@ -4,17 +4,17 @@ import android.util.Log
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.http.StreamResponse
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageDeltaUsage
 import com.anthropic.models.messages.RawContentBlockDelta
 import com.anthropic.models.messages.RawContentBlockDeltaEvent
 import com.anthropic.models.messages.RawMessageDeltaEvent
-import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.RawMessageStopEvent
-import com.anthropic.models.messages.MessageDeltaUsage
+import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.StopReason
 import com.anthropic.models.messages.TextDelta
 import com.anthropic.services.blocking.MessageService
-import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
 import com.browntowndev.enclave.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
@@ -24,6 +24,7 @@ import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -32,11 +33,11 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
-import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
+import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
 import com.browntowndev.enclave.feature.inference.AnthropicInferenceServiceImpl
 import com.browntowndev.enclave.feature.inference.BaseOpenAiSdkInferenceService
 import com.browntowndev.enclave.feature.inference.GoogleGenAiSdkClient
@@ -45,7 +46,6 @@ import com.browntowndev.enclave.feature.inference.GoogleSdkResult
 import com.browntowndev.enclave.feature.inference.RustCompatibleInferenceService
 import com.browntowndev.enclave.feature.inference.RustLoopInferenceService
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
-import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -60,19 +60,18 @@ import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.ProducerScope
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import kotlin.test.assertFailsWith
 import java.io.IOException
 import java.util.Optional
 import java.util.stream.Stream
 import javax.inject.Provider
+import kotlin.test.assertFailsWith
 
 /**
  * TELEMETRY-001 TDD Red — inference layer scenarios TEL-037..TEL-044, TEL-050..TEL-053, TEL-062.
@@ -576,13 +575,14 @@ class Telemetry001InferenceTddRedTest {
             userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
             assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
             emitEvent: suspend (InferenceEvent) -> Unit,
-        ): StreamedOpenAiResponse = streamChatCompletions(
-            params = ChatCompletionCreateParams.builder().model("gpt-4.1").build(),
-            chatId = chatId,
-            userMessageId = userMessageId,
-            assistantMessageId = assistantMessageId,
-            emitEvent = emitEvent,
-        )
+        ): StreamedOpenAiResponse =
+            streamChatCompletions(
+                params = ChatCompletionCreateParams.builder().model("gpt-4.1").build(),
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                emitEvent = emitEvent,
+            )
     }
 
     private class CapturingAgentLoopPort(

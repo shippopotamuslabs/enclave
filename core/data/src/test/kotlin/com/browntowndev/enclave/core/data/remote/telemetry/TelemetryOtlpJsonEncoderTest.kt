@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.core.data.remote.telemetry
 
 import com.browntowndev.enclave.core.data.local.TelemetryEventEntity
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

@@ -122,7 +122,8 @@ class Telemetry001DomainTddRedTest {
     @Test
     fun `TEL-049 LoggingPort interface no longer declares recordException method`() {
         val methodNames =
-            LoggingPort::class.declaredFunctions
+            LoggingPort::class
+                .declaredFunctions
                 .mapNotNull { it.javaMethod?.name }
                 .toSet()
         assertEquals(setOf("debug", "info", "warning", "error"), methodNames)
