@@ -23,7 +23,8 @@ class TelemetryUploadScheduler
                 return
             }
             val constraints =
-                Constraints.Builder()
+                Constraints
+                    .Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
 
@@ -43,8 +44,7 @@ class TelemetryUploadScheduler
                 PeriodicWorkRequestBuilder<TelemetryUploadWorker>(
                     UPLOAD_INTERVAL_MINUTES,
                     TimeUnit.MINUTES,
-                )
-                    .setConstraints(constraints)
+                ).setConstraints(constraints)
                     .build()
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME,
@@ -58,7 +58,8 @@ class TelemetryUploadScheduler
                 return
             }
             val constraints =
-                Constraints.Builder()
+                Constraints
+                    .Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
 
