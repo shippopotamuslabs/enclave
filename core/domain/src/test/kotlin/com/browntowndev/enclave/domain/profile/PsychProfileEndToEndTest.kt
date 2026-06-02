@@ -27,17 +27,19 @@ class PsychProfileEndToEndTest {
             **Psychological Patterns:** Avoidance tendency when discussing career uncertainty.
             """.trimIndent()
 
-        val coreMemories = listOf(
-            Memory(category = MemoryCategory.CORE_IDENTITY, content = "Software engineer, 10 years experience."),
-            Memory(category = MemoryCategory.PSYCH_PROFILE, content = profileText),
-        )
+        val coreMemories =
+            listOf(
+                Memory(category = MemoryCategory.CORE_IDENTITY, content = "Software engineer, 10 years experience."),
+                Memory(category = MemoryCategory.PSYCH_PROFILE, content = profileText),
+            )
 
-        val composed = composer.compose(
-            baseSystemPrompt = "Be helpful.",
-            toolCatalog = emptyList(),
-            activeTools = emptyList(),
-            coreMemories = coreMemories,
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be helpful.",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = coreMemories,
+            )
 
         assertTrue(composed.contains("# PSYCHOLOGICAL PROFILE:"), "Missing PSYCHOLOGICAL PROFILE section")
         assertTrue(composed.contains("Avoidance tendency when discussing career uncertainty"))
@@ -47,17 +49,19 @@ class PsychProfileEndToEndTest {
 
     @Test
     fun `PP-141 PSYCH_PROFILE section appears after ABOUT THE USER section`() {
-        val coreMemories = listOf(
-            Memory(category = MemoryCategory.CORE_IDENTITY, content = "Developer."),
-            Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Tends toward perfectionism."),
-        )
+        val coreMemories =
+            listOf(
+                Memory(category = MemoryCategory.CORE_IDENTITY, content = "Developer."),
+                Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Tends toward perfectionism."),
+            )
 
-        val composed = composer.compose(
-            baseSystemPrompt = null,
-            toolCatalog = emptyList(),
-            activeTools = emptyList(),
-            coreMemories = coreMemories,
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = null,
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = coreMemories,
+            )
 
         val aboutIdx = composed.indexOf("# ABOUT THE USER:")
         val profileIdx = composed.indexOf("# PSYCHOLOGICAL PROFILE:")
@@ -77,31 +81,34 @@ class PsychProfileEndToEndTest {
         val originalContent = "User avoids vulnerability."
         val editedContent = "User avoids vulnerability. Growth trajectory: active therapy work."
 
-        val withOriginal = composer.compose(
-            baseSystemPrompt = null,
-            toolCatalog = emptyList(),
-            activeTools = emptyList(),
-            coreMemories = listOf(Memory(category = MemoryCategory.PSYCH_PROFILE, content = originalContent)),
-        )
+        val withOriginal =
+            composer.compose(
+                baseSystemPrompt = null,
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = listOf(Memory(category = MemoryCategory.PSYCH_PROFILE, content = originalContent)),
+            )
         assertFalse(withOriginal.contains("active therapy work"))
 
-        val withEdited = composer.compose(
-            baseSystemPrompt = null,
-            toolCatalog = emptyList(),
-            activeTools = emptyList(),
-            coreMemories = listOf(Memory(category = MemoryCategory.PSYCH_PROFILE, content = editedContent)),
-        )
+        val withEdited =
+            composer.compose(
+                baseSystemPrompt = null,
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = listOf(Memory(category = MemoryCategory.PSYCH_PROFILE, content = editedContent)),
+            )
         assertTrue(withEdited.contains("active therapy work"))
     }
 
     @Test
     fun `PP-144 no PSYCH_PROFILE memory means no PSYCHOLOGICAL PROFILE section in system prompt`() {
-        val composed = composer.compose(
-            baseSystemPrompt = "Be helpful.",
-            toolCatalog = emptyList(),
-            activeTools = emptyList(),
-            coreMemories = listOf(Memory(category = MemoryCategory.CORE_IDENTITY, content = "Developer.")),
-        )
+        val composed =
+            composer.compose(
+                baseSystemPrompt = "Be helpful.",
+                toolCatalog = emptyList(),
+                activeTools = emptyList(),
+                coreMemories = listOf(Memory(category = MemoryCategory.CORE_IDENTITY, content = "Developer.")),
+            )
         assertFalse(composed.contains("# PSYCHOLOGICAL PROFILE:"))
     }
 

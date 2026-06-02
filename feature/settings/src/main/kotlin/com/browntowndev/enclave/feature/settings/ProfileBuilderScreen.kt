@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.settings.steps.AnalysisProgressStep
 import com.browntowndev.enclave.feature.settings.steps.CostEstimateStep
@@ -48,24 +46,27 @@ internal fun ProfileBuilderScreen(
     onSaveProfile: () -> Unit,
     onGoToStep: (Int) -> Unit,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = uiState.currentStep,
-        pageCount = { PROFILE_BUILDER_TOTAL_STEPS },
-    )
+    val pagerState =
+        rememberPagerState(
+            initialPage = uiState.currentStep,
+            pageCount = { PROFILE_BUILDER_TOTAL_STEPS },
+        )
 
     LaunchedEffect(uiState.currentStep) {
         pagerState.animateScrollToPage(uiState.currentStep)
     }
 
-    val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris ->
-        val pairs = uris.map { uri ->
-            val name = uri.lastPathSegment ?: uri.toString()
-            uri.toString() to name
+    val filePicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenMultipleDocuments(),
+        ) { uris ->
+            val pairs =
+                uris.map { uri ->
+                    val name = uri.lastPathSegment ?: uri.toString()
+                    uri.toString() to name
+                }
+            onFilesSelected(pairs.map { it.first }, pairs.map { it.second })
         }
-        onFilesSelected(pairs.map { it.first }, pairs.map { it.second })
-    }
 
     Scaffold(
         topBar = {
@@ -80,9 +81,10 @@ internal fun ProfileBuilderScreen(
         },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
         ) {
             WizardStepBar(currentStep = uiState.currentStep, totalSteps = PROFILE_BUILDER_TOTAL_STEPS)
 
@@ -139,24 +141,29 @@ internal fun ProfileBuilderScreen(
 }
 
 @Composable
-private fun WizardStepBar(currentStep: Int, totalSteps: Int) {
+private fun WizardStepBar(
+    currentStep: Int,
+    totalSteps: Int,
+) {
     val primary = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.outlineVariant
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(totalSteps) { step ->
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(6.dp)
-                    .background(
-                        color = if (step <= currentStep) primary else dim,
-                        shape = EnclaveNeoTokens.shape,
-                    ),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(6.dp)
+                        .background(
+                            color = if (step <= currentStep) primary else dim,
+                            shape = EnclaveNeoTokens.shape,
+                        ),
             )
         }
     }

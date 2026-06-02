@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test
 class GenericFallbackParserTest {
     private val parser = GenericFallbackParser()
 
-    private val sampleJson = """
+    private val sampleJson =
+        """
         [
           {
             "id": "conv-x",
@@ -22,7 +23,7 @@ class GenericFallbackParserTest {
             ]
           }
         ]
-    """.trimIndent()
+        """.trimIndent()
 
     @Test
     fun `PP-40 canHandle returns true for generic JSON array with json extension`() {

@@ -55,7 +55,8 @@ class ConversationScorerTest {
 
     @Test
     fun `PP-64 stance markers raise score`() {
-        val withStance = score(userText = "I think this approach is wrong. Actually, I believe there is a better way. I disagree with the premise.")
+        val withStance =
+            score(userText = "I think this approach is wrong. Actually, I believe there is a better way. I disagree with the premise.")
         val noStance = score(userText = "Generate a list of 10 random words in English.")
         assertTrue(withStance > noStance, "stance=$withStance noStance=$noStance")
     }
@@ -64,21 +65,24 @@ class ConversationScorerTest {
 
     @Test
     fun `PP-65 code-heavy conversation scores lower than reflective conversation`() {
-        val codeHeavy = score(
-            userText = """
-                ```python
-                def factorial(n):
-                    if n <= 1: return 1
-                    return n * factorial(n-1)
-                ```
-                Can you explain this? Also ```import sys; print(sys.version)```
-            """.trimIndent(),
-            userTokenCount = 200,
-        )
-        val reflective = score(
-            userText = "I've been thinking about my relationship with work. I feel like I'm always anxious and I wonder if this is healthy.",
-            userTokenCount = 200,
-        )
+        val codeHeavy =
+            score(
+                userText =
+                    """
+                    ```python
+                    def factorial(n):
+                        if n <= 1: return 1
+                        return n * factorial(n-1)
+                    ```
+                    Can you explain this? Also ```import sys; print(sys.version)```
+                    """.trimIndent(),
+                userTokenCount = 200,
+            )
+        val reflective =
+            score(
+                userText = "I've been thinking about my relationship with work. I feel like I'm always anxious and I wonder if this is healthy.",
+                userTokenCount = 200,
+            )
         assertTrue(reflective > codeHeavy, "reflective=$reflective codeHeavy=$codeHeavy")
     }
 
@@ -111,18 +115,20 @@ class ConversationScorerTest {
 
     @Test
     fun `PP-69 score always in 0-1 range`() {
-        val extremeHigh = score(
-            userText = "I I I I I feel worried sad anxious frustrated. I think I believe I disagree.",
-            title = "why do I feel this way about my life?",
-            userTokenCount = ConversationScoringPolicy.VOLUME_SWEET_SPOT_TOKENS,
-            createdAtMs = now,
-        )
-        val extremeLow = score(
-            userText = "```\n" + "x".repeat(2000) + "\n```",
-            title = "fix sql query",
-            userTokenCount = 5,
-            createdAtMs = weekAgo,
-        )
+        val extremeHigh =
+            score(
+                userText = "I I I I I feel worried sad anxious frustrated. I think I believe I disagree.",
+                title = "why do I feel this way about my life?",
+                userTokenCount = ConversationScoringPolicy.VOLUME_SWEET_SPOT_TOKENS,
+                createdAtMs = now,
+            )
+        val extremeLow =
+            score(
+                userText = "```\n" + "x".repeat(2000) + "\n```",
+                title = "fix sql query",
+                userTokenCount = 5,
+                createdAtMs = weekAgo,
+            )
         assertTrue(extremeHigh <= 1f && extremeHigh >= 0f)
         assertTrue(extremeLow <= 1f && extremeLow >= 0f)
     }

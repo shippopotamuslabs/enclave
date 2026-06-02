@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,11 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
 
 @Composable
@@ -36,9 +36,10 @@ internal fun CostEstimateStep(
     onStartAnalysis: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         NeoSectionHeader(text = "Cost estimate")
 
@@ -50,7 +51,7 @@ internal fun CostEstimateStep(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator()
+                    NeoCircularProgressIndicator()
                     Text(
                         text = "Preparing corpus…",
                         style = MaterialTheme.typography.bodyMedium,
@@ -80,16 +81,18 @@ internal fun CostEstimateStep(
                     NeoGroupDivider()
                     StatRow(
                         label = "Estimated cost",
-                        value = if (estimate.estimatedCostUsd != null) {
-                            "~\$${estimate.estimatedCostUsd}"
-                        } else {
-                            "N/A"
-                        },
-                        valueNote = if (estimate.estimatedCostUsd == null) {
-                            "No pricing data for this model"
-                        } else {
-                            null
-                        },
+                        value =
+                            if (estimate.estimatedCostUsd != null) {
+                                "~\$${estimate.estimatedCostUsd}"
+                            } else {
+                                "N/A"
+                            },
+                        valueNote =
+                            if (estimate.estimatedCostUsd == null) {
+                                "No pricing data for this model"
+                            } else {
+                                null
+                            },
                     )
                 }
 
@@ -108,9 +111,10 @@ internal fun CostEstimateStep(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Analysis runs 4 passes using your API key. " +
-                                "The full corpus stays on your device — only relevant text " +
-                                "excerpts are sent to your configured API provider.",
+                            text =
+                                "Analysis runs 4 passes using your API key. " +
+                                    "The full corpus stays on your device — only relevant text " +
+                                    "excerpts are sent to your configured API provider.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -140,11 +144,16 @@ internal fun CostEstimateStep(
 }
 
 @Composable
-private fun StatRow(label: String, value: String, valueNote: String? = null) {
+private fun StatRow(
+    label: String,
+    value: String,
+    valueNote: String? = null,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -11,7 +11,8 @@ class OpenAiExportParserTest {
     private val parser = OpenAiExportParser()
 
     // Minimal but realistic sample: two-turn conversation
-    private val sampleJson = """
+    private val sampleJson =
+        """
         [
           {
             "id": "conv-001",
@@ -56,7 +57,7 @@ class OpenAiExportParserTest {
             "current_node": "msg-asst-1"
           }
         ]
-    """.trimIndent()
+        """.trimIndent()
 
     @Test
     fun `PP-20 canHandle returns true for OpenAI conversations json`() {

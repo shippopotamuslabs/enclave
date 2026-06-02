@@ -27,153 +27,176 @@ import kotlinx.serialization.json.doubleOrNull
 class OpenAiExportParser
     @javax.inject.Inject
     constructor() : ConversationExportParser {
-    override val provider = ConversationProvider.OPENAI
+        override val provider = ConversationProvider.OPENAI
 
-    override fun canHandle(entryName: String, contentPreview: String): Boolean =
-        entryName.endsWith("conversations.json") &&
-            contentPreview.trimStart().startsWith("[") &&
-            contentPreview.contains("\"mapping\"")
+        override fun canHandle(
+            entryName: String,
+            contentPreview: String,
+        ): Boolean =
+            entryName.endsWith("conversations.json") &&
+                contentPreview.trimStart().startsWith("[") &&
+                contentPreview.contains("\"mapping\"")
 
-    override fun parse(entryName: String, content: String): Pair<List<ConversationRecord>, ParseHealthReport> {
-        val topLevel = runCatching { parserJson.parseToJsonElement(content) }.getOrNull()
-            ?: return emptyList<ConversationRecord>() to emptyReport(0)
+        override fun parse(
+            entryName: String,
+            content: String,
+        ): Pair<List<ConversationRecord>, ParseHealthReport> {
+            val topLevel =
+                runCatching { parserJson.parseToJsonElement(content) }.getOrNull()
+                    ?: return emptyList<ConversationRecord>() to emptyReport(0)
 
-        val array = when (topLevel) {
-            is JsonArray -> topLevel
-            else -> return emptyList<ConversationRecord>() to emptyReport(0)
-        }
-
-        val totalEntries = array.size
-        val records = mutableListOf<ConversationRecord>()
-        var totalMessages = 0
-        var messagesWithText = 0
-        var skipped = 0
-
-        for (element in array) {
-            val obj = element as? JsonObject ?: run { skipped++; continue }
-            runCatching {
-                val record = parseConversation(obj)
-                if (record != null) {
-                    records.add(record)
-                    totalMessages += record.messages.size
-                    messagesWithText += record.messages.count { it.content.isNotBlank() }
-                } else {
-                    skipped++
+            val array =
+                when (topLevel) {
+                    is JsonArray -> topLevel
+                    else -> return emptyList<ConversationRecord>() to emptyReport(0)
                 }
-            }.onFailure { skipped++ }
-        }
 
-        return records to ParseHealthReport(
-            provider = provider,
-            totalEntries = totalEntries,
-            extractedConversations = records.size,
-            totalMessages = totalMessages,
-            messagesWithText = messagesWithText,
-            skippedMalformed = skipped,
-        )
-    }
+            val totalEntries = array.size
+            val records = mutableListOf<ConversationRecord>()
+            var totalMessages = 0
+            var messagesWithText = 0
+            var skipped = 0
 
-    private fun parseConversation(obj: JsonObject): ConversationRecord? {
-        val id = obj.stringOrNull("id") ?: obj.stringOrNull("uuid") ?: return null
-        val title = obj.stringOrNull("title") ?: "Untitled"
-        val createdAt = obj.doubleOrNull("create_time")?.let { (it * 1000).toLong() }
-        val mapping = obj["mapping"] as? JsonObject ?: return null
-        val currentNode = obj.stringOrNull("current_node") ?: return null
-
-        val path = walkPath(mapping, currentNode)
-        val messages = path.mapIndexedNotNull { index, nodeId ->
-            extractMessage(mapping[nodeId] as? JsonObject, index)
-        }
-
-        return ConversationRecord(
-            externalId = id,
-            title = title,
-            provider = provider,
-            createdAtMs = createdAt,
-            messages = messages,
-        )
-    }
-
-    private fun walkPath(mapping: JsonObject, leafNodeId: String): List<String> {
-        val path = mutableListOf<String>()
-        var current: String? = leafNodeId
-        val visited = mutableSetOf<String>()
-        while (current != null && current !in visited) {
-            visited.add(current)
-            path.add(current)
-            current = (mapping[current] as? JsonObject)?.stringOrNull("parent")
-        }
-        path.reverse()
-        return path
-    }
-
-    private fun extractMessage(node: JsonObject?, orderIndex: Int): ConversationMessage? {
-        val message = node?.get("message") as? JsonObject ?: return null
-        val role = (message["author"] as? JsonObject)?.stringOrNull("role")
-            ?: message.stringOrNull("role")
-            ?: return null
-        if (role == "system" || role == "tool") return null
-
-        val content = extractContent(message["content"]) ?: return null
-        if (content.isBlank()) return null
-
-        val createdAt = message.doubleOrNull("create_time")?.let { (it * 1000).toLong() }
-
-        return ConversationMessage(
-            role = role.toMessageRole(),
-            content = content,
-            createdAtMs = createdAt,
-            orderIndex = orderIndex,
-        )
-    }
-
-    private fun extractContent(element: JsonElement?): String? {
-        if (element == null || element is JsonNull) return null
-        return when (element) {
-            is JsonObject -> {
-                when (element.stringOrNull("content_type")) {
-                    "text" -> (element["parts"] as? JsonArray)?.joinToString("") { part ->
-                        when (part) {
-                            is JsonPrimitive -> part.contentOrNull ?: ""
-                            else -> ""
-                        }
+            for (element in array) {
+                val obj =
+                    element as? JsonObject ?: run {
+                        skipped++
+                        continue
                     }
-                    "multimodal_text" -> (element["parts"] as? JsonArray)?.joinToString("") { part ->
-                        when (part) {
-                            is JsonPrimitive -> part.contentOrNull ?: ""
-                            is JsonObject -> part.stringOrNull("text") ?: ""
-                            else -> ""
-                        }
+                runCatching {
+                    val record = parseConversation(obj)
+                    if (record != null) {
+                        records.add(record)
+                        totalMessages += record.messages.size
+                        messagesWithText += record.messages.count { it.content.isNotBlank() }
+                    } else {
+                        skipped++
                     }
-                    "code" -> element.stringOrNull("text")
-                    else -> element.stringOrNull("text") ?: element.stringOrNull("content")
-                }
+                }.onFailure { skipped++ }
             }
-            is JsonPrimitive -> element.contentOrNull
-            else -> null
+
+            return records to
+                ParseHealthReport(
+                    provider = provider,
+                    totalEntries = totalEntries,
+                    extractedConversations = records.size,
+                    totalMessages = totalMessages,
+                    messagesWithText = messagesWithText,
+                    skippedMalformed = skipped,
+                )
         }
+
+        private fun parseConversation(obj: JsonObject): ConversationRecord? {
+            val id = obj.stringOrNull("id") ?: obj.stringOrNull("uuid") ?: return null
+            val title = obj.stringOrNull("title") ?: "Untitled"
+            val createdAt = obj.doubleOrNull("create_time")?.let { (it * 1000).toLong() }
+            val mapping = obj["mapping"] as? JsonObject ?: return null
+            val currentNode = obj.stringOrNull("current_node") ?: return null
+
+            val path = walkPath(mapping, currentNode)
+            val messages =
+                path.mapIndexedNotNull { index, nodeId ->
+                    extractMessage(mapping[nodeId] as? JsonObject, index)
+                }
+
+            return ConversationRecord(
+                externalId = id,
+                title = title,
+                provider = provider,
+                createdAtMs = createdAt,
+                messages = messages,
+            )
+        }
+
+        private fun walkPath(
+            mapping: JsonObject,
+            leafNodeId: String,
+        ): List<String> {
+            val path = mutableListOf<String>()
+            var current: String? = leafNodeId
+            val visited = mutableSetOf<String>()
+            while (current != null && current !in visited) {
+                visited.add(current)
+                path.add(current)
+                current = (mapping[current] as? JsonObject)?.stringOrNull("parent")
+            }
+            path.reverse()
+            return path
+        }
+
+        private fun extractMessage(
+            node: JsonObject?,
+            orderIndex: Int,
+        ): ConversationMessage? {
+            val message = node?.get("message") as? JsonObject ?: return null
+            val role =
+                (message["author"] as? JsonObject)?.stringOrNull("role")
+                    ?: message.stringOrNull("role")
+                    ?: return null
+            if (role == "system" || role == "tool") return null
+
+            val content = extractContent(message["content"]) ?: return null
+            if (content.isBlank()) return null
+
+            val createdAt = message.doubleOrNull("create_time")?.let { (it * 1000).toLong() }
+
+            return ConversationMessage(
+                role = role.toMessageRole(),
+                content = content,
+                createdAtMs = createdAt,
+                orderIndex = orderIndex,
+            )
+        }
+
+        private fun extractContent(element: JsonElement?): String? {
+            if (element == null || element is JsonNull) return null
+            return when (element) {
+                is JsonObject -> {
+                    when (element.stringOrNull("content_type")) {
+                        "text" ->
+                            (element["parts"] as? JsonArray)?.joinToString("") { part ->
+                                when (part) {
+                                    is JsonPrimitive -> part.contentOrNull ?: ""
+                                    else -> ""
+                                }
+                            }
+                        "multimodal_text" ->
+                            (element["parts"] as? JsonArray)?.joinToString("") { part ->
+                                when (part) {
+                                    is JsonPrimitive -> part.contentOrNull ?: ""
+                                    is JsonObject -> part.stringOrNull("text") ?: ""
+                                    else -> ""
+                                }
+                            }
+                        "code" -> element.stringOrNull("text")
+                        else -> element.stringOrNull("text") ?: element.stringOrNull("content")
+                    }
+                }
+                is JsonPrimitive -> element.contentOrNull
+                else -> null
+            }
+        }
+
+        private fun emptyReport(total: Int) =
+            ParseHealthReport(
+                provider = provider,
+                totalEntries = total,
+                extractedConversations = 0,
+                totalMessages = 0,
+                messagesWithText = 0,
+                skippedMalformed = total,
+            )
     }
 
-    private fun emptyReport(total: Int) = ParseHealthReport(
-        provider = provider,
-        totalEntries = total,
-        extractedConversations = 0,
-        totalMessages = 0,
-        messagesWithText = 0,
-        skippedMalformed = total,
-    )
-}
+private fun JsonObject.stringOrNull(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
-private fun JsonObject.stringOrNull(key: String): String? =
-    (this[key] as? JsonPrimitive)?.contentOrNull
+private fun JsonObject.doubleOrNull(key: String): Double? = (this[key] as? JsonPrimitive)?.doubleOrNull
 
-private fun JsonObject.doubleOrNull(key: String): Double? =
-    (this[key] as? JsonPrimitive)?.doubleOrNull
-
-private fun String.toMessageRole() = when (lowercase()) {
-    "user" -> MessageRole.USER
-    "assistant" -> MessageRole.ASSISTANT
-    "system" -> MessageRole.SYSTEM
-    "tool" -> MessageRole.TOOL
-    else -> MessageRole.UNKNOWN
-}
+private fun String.toMessageRole() =
+    when (lowercase()) {
+        "user" -> MessageRole.USER
+        "assistant" -> MessageRole.ASSISTANT
+        "system" -> MessageRole.SYSTEM
+        "tool" -> MessageRole.TOOL
+        else -> MessageRole.UNKNOWN
+    }

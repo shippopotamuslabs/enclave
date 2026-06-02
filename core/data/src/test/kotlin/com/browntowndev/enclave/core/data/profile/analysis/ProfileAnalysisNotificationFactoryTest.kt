@@ -4,13 +4,13 @@ import android.app.Notification
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.R
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @ExtendWith(RobolectricExtension::class)
 @Config(manifest = Config.NONE, sdk = [34])
@@ -24,10 +24,11 @@ class ProfileAnalysisNotificationFactoryTest {
 
     @Test
     fun build_setsProfileNotificationContentAndIcon() {
-        val notification = ProfileAnalysisNotificationFactory.build(
-            context = context,
-            text = "Pass 2 of 4...",
-        )
+        val notification =
+            ProfileAnalysisNotificationFactory.build(
+                context = context,
+                text = "Pass 2 of 4...",
+            )
 
         assertEquals("Building psychological profile", notification.extras.getString(Notification.EXTRA_TITLE))
         assertEquals("Pass 2 of 4...", notification.extras.getString(Notification.EXTRA_TEXT))

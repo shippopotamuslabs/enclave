@@ -76,12 +76,18 @@ object ConversationScorer {
         }
     }
 
-    private fun firstPersonScore(words: List<String>, wordCount: Int): Float {
+    private fun firstPersonScore(
+        words: List<String>,
+        wordCount: Int,
+    ): Float {
         val hits = words.count { it in FIRST_PERSON_WORDS }
         return min(1f, hits.toFloat() / (wordCount * 0.15f))
     }
 
-    private fun affectScore(words: List<String>, wordCount: Int): Float {
+    private fun affectScore(
+        words: List<String>,
+        wordCount: Int,
+    ): Float {
         val hits = words.count { it in ConversationScoringPolicy.AFFECT_LEXICON }
         val density = hits.toFloat() / wordCount
         return min(1f, density / ConversationScoringPolicy.AFFECT_DENSITY_CAP)
@@ -104,7 +110,11 @@ object ConversationScorer {
         }
     }
 
-    private fun recencyScore(createdAtMs: Long?, oldestMs: Long, newestMs: Long): Float {
+    private fun recencyScore(
+        createdAtMs: Long?,
+        oldestMs: Long,
+        newestMs: Long,
+    ): Float {
         if (createdAtMs == null) return 0.5f
         val span = newestMs - oldestMs
         if (span <= 0L) return 1.0f

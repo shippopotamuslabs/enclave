@@ -46,14 +46,23 @@ class ProfileBuilderViewModel
             _uiState.update { it.copy(selectedConfigId = configId) }
         }
 
-        fun onFilesSelected(uris: List<String>, names: List<String>) {
-            val nonZip = names.filterNot { name ->
-                name.substringAfterLast('/').substringAfterLast(':').lowercase().endsWith(".zip")
-            }
-            if (nonZip.isNotEmpty()) {
-                val names = nonZip.joinToString { n ->
-                    n.substringAfterLast('/').substringAfterLast(':')
+        fun onFilesSelected(
+            uris: List<String>,
+            names: List<String>,
+        ) {
+            val nonZip =
+                names.filterNot { name ->
+                    name
+                        .substringAfterLast('/')
+                        .substringAfterLast(':')
+                        .lowercase()
+                        .endsWith(".zip")
                 }
+            if (nonZip.isNotEmpty()) {
+                val names =
+                    nonZip.joinToString { n ->
+                        n.substringAfterLast('/').substringAfterLast(':')
+                    }
                 _uiState.update {
                     it.copy(errorMessage = "Only .zip export files are supported. Unsupported: $names")
                 }
@@ -75,11 +84,12 @@ class ProfileBuilderViewModel
             viewModelScope.launch {
                 try {
                     val corpusRunId = state.corpusRunId
-                    val estimate = analysisPort.prepareCorpus(
-                        corpusRunId = corpusRunId,
-                        fileUris = state.selectedFileUris,
-                        configId = state.selectedConfigId
-                    )
+                    val estimate =
+                        analysisPort.prepareCorpus(
+                            corpusRunId = corpusRunId,
+                            fileUris = state.selectedFileUris,
+                            configId = state.selectedConfigId,
+                        )
                     _uiState.update { it.copy(isPreparingCorpus = false, costEstimate = estimate) }
                 } catch (e: Exception) {
                     _uiState.update {
@@ -96,7 +106,7 @@ class ProfileBuilderViewModel
         fun startAnalysis() {
             val state = _uiState.value
             val configId = state.selectedConfigId ?: return
-            
+
             // Double-start protection guard
             if (state.isAnalysisRunning) return
 
@@ -115,7 +125,7 @@ class ProfileBuilderViewModel
                     _uiState.update {
                         it.copy(
                             isAnalysisRunning = false,
-                            analysisError = "Failed to start analysis: ${e.message}"
+                            analysisError = "Failed to start analysis: ${e.message}",
                         )
                     }
                 }
@@ -125,23 +135,24 @@ class ProfileBuilderViewModel
         private fun observeWorkProgress() {
             // Cancel prior job to prevent stacking collectors
             progressJob?.cancel()
-            progressJob = viewModelScope.launch {
-                analysisPort.observeAnalysisProgress(_uiState.value.corpusRunId).collect { progress ->
-                    _uiState.update {
-                        it.copy(
-                            currentPass = progress.currentPass,
-                            totalPasses = progress.totalPasses,
-                            isAnalysisRunning = progress.isRunning,
-                            isAnalysisComplete = progress.isComplete,
-                            analysisError = progress.error,
-                        )
-                    }
+            progressJob =
+                viewModelScope.launch {
+                    analysisPort.observeAnalysisProgress(_uiState.value.corpusRunId).collect { progress ->
+                        _uiState.update {
+                            it.copy(
+                                currentPass = progress.currentPass,
+                                totalPasses = progress.totalPasses,
+                                isAnalysisRunning = progress.isRunning,
+                                isAnalysisComplete = progress.isComplete,
+                                analysisError = progress.error,
+                            )
+                        }
 
-                    if (progress.isComplete) {
-                        loadProfileContent()
+                        if (progress.isComplete) {
+                            loadProfileContent()
+                        }
                     }
                 }
-            }
         }
 
         private fun loadProfileContent() {
@@ -177,8 +188,10 @@ class ProfileBuilderViewModel
             viewModelScope.launch {
                 try {
                     // Single write policy: upsert memory on save
-                    val existing = memoriesRepository.getCoreMemories()
-                        .firstOrNull { it.category == com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE }
+                    val existing =
+                        memoriesRepository
+                            .getCoreMemories()
+                            .firstOrNull { it.category == com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE }
                     if (existing != null) {
                         memoriesRepository.updateMemory(
                             existing.id,

@@ -9,17 +9,24 @@ import com.browntowndev.enclave.domain.port.profile.ConversationExportParser
 class GoogleExportParser
     @javax.inject.Inject
     constructor() : ConversationExportParser {
-    override val provider = ConversationProvider.GOOGLE
+        override val provider = ConversationProvider.GOOGLE
 
-    override fun canHandle(entryName: String, contentPreview: String): Boolean = false
+        override fun canHandle(
+            entryName: String,
+            contentPreview: String,
+        ): Boolean = false
 
-    override fun parse(entryName: String, content: String): Pair<List<ConversationRecord>, ParseHealthReport> =
-        emptyList<ConversationRecord>() to ParseHealthReport(
-            provider = provider,
-            totalEntries = 0,
-            extractedConversations = 0,
-            totalMessages = 0,
-            messagesWithText = 0,
-            skippedMalformed = 0,
-        )
-}
+        override fun parse(
+            entryName: String,
+            content: String,
+        ): Pair<List<ConversationRecord>, ParseHealthReport> =
+            emptyList<ConversationRecord>() to
+                ParseHealthReport(
+                    provider = provider,
+                    totalEntries = 0,
+                    extractedConversations = 0,
+                    totalMessages = 0,
+                    messagesWithText = 0,
+                    skippedMalformed = 0,
+                )
+    }

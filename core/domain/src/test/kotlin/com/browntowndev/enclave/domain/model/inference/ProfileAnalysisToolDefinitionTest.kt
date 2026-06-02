@@ -62,4 +62,3 @@ class ProfileAnalysisToolDefinitionTest {
         assertEquals(null, params.category)
     }
 }
-

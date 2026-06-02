@@ -39,41 +39,47 @@ class ProfileCorpusScorerImpl
                 val newestMs = conversations.mapNotNull { it.createdAtMs }.maxOrNull() ?: System.currentTimeMillis()
 
                 // Score each conversation
-                val candidates = conversations.map { conv ->
-                    val userText = withContext(Dispatchers.IO) {
-                        dao.getMessagesForConversation(conv.id)
-                            .filter { it.role == "USER" }
-                            .sortedBy { it.orderIndex }
-                            .joinToString("\n") { it.content }
-                    }
+                val candidates =
+                    conversations
+                        .map { conv ->
+                            val userText =
+                                withContext(Dispatchers.IO) {
+                                    dao
+                                        .getMessagesForConversation(conv.id)
+                                        .filter { it.role == "USER" }
+                                        .sortedBy { it.orderIndex }
+                                        .joinToString("\n") { it.content }
+                                }
 
-                    val score = ConversationScorer.score(
-                        userText = userText,
-                        title = conv.title,
-                        userTokenCount = conv.userTokenCount,
-                        createdAtMs = conv.createdAtMs,
-                        oldestMs = oldestMs,
-                        newestMs = newestMs,
-                    )
+                            val score =
+                                ConversationScorer.score(
+                                    userText = userText,
+                                    title = conv.title,
+                                    userTokenCount = conv.userTokenCount,
+                                    createdAtMs = conv.createdAtMs,
+                                    oldestMs = oldestMs,
+                                    newestMs = newestMs,
+                                )
 
-                    withContext(Dispatchers.IO) {
-                        dao.updateSignalScore(conv.id, score)
-                    }
+                            withContext(Dispatchers.IO) {
+                                dao.updateSignalScore(conv.id, score)
+                            }
 
-                    score to conv
-                }.filter { (score, _) -> score >= ConversationScoringPolicy.MIN_ELIGIBLE_SCORE }
-                 .map { (score, conv) -> score to conv }
+                            score to conv
+                        }.filter { (score, _) -> score >= ConversationScoringPolicy.MIN_ELIGIBLE_SCORE }
+                        .map { (score, conv) -> score to conv }
 
                 // Embed seed text for MMR diversity
-                val candidatesWithEmbeddings = candidates.map { (score, conv) ->
-                    val embedding = embeddingEngine.getEmbedding(conv.embeddingSeedText)
-                    ConversationSelector.Candidate(
-                        id = conv.id,
-                        signalScore = score,
-                        userTokenCount = conv.userTokenCount,
-                        embedding = embedding,
-                    )
-                }
+                val candidatesWithEmbeddings =
+                    candidates.map { (score, conv) ->
+                        val embedding = embeddingEngine.getEmbedding(conv.embeddingSeedText)
+                        ConversationSelector.Candidate(
+                            id = conv.id,
+                            signalScore = score,
+                            userTokenCount = conv.userTokenCount,
+                            embedding = embedding,
+                        )
+                    }
 
                 // MMR selection
                 val result = ConversationSelector.select(candidatesWithEmbeddings, tokenBudget)
@@ -88,8 +94,12 @@ class ProfileCorpusScorerImpl
                     selectedConversationIds = result.selectedIds,
                     totalConversationsInCorpus = conversations.size,
                     estimatedInputTokens = result.totalTokens,
-                    coveragePercent = if (conversations.isEmpty()) 0f
-                                      else result.selectedIds.size.toFloat() / conversations.size,
+                    coveragePercent =
+                        if (conversations.isEmpty()) {
+                            0f
+                        } else {
+                            result.selectedIds.size.toFloat() / conversations.size
+                        },
                 )
             }
     }

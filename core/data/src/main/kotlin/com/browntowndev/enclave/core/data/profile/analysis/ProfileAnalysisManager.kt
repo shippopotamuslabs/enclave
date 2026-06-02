@@ -37,69 +37,71 @@ class ProfileAnalysisManager
         private val costEstimator: ProfileCostEstimator,
         private val findingsDao: ProfileFindingsDao,
     ) : ProfileAnalysisPort {
-
         private val workManager = WorkManager.getInstance(context)
 
         override suspend fun prepareCorpus(
             corpusRunId: String,
             fileUris: List<String>,
             configId: ApiModelConfigurationId?,
-        ): ProfileCostEstimate = withContext(Dispatchers.IO) {
-            // Re-import safety: clear all previous data for this run first
-            ingestionPort.clearAll(corpusRunId)
+        ): ProfileCostEstimate =
+            withContext(Dispatchers.IO) {
+                // Re-import safety: clear all previous data for this run first
+                ingestionPort.clearAll(corpusRunId)
 
-            // Ingest zip files
-            ingestionPort.ingestZipFiles(fileUris, corpusRunId)
+                // Ingest zip files
+                ingestionPort.ingestZipFiles(fileUris, corpusRunId)
 
-            // Score and select using default budget
-            val selected = scorerPort.scoreAndSelect(corpusRunId, tokenBudget = DEFAULT_TOKEN_BUDGET)
+                // Score and select using default budget
+                val selected = scorerPort.scoreAndSelect(corpusRunId, tokenBudget = DEFAULT_TOKEN_BUDGET)
 
-            // Load config pricing to build cost estimate
-            val config = configId?.let { apiModelRepository.getConfigurationById(it) }
-            costEstimator.estimate(
-                selectedCorpusInputTokens = selected.estimatedInputTokens,
-                selectedConversationCount = selected.selectedConversationIds.size,
-                totalConversationCount = selected.totalConversationsInCorpus,
-                pricing = config?.pricing,
-            )
-        }
+                // Load config pricing to build cost estimate
+                val config = configId?.let { apiModelRepository.getConfigurationById(it) }
+                costEstimator.estimate(
+                    selectedCorpusInputTokens = selected.estimatedInputTokens,
+                    selectedConversationCount = selected.selectedConversationIds.size,
+                    totalConversationCount = selected.totalConversationsInCorpus,
+                    pricing = config?.pricing,
+                )
+            }
 
         override suspend fun startAnalysis(
             corpusRunId: String,
             configId: ApiModelConfigurationId,
         ) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
+            val constraints =
+                Constraints
+                    .Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
 
-            val workRequest = OneTimeWorkRequestBuilder<ProfileAnalysisWorker>()
-                .setInputData(
-                    workDataOf(
-                        ProfileAnalysisWorker.KEY_CORPUS_RUN_ID to corpusRunId,
-                        ProfileAnalysisWorker.KEY_CONFIG_ID to configId.value,
-                    )
-                )
-                .setConstraints(constraints)
-                .setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    15,
-                    TimeUnit.SECONDS
-                )
-                .addTag(ANALYSIS_WORK_TAG)
-                .build()
+            val workRequest =
+                OneTimeWorkRequestBuilder<ProfileAnalysisWorker>()
+                    .setInputData(
+                        workDataOf(
+                            ProfileAnalysisWorker.KEY_CORPUS_RUN_ID to corpusRunId,
+                            ProfileAnalysisWorker.KEY_CONFIG_ID to configId.value,
+                        ),
+                    ).setConstraints(constraints)
+                    .setBackoffCriteria(
+                        BackoffPolicy.EXPONENTIAL,
+                        15,
+                        TimeUnit.SECONDS,
+                    ).addTag(ANALYSIS_WORK_TAG)
+                    .build()
 
             // Enqueue unique work to prevent parallel runs for the same corpus
             val uniqueWorkName = getUniqueWorkName(corpusRunId)
             workManager.enqueueUniqueWork(
                 uniqueWorkName,
                 ExistingWorkPolicy.KEEP,
-                workRequest
+                workRequest,
             )
         }
 
         override fun observeAnalysisProgress(corpusRunId: String): Flow<ProfileAnalysisProgress> {
             val uniqueWorkName = getUniqueWorkName(corpusRunId)
-            return workManager.getWorkInfosForUniqueWorkFlow(uniqueWorkName)
+            return workManager
+                .getWorkInfosForUniqueWorkFlow(uniqueWorkName)
                 .map { workInfos ->
                     val info = workInfos.firstOrNull()
                     if (info == null) {
@@ -130,12 +132,13 @@ class ProfileAnalysisManager
 
         override suspend fun getLatestProfileSynthesis(corpusRunId: String): String? =
             withContext(Dispatchers.IO) {
-                findingsDao.getByCategory(corpusRunId, "SYNTHESIS")
-                    .lastOrNull()?.content
+                findingsDao
+                    .getByCategory(corpusRunId, "SYNTHESIS")
+                    .lastOrNull()
+                    ?.content
             }
 
-        private fun getUniqueWorkName(corpusRunId: String): String =
-            "profile_analysis_$corpusRunId"
+        private fun getUniqueWorkName(corpusRunId: String): String = "profile_analysis_$corpusRunId"
 
         companion object {
             private const val DEFAULT_TOKEN_BUDGET = 100_000
