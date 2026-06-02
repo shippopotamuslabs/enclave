@@ -7,7 +7,9 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
+import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
@@ -43,6 +45,7 @@ class OnboardingViewModelTest {
     private val mockDiscoverModels: DiscoverApiModelsUseCase = mockk(relaxed = true)
     private val mockSaveTts: SaveTtsProviderUseCase = mockk(relaxed = true)
     private val mockSaveMedia: SaveMediaProviderUseCase = mockk(relaxed = true)
+    private val mockResolveFlowMode: ResolveOnboardingFlowModeUseCase = mockk()
 
     private lateinit var viewModel: OnboardingViewModel
 
@@ -65,6 +68,7 @@ class OnboardingViewModelTest {
             )
         coEvery { mockSaveTts(any()) } returns Result.success(TtsProviderId("fake-tts"))
         coEvery { mockSaveMedia(any(), any()) } returns MediaProviderId("fake-media")
+        coEvery { mockResolveFlowMode() } returns OnboardingFlowMode.FULL
 
         viewModel =
             OnboardingViewModel(
@@ -73,8 +77,22 @@ class OnboardingViewModelTest {
                 discoverApiModelsUseCase = mockDiscoverModels,
                 saveTtsProviderUseCase = mockSaveTts,
                 saveMediaProviderUseCase = mockSaveMedia,
+                resolveOnboardingFlowModeUseCase = mockResolveFlowMode,
                 loggingPort = fakeLogging,
             )
+    }
+
+    private fun createViewModelWithFlowMode(flowMode: OnboardingFlowMode): OnboardingViewModel {
+        coEvery { mockResolveFlowMode() } returns flowMode
+        return OnboardingViewModel(
+            settingsRepository = fakeSettingsRepository,
+            bulkAssignApiProviderUseCase = fakeBulkAssign,
+            discoverApiModelsUseCase = mockDiscoverModels,
+            saveTtsProviderUseCase = mockSaveTts,
+            saveMediaProviderUseCase = mockSaveMedia,
+            resolveOnboardingFlowModeUseCase = mockResolveFlowMode,
+            loggingPort = fakeLogging,
+        )
     }
 
     // -------- OB-02 --------
@@ -95,6 +113,7 @@ class OnboardingViewModelTest {
     @DisplayName("OB-03 — Step 0 advances to step 1 when age confirmed")
     fun `OB-03 onAgeConfirmedChange true then onNextStep advances to step 1`() =
         runTest {
+            advanceUntilIdle()
             viewModel.onAgeConfirmedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
@@ -504,6 +523,43 @@ class OnboardingViewModelTest {
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
                 assertTrue(awaitItem() is OnboardingEvent.NavigateToChat)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // -------- OB-RESTORED --------
+
+    @Test
+    @DisplayName("OB-RESTORED-01 — Synced account uses RESTORED flow mode")
+    fun `OB-RESTORED-01 init sets RESTORED flow mode when resolver returns RESTORED`() =
+        runTest {
+            viewModel = createViewModelWithFlowMode(OnboardingFlowMode.RESTORED)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(OnboardingFlowMode.RESTORED, state.flowMode)
+            assertEquals(ModelChoice.RESTORED, state.selectedModelChoice)
+            assertEquals(0, state.currentStep)
+        }
+
+    @Test
+    @DisplayName("OB-RESTORED-02 — RESTORED flow completes from welcome and skips bulk-assign")
+    fun `OB-RESTORED-02 onNextStep from welcome completes and emits RESTORED`() =
+        runTest {
+            viewModel = createViewModelWithFlowMode(OnboardingFlowMode.RESTORED)
+            advanceUntilIdle()
+
+            viewModel.onAgeConfirmedChange(true)
+
+            viewModel.events.test {
+                viewModel.onNextStep()
+                advanceUntilIdle()
+
+                assertTrue(fakeSettingsRepository.onboardingCompleted)
+                assertTrue(fakeSettingsRepository.ageConfirmed)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.RESTORED, event.modelChoice)
+                assertEquals(0, fakeBulkAssign.callCount)
                 cancelAndIgnoreRemainingEvents()
             }
         }
