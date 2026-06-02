@@ -29,7 +29,8 @@ interface DeviceEnvironmentRepositoryPort {
  */
 object NoopDeviceEnvironmentRepository : DeviceEnvironmentRepositoryPort {
     override suspend fun isWifiConnected(): Boolean = true
+
     override suspend fun hasRequiredStorage(requiredBytes: Long): Boolean = true
+
     override suspend fun isNetworkAvailable(): Boolean = true
 }
-

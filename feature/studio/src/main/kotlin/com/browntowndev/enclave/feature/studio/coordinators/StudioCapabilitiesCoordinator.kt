@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import kotlinx.coroutines.CoroutineScope
@@ -22,20 +23,124 @@ class StudioCapabilitiesCoordinator
             capabilitiesFlow
                 .onEach { caps ->
                     caps ?: return@onEach
-                    val currentSettings = settings.value
-                    if (currentSettings is ImageGenerationSettings) {
-                        if (caps.supportedImageQualities.isNotEmpty() &&
-                            !caps.supportedImageQualities.contains(currentSettings.quality)
-                        ) {
-                            settings.value = currentSettings.copy(quality = caps.supportedImageQualities.first())
-                        }
-                    } else if (currentSettings is VideoGenerationSettings) {
-                        if (caps.supportedVideoQualities.isNotEmpty() &&
-                            !caps.supportedVideoQualities.contains(currentSettings.quality)
-                        ) {
-                            settings.value = currentSettings.copy(quality = caps.supportedVideoQualities.first())
-                        }
-                    }
-                }.launchIn(scope)
+                    applyCapabilitiesToSettings(settings, caps)
+                }
+                .launchIn(scope)
+        }
+
+        private fun applyCapabilitiesToSettings(
+            settings: MutableStateFlow<GenerationSettings>,
+            caps: ProviderCapabilities,
+        ) {
+            val currentSettings = settings.value
+            val updated =
+                when (currentSettings) {
+                    is ImageGenerationSettings -> alignImageSettings(currentSettings, caps)
+                    is VideoGenerationSettings -> alignVideoSettings(currentSettings, caps)
+                    is MusicGenerationSettings -> alignMusicSettings(currentSettings, caps)
+                    else -> return
+                }
+            if (updated != currentSettings) {
+                settings.value = updated
+            }
+        }
+
+        private fun alignImageSettings(
+            settings: ImageGenerationSettings,
+            caps: ProviderCapabilities,
+        ): ImageGenerationSettings {
+            var updated = settings
+            if (caps.supportedImageQualities.isNotEmpty() &&
+                !caps.supportedImageQualities.contains(updated.quality)
+            ) {
+                updated = updated.copy(quality = caps.supportedImageQualities.first())
+            }
+            if (caps.supportedAspectRatios.isNotEmpty() &&
+                !caps.supportedAspectRatios.contains(updated.aspectRatio)
+            ) {
+                updated = updated.copy(aspectRatio = caps.supportedAspectRatios.first())
+            }
+            if (caps.supportedImageResolutions.isNotEmpty()) {
+                val resolution =
+                    updated.imageResolution?.takeIf { it in caps.supportedImageResolutions }
+                        ?: caps.supportedImageResolutions.first()
+                if (resolution != updated.imageResolution) {
+                    updated = updated.copy(imageResolution = resolution)
+                }
+            }
+            return updated
+        }
+
+        private fun alignVideoSettings(
+            settings: VideoGenerationSettings,
+            caps: ProviderCapabilities,
+        ): VideoGenerationSettings {
+            var updated = settings
+            if (caps.supportedVideoQualities.isNotEmpty() &&
+                !caps.supportedVideoQualities.contains(updated.quality)
+            ) {
+                updated = updated.copy(quality = caps.supportedVideoQualities.first())
+            }
+            if (caps.supportedAspectRatios.isNotEmpty() &&
+                !caps.supportedAspectRatios.contains(updated.aspectRatio)
+            ) {
+                updated = updated.copy(aspectRatio = caps.supportedAspectRatios.first())
+            }
+            if (caps.supportedVideoResolutions.isNotEmpty() &&
+                !caps.supportedVideoResolutions.contains(updated.videoResolution)
+            ) {
+                updated = updated.copy(videoResolution = caps.supportedVideoResolutions.first())
+            }
+            updated = alignVideoDuration(updated, caps)
+            return updated
+        }
+
+        private fun alignVideoDuration(
+            settings: VideoGenerationSettings,
+            caps: ProviderCapabilities,
+        ): VideoGenerationSettings {
+            val durationTokens = caps.supportedVideoDurationTokens
+            if (durationTokens.isNotEmpty()) {
+                val selectedToken =
+                    settings.apiDuration?.takeIf { it in durationTokens }
+                        ?: durationTokens.first()
+                val seconds = selectedToken.removeSuffix("s").toIntOrNull() ?: settings.videoDuration
+                if (selectedToken == settings.apiDuration && seconds == settings.videoDuration) {
+                    return settings
+                }
+                return settings.copy(
+                    apiDuration = selectedToken,
+                    videoDuration = seconds,
+                )
+            }
+            if (caps.supportedVideoDurations.isEmpty() ||
+                caps.supportedVideoDurations.contains(settings.videoDuration)
+            ) {
+                return settings
+            }
+            return settings.copy(
+                videoDuration = caps.supportedVideoDurations.first(),
+                apiDuration = null,
+            )
+        }
+
+        private fun alignMusicSettings(
+            settings: MusicGenerationSettings,
+            caps: ProviderCapabilities,
+        ): MusicGenerationSettings {
+            var updated = settings
+            if (updated.duration !in caps.musicDurationRange) {
+                updated =
+                    updated.copy(
+                        duration = updated.duration.coerceIn(caps.musicDurationRange),
+                    )
+            }
+            if (updated.tempo !in caps.musicTempoRange) {
+                updated =
+                    updated.copy(
+                        tempo = updated.tempo.coerceIn(caps.musicTempoRange),
+                    )
+            }
+            return updated
         }
     }

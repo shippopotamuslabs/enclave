@@ -22,7 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
@@ -34,6 +34,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -60,7 +61,7 @@ class MultimodalViewModelTest {
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>()
+    private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
     private val chatUseCases = mockk<ChatUseCases>()
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
@@ -141,7 +142,9 @@ class MultimodalViewModelTest {
             )
 
         coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
-        every { getProviderCapabilitiesUseCase(any()) } returns
+        coEvery {
+            resolveMediaProviderCapabilitiesUseCase(any(), any())
+        } returns
             ProviderCapabilities(
                 supportedAspectRatios = AspectRatio.entries.toList(),
                 supportedImageQualities = listOf(GenerationQuality.SPEED),
@@ -160,22 +163,24 @@ class MultimodalViewModelTest {
         speechCoordinator = StudioSpeechCoordinator(chatUseCases)
         playbackCoordinator = StudioPlaybackCoordinator(playbackController)
         studioUiStateReducer = StudioUiStateReducer()
-        val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
+        viewModel = createViewModel()
+    }
 
-        viewModel =
-            MultimodalViewModel(
-                shareMediaPort = shareMediaPort,
-                studioRepository = studioRepository,
-                defaultModelRepository = defaultModelRepository,
-                mediaProviderRepository = mediaProviderRepository,
-                getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
-                generationCoordinator = generationCoordinator,
-                albumSelectionCoordinator = albumSelectionCoordinator,
-                speechCoordinator = speechCoordinator,
-                playbackCoordinator = playbackCoordinator,
-                studioUiStateReducer = studioUiStateReducer,
-                capabilitiesCoordinator = capabilitiesCoordinator,
-            )
+    private fun createViewModel(): MultimodalViewModel {
+        val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
+        return MultimodalViewModel(
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
+            generationCoordinator = generationCoordinator,
+            albumSelectionCoordinator = albumSelectionCoordinator,
+            speechCoordinator = speechCoordinator,
+            playbackCoordinator = playbackCoordinator,
+            studioUiStateReducer = studioUiStateReducer,
+            capabilitiesCoordinator = capabilitiesCoordinator,
+        )
     }
 
     @AfterEach
@@ -245,16 +250,83 @@ class MultimodalViewModelTest {
                     supportsReferenceImage = false,
                     supportsVideo = false,
                 )
-            every { getProviderCapabilitiesUseCase(any()) } returns capabilities
+            coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns capabilities
 
+            viewModel = createViewModel()
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
                 }
+            advanceUntilIdle()
 
             val state = viewModel.uiState.value
             assertEquals(listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE), state.capabilities?.supportedAspectRatios)
             assertEquals(listOf(GenerationQuality.SPEED, GenerationQuality.HD), state.capabilities?.supportedImageQualities)
+            job.cancel()
+        }
+
+    @Test
+    fun `switching media type while fal schema fetch is in flight keeps loading active`() =
+        runTest {
+            val mediaProviderId = MediaProviderId("fal-provider")
+            val falProvider =
+                MediaProviderAsset(
+                    id = mediaProviderId,
+                    displayName = "Fal",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.IMAGE,
+                    credentialAlias = "fal-alias",
+                    modelName = "fal-ai/flux/dev",
+                )
+            val imageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    mediaProviderId = mediaProviderId,
+                )
+            val videoAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.VIDEO_GENERATION,
+                    mediaProviderId = mediaProviderId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns
+                flowOf(listOf(imageAssignment, videoAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(falProvider))
+
+            val remoteFetchGate = CompletableDeferred<Unit>()
+            val resolvedCapabilities =
+                ProviderCapabilities(
+                    supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                    supportedImageQualities = listOf(GenerationQuality.SPEED),
+                    supportedVideoQualities = listOf(GenerationQuality.SPEED),
+                    supportedVideoResolutions = listOf("480p"),
+                    supportedVideoDurations = listOf(5),
+                    supportsReferenceImage = false,
+                    supportsVideo = true,
+                )
+            coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } coAnswers {
+                remoteFetchGate.await()
+                resolvedCapabilities
+            }
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isCapabilitiesLoading)
+
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
+            assertTrue(
+                viewModel.uiState.value.isCapabilitiesLoading,
+                "Loading must stay active until the superseding fetch completes",
+            )
+
+            remoteFetchGate.complete(Unit)
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.isCapabilitiesLoading)
+            assertEquals(resolvedCapabilities, viewModel.uiState.value.capabilities)
             job.cancel()
         }
 

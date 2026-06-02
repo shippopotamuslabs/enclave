@@ -123,13 +123,13 @@ class StudioGenerationCoordinatorTest {
 
             ephemeralMediaFlow.value =
                 ephemeralMediaFlow.value +
-                    StudioMediaAsset(
-                        id = "2",
-                        localUri = "cache://2.jpg",
-                        prompt = "continual prompt",
-                        mediaType = MediaCapability.IMAGE.name,
-                        createdAt = 2L,
-                    )
+                StudioMediaAsset(
+                    id = "2",
+                    localUri = "cache://2.jpg",
+                    prompt = "continual prompt",
+                    mediaType = MediaCapability.IMAGE.name,
+                    createdAt = 2L,
+                )
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
 

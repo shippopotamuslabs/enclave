@@ -22,7 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
-import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
@@ -59,7 +59,8 @@ class MultimodalViewModelAnimateTest {
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>(relaxed = true)
+    private val resolveMediaProviderCapabilitiesUseCase =
+        mockk<ResolveMediaProviderCapabilitiesUseCase>(relaxed = true)
     private val chatUseCases = mockk<ChatUseCases>(relaxed = true)
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
@@ -93,7 +94,7 @@ class MultimodalViewModelAnimateTest {
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
         coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://video.mp4"
-        every { getProviderCapabilitiesUseCase(any()) } returns
+        coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns
             ProviderCapabilities(
                 supportedAspectRatios = AspectRatio.entries.toList(),
                 supportedImageQualities = listOf(GenerationQuality.SPEED),
@@ -117,7 +118,7 @@ class MultimodalViewModelAnimateTest {
                 studioRepository = studioRepository,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
-                getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+                resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
                 speechCoordinator = speechCoordinator,
