@@ -17,6 +17,7 @@ class VideoGenerationPortImpl
         private val openAiAdapter: OpenAiVideoGenerationAdapter,
         private val googleAdapter: GoogleVideoGenerationAdapter,
         private val xaiAdapter: XaiVideoGenerationAdapter,
+        private val falAdapter: FalVideoGenerationAdapter,
     ) : VideoGenerationPort {
         override suspend fun generateVideo(
             prompt: String,
@@ -54,6 +55,15 @@ class VideoGenerationPortImpl
                         prompt = prompt,
                         apiKey = apiKey,
                         modelId = provider.modelName ?: "grok-imagine-video",
+                        baseUrl = provider.baseUrl,
+                        settings = settings,
+                        referenceImage = referenceImageBytes,
+                    )
+                ApiProvider.FAL ->
+                    falAdapter.generateVideo(
+                        prompt = prompt,
+                        apiKey = apiKey,
+                        modelId = provider.modelName ?: "fal-ai/minimax/video-01",
                         baseUrl = provider.baseUrl,
                         settings = settings,
                         referenceImage = referenceImageBytes,

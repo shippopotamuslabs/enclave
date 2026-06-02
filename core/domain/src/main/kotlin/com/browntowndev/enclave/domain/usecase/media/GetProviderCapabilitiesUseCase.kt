@@ -72,6 +72,24 @@ class GetProviderCapabilitiesUseCase
                         supportsVideo = true,
                         supportsMusic = false,
                     )
+                id == "fal" ->
+                    ProviderCapabilities(
+                        supportedAspectRatios =
+                            listOf(
+                                AspectRatio.ONE_ONE,
+                                AspectRatio.NINE_SIXTEEN,
+                                AspectRatio.SIXTEEN_NINE,
+                                AspectRatio.THREE_FOUR,
+                                AspectRatio.FOUR_THREE,
+                            ),
+                        supportedImageQualities = emptyList(),
+                        supportedVideoQualities = listOf(GenerationQuality.QUALITY),
+                        supportedVideoResolutions = listOf("720p", "1080p"),
+                        supportedVideoDurations = listOf(5, 10),
+                        supportsReferenceImage = true,
+                        supportsVideo = true,
+                        supportsMusic = true,
+                    )
                 else ->
                     ProviderCapabilities(
                         supportedAspectRatios = AspectRatio.entries.toList(),

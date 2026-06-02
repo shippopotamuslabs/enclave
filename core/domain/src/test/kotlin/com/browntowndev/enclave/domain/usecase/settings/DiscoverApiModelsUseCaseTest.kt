@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.settings
 
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
 import io.mockk.coEvery
@@ -10,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DiscoverApiModelsUseCaseTest {
     private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase = mockk()
@@ -41,13 +43,14 @@ class DiscoverApiModelsUseCaseTest {
 
             coEvery {
                 fetchApiProviderModelsUseCase(ApiProvider.ANTHROPIC, "key", null, null)
-            } returns models
+            } returns ApiModelCatalogResult(models)
 
             val result = useCase(request)
 
             assertEquals(1, result.models.size)
             assertEquals("model-1", result.models[0].id)
             assertEquals(ApiProvider.ANTHROPIC, result.scope.provider)
+            assertEquals(false, result.isTruncated)
         }
 
     @Test
@@ -67,7 +70,7 @@ class DiscoverApiModelsUseCaseTest {
 
             coEvery {
                 fetchApiProviderModelsUseCase(ApiProvider.XAI, "key", null, null)
-            } returns models
+            } returns ApiModelCatalogResult(models)
 
             coEvery {
                 fetchApiProviderModelDetailUseCase(ApiProvider.XAI, "grok-beta", "key", null, null)
@@ -92,11 +95,31 @@ class DiscoverApiModelsUseCaseTest {
                 )
             coEvery {
                 fetchApiProviderModelsUseCase(ApiProvider.GOOGLE, "key", null, null)
-            } returns emptyList()
+            } returns ApiModelCatalogResult(emptyList())
 
             val result = useCase(request)
 
             assertEquals(1, result.models.size)
             assertEquals("custom-model", result.models[0].id)
+        }
+
+    @Test
+    fun `invoke propagates catalog truncation flag`() =
+        runTest {
+            val request =
+                ApiModelDiscoveryRequest(
+                    provider = ApiProvider.FAL,
+                    currentApiKey = "key",
+                    credentialAlias = null,
+                    baseUrl = null,
+                    selectedModelId = null,
+                )
+            coEvery {
+                fetchApiProviderModelsUseCase(ApiProvider.FAL, "key", null, null)
+            } returns ApiModelCatalogResult(models = emptyList(), isTruncated = true)
+
+            val result = useCase(request)
+
+            assertTrue(result.isTruncated)
         }
 }

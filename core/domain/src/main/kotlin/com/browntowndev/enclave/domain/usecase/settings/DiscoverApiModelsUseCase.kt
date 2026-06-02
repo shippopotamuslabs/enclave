@@ -13,13 +13,14 @@ class DiscoverApiModelsUseCase
         private val fetchApiProviderModelDetailUseCase: FetchApiProviderModelDetailUseCase,
     ) {
         suspend operator fun invoke(request: ApiModelDiscoveryRequest): ApiModelDiscoveryResult {
-            val models =
+            val catalog =
                 fetchApiProviderModelsUseCase(
                     provider = request.provider,
                     currentApiKey = request.currentApiKey,
                     credentialAlias = request.credentialAlias,
                     baseUrl = request.baseUrl,
                 )
+            val models = catalog.models
             val needsDetailFetch =
                 request.provider == ApiProvider.XAI &&
                     request.selectedModelId != null &&
@@ -58,6 +59,7 @@ class DiscoverApiModelsUseCase
                         baseUrl = request.baseUrl.normalizedBaseUrl(),
                         credentialAlias = request.credentialAlias?.takeIf(String::isNotBlank),
                     ),
+                isTruncated = catalog.isTruncated,
             )
         }
 

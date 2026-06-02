@@ -12,6 +12,8 @@ sealed interface VisualGenerationSettings : GenerationSettings {
 data class ImageGenerationSettings(
     override val aspectRatio: AspectRatio = AspectRatio.ONE_ONE,
     override val quality: GenerationQuality = GenerationQuality.SPEED,
+    /** Provider-native resolution (e.g. fal OpenAPI `resolution` enum). */
+    val imageResolution: String? = null,
     override val referenceImageUri: String? = null,
     override val seed: String = "",
     val generationCount: Int = 1,
@@ -35,6 +37,11 @@ data class VideoGenerationSettings(
     override val aspectRatio: AspectRatio = AspectRatio.ONE_ONE,
     override val quality: GenerationQuality = GenerationQuality.SPEED,
     val videoDuration: Int = 6,
+    /**
+     * Provider-native duration token when the API expects a string (e.g. `"8s"`).
+     * When set, inference adapters should send this value instead of [videoDuration].
+     */
+    val apiDuration: String? = null,
     val videoResolution: String = "480p",
     val autoGenerateVideo: Boolean = false,
     override val referenceImageUri: String? = null,
@@ -73,13 +80,21 @@ enum class GenerationQuality(
     AUTO("Auto"),
 }
 
+private val DefaultMusicDurationRange = 5..120
+private val DefaultMusicTempoRange = 60..200
+
 data class ProviderCapabilities(
     val supportedAspectRatios: List<AspectRatio>,
     val supportedImageQualities: List<GenerationQuality>,
+    val supportedImageResolutions: List<String> = emptyList(),
     val supportedVideoQualities: List<GenerationQuality>,
     val supportedVideoResolutions: List<String>,
     val supportedVideoDurations: List<Int>,
+    /** Labels shown in Studio duration pills (e.g. `8s`); falls back to `"${seconds}s"` when empty. */
+    val supportedVideoDurationTokens: List<String> = emptyList(),
     val supportsReferenceImage: Boolean,
     val supportsVideo: Boolean,
     val supportsMusic: Boolean = false,
+    val musicDurationRange: IntRange = DefaultMusicDurationRange,
+    val musicTempoRange: IntRange = DefaultMusicTempoRange,
 )
