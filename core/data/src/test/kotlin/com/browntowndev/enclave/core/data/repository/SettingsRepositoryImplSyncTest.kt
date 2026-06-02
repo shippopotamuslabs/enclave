@@ -121,7 +121,11 @@ class SettingsRepositoryImplSyncTest {
             advanceUntilIdle()
 
             val data = repository.settingsFlow.first()
-            assertEquals(SearchProvider.EXA, data.searchProvider, "settingsFlow.searchProvider should be EXA after updateSearchProvider(EXA)")
+            assertEquals(
+                SearchProvider.EXA,
+                data.searchProvider,
+                "settingsFlow.searchProvider should be EXA after updateSearchProvider(EXA)",
+            )
             assertEquals(true, queue.isPending(), "queue.isPending() should be true after updateSearchProvider(EXA)")
         }
 
@@ -180,7 +184,11 @@ class SettingsRepositoryImplSyncTest {
             val post = repository.settingsFlow.first()
             // The repository must keep searchEnabled true regardless of key state.
             assertNotNull(post, "settingsFlow should still emit a value after applyRemoteSearchToolSettings")
-            assertEquals(true, post.searchEnabled, "searchEnabled must remain true (remote apply should not flip booleans based on key presence)")
+            assertEquals(
+                true,
+                post.searchEnabled,
+                "searchEnabled must remain true (remote apply should not flip booleans based on key presence)",
+            )
         }
 
     // -----------------------------------------------------------------------

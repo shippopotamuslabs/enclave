@@ -65,12 +65,13 @@ sealed interface AppStartupState {
         val onboardingCompleted: Boolean = true,
     ) : AppStartupState {
         val initialRoute: String
-            get() = when {
-                !onboardingCompleted -> Routes.ONBOARDING
-                initializationError != null ||
-                    modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
-                else -> Routes.CHAT
-            }
+            get() =
+                when {
+                    !onboardingCompleted -> Routes.ONBOARDING
+                    initializationError != null ||
+                        modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
+                    else -> Routes.CHAT
+                }
     }
 }
 
@@ -162,10 +163,11 @@ class MainViewModel
             isVaultLocked: Boolean,
             isBiometricUnlockPossible: Boolean,
         ) {
-            val onboardingCompleted = settingsRepository
-                .settingsFlow
-                .first()
-                .onboardingCompleted
+            val onboardingCompleted =
+                settingsRepository
+                    .settingsFlow
+                    .first()
+                    .onboardingCompleted
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
                 val vaultLockedNow = !cryptoManager.hasCachedKey()
@@ -701,7 +703,10 @@ class MainViewModel
         fun getBiometricDecryptCipher(): Cipher? {
             val cipher = biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
             if (cipher == null && biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)) {
-                loggingPort.error(TAG, "getBiometricDecryptCipher: Cipher is null but has secure value. Invalidate stale biometric credentials.")
+                loggingPort.error(
+                    TAG,
+                    "getBiometricDecryptCipher: Cipher is null but has secure value. Invalidate stale biometric credentials.",
+                )
                 invalidateStaleBiometricUnlock("Biometric key invalidated. Enter your vault password.")
             }
             return cipher

@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,12 +45,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
@@ -400,22 +399,12 @@ private fun LocalModelAssetCard(
                             }
                         }
                         is ReDownloadProgress.Preparing -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                strokeCap = StrokeCap.Round,
-                            )
+                            NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
                         }
                         is ReDownloadProgress.Downloading -> {
-                            CircularProgressIndicator(
+                            NeoCircularProgressIndicator(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                strokeCap = StrokeCap.Round,
                             )
                         }
                         is ReDownloadProgress.Complete -> {

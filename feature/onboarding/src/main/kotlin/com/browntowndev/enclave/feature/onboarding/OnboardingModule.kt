@@ -13,7 +13,5 @@ import javax.inject.Singleton
 abstract class OnboardingModule {
     @Binds
     @Singleton
-    abstract fun bindBulkAssignApiProviderUseCase(
-        impl: BulkAssignApiProviderUseCaseImpl,
-    ): BulkAssignApiProviderUseCase
+    abstract fun bindBulkAssignApiProviderUseCase(impl: BulkAssignApiProviderUseCaseImpl): BulkAssignApiProviderUseCase
 }

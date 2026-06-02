@@ -1,10 +1,12 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
@@ -61,13 +63,21 @@ class SetDefaultModelUseCaseTest {
     fun `SCN-USECASE-VISION-001 Vision Default Requires Multimodal Preset`() =
         runTest {
             val configId = ApiModelConfigurationId("config-1")
+            val credId = ApiCredentialsId("cred-1")
             coEvery { apiModelRepository.getConfigurationById(configId) } returns
                 ApiModelConfiguration(
                     id = configId,
-                    apiCredentialsId = ApiCredentialsId("cred-1"),
+                    apiCredentialsId = credId,
                     modelId = "gpt-4o",
                     isMultimodal = false,
                     displayName = "Text Only",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credId) } returns
+                ApiCredentials(
+                    id = credId,
+                    displayName = "OpenAI",
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "openai",
                 )
 
             val error =
@@ -87,5 +97,116 @@ class SetDefaultModelUseCaseTest {
                 }
 
             assertEquals("Vision slot is API-only.", error.message)
+        }
+
+    @Test
+    fun `SCN-USECASE-CHAT-001 MAIN slot rejects provider that does not support chat`() =
+        runTest {
+            val configId = ApiModelConfigurationId("config-fal")
+            val credId = ApiCredentialsId("cred-fal")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    modelId = "fal-ai/flux",
+                    displayName = "FAL Flux",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credId) } returns
+                ApiCredentials(
+                    id = credId,
+                    displayName = "FAL",
+                    provider = ApiProvider.FAL,
+                    credentialAlias = "fal-alias",
+                )
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.MAIN, localConfigId = null, apiConfigId = configId)
+                }
+
+            assertTrue(error.message!!.contains("does not support chat", ignoreCase = true))
+        }
+
+    @Test
+    fun `SCN-USECASE-CHAT-002 THINKING slot rejects provider that does not support chat`() =
+        runTest {
+            val configId = ApiModelConfigurationId("config-fal-2")
+            val credId = ApiCredentialsId("cred-fal-2")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    modelId = "fal-ai/flux",
+                    displayName = "FAL Flux",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credId) } returns
+                ApiCredentials(
+                    id = credId,
+                    displayName = "FAL",
+                    provider = ApiProvider.FAL,
+                    credentialAlias = "fal-alias-2",
+                )
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.THINKING, localConfigId = null, apiConfigId = configId)
+                }
+
+            assertTrue(error.message!!.contains("does not support chat", ignoreCase = true))
+        }
+
+    @Test
+    fun `MAIN slot accepts provider that supports chat`() =
+        runTest {
+            val configId = ApiModelConfigurationId("config-anthropic")
+            val credId = ApiCredentialsId("cred-anthropic")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    modelId = "claude-opus-4-8",
+                    displayName = "Claude",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credId) } returns
+                ApiCredentials(
+                    id = credId,
+                    displayName = "Anthropic",
+                    provider = ApiProvider.ANTHROPIC,
+                    credentialAlias = "anthropic-alias",
+                )
+
+            useCase(ModelType.MAIN, localConfigId = null, apiConfigId = configId)
+
+            val assignment = repository.getDefault(ModelType.MAIN)
+            assertEquals(configId, assignment?.apiConfigId)
+        }
+
+    @Test
+    fun `VISION slot rejects provider that does not support chat`() =
+        runTest {
+            val configId = ApiModelConfigurationId("config-fal-vision")
+            val credId = ApiCredentialsId("cred-fal-vision")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credId,
+                    modelId = "fal-ai/flux-pro",
+                    isMultimodal = true,
+                    displayName = "FAL Flux",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credId) } returns
+                ApiCredentials(
+                    id = credId,
+                    displayName = "FAL",
+                    provider = ApiProvider.FAL,
+                    credentialAlias = "fal-vision",
+                )
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.VISION, localConfigId = null, apiConfigId = configId)
+                }
+
+            assertTrue(error.message!!.contains("does not support vision", ignoreCase = true))
         }
 }

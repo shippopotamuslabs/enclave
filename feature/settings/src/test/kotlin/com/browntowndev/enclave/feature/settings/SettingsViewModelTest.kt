@@ -278,7 +278,7 @@ class SettingsViewModelTest {
             SettingsViewModel(
                 settingsUseCases = settingsUseCases,
                 settingsUiStateFactory =
-                    SettingsUiStateFactory(
+                    buildSettingsUiStateFactory(
                         localModelAssetUiMapper,
                         apiModelAssetUiMapper,
                         ttsProviderAssetUiMapper,
@@ -386,7 +386,7 @@ class SettingsViewModelTest {
             }
             assertEquals(
                 listOf("gemini-2.5-flash-preview-tts"),
-                viewModel.uiState.value.apiProviderEditor.discovery.models
+                viewModel.uiState.value.ttsProviderEditor.discovery.models
                     .map { it.modelId },
             )
         }

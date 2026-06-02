@@ -34,6 +34,7 @@ interface DefaultModelsDao {
             dm.media_provider_id as mediaProviderId,
             mp.displayName as mediaAssetName,
             mp.provider as mediaProviderName,
+            mp.modelName as mediaModelName,
             mp.capability as mediaCapability
         FROM default_models dm
         LEFT JOIN local_model_configurations lmc ON dm.local_config_id = lmc.id

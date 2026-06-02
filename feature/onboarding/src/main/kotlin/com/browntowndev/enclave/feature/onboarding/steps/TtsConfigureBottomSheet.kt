@@ -66,15 +66,16 @@ fun TtsConfigureBottomSheet(
                     readOnly = true,
                     label = { Text("API Provider") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
+                    modifier =
+                        Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
                     expanded = providerExpanded,
                     onDismissRequest = { providerExpanded = false },
                 ) {
-                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE).forEach { p ->
+                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE, ApiProvider.FAL).forEach { p ->
                         DropdownMenuItem(
                             text = { Text(p.displayName) },
                             onClick = {
@@ -113,9 +114,10 @@ fun TtsConfigureBottomSheet(
                     readOnly = true,
                     label = { Text("Voice") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = voiceExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
+                    modifier =
+                        Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
                     expanded = voiceExpanded,

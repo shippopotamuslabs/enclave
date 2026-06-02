@@ -66,10 +66,10 @@ internal fun TtsConfigureRoute(
             })
         },
         onFetchApiModels = viewModel::onFetchTtsModels,
-        onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
-        onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
-        onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
-        onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
+        onUpdateModelSearchQuery = viewModel::onUpdateTtsModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleTtsModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearTtsModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateTtsModelSortOption,
         snackbarHostState = snackbarHostState,
     )
 }
@@ -154,7 +154,7 @@ fun ByokConfigureScreen(
     onSearchEnabledChange: (Boolean) -> Unit,
     onSearchApiKeyChange: (String) -> Unit,
     onClearSearchApiKey: () -> Unit,
-    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
+    onSelectReusableApiCredential: (String?) -> Unit,
     onFetchApiModels: () -> Unit,
     onTestApiProviderConnection: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
@@ -269,9 +269,7 @@ fun ByokConfigureScreen(
                         uiState.apiProviderEditor.discovery.models.find {
                             it.modelId == selectedConfig.modelId
                         },
-                    availableModels = uiState.apiProviderEditor.discovery.models,
-                    filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
-                    isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
+                    discovery = uiState.apiProviderEditor.discovery,
                     canFetchModels =
                         !uiState.apiProviderEditor.discovery.isLoading &&
                             (
@@ -279,33 +277,28 @@ fun ByokConfigureScreen(
                                     draftAsset.credentialsId.value.isNotEmpty() ||
                                     uiState.apiProviderEditor.selectedReusableCredential != null
                             ),
-                    searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
-                    providerFilters = uiState.apiProviderEditor.discovery.providerFilters,
-                    sortOption = uiState.apiProviderEditor.discovery.sortOption,
                     onConfigChange = onApiModelConfigFieldChange,
                     onNavigateToCustomHeaders = onNavigateToCustomHeaders,
-                    onFetchModels = onFetchApiModels,
-                    onUpdateSearchQuery = onUpdateModelSearchQuery,
-                    onToggleProviderFilter = onToggleModelProviderFilter,
-                    onClearProviderFilters = onClearModelProviderFilters,
-                    onUpdateSortOption = onUpdateModelSortOption,
+                    discoveryCallbacks =
+                        ModelDiscoveryFieldCallbacks(
+                            onFetchModels = onFetchApiModels,
+                            onUpdateSearchQuery = onUpdateModelSearchQuery,
+                            onToggleProviderFilter = onToggleModelProviderFilter,
+                            onClearProviderFilters = onClearModelProviderFilters,
+                            onUpdateSortOption = onUpdateModelSortOption,
+                        ),
                 )
             } else {
                 CredentialsConfigurationForm(
                     asset = draftAsset,
                     reusableCredentials =
-                        uiState.apiProvidersSheet.assets
-                            .filter { existing ->
-                                existing.provider == draftAsset.provider &&
-                                    existing.credentialsId != draftAsset.credentialsId
-                            }.map { existing ->
-                                ReusableApiCredentialUi(
-                                    credentialsId = existing.credentialsId,
-                                    displayName = existing.displayName,
-                                    providerLabel = existing.provider.displayName,
-                                    credentialAlias = existing.credentialAlias,
-                                )
-                            },
+                        reusableCredentialsForProvider(
+                            provider = draftAsset.provider,
+                            apiAssets = uiState.apiProvidersSheet.assets,
+                            mediaAssets = uiState.mediaProvidersSheet.assets,
+                            ttsAssets = uiState.ttsProvidersSheet.assets,
+                            excludeApiCredentialsId = draftAsset.credentialsId.takeIf { it.value.isNotEmpty() },
+                        ),
                     selectedReusableCredential = uiState.apiProviderEditor.selectedReusableCredential,
                     apiKey = apiKey,
                     connectionTestStatus = uiState.apiProviderEditor.connectionTestStatus,

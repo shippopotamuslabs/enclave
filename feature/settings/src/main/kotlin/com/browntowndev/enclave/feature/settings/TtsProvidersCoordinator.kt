@@ -32,14 +32,13 @@ internal class TtsProvidersCoordinator
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
         ) {
             val draft = ttsState.value.assetDraft ?: ttsState.value.selectedAsset ?: return
             val credentialAlias = resolveTtsCredentialAlias(ttsState.value, draft)
             if (currentApiKey.value.isBlank() && credentialAlias == null) return
 
-            apiState.update { it.copy(isDiscoveringApiModels = true) }
+            ttsState.update { it.copy(isDiscoveringApiModels = true) }
             scope.launch(
                 errorHandler.coroutineExceptionHandler(
                     tag,
@@ -58,17 +57,24 @@ internal class TtsProvidersCoordinator
                                 selectedModelId =
                                     draft.modelName
                                         ?.takeIf(String::isNotBlank)
-                                        ?.takeIf { it.isGoogleTtsModelCandidate() },
+                                        ?.takeIf { modelId ->
+                                            when (draft.provider) {
+                                                ApiProvider.GOOGLE -> modelId.isGoogleTtsModelCandidate()
+                                                ApiProvider.FAL -> modelId.isFalTtsModelCandidate()
+                                                else -> modelId.isGoogleTtsModelCandidate() || modelId.isNotBlank()
+                                            }
+                                        },
                             ),
                         )
-                    apiState.update { state ->
+                    ttsState.update { state ->
                         state.copy(
-                            discoveredApiModels = result.models.filterGoogleTtsModels(),
+                            discoveredApiModels = result.models.filterTtsModels(draft.provider),
                             discoveredApiModelScope = result.scope,
+                            isDiscoveryTruncated = result.isTruncated,
                         )
                     }
                 } finally {
-                    apiState.update { it.copy(isDiscoveringApiModels = false) }
+                    ttsState.update { it.copy(isDiscoveringApiModels = false) }
                 }
             }
         }
@@ -86,7 +92,6 @@ internal class TtsProvidersCoordinator
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
             assignmentsUseCases: SettingsAssignmentUseCases,
             asset: TtsProviderAssetUi,
@@ -133,8 +138,8 @@ internal class TtsProvidersCoordinator
             }
 
             if (discoveryScopeChanged) {
-                apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
-                onFetchTtsModels(scope, tag, ttsState, apiState, currentApiKey)
+                ttsState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
+                onFetchTtsModels(scope, tag, ttsState, currentApiKey)
             }
         }
 
@@ -142,7 +147,6 @@ internal class TtsProvidersCoordinator
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
             asset: TtsProviderAssetUi?,
         ) {
@@ -152,12 +156,13 @@ internal class TtsProvidersCoordinator
                     assetDraft = asset,
                     selectedReusableApiCredentialAlias = null,
                     selectedReusableApiCredentialName = null,
+                    discoveredApiModels = emptyList(),
+                    discoveredApiModelScope = null,
                 )
             }
-            apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
             currentApiKey.value = ""
             if (asset != null) {
-                onFetchTtsModels(scope, tag, ttsState, apiState, currentApiKey)
+                onFetchTtsModels(scope, tag, ttsState, currentApiKey)
             }
         }
 

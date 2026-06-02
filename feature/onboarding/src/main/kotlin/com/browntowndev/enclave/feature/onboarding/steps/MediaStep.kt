@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber")
+
 package com.browntowndev.enclave.feature.onboarding.steps
 
 import androidx.compose.foundation.clickable
@@ -59,30 +60,34 @@ fun MediaStep(
     var activeSheet by remember { mutableStateOf<ActiveSheet?>(null) }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(scrollState)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState),
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "MEDIA & OPTIONAL PLUGINS",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                ),
+                style =
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                    ),
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Customize your private assistant with optional capabilities. " +
-                    "These can also be configured or changed anytime later in Settings.",
+                text =
+                    "Customize your private assistant with optional capabilities. " +
+                        "These can also be configured or changed anytime later in Settings.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -90,12 +95,13 @@ fun MediaStep(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 PluginCard(
                     title = "Text-to-Speech (TTS)",
-                    description = "Generates high-quality voices using xAI, enabling Enclave " +
-                        "to read messages and interact with you audibly.",
+                    description =
+                        "Generates high-quality voices using xAI, enabling Enclave " +
+                            "to read messages and interact with you audibly.",
                     isConfigured = isTtsConfigured,
                     borderColor = borderColor,
                     onClick = { activeSheet = ActiveSheet.TTS },
@@ -103,8 +109,9 @@ fun MediaStep(
 
                 PluginCard(
                     title = "Image & Video Generation",
-                    description = "Allows you to dynamically create beautiful images and videos " +
-                        "directly inside your chats via xAI integration.",
+                    description =
+                        "Allows you to dynamically create beautiful images and videos " +
+                            "directly inside your chats via xAI integration.",
                     isConfigured = isMediaConfigured,
                     borderColor = borderColor,
                     onClick = { activeSheet = ActiveSheet.IMAGE_VIDEO },
@@ -112,8 +119,9 @@ fun MediaStep(
 
                 PluginCard(
                     title = "Music Generation",
-                    description = "Enables dynamic music track creation in response to your prompts " +
-                        "powered by Google AI model capabilities.",
+                    description =
+                        "Enables dynamic music track creation in response to your prompts " +
+                            "powered by Google AI model capabilities.",
                     isConfigured = isMediaConfigured,
                     borderColor = borderColor,
                     onClick = { activeSheet = ActiveSheet.MUSIC },
@@ -124,48 +132,52 @@ fun MediaStep(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             NeoSecondaryButton(
                 text = "BACK",
                 onClick = onPrevious,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             NeoPrimaryButton(
                 text = "CONTINUE",
                 onClick = onNext,
-                modifier = Modifier.weight(1.5f)
+                modifier = Modifier.weight(1.5f),
             )
         }
     }
 
     when (activeSheet) {
-        ActiveSheet.TTS -> TtsConfigureBottomSheet(
-            onDismiss = { activeSheet = null },
-            onSave = { draft ->
-                onSaveTtsProvider(draft)
-                activeSheet = null
-            },
-        )
-        ActiveSheet.IMAGE_VIDEO -> MediaConfigureBottomSheet(
-            initialCapability = MediaCapability.IMAGE,
-            onDismiss = { activeSheet = null },
-            onSave = { draft ->
-                onSaveMediaProvider(draft)
-                activeSheet = null
-            },
-        )
-        ActiveSheet.MUSIC -> MediaConfigureBottomSheet(
-            initialCapability = MediaCapability.MUSIC,
-            onDismiss = { activeSheet = null },
-            onSave = { draft ->
-                onSaveMediaProvider(draft)
-                activeSheet = null
-            },
-        )
+        ActiveSheet.TTS ->
+            TtsConfigureBottomSheet(
+                onDismiss = { activeSheet = null },
+                onSave = { draft ->
+                    onSaveTtsProvider(draft)
+                    activeSheet = null
+                },
+            )
+        ActiveSheet.IMAGE_VIDEO ->
+            MediaConfigureBottomSheet(
+                initialCapability = MediaCapability.IMAGE,
+                onDismiss = { activeSheet = null },
+                onSave = { draft ->
+                    onSaveMediaProvider(draft)
+                    activeSheet = null
+                },
+            )
+        ActiveSheet.MUSIC ->
+            MediaConfigureBottomSheet(
+                initialCapability = MediaCapability.MUSIC,
+                onDismiss = { activeSheet = null },
+                onSave = { draft ->
+                    onSaveMediaProvider(draft)
+                    activeSheet = null
+                },
+            )
         null -> Unit
     }
 }
@@ -179,14 +191,14 @@ private fun PluginCard(
     onClick: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .neoSurface(
-                backgroundColor = MaterialTheme.colorScheme.surface,
-                borderColor = borderColor,
-            )
-            .clickable(onClick = onClick)
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = borderColor,
+                ).clickable(onClick = onClick)
+                .padding(16.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

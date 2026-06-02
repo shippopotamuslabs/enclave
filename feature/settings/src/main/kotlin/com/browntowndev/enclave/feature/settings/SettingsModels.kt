@@ -201,6 +201,7 @@ data class TtsProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: TtsProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
 )
 
 @Immutable
@@ -223,9 +224,19 @@ data class ApiModelDiscoveryUiState(
     val models: List<DiscoveredApiModelUi> = emptyList(),
     val filteredModels: List<DiscoveredApiModelUi> = emptyList(),
     val isLoading: Boolean = false,
+    val isTruncated: Boolean = false,
     val searchQuery: String = "",
     val providerFilters: Set<String> = emptySet(),
     val sortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+)
+
+@Immutable
+data class ModelDiscoveryFieldCallbacks(
+    val onFetchModels: () -> Unit,
+    val onUpdateSearchQuery: (String) -> Unit,
+    val onToggleProviderFilter: (String) -> Unit,
+    val onClearProviderFilters: () -> Unit,
+    val onUpdateSortOption: (ModelSortOption) -> Unit,
 )
 
 @Immutable
@@ -464,16 +475,63 @@ data class DefaultModelAssignmentUi(
     val isMultimodal: Boolean = false,
 )
 
-/** Primary assignment label in model configuration lists. API slots use the configured model id. */
-internal val DefaultModelAssignmentUi.assignmentHeadlineName: String
-    get() =
-        when (source) {
-            ModelSource.API ->
-                modelId?.takeIf { it.isNotBlank() }
-                    ?: presetName
-                    ?: currentModelName
-            else -> currentModelName
+@Immutable
+internal data class AssignmentRowDisplay(
+    val presetName: String,
+    val providerName: String? = null,
+    val modelName: String? = null,
+)
+
+private fun String.isReadableAssignmentLabel(): Boolean = isNotBlank() && this != "None Assigned"
+
+private fun String?.toReadableAssignmentLabel(): String? = this?.takeIf { it.isReadableAssignmentLabel() }
+
+private val MEDIA_ASSIGNMENT_TYPES =
+    setOf(
+        ModelType.IMAGE_GENERATION,
+        ModelType.VIDEO_GENERATION,
+        ModelType.MUSIC_GENERATION,
+    )
+
+/**
+ * Model Role Assignment card body: preset name, provider, then catalog/base model id.
+ * Mapping differs by source (API preset vs local config vs media/TTS provider).
+ */
+internal val DefaultModelAssignmentUi.assignmentRowDisplay: AssignmentRowDisplay
+    get() {
+        if (currentModelName == "None Assigned") {
+            return AssignmentRowDisplay(presetName = currentModelName)
         }
+        return when (source) {
+            ModelSource.ON_DEVICE ->
+                AssignmentRowDisplay(
+                    presetName = presetName.toReadableAssignmentLabel() ?: currentModelName,
+                    providerName = providerName ?: "Local",
+                    modelName = currentModelName.toReadableAssignmentLabel(),
+                )
+            ModelSource.API ->
+                when (modelType) {
+                    in MEDIA_ASSIGNMENT_TYPES ->
+                        AssignmentRowDisplay(
+                            presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = presetName.toReadableAssignmentLabel(),
+                        )
+                    ModelType.TTS ->
+                        AssignmentRowDisplay(
+                            presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = presetName.toReadableAssignmentLabel(),
+                        )
+                    else ->
+                        AssignmentRowDisplay(
+                            presetName = presetName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = modelId.toReadableAssignmentLabel(),
+                        )
+                }
+        }
+    }
 
 internal val ModelType.displayLabel: String
     get() =

@@ -300,7 +300,7 @@ internal class SettingsViewModel
 
         fun onShowTtsProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowTtsProvidersSheet(_ttsState, show)
 
-        fun onFetchTtsModels() = apiProvidersDelegate.onFetchTtsModels(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey)
+        fun onFetchTtsModels() = apiProvidersDelegate.onFetchTtsModels(viewModelScope, TAG, _ttsState, _currentApiKey)
 
         fun onStartCreateTtsProviderAsset() = apiProvidersDelegate.onStartCreateTtsProviderAsset(_ttsState)
 
@@ -309,7 +309,6 @@ internal class SettingsViewModel
                 viewModelScope,
                 TAG,
                 _ttsState,
-                _apiState,
                 _currentApiKey,
                 assignmentsUseCases = assignmentUseCases,
                 asset = asset,
@@ -326,7 +325,7 @@ internal class SettingsViewModel
             )
 
         fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) =
-            apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _apiState, _currentApiKey, asset)
+            apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _currentApiKey, asset)
 
         fun onShowMediaProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowMediaProvidersSheet(_mediaState, show)
 
@@ -379,18 +378,9 @@ internal class SettingsViewModel
         fun onSaveApiModelConfig(onSuccess: () -> Unit) =
             apiProvidersDelegate.onSaveApiModelConfig(viewModelScope, TAG, _apiState, onSuccess)
 
-        fun onSelectReusableApiCredential(id: ApiCredentialsId?) {
-            val reusableCredential =
-                uiState.value.apiProvidersSheet.assets
-                    .find { it.credentialsId == id }
-                    ?.let {
-                        ReusableApiCredentialUi(
-                            credentialsId = it.credentialsId,
-                            displayName = it.displayName,
-                            providerLabel = it.provider.displayName,
-                            credentialAlias = it.credentialAlias,
-                        )
-                    }
+        fun onSelectReusableApiCredential(credentialAlias: String?) {
+            val provider = _apiState.value.assetDraft?.provider ?: return
+            val reusableCredential = findReusableCredential(provider, credentialAlias)
             _currentApiKey.value = ""
             _apiState.value =
                 _apiState.value.copy(
@@ -400,18 +390,12 @@ internal class SettingsViewModel
                 )
         }
 
-        fun onSelectReusableTtsApiCredential(id: ApiCredentialsId?) {
-            val reusableCredential =
-                uiState.value.apiProvidersSheet.assets
-                    .find { it.credentialsId == id }
-                    ?.let {
-                        ReusableApiCredentialUi(
-                            credentialsId = it.credentialsId,
-                            displayName = it.displayName,
-                            providerLabel = it.provider.displayName,
-                            credentialAlias = it.credentialAlias,
-                        )
-                    }
+        fun onSelectReusableTtsApiCredential(credentialAlias: String?) {
+            val provider =
+                _ttsState.value.assetDraft?.provider
+                    ?: _ttsState.value.selectedAsset?.provider
+                    ?: return
+            val reusableCredential = findReusableCredential(provider, credentialAlias)
             _currentApiKey.value = ""
             _apiState.value =
                 _apiState.value.copy(
@@ -429,28 +413,57 @@ internal class SettingsViewModel
                 )
         }
 
-        fun onSelectReusableMediaApiCredential(id: ApiCredentialsId?) {
+        fun onSelectReusableMediaApiCredential(credentialAlias: String?) {
+            val draft = _mediaState.value.assetDraft ?: return
             val reusableCredential =
-                uiState.value.apiProvidersSheet.assets
-                    .find { it.credentialsId == id }
-                    ?.let {
-                        ReusableApiCredentialUi(
-                            credentialsId = it.credentialsId,
-                            displayName = it.displayName,
-                            providerLabel = it.provider.displayName,
-                            credentialAlias = it.credentialAlias,
-                        )
-                    }
+                findReusableCredential(
+                    provider = draft.provider,
+                    credentialAlias = credentialAlias,
+                    excludeMediaProviderId = draft.id.takeIf { it.value.isNotEmpty() },
+                )
             _currentApiKey.value = ""
             _mediaState.value =
                 _mediaState.value.copy(
                     selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
                     selectedReusableApiCredentialName = reusableCredential?.displayName,
+                    discoveredApiModels = emptyList(),
+                    discoveredApiModelScope = null,
+                    isDiscoveringApiModels = false,
+                    modelSearchQuery = "",
+                    modelProviderFilters = emptySet(),
+                    modelSortOption = ModelSortOption.A_TO_Z,
                 )
+            if (reusableCredential != null) {
+                onFetchMediaModels()
+            }
+        }
+
+        private fun findReusableCredential(
+            provider: com.browntowndev.enclave.domain.model.inference.ApiProvider,
+            credentialAlias: String?,
+            excludeApiCredentialsId: com.browntowndev.enclave.domain.model.config.ApiCredentialsId? = null,
+            excludeMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId? = null,
+            excludeTtsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId? = null,
+        ): ReusableApiCredentialUi? {
+            if (credentialAlias.isNullOrBlank()) return null
+            val state = uiState.value
+            return reusableCredentialsForProvider(
+                provider = provider,
+                apiAssets = state.apiProvidersSheet.assets,
+                mediaAssets = state.mediaProvidersSheet.assets,
+                ttsAssets = state.ttsProvidersSheet.assets,
+                excludeApiCredentialsId = excludeApiCredentialsId,
+                excludeMediaProviderId = excludeMediaProviderId,
+                excludeTtsProviderId = excludeTtsProviderId,
+            ).find { it.credentialAlias == credentialAlias }
         }
 
         fun onUpdateModelSearchQuery(query: String) {
             _apiState.value = _apiState.value.copy(modelSearchQuery = query)
+        }
+
+        fun onUpdateTtsModelSearchQuery(query: String) {
+            _ttsState.value = _ttsState.value.copy(modelSearchQuery = query)
         }
 
         fun onUpdateMediaModelSearchQuery(query: String) {
@@ -461,6 +474,14 @@ internal class SettingsViewModel
             val filters = _apiState.value.modelProviderFilters
             _apiState.value =
                 _apiState.value.copy(
+                    modelProviderFilters = if (filters.contains(provider)) filters - provider else filters + provider,
+                )
+        }
+
+        fun onToggleTtsModelProviderFilter(provider: String) {
+            val filters = _ttsState.value.modelProviderFilters
+            _ttsState.value =
+                _ttsState.value.copy(
                     modelProviderFilters = if (filters.contains(provider)) filters - provider else filters + provider,
                 )
         }
@@ -477,12 +498,20 @@ internal class SettingsViewModel
             _apiState.value = _apiState.value.copy(modelProviderFilters = emptySet())
         }
 
+        fun onClearTtsModelProviderFilters() {
+            _ttsState.value = _ttsState.value.copy(modelProviderFilters = emptySet())
+        }
+
         fun onClearMediaModelProviderFilters() {
             _mediaState.value = _mediaState.value.copy(modelProviderFilters = emptySet())
         }
 
         fun onUpdateModelSortOption(option: ModelSortOption) {
             _apiState.value = _apiState.value.copy(modelSortOption = option)
+        }
+
+        fun onUpdateTtsModelSortOption(option: ModelSortOption) {
+            _ttsState.value = _ttsState.value.copy(modelSortOption = option)
         }
 
         fun onUpdateMediaModelSortOption(option: ModelSortOption) {

@@ -102,13 +102,14 @@ class OnboardingViewModel
             _uiState.update { it.copy(isDiscoveringModels = true, discoveryError = null) }
             viewModelScope.launch {
                 try {
-                    val request = ApiModelDiscoveryRequest(
-                        provider = provider,
-                        currentApiKey = state.apiKey,
-                        credentialAlias = null,
-                        baseUrl = null,
-                        selectedModelId = null,
-                    )
+                    val request =
+                        ApiModelDiscoveryRequest(
+                            provider = provider,
+                            currentApiKey = state.apiKey,
+                            credentialAlias = null,
+                            baseUrl = null,
+                            selectedModelId = null,
+                        )
                     val result = discoverApiModelsUseCase(request)
                     _uiState.update {
                         it.copy(
@@ -159,22 +160,27 @@ class OnboardingViewModel
                 settingsRepository.updateAutomaticErrorTrackingEnabled(state.automaticErrorTrackingEnabled)
 
                 if (state.selectedModelChoice == ModelChoice.API) {
-                    val provider = state.selectedProvider ?: run {
-                        _uiState.update { it.copy(isSaving = false, saveError = "No provider selected") }
-                        return@launch
-                    }
-                    val credentials = ApiCredentials(
-                        id = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
-                        displayName = provider.name,
-                        provider = provider,
-                        credentialAlias = provider.name.lowercase(),
-                    )
-                    val result = bulkAssignApiProviderUseCase(
-                        credentials = credentials,
-                        apiKey = state.apiKey,
-                        modelId = state.selectedModelId,
-                        displayName = state.selectedModelId,
-                    )
+                    val provider =
+                        state.selectedProvider ?: run {
+                            _uiState.update { it.copy(isSaving = false, saveError = "No provider selected") }
+                            return@launch
+                        }
+                    val credentials =
+                        ApiCredentials(
+                            id =
+                                com.browntowndev.enclave.domain.model.config
+                                    .ApiCredentialsId(""),
+                            displayName = provider.name,
+                            provider = provider,
+                            credentialAlias = provider.name.lowercase(),
+                        )
+                    val result =
+                        bulkAssignApiProviderUseCase(
+                            credentials = credentials,
+                            apiKey = state.apiKey,
+                            modelId = state.selectedModelId,
+                            displayName = state.selectedModelId,
+                        )
                     if (result.isFailure) {
                         _uiState.update {
                             it.copy(
@@ -204,15 +210,16 @@ class OnboardingViewModel
                 // Save deferred Media provider if configured
                 state.mediaProviderDraft?.let { mediaDraft ->
                     try {
-                        val asset = com.browntowndev.enclave.domain.model.config.MediaProviderAsset(
-                            id = mediaDraft.id,
-                            displayName = mediaDraft.displayName,
-                            provider = mediaDraft.provider,
-                            modelName = mediaDraft.modelId,
-                            capability = mediaDraft.capability,
-                            baseUrl = mediaDraft.baseUrl,
-                            credentialAlias = mediaDraft.credentialAlias,
-                        )
+                        val asset =
+                            com.browntowndev.enclave.domain.model.config.MediaProviderAsset(
+                                id = mediaDraft.id,
+                                displayName = mediaDraft.displayName,
+                                provider = mediaDraft.provider,
+                                modelName = mediaDraft.modelId,
+                                capability = mediaDraft.capability,
+                                baseUrl = mediaDraft.baseUrl,
+                                credentialAlias = mediaDraft.credentialAlias,
+                            )
                         saveMediaProviderUseCase(asset, mediaDraft.apiKey.takeIf { it.isNotBlank() })
                     } catch (e: Exception) {
                         loggingPort.error(TAG, "Failed to save media provider during completion", e)

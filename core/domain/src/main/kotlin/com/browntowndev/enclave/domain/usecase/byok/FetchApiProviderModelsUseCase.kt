@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import javax.inject.Inject
 
@@ -12,7 +12,7 @@ interface FetchApiProviderModelsUseCase {
         currentApiKey: String,
         credentialAlias: String? = null,
         baseUrl: String? = null,
-    ): List<DiscoveredApiModel>
+    ): ApiModelCatalogResult
 }
 
 class FetchApiProviderModelsUseCaseImpl
@@ -26,7 +26,7 @@ class FetchApiProviderModelsUseCaseImpl
             currentApiKey: String,
             credentialAlias: String?,
             baseUrl: String?,
-        ): List<DiscoveredApiModel> {
+        ): ApiModelCatalogResult {
             val resolvedApiKey =
                 currentApiKey.ifBlank {
                     credentialAlias
