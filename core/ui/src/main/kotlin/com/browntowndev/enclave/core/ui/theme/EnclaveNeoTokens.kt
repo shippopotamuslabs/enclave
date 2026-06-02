@@ -68,10 +68,27 @@ object EnclaveNeoTokens {
     /** Larger offset on dark backgrounds so hard shadows read against charcoal. */
     val buttonShadowOffsetDark: Dp = 5.dp
 
+    /** Reduced hard shadow for inline secondary icon actions (prompt headers, tool rows). */
+    val subtleButtonShadowOffset: Dp = 2.dp
+
+    /**
+     * Panel shape flush under an app bar or sticky chrome — square top, neo radius on bottom.
+     */
+    val flushTopShape =
+        RoundedCornerShape(
+            topStart = 0.dp,
+            topEnd = 0.dp,
+            bottomStart = cornerRadius,
+            bottomEnd = cornerRadius,
+        )
+
     /** Vertical gap between standalone settings rows in a section. */
     val rowSpacing: Dp = 4.dp
 
     val iconTileSize: Dp = 40.dp
+
+    /** Square album cover thumbnail in selection sheets and list rows. */
+    val albumThumbnailSize: Dp = 72.dp
 
     val iconButtonSize: Dp = 44.dp
 
