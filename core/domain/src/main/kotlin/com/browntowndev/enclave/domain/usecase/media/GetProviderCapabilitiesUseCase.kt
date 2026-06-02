@@ -16,7 +16,6 @@ class GetProviderCapabilitiesUseCase
                     supportedVideoQualities = emptyList(),
                     supportedVideoResolutions = emptyList(),
                     supportedVideoDurations = emptyList(),
-                    supportsReferenceImage = false,
                     supportsVideo = false,
                     supportsMusic = false,
                 )
@@ -37,7 +36,6 @@ class GetProviderCapabilitiesUseCase
                         supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
                         supportedVideoResolutions = listOf("480p", "720p", "1080p"),
                         supportedVideoDurations = listOf(4, 8, 12),
-                        supportsReferenceImage = true,
                         supportsVideo = true,
                         supportsMusic = false,
                     )
@@ -48,7 +46,6 @@ class GetProviderCapabilitiesUseCase
                         supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
                         supportedVideoResolutions = listOf("720p", "1080p", "4k"),
                         supportedVideoDurations = listOf(5, 6, 8),
-                        supportsReferenceImage = true,
                         supportsVideo = true,
                         supportsMusic = false,
                     )
@@ -68,7 +65,6 @@ class GetProviderCapabilitiesUseCase
                         supportedVideoQualities = listOf(GenerationQuality.QUALITY),
                         supportedVideoResolutions = listOf("720p", "1080p"),
                         supportedVideoDurations = listOf(5),
-                        supportsReferenceImage = true,
                         supportsVideo = true,
                         supportsMusic = false,
                     )
@@ -86,7 +82,6 @@ class GetProviderCapabilitiesUseCase
                         supportedVideoQualities = listOf(GenerationQuality.QUALITY),
                         supportedVideoResolutions = listOf("720p", "1080p"),
                         supportedVideoDurations = listOf(5, 10),
-                        supportsReferenceImage = true,
                         supportsVideo = true,
                         supportsMusic = true,
                     )
@@ -97,7 +92,6 @@ class GetProviderCapabilitiesUseCase
                         supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY, GenerationQuality.HD),
                         supportedVideoResolutions = listOf("480p", "720p", "1080p"),
                         supportedVideoDurations = listOf(5, 10, 15),
-                        supportsReferenceImage = true,
                         supportsVideo = true,
                         supportsMusic = true,
                     )

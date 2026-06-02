@@ -44,6 +44,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
@@ -112,9 +113,14 @@ fun MediaConfigureScreen(
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
 
     val isSaveEnabled =
-        draft.displayName.isNotBlank() &&
-            draft.modelName.isNotBlank() &&
-            (apiKey.isNotBlank() || isKeySaved)
+        isMediaProviderSaveEnabled(
+            displayName = draft.displayName,
+            modelName = draft.modelName,
+            capability = draft.capability,
+            tasks = draft.tasks,
+            apiKeyPresent = apiKey.isNotBlank() || isKeySaved,
+        )
+    val locksTaskToggles = draft.provider.locksMediaTaskToggles()
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -176,7 +182,12 @@ fun MediaConfigureScreen(
                         DropdownMenuItem(
                             text = { Text(provider.displayName) },
                             onClick = {
-                                onMediaAssetFieldChange(draft.copy(provider = provider))
+                                onMediaAssetFieldChange(
+                                    draft.copy(
+                                        provider = provider,
+                                        baseUrl = if (provider.showsMediaBaseUrlOverride()) draft.baseUrl else null,
+                                    ),
+                                )
                                 providerDropdownExpanded = false
                             },
                         )
@@ -252,7 +263,16 @@ fun MediaConfigureScreen(
                 discovery = uiState.mediaProviderEditor.discovery,
                 canFetchModels = canFetchModels,
                 onConfigChange = { updatedConfig ->
-                    onMediaAssetFieldChange(draft.copy(modelName = updatedConfig.modelId))
+                    val discoveredModel =
+                        uiState.mediaProviderEditor.discovery.models
+                            .find { it.modelId == updatedConfig.modelId }
+                    val tasks = discoveredModel?.tasks ?: emptySet()
+                    onMediaAssetFieldChange(
+                        draft.copy(
+                            modelName = updatedConfig.modelId,
+                            tasks = tasks,
+                        ),
+                    )
                 },
                 callbacks =
                     ModelDiscoveryFieldCallbacks(
@@ -264,13 +284,45 @@ fun MediaConfigureScreen(
                     ),
             )
 
-            // Base URL (for proxies)
-            NeoOutlinedTextField(
-                value = draft.baseUrl ?: "",
-                onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
-                label = { Text("Base URL (Optional)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (draft.provider.showsMediaBaseUrlOverride()) {
+                NeoOutlinedTextField(
+                    value = draft.baseUrl ?: "",
+                    onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
+                    label = { Text("Base URL (Optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            if (draft.capability.requiresMediaTaskSelection()) {
+                Text(
+                    text = "Supported Tasks",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                val relevantTasks = MediaTask.entries.filter { it.kind == draft.capability }
+                relevantTasks.forEach { task ->
+                    val isChecked = task in draft.tasks
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = mediaTaskDisplayLabel(task),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Switch(
+                            checked = isChecked,
+                            onCheckedChange = { checked ->
+                                val newTasks = if (checked) draft.tasks + task else draft.tasks - task
+                                onMediaAssetFieldChange(draft.copy(tasks = newTasks))
+                            },
+                            enabled = !locksTaskToggles,
+                        )
+                    }
+                }
+            }
 
             // Use as Default Toggle
             Row(

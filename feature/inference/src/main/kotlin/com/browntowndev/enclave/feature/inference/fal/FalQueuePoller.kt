@@ -18,46 +18,125 @@ class FalQueuePoller(
         request: FalRequest,
     ): JsonObject {
         try {
-            var consecutiveUnknownAttempts = 0
-            repeat(MAX_POLL_ATTEMPTS) {
-                coroutineContext.ensureActive()
-                val status = falService.status(apiKey = apiKey, statusUrl = request.statusUrl)
-                val statusStr = falService.statusValue(status)?.lowercase()
-                when (statusStr) {
-                    "completed", "complete", "done" -> {
-                        status.optionalQueueError()?.let { failGeneration(status) }
-                        return if (request.responseUrl != null) {
-                            val result = runCatching { falService.result(apiKey = apiKey, responseUrl = request.responseUrl) }.getOrNull()
-                            selectCompletedPayload(status = status, result = result)
-                        } else {
-                            status
-                        }
-                    }
-                    "failed", "error", "cancelled" -> failGeneration(status)
-                    "in_queue", "in_progress", "processing" -> {
-                        consecutiveUnknownAttempts = 0
-                    }
+            val streamStatus = runCatching { falService.awaitStatusStream(apiKey = apiKey, statusUrl = request.statusUrl) }.getOrNull()
+            if (streamStatus != null) {
+                when (falService.statusValue(streamStatus)?.lowercase()) {
+                    "failed", "error", "cancelled" -> failGeneration(streamStatus)
                     else -> {
-                        if (falService.primaryMediaUrls(status).isNotEmpty()) {
-                            return status
-                        }
-                        consecutiveUnknownAttempts++
-                        if (consecutiveUnknownAttempts >= 5) {
-                            cancelQueue(apiKey = apiKey, request = request)
-                            throw IllegalStateException(
-                                "$errorPrefix failed: received unknown or unexpected status '$statusStr' multiple times",
-                            )
-                        }
+                        streamStatus.optionalQueueError()?.let { failGeneration(streamStatus) }
+                        return resolveCompletedPayload(apiKey = apiKey, request = request, status = streamStatus)
                     }
                 }
-                delay(pollDelayMillis)
             }
-            cancelQueue(apiKey = apiKey, request = request)
-            failGenerationTimeout()
+            return pollWithBackoff(apiKey = apiKey, request = request)
         } catch (cancellation: CancellationException) {
             cancelQueue(apiKey = apiKey, request = request)
             throw cancellation
         }
+    }
+
+    private suspend fun pollWithBackoff(
+        apiKey: String,
+        request: FalRequest,
+    ): JsonObject {
+        var consecutiveUnknownAttempts = 0
+        repeat(MAX_POLL_ATTEMPTS) { attempt ->
+            coroutineContext.ensureActive()
+            val status = falService.status(apiKey = apiKey, statusUrl = request.statusUrl)
+            val statusStr = falService.statusValue(status)?.lowercase()
+            when (statusStr) {
+                "completed", "complete", "done" -> {
+                    status.optionalQueueError()?.let { failGeneration(status) }
+                    return resolveCompletedPayload(apiKey = apiKey, request = request, status = status)
+                }
+                "failed", "error", "cancelled" -> failGeneration(status)
+                "in_queue", "in_progress", "processing" -> {
+                    consecutiveUnknownAttempts = 0
+                }
+                else -> {
+                    if (falService.primaryMediaUrls(status).isNotEmpty()) {
+                        return status
+                    }
+                    consecutiveUnknownAttempts++
+                    if (consecutiveUnknownAttempts >= 5) {
+                        cancelQueue(apiKey = apiKey, request = request)
+                        throw IllegalStateException(
+                            "$errorPrefix failed: received unknown or unexpected status '$statusStr' multiple times",
+                        )
+                    }
+                }
+            }
+            delay(backoffDelayMillis(attempt))
+        }
+        cancelQueue(apiKey = apiKey, request = request)
+        failGenerationTimeout()
+    }
+
+    private fun resolveCompletedPayload(
+        apiKey: String,
+        request: FalRequest,
+        status: JsonObject,
+    ): JsonObject {
+        status.optionalQueueError()?.let { failGeneration(status) }
+        val explicitResponseUrl = request.responseUrl
+        val fetchUrl =
+            explicitResponseUrl
+                ?: FalService.deriveResponseUrl(request.statusUrl)
+                    .takeIf { falService.mediaUrls(status).isEmpty() }
+        return if (fetchUrl != null) {
+            val result = fetchQueueResult(apiKey = apiKey, fetchUrl = fetchUrl, request = request, status = status)
+            val payload = selectCompletedPayload(status = status, result = result)
+            throwIfPayloadReportsError(payload)
+            payload
+        } else {
+            throwIfPayloadReportsError(status)
+            status
+        }
+    }
+
+    private fun fetchQueueResult(
+        apiKey: String,
+        fetchUrl: String,
+        request: FalRequest,
+        status: JsonObject,
+    ): JsonObject? {
+        val resultOutcome = runCatching { falService.result(apiKey = apiKey, responseUrl = fetchUrl) }
+        resultOutcome.exceptionOrNull()?.let { error ->
+            FalMediaResponseDiagnostics.logResultFetchFailure(
+                modelId = request.requestId ?: "unknown",
+                fetchUrl = fetchUrl,
+                error = error,
+            )
+        }
+        val result = resultOutcome.getOrNull()
+        if (result == null && falService.mediaUrls(status).isEmpty()) {
+            failResultFetch(fetchUrl = fetchUrl, cause = resultOutcome.exceptionOrNull())
+        }
+        return result
+    }
+
+    private fun throwIfPayloadReportsError(payload: JsonObject): JsonObject {
+        payload.extractPayloadErrorMessage()?.let { message -> failGenerationDetail(message) }
+        return payload
+    }
+
+    private fun failResultFetch(
+        fetchUrl: String,
+        cause: Throwable?,
+    ): Nothing {
+        throw IllegalStateException(
+            "$errorPrefix failed: could not fetch queue result from $fetchUrl" +
+                (cause?.message?.let { " ($it)" } ?: ""),
+        )
+    }
+
+    private fun failGenerationDetail(message: String): Nothing = throw IllegalStateException("$errorPrefix failed: $message")
+
+    private fun JsonObject.extractPayloadErrorMessage(): String? = FalMediaResponseDiagnostics.extractPayloadErrorMessage(this)
+
+    private fun backoffDelayMillis(attempt: Int): Long {
+        val scaled = pollDelayMillis * (attempt + 1)
+        return scaled.coerceAtMost(MAX_POLL_DELAY_MILLIS)
     }
 
     private fun cancelQueue(
@@ -89,17 +168,19 @@ class FalQueuePoller(
     private fun selectCompletedPayload(
         status: JsonObject,
         result: JsonObject?,
-    ): JsonObject =
-        when {
-            result != null && falService.primaryMediaUrls(result).isNotEmpty() -> result
-            falService.primaryMediaUrls(status).isNotEmpty() -> status
+    ): JsonObject {
+        val statusPrimary = falService.primaryMediaUrls(status)
+        val resultPrimary = result?.let { falService.primaryMediaUrls(it) }.orEmpty()
+        return when {
+            result != null && resultPrimary.isNotEmpty() -> result
+            statusPrimary.isNotEmpty() -> status
             result != null && falService.mediaUrls(result).isNotEmpty() -> result
-            falService.mediaUrls(status).isNotEmpty() -> status
-            result != null -> result
             else -> status
         }
+    }
 
     private companion object {
         private const val MAX_POLL_ATTEMPTS = 120
+        private const val MAX_POLL_DELAY_MILLIS = 5_000L
     }
 }

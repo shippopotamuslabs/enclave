@@ -307,5 +307,6 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         isImageGenerationCapable = isImageGenerationCapable,
         isVideoGenerationCapable = isVideoGenerationCapable,
         isAudioGenerationCapable = isAudioGenerationCapable,
+        tasks = tasks,
     )
 }

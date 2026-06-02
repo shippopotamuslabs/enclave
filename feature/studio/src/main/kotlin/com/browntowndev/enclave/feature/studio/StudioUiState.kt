@@ -51,5 +51,6 @@ data class StudioUiState(
     val speechState: SpeechState = SpeechState.Idle,
     val isPlayingTts: Boolean = false,
     val groupedGallery: List<StudioGalleryGroup> = emptyList(),
-    val hasVideoModel: Boolean = false,
+    val hasImageEditModel: Boolean = false,
+    val hasImageToVideoModel: Boolean = false,
 )

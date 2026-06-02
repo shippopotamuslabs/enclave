@@ -1,7 +1,9 @@
 package com.browntowndev.enclave.feature.studio.service
 
+import android.app.Notification
 import android.content.Context
 import android.content.Intent
+import com.browntowndev.enclave.core.data.R
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
@@ -143,6 +145,14 @@ class MultimediaGenerationServiceTest {
     }
 
     @Test
+    fun `S-STU-07 foreground notification uses Enclave ic_notification icon`() {
+        val notification = invokeCreateNotification(service, "Generating...")
+
+        assertEquals(R.drawable.ic_notification, notification.smallIcon.resId)
+        assertEquals("Enclave", notification.extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
     fun `M-STU-01 Studio IMAGE uses GenerateMediaUseCase not ImageGenerationPort`() {
         val requestSlot = slot<MediaGenerationRequest>()
         coEvery { generateMediaUseCase(capture(requestSlot)) } returns Result.success(emptyList())
@@ -199,5 +209,18 @@ class MultimediaGenerationServiceTest {
             )
         method.isAccessible = true
         method.invoke(target)
+    }
+
+    private fun invokeCreateNotification(
+        target: MultimediaGenerationService,
+        content: String,
+    ): Notification {
+        val method =
+            MultimediaGenerationService::class.java.getDeclaredMethod(
+                "createNotification",
+                String::class.java,
+            )
+        method.isAccessible = true
+        return method.invoke(target, content) as Notification
     }
 }

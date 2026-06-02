@@ -29,11 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.component.neo.neoSurfaceEdges
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+
+private val PromptHeaderActionSize = EnclaveNeoTokens.iconTileSize
+private val PromptHeaderVerticalPadding = 10.dp
 
 @Composable
 fun PromptHeaderDivider(
@@ -41,6 +44,7 @@ fun PromptHeaderDivider(
     isExpanded: Boolean? = null,
     onExpandedChange: ((Boolean) -> Unit)? = null,
     omitTopBorder: Boolean = false,
+    showSectionDivider: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var localIsExpanded by rememberSaveable { mutableStateOf(false) }
@@ -48,6 +52,12 @@ fun PromptHeaderDivider(
     val updateExpanded = onExpandedChange ?: { value -> localIsExpanded = value }
     val clipboardManager = LocalClipboardManager.current
     val borderColor = neoBorderColor()
+    val headerBackground =
+        if (omitTopBorder) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
 
     Box(
         modifier =
@@ -55,18 +65,34 @@ fun PromptHeaderDivider(
                 .zIndex(1f)
                 .fillMaxWidth()
                 .then(
-                    if (omitTopBorder) {
-                        Modifier.neoSurfaceEdges(
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = borderColor,
-                            drawTop = false,
-                        )
-                    } else {
-                        Modifier.neoSurface(
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = borderColor,
-                            withShadow = false,
-                        )
+                    when {
+                        omitTopBorder -> {
+                            Modifier.neoSurfaceEdges(
+                                backgroundColor = headerBackground,
+                                borderColor = borderColor,
+                                shape = EnclaveNeoTokens.flushTopShape,
+                                drawTop = false,
+                                drawBottom = true,
+                                drawStart = true,
+                                drawEnd = true,
+                            )
+                        }
+                        showSectionDivider -> {
+                            Modifier.neoSurfaceEdges(
+                                backgroundColor = headerBackground,
+                                borderColor = borderColor,
+                                drawBottom = false,
+                                drawStart = false,
+                                drawEnd = false,
+                            )
+                        }
+                        else -> {
+                            Modifier.neoSurface(
+                                backgroundColor = headerBackground,
+                                borderColor = borderColor,
+                                withShadow = false,
+                            )
+                        }
                     },
                 ).animateContentSize()
                 .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier),
@@ -77,10 +103,10 @@ fun PromptHeaderDivider(
                     .fillMaxWidth()
                     .padding(
                         horizontal = EnclaveNeoTokens.screenHorizontalPadding,
-                        vertical = 12.dp,
+                        vertical = PromptHeaderVerticalPadding,
                     ),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Box(
                 modifier =
@@ -98,7 +124,7 @@ fun PromptHeaderDivider(
             ) {
                 Text(
                     text = prompt,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = if (expanded) Int.MAX_VALUE else 1,
@@ -107,16 +133,19 @@ fun PromptHeaderDivider(
                 )
             }
 
-            NeoIconButton(
+            NeoSecondaryIconButton(
                 onClick = { clipboardManager.setText(AnnotatedString(prompt)) },
                 icon = Icons.Default.ContentCopy,
                 contentDescription = "Copy prompt",
+                size = PromptHeaderActionSize,
             )
 
-            NeoIconButton(
+            NeoSecondaryIconButton(
                 onClick = { updateExpanded(!expanded) },
                 icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (expanded) "Collapse" else "Expand",
+                size = PromptHeaderActionSize,
+                iconTint = MaterialTheme.colorScheme.onSurface,
             )
         }
     }

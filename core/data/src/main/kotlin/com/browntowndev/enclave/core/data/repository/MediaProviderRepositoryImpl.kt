@@ -10,6 +10,8 @@ import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplie
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.config.toMask
+import com.browntowndev.enclave.domain.model.config.toMediaTasksOrLegacy
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -79,6 +81,7 @@ class MediaProviderRepositoryImpl
                         modelName = asset.modelName,
                         baseUrl = asset.baseUrl,
                         credentialAlias = credentialAlias,
+                        tasksMask = asset.tasks.toMask(),
                         pendingSync = 1,
                     ),
                     healer,
@@ -108,6 +111,7 @@ class MediaProviderRepositoryImpl
                 modelName = e.modelName,
                 baseUrl = e.baseUrl,
                 credentialAlias = e.credentialAlias,
+                tasks = e.tasksMask.toMediaTasksOrLegacy(e.capability),
             )
         }
     }

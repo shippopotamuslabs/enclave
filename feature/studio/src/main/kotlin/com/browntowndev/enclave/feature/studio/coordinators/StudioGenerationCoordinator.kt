@@ -8,6 +8,8 @@ import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.STUDIO_ANIMATE_I2V_UNAVAILABLE
+import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,14 +63,15 @@ class StudioGenerationCoordinator
                 .observeGenerationError()
                 .onEach { generationError ->
                     if (generationError != null) {
-                        _error.value = generationError
+                        val snackbarMessage = StudioGenerationErrorMessages.toSnackbarMessage(generationError)
+                        _error.value = snackbarMessage
                         _isGenerating.value = false
                         _isContinualGenerationActive.value = false
                         pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
                             _videoGenerationState.value =
                                 VideoGenerationState.Error(
                                     sourceAssetId = sourceAssetId,
-                                    message = generationError,
+                                    message = snackbarMessage,
                                 )
                             clearPendingDetailVideoGeneration()
                         }
@@ -91,10 +94,26 @@ class StudioGenerationCoordinator
             _isGenerating.value = true
         }
 
+        fun setVideoGenerationError(
+            sourceAssetId: String?,
+            message: String,
+        ) {
+            _videoGenerationState.value = VideoGenerationState.Error(sourceAssetId, message)
+        }
+
         fun startDetailVideoGeneration(
             asset: StudioMediaAsset,
             customPrompt: String? = null,
+            hasImageToVideoModel: Boolean = true,
         ) {
+            if (!hasImageToVideoModel) {
+                _videoGenerationState.value =
+                    VideoGenerationState.Error(
+                        sourceAssetId = asset.id,
+                        message = STUDIO_ANIMATE_I2V_UNAVAILABLE,
+                    )
+                return
+            }
             val prompt = customPrompt ?: asset.prompt
             pendingDetailVideoSourceAssetId = asset.id
             pendingDetailVideoSourceCreatedAt = asset.createdAt

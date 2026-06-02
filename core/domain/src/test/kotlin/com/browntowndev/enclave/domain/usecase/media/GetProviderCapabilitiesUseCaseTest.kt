@@ -26,7 +26,6 @@ class GetProviderCapabilitiesUseCaseTest {
         assertEquals(listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN), capabilities.supportedAspectRatios)
         assertEquals(listOf("480p", "720p", "1080p"), capabilities.supportedVideoResolutions)
         assertEquals(listOf(4, 8, 12), capabilities.supportedVideoDurations)
-        assertEquals(true, capabilities.supportsReferenceImage)
         assertEquals(true, capabilities.supportsVideo)
     }
 
@@ -48,7 +47,6 @@ class GetProviderCapabilitiesUseCaseTest {
         assertEquals(emptyList<String>(), capabilities.supportedImageResolutions)
         assertEquals(listOf("720p", "1080p"), capabilities.supportedVideoResolutions)
         assertEquals(listOf(5, 10), capabilities.supportedVideoDurations)
-        assertEquals(true, capabilities.supportsReferenceImage)
         assertEquals(true, capabilities.supportsVideo)
         assertEquals(true, capabilities.supportsMusic)
     }

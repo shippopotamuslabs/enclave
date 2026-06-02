@@ -3,31 +3,50 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
+import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalRequest
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import com.browntowndev.enclave.feature.inference.media.FalImageGenerationAdapter
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import io.mockk.clearMocks
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
 
 class FalImageGenerationAdapterTest {
     private val falService = mockk<FalService>()
-    private val adapter = FalImageGenerationAdapter(falService, pollDelayMillis = 0L)
+    private val outputSchemaResolver =
+        mockk<FalOutputSchemaResolver>().also { resolver ->
+            coEvery { resolver.resolve(any(), any(), any()) } returns null
+        }
+    private val adapter =
+        FalImageGenerationAdapter(
+            falService = falService,
+            outputSchemaResolver = outputSchemaResolver,
+            pollDelayMillis = 0L,
+        )
+
+    @BeforeEach
+    fun resetFalServiceMocks() {
+        clearMocks(falService, answers = false)
+        every { falService.result(any(), any()) } returns buildJsonObject {}
+    }
 
     private fun defaultRequest(cancelUrl: String? = null) =
         FalRequest(
@@ -77,7 +96,7 @@ class FalImageGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns resultJson
-            every { falService.primaryMediaUrls(resultJson) } returns listOf("https://cdn.test/image.png")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/image.png")
             every { falService.resolveMediaBytes("https://cdn.test/image.png", any()) } returns "png".toByteArray()
 
             val result =
@@ -97,13 +116,17 @@ class FalImageGenerationAdapterTest {
     @Test
     fun generateImage_completedWithoutResponseUrl_usesInlineMediaUrl() =
         runTest {
-            val status = buildJsonObject { put("status", "COMPLETED") }
+            val status =
+                buildJsonObject {
+                    put("status", "COMPLETED")
+                    put("image_url", "https://cdn.test/image.png")
+                }
             every { falService.submitQueue(any(), any(), any(), any()) } returns
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns emptyList()
-            every { falService.mediaUrls(status) } returns listOf("https://cdn.test/image.png")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/image.png")
+            every { falService.mediaUrls(any(), any()) } returns listOf("https://cdn.test/image.png")
             every { falService.resolveMediaBytes("https://cdn.test/image.png", any()) } returns "png".toByteArray()
 
             val result =
@@ -193,7 +216,7 @@ class FalImageGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns resultWithBoth
-            every { falService.primaryMediaUrls(resultWithBoth) } returns listOf("https://cdn.test/image.png")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/image.png")
             every { falService.resolveMediaBytes("https://cdn.test/image.png", any()) } returns "png".toByteArray()
 
             val result =
@@ -220,8 +243,9 @@ class FalImageGenerationAdapterTest {
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns emptyList()
-            every { falService.mediaUrls(status) } returns listOf(dataUri)
+            every { falService.result(any(), any()) } returns buildJsonObject { put("image_url", dataUri) }
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf(dataUri)
+            every { falService.mediaUrls(any(), any()) } returns listOf(dataUri)
             every { falService.resolveMediaBytes(dataUri, any()) } returns bytes
 
             val result =
@@ -245,8 +269,9 @@ class FalImageGenerationAdapterTest {
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns emptyList()
-            every { falService.mediaUrls(status) } returns emptyList()
+            every { falService.result(any(), any()) } returns buildJsonObject {}
+            every { falService.primaryMediaUrls(any(), any()) } returns emptyList()
+            every { falService.mediaUrls(any(), any()) } returns emptyList()
 
             val result =
                 adapter.generateImage(
@@ -258,7 +283,7 @@ class FalImageGenerationAdapterTest {
                 )
 
             assertTrue(result.isFailure)
-            assertEquals("No fal image URLs returned", result.exceptionOrNull()?.message)
+            assertTrue(result.exceptionOrNull()?.message?.contains("No fal image URLs returned") == true)
         }
 
     @Test
@@ -269,7 +294,9 @@ class FalImageGenerationAdapterTest {
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns listOf("https://cdn.test/image1.png")
+            every { falService.result(any(), any()) } returns buildJsonObject { put("image_url", "https://cdn.test/image1.png") }
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/image1.png")
+            every { falService.mediaUrls(any(), any()) } returns listOf("https://cdn.test/image1.png")
             every { falService.resolveMediaBytes(any(), any()) } returns "png".toByteArray()
 
             val result =
@@ -359,7 +386,12 @@ class FalImageGenerationAdapterTest {
     @Test
     fun generateImage_coroutineCancellation_cancelsQueueAndRethrowsCancellation() =
         runTest {
-            val waitingAdapter = FalImageGenerationAdapter(falService, pollDelayMillis = 10_000L)
+            val waitingAdapter =
+                FalImageGenerationAdapter(
+                    falService = falService,
+                    outputSchemaResolver = outputSchemaResolver,
+                    pollDelayMillis = 10_000L,
+                )
             val status = buildJsonObject { put("status", "IN_QUEUE") }
             val statusPolled = CompletableDeferred<Unit>()
             every { falService.submitQueue(any(), any(), any(), any()) } returns
@@ -403,8 +435,10 @@ class FalImageGenerationAdapterTest {
                 listOf(inProgressWithPreview, completedStatus)
             every { falService.statusValue(inProgressWithPreview) } returns "IN_PROGRESS"
             every { falService.statusValue(completedStatus) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(completedStatus) } returns emptyList()
-            every { falService.mediaUrls(completedStatus) } returns listOf("https://cdn.test/image.png")
+            every { falService.mediaUrls(completedStatus) } returns emptyList()
+            every { falService.mediaUrls(completedStatus) } returns emptyList()
+            every { falService.result(any(), any()) } returns buildJsonObject { put("image_url", "https://cdn.test/image.png") }
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/image.png")
             every { falService.resolveMediaBytes("https://cdn.test/image.png", any()) } returns "png".toByteArray()
 
             val result =

@@ -219,7 +219,7 @@ private fun GalleryDetailRoute(
         albumId = albumId,
         assetId = assetId,
         albums = galleryUiState.albums,
-        hasVideoModel = galleryUiState.hasVideoModel,
+        hasImageToVideoModel = galleryUiState.hasImageToVideoModel,
         onNavigateBack = actions.onNavigateBack,
         onShareMedia = galleryViewModel::shareSingleMedia,
         onSendToStudio = actions.onSendToStudioFromGallery,
@@ -262,6 +262,6 @@ private fun StudioDetailRoute(
         onShareMedia = studioViewModel::shareSingleMedia,
         onDeleteMedia = studioViewModel::deleteMedia,
         videoGenerationState = studioUiState.videoGenerationState,
-        hasVideoModel = studioUiState.hasVideoModel,
+        hasImageToVideoModel = studioUiState.hasImageToVideoModel,
     )
 }

@@ -4,9 +4,9 @@ import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import io.mockk.coVerify
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -122,52 +122,59 @@ class MediaProvidersCoordinatorTest {
     @Test
     fun `onFetchMediaModels for FAL music filters out TTS models and keeps music models`() =
         runTest {
-            val mediaState = MutableStateFlow(MediaProvidersTransientState(
-                assetDraft = MediaProviderAssetUi(
-                    provider = ApiProvider.FAL,
-                    capability = MediaCapability.MUSIC,
-                    credentialAlias = "alias"
+            val mediaState =
+                MutableStateFlow(
+                    MediaProvidersTransientState(
+                        assetDraft =
+                            MediaProviderAssetUi(
+                                provider = ApiProvider.FAL,
+                                capability = MediaCapability.MUSIC,
+                                credentialAlias = "alias",
+                            ),
+                    ),
                 )
-            ))
             val currentApiKey = MutableStateFlow("api-key")
 
-            val discoveredModels = listOf(
-                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
-                    id = "fal-ai/stable-audio",
-                    isAudioGenerationCapable = true
-                ),
-                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
-                    id = "fal-ai/elevenlabs/tts/turbo-v2.5",
-                    isAudioGenerationCapable = true
-                ),
-                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
-                    id = "fal-ai/minimax/speech-02-hd",
-                    isAudioGenerationCapable = true
-                ),
-                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
-                    id = "fal-ai/ace-step",
-                    isAudioGenerationCapable = true
+            val discoveredModels =
+                listOf(
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/stable-audio",
+                        isAudioGenerationCapable = true,
+                    ),
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/elevenlabs/tts/turbo-v2.5",
+                        isAudioGenerationCapable = true,
+                    ),
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/minimax/speech-02-hd",
+                        isAudioGenerationCapable = true,
+                    ),
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/ace-step",
+                        isAudioGenerationCapable = true,
+                    ),
                 )
-            )
 
-            val mockScope = com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope(
-                provider = ApiProvider.FAL,
-                baseUrl = "",
-                credentialAlias = "alias"
-            )
+            val mockScope =
+                com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope(
+                    provider = ApiProvider.FAL,
+                    baseUrl = "",
+                    credentialAlias = "alias",
+                )
 
             io.mockk.coEvery {
                 apiProviderUseCases.discoverApiModels(any())
-            } returns com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
-                models = discoveredModels,
-                scope = mockScope
-            )
+            } returns
+                com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
+                    models = discoveredModels,
+                    scope = mockScope,
+                )
 
             coordinator.onFetchMediaModels(
                 scope = this,
                 tag = "tag",
                 mediaState = mediaState,
-                currentApiKey = currentApiKey
+                currentApiKey = currentApiKey,
             )
 
             advanceUntilIdle()
@@ -201,6 +208,37 @@ class MediaProvidersCoordinatorTest {
         assertTrue(!"fal-ai/elevenlabs/tts/turbo-v2.5".isFalMusicModelCandidate())
         assertTrue(!"fal-ai/minimax/speech-02-hd".isFalMusicModelCandidate())
         assertTrue(!"fal-ai/custom-image".isFalMusicModelCandidate())
+    }
+
+    @Test
+    fun `filterMediaModels narrows image discovery by draft tasks when known`() {
+        val models =
+            listOf(
+                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                    id = "fal-ai/recraft/v3",
+                    isImageGenerationCapable = true,
+                    tasks = setOf(com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE),
+                ),
+                com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                    id = "fal-ai/flux-pro/kontext",
+                    isImageGenerationCapable = true,
+                    tasks =
+                        setOf(
+                            com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE,
+                            com.browntowndev.enclave.domain.model.config.MediaTask.EDIT_IMAGE,
+                        ),
+                ),
+            )
+
+        val result =
+            models.filterMediaModels(
+                capability = com.browntowndev.enclave.domain.model.config.MediaCapability.IMAGE,
+                provider = com.browntowndev.enclave.domain.model.inference.ApiProvider.FAL,
+                requiredTasks = setOf(com.browntowndev.enclave.domain.model.config.MediaTask.EDIT_IMAGE),
+            )
+
+        assertEquals(1, result.size)
+        assertEquals("fal-ai/flux-pro/kontext", result.single().id)
     }
 
     @Test

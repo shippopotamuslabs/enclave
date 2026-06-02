@@ -1,9 +1,11 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
+import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalRequest
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import com.browntowndev.enclave.feature.inference.media.FalMusicGenerationAdapter
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -16,7 +18,16 @@ import java.util.Base64
 
 class FalMusicGenerationAdapterTest {
     private val falService = mockk<FalService>(relaxed = true)
-    private val adapter = FalMusicGenerationAdapter(falService, pollDelayMillis = 0L)
+    private val outputSchemaResolver =
+        mockk<FalOutputSchemaResolver>().also { resolver ->
+            coEvery { resolver.resolve(any(), any(), any()) } returns null
+        }
+    private val adapter =
+        FalMusicGenerationAdapter(
+            falService = falService,
+            outputSchemaResolver = outputSchemaResolver,
+            pollDelayMillis = 0L,
+        )
 
     @Test
     fun generateMusic_queueResult_downloadsAudioUrl() =

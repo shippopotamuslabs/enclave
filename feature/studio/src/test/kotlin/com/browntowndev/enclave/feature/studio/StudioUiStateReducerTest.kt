@@ -57,7 +57,8 @@ class StudioUiStateReducerTest {
                     speechState = SpeechState.Idle,
                     isPlayingTts = false,
                     referenceMediaType = null,
-                    hasVideoModel = false,
+                    hasImageEditModel = false,
+                    hasImageToVideoModel = false,
                 ),
             )
 
@@ -183,6 +184,7 @@ class StudioUiStateReducerTest {
             speechState = SpeechState.Idle,
             isPlayingTts = false,
             referenceMediaType = null,
-            hasVideoModel = false,
+            hasImageEditModel = false,
+            hasImageToVideoModel = false,
         )
 }

@@ -65,10 +65,22 @@ enum class ModelType(
     IMAGE_GENERATION("image_generation"),
 
     /**
+     * Image editing model.
+     */
+    @SerialName("image_edit")
+    IMAGE_EDIT("image_edit"),
+
+    /**
      * Video generation model.
      */
     @SerialName("video_generation")
     VIDEO_GENERATION("video_generation"),
+
+    /**
+     * Image-to-video model.
+     */
+    @SerialName("image_to_video")
+    IMAGE_TO_VIDEO("image_to_video"),
 
     /**
      * Music generation model.
@@ -97,7 +109,9 @@ enum class ModelType(
             FINAL_SYNTHESIS -> "Final Review"
             TTS -> "Text-to-Speech"
             IMAGE_GENERATION -> "Image Generation"
+            IMAGE_EDIT -> "Image Edit"
             VIDEO_GENERATION -> "Video Generation"
+            IMAGE_TO_VIDEO -> "Image to Video"
             MUSIC_GENERATION -> "Music Generation"
             UNASSIGNED -> "Unassigned"
         }
@@ -117,7 +131,9 @@ enum class ModelType(
                 FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
                 TTS -> "Synthesize text responses into natural-sounding speech."
                 IMAGE_GENERATION -> "Generate images from text prompts."
+                IMAGE_EDIT -> "Edit or transform images using a reference image."
                 VIDEO_GENERATION -> "Generate videos from text prompts."
+                IMAGE_TO_VIDEO -> "Animate a reference image into video."
                 MUSIC_GENERATION -> "Generate music from text prompts."
                 UNASSIGNED -> "Models not yet assigned to a role."
             }

@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,8 +30,12 @@ class GenerateVideoUseCaseTest {
     fun setup() {
         useCase =
             GenerateVideoUseCase(
-                defaultModelRepository = defaultModelRepository,
-                mediaProviderRepository = mediaProviderRepository,
+                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                resolveAssignedMediaProviderUseCase =
+                    ResolveAssignedMediaProviderUseCase(
+                        defaultModelRepository = defaultModelRepository,
+                        mediaProviderRepository = mediaProviderRepository,
+                    ),
                 videoGenerationPort = videoGenerationPort,
             )
     }
@@ -61,6 +66,54 @@ class GenerateVideoUseCaseTest {
 
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
+
+    @Test
+    fun invoke_withReferenceImage_resolvesImageToVideoDefault() =
+        runTest {
+            val providerId = MediaProviderId("i2v-provider")
+            val provider =
+                MediaProviderAsset(
+                    id = providerId,
+                    displayName = "Fal I2V",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.VIDEO,
+                    credentialAlias = "fal",
+                )
+            val settings =
+                VideoGenerationSettings(
+                    videoDuration = 5,
+                    referenceImageUri = "file://reference.png",
+                )
+            val bytes = "video".toByteArray()
+            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_TO_VIDEO,
+                    mediaProviderId = providerId,
+                )
+            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
+            coEvery { videoGenerationPort.generateVideo("prompt", provider, settings) } returns Result.success(bytes)
+
+            val result = useCase("prompt", settings)
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals(bytes, result.getOrThrow())
+            coVerify(exactly = 0) { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) }
+        }
+
+    @Test
+    fun invoke_withReferenceImage_failsWhenNoImageToVideoProviderAssigned() =
+        runTest {
+            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns null
+
+            val result =
+                useCase(
+                    "prompt",
+                    VideoGenerationSettings(referenceImageUri = "file://reference.png"),
+                )
+
+            assertTrue(result.isFailure)
+            assertEquals("No image-to-video provider assigned", result.exceptionOrNull()?.message)
         }
 
     @Test

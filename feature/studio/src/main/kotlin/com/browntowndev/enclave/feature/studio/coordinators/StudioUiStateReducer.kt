@@ -37,7 +37,8 @@ class StudioUiStateReducer
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
             val referenceMediaType: MediaCapability?,
-            val hasVideoModel: Boolean,
+            val hasImageEditModel: Boolean,
+            val hasImageToVideoModel: Boolean,
         )
 
         fun reduce(params: ReduceParams): StudioUiState {
@@ -78,7 +79,8 @@ class StudioUiStateReducer
                 videoGenerationState = params.videoGenerationState,
                 speechState = params.speechState,
                 isPlayingTts = params.isPlayingTts,
-                hasVideoModel = params.hasVideoModel,
+                hasImageEditModel = params.hasImageEditModel,
+                hasImageToVideoModel = params.hasImageToVideoModel,
             )
         }
 

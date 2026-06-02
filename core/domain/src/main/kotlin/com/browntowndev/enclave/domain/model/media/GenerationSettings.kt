@@ -92,7 +92,6 @@ data class ProviderCapabilities(
     val supportedVideoDurations: List<Int>,
     /** Labels shown in Studio duration pills (e.g. `8s`); falls back to `"${seconds}s"` when empty. */
     val supportedVideoDurationTokens: List<String> = emptyList(),
-    val supportsReferenceImage: Boolean,
     val supportsVideo: Boolean,
     val supportsMusic: Boolean = false,
     val musicDurationRange: IntRange = DefaultMusicDurationRange,

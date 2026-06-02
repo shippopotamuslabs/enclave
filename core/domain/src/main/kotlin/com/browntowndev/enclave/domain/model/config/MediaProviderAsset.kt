@@ -32,4 +32,5 @@ data class MediaProviderAsset(
     val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String,
+    val tasks: Set<MediaTask> = emptySet(),
 )

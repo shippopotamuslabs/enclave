@@ -1,10 +1,8 @@
 package com.browntowndev.enclave.feature.inference.fal
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
+import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -28,6 +26,7 @@ class FalService
         private val okHttpClient: OkHttpClient,
     ) {
         private val json = Json { ignoreUnknownKeys = true }
+        private val queueStatusStream = FalQueueStatusStream(okHttpClient, json)
 
         fun runSync(
             apiKey: String,
@@ -70,6 +69,12 @@ class FalService
                 cancelUrl = response.optionalString("cancel_url"),
             )
         }
+
+        /** Blocks until the queue reports a terminal status via Fal's SSE status stream. */
+        fun awaitStatusStream(
+            apiKey: String,
+            statusUrl: String,
+        ): JsonObject = queueStatusStream.awaitTerminalStatus(apiKey = apiKey, statusUrl = statusUrl)
 
         fun status(
             apiKey: String,
@@ -122,7 +127,7 @@ class FalService
             url: String,
             apiKey: String? = null,
         ): ByteArray {
-            val builder = Request.Builder().url(url).get()
+            val builder = Request.Builder().url(url.normalizeMediaUrl()).get()
             if (!apiKey.isNullOrBlank()) {
                 builder.header("Authorization", "Key ${apiKey.trim()}")
             }
@@ -158,28 +163,25 @@ class FalService
                 downloadBytes(url, apiKey)
             }
 
-        fun mediaUrls(response: JsonObject): List<String> =
-            response
-                .unwrapResultPayload()
-                .collectUrlCandidates()
-                .filter { it.url.isMediaUrl() }
-                .sortedWith(compareBy<UrlCandidate> { it.priority }.thenBy { it.index })
-                .distinctBy(UrlCandidate::url)
-                .map(UrlCandidate::url)
+        fun mediaUrls(
+            response: JsonObject,
+            outputSchema: ModelGenerationOutputSchema? = null,
+        ): List<String> = FalResponseMediaUrls.mediaUrls(response, outputSchema)
 
-        fun primaryMediaUrls(response: JsonObject): List<String> =
-            response
-                .unwrapResultPayload()
-                .collectUrlCandidates()
-                .filter { it.url.isMediaUrl() && it.priority < PREVIEW_MEDIA_URL_PRIORITY }
-                .sortedWith(compareBy<UrlCandidate> { it.priority }.thenBy { it.index })
-                .distinctBy(UrlCandidate::url)
-                .map(UrlCandidate::url)
+        fun primaryMediaUrls(
+            response: JsonObject,
+            outputSchema: ModelGenerationOutputSchema? = null,
+        ): List<String> = FalResponseMediaUrls.primaryMediaUrls(response, outputSchema)
 
-        fun statusValue(response: JsonObject): String? =
-            response.optionalString("status")
-                ?: response.optionalString("state")
-                ?: response.optionalString("queue_status")
+        fun primaryVideoUrls(
+            response: JsonObject,
+            outputSchema: ModelGenerationOutputSchema? = null,
+        ): List<String> = FalResponseMediaUrls.primaryVideoUrls(response, outputSchema)
+
+        fun statusValue(response: JsonObject): String? = response.queueStatusValue()
+
+        private fun JsonObject.requiredString(name: String): String =
+            optionalString(name) ?: throw IllegalStateException("Missing fal $name")
 
         private fun executeJson(
             request: Request,
@@ -234,13 +236,14 @@ class FalService
             failurePrefix: String,
             statusCode: Int,
             body: String,
-        ): IllegalStateException = IllegalStateException("$failurePrefix: $statusCode $body")
+        ): IllegalStateException =
+            IllegalStateException(
+                "$failurePrefix: $statusCode ${FalMediaResponseDiagnostics.formatHttpErrorBody(body)}",
+            )
 
-        private fun jsonCallFailed(failurePrefix: String): IllegalStateException =
-            IllegalStateException("$failurePrefix failed")
+        private fun jsonCallFailed(failurePrefix: String): IllegalStateException = IllegalStateException("$failurePrefix failed")
 
-        private fun Int.isTransientHttpStatus(): Boolean =
-            this == HTTP_TOO_MANY_REQUESTS || this == HTTP_SERVICE_UNAVAILABLE
+        private fun Int.isTransientHttpStatus(): Boolean = this == HTTP_TOO_MANY_REQUESTS || this == HTTP_SERVICE_UNAVAILABLE
 
         private sealed class JsonCallResult {
             data class Success(
@@ -280,113 +283,21 @@ class FalService
             return if (trimmed.equals(DEFAULT_SYNC_BASE_URL, ignoreCase = true)) DEFAULT_QUEUE_BASE_URL else trimmed
         }
 
-        private fun JsonObject.requiredString(name: String): String =
-            optionalString(name) ?: throw IllegalStateException("Missing fal $name")
-
-        private fun JsonObject.optionalString(name: String): String? = get(name)?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-
-        private fun JsonObject.unwrapResultPayload(): JsonObject {
-            val wrapperKey =
-                RESULT_PAYLOAD_WRAPPER_KEYS.firstOrNull { key ->
-                    (this[key] as? JsonObject)?.let { nested ->
-                        nested.containsMediaArtifactKey() || nested.collectUrlCandidates().any { it.url.isMediaUrl() }
-                    } == true
-                }
-            val nested = wrapperKey?.let { this[it] as? JsonObject }
-            return if (nested != null && nested != this) nested.unwrapResultPayload() else this
-        }
-
-        private fun JsonObject.containsMediaArtifactKey(): Boolean =
-            keys.any { key ->
-                key.isMediaFileKey() ||
-                    key.endsWith("url", ignoreCase = true) ||
-                    key.equals("images", ignoreCase = true) ||
-                    key.equals("videos", ignoreCase = true)
-            }
-
-        private fun JsonElement.collectUrlCandidates(): List<UrlCandidate> {
-            val candidates = mutableListOf<UrlCandidate>()
-
-            fun visit(
-                element: JsonElement,
-                sequenceIndex: () -> Int,
-            ) {
-                when (element) {
-                    is JsonObject -> {
-                        for ((key, value) in element.entries) {
-                            when {
-                                key.endsWith("url", ignoreCase = true) && value is JsonPrimitive -> {
-                                    value.contentOrNull?.let { url ->
-                                        if (!key.isQueueControlUrlKey()) {
-                                            candidates +=
-                                                UrlCandidate(
-                                                    url = url,
-                                                    priority = key.mediaUrlPriority(),
-                                                    index = sequenceIndex())
-                                        }
-                                    }
-                                }
-                                key.isMediaFileKey() && value is JsonPrimitive -> {
-                                    value.contentOrNull?.takeIf { it.isMediaUrl() }?.let { url ->
-                                        candidates +=
-                                            UrlCandidate(
-                                                url = url,
-                                                priority = PRIMARY_MEDIA_URL_PRIORITY,
-                                                index = sequenceIndex())
-                                    }
-                                }
-                            }
-                            visit(value, sequenceIndex)
-                        }
-                    }
-                    is JsonArray -> element.forEach { visit(it, sequenceIndex) }
-                    else -> Unit
-                }
-            }
-
-            var index = 0
-            visit(this) { index++ }
-            return candidates
-        }
-
-        private fun String.isMediaFileKey(): Boolean = MEDIA_FILE_KEYS.any { equals(it, ignoreCase = true) }
-
-        private fun String.isMediaUrl(): Boolean = startsWith("http://") || startsWith("https://") || startsWith(DATA_URI_PREFIX)
-
-        private fun String.isQueueControlUrlKey(): Boolean =
-            equals("status_url", ignoreCase = true) ||
-                equals("response_url", ignoreCase = true) ||
-                equals("cancel_url", ignoreCase = true)
-
-        private fun String.mediaUrlPriority(): Int =
-            when {
-                equals("video_url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY
-                equals("audio_url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY
-                equals("music_url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY
-                equals("image_url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY
-                equals("file_url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY
-                equals("url", ignoreCase = true) -> PRIMARY_MEDIA_URL_PRIORITY + 10
-                contains("preview", ignoreCase = true) -> PREVIEW_MEDIA_URL_PRIORITY
-                contains("thumbnail", ignoreCase = true) -> PREVIEW_MEDIA_URL_PRIORITY
-                contains("poster", ignoreCase = true) -> PREVIEW_MEDIA_URL_PRIORITY
-                else -> FALLBACK_MEDIA_URL_PRIORITY
-            }
-
-        private data class UrlCandidate(
-            val url: String,
-            val priority: Int,
-            val index: Int,
-        )
+        private fun String.normalizeMediaUrl(): String = if (startsWith("//")) "https:$this" else this
 
         companion object {
             const val DEFAULT_SYNC_BASE_URL = "https://fal.run"
             const val DEFAULT_QUEUE_BASE_URL = "https://queue.fal.run"
-            private val RESULT_PAYLOAD_WRAPPER_KEYS = listOf("data", "output", "response", "payload", "result")
-            private val MEDIA_FILE_KEYS = setOf("video", "image", "audio", "file", "output", "result")
             private const val DATA_URI_PREFIX = "data:"
-            private const val PRIMARY_MEDIA_URL_PRIORITY = 0
-            private const val FALLBACK_MEDIA_URL_PRIORITY = 50
-            private const val PREVIEW_MEDIA_URL_PRIORITY = 100
+
+            fun deriveResponseUrl(statusUrl: String): String? {
+                val trimmed = statusUrl.trimEnd('/')
+                return if (trimmed.endsWith("/status", ignoreCase = true)) {
+                    trimmed.removeSuffix("/status")
+                } else {
+                    null
+                }
+            }
             private const val MAX_RETRY_ATTEMPTS = 3
             private const val RETRY_BACKOFF_MILLIS = 1_000L
             private const val HTTP_TOO_MANY_REQUESTS = 429
@@ -395,3 +306,10 @@ class FalService
             private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         }
     }
+
+internal fun JsonObject.queueStatusValue(): String? =
+    optionalString("status")
+        ?: optionalString("state")
+        ?: optionalString("queue_status")
+
+internal fun JsonObject.optionalString(name: String): String? = get(name)?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }

@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
@@ -36,6 +35,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoStepper
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -304,9 +304,7 @@ private fun StudioSettingsShimmerBlock(
 }
 
 @Composable
-private fun StudioAspectRatioShimmer(
-    modifier: Modifier = Modifier,
-) {
+private fun StudioAspectRatioShimmer(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "studioAspectShimmer")
     val progressState =
         infiniteTransition.animateFloat(
@@ -1027,7 +1025,6 @@ private val previewStudioCapabilities =
         supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
         supportedVideoResolutions = listOf("720p", "1080p"),
         supportedVideoDurations = listOf(5, 10),
-        supportsReferenceImage = true,
         supportsVideo = true,
     )
 

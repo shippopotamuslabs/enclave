@@ -1,14 +1,13 @@
 package com.browntowndev.enclave.feature.inference.fal
 
+import com.browntowndev.enclave.domain.model.media.ImageInputRequirement
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class FalOpenApiInputSchemaParserTest {
@@ -54,7 +53,7 @@ class FalOpenApiInputSchemaParserTest {
         assertEquals(listOf("5s", "10s"), schema!!.videoDurationTokens)
         assertEquals(listOf("720p", "1080p"), schema.resolutionOptions)
         assertEquals(listOf("16:9", "9:16"), schema.aspectRatioOptions)
-        assertTrue(schema.supportsReferenceImage)
+        assertEquals(ImageInputRequirement.OPTIONAL, schema.imageInput)
     }
 
     @Test

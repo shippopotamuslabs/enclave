@@ -20,6 +20,7 @@ import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
@@ -54,6 +55,7 @@ class MultimodalViewModel
         private val studioRepository: StudioRepositoryPort,
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
         private val resolveMediaProviderCapabilitiesUseCase: ResolveMediaProviderCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
@@ -73,13 +75,8 @@ class MultimodalViewModel
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
 
         private val activeModelFlow =
-            combine(_mediaType, defaultModelRepository.observeDefaults()) { type, defaults ->
-                val modelType =
-                    when (type) {
-                        MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
-                        MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
-                        MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
-                    }
+            combine(_mediaType, _settings, defaultModelRepository.observeDefaults()) { type, settings, defaults ->
+                val modelType = resolveMediaModelTypeUseCase(type, settings)
                 defaults.find { it.modelType == modelType }
             }
 
@@ -108,12 +105,21 @@ class MultimodalViewModel
                     }
                 }.distinctUntilChanged()
 
-        private val hasVideoModelFlow =
+        private val hasImageEditModelFlow =
             defaultModelRepository
                 .observeDefaults()
                 .map { assignments ->
                     assignments.any { assignment ->
-                        assignment.modelType == ModelType.VIDEO_GENERATION && assignment.mediaProviderId != null
+                        assignment.modelType == ModelType.IMAGE_EDIT && assignment.mediaProviderId != null
+                    }
+                }.distinctUntilChanged()
+
+        private val hasImageToVideoModelFlow =
+            defaultModelRepository
+                .observeDefaults()
+                .map { assignments ->
+                    assignments.any { assignment ->
+                        assignment.modelType == ModelType.IMAGE_TO_VIDEO && assignment.mediaProviderId != null
                     }
                 }.distinctUntilChanged()
 
@@ -210,14 +216,16 @@ class MultimodalViewModel
                 capabilitiesPlaybackFlow,
                 speechCoordinator.speechState,
                 playbackCoordinator.isPlayingTts,
-                hasVideoModelFlow,
-            ) { capabilitiesPlayback, speechState, isPlayingTts, hasVideoModel ->
+                hasImageEditModelFlow,
+                hasImageToVideoModelFlow,
+            ) { capabilitiesPlayback, speechState, isPlayingTts, hasImageEdit, hasImageToVideo ->
                 PlaybackInputs(
                     capabilities = capabilitiesPlayback.capabilities,
                     isCapabilitiesLoading = capabilitiesPlayback.isCapabilitiesLoading,
                     speechState = speechState,
                     isPlayingTts = isPlayingTts,
-                    hasVideoModel = hasVideoModel,
+                    hasImageEditModel = hasImageEdit,
+                    hasImageToVideoModel = hasImageToVideo,
                 )
             }
 
@@ -233,41 +241,37 @@ class MultimodalViewModel
             )
             combine(activeProviderFlow, _mediaType) { provider, mediaCapability ->
                 provider to mediaCapability
-            }
-                .distinctUntilChanged { previous, next ->
-                    previous.second == next.second &&
-                        remoteCapabilitiesRequestKey(previous.first) ==
-                        remoteCapabilitiesRequestKey(next.first)
-                }
-                .flatMapLatest { (provider, mediaCapability) ->
-                    flow {
-                        val requiresRemoteSchema = requiresRemoteCapabilities(provider)
-                        if (requiresRemoteSchema) {
-                            emit(
-                                CapabilitiesLoadSnapshot(
-                                    isLoading = true,
-                                    capabilities = null,
-                                ),
-                            )
-                        }
-                        val resolved =
-                            resolveMediaProviderCapabilitiesUseCase(
-                                mediaProvider = provider,
-                                mediaCapability = mediaCapability,
-                            )
+            }.distinctUntilChanged { previous, next ->
+                previous.second == next.second &&
+                    remoteCapabilitiesRequestKey(previous.first) ==
+                    remoteCapabilitiesRequestKey(next.first)
+            }.flatMapLatest { (provider, mediaCapability) ->
+                flow {
+                    val requiresRemoteSchema = requiresRemoteCapabilities(provider)
+                    if (requiresRemoteSchema) {
                         emit(
                             CapabilitiesLoadSnapshot(
-                                isLoading = false,
-                                capabilities = resolved,
+                                isLoading = true,
+                                capabilities = null,
                             ),
                         )
                     }
+                    val resolved =
+                        resolveMediaProviderCapabilitiesUseCase(
+                            mediaProvider = provider,
+                            mediaCapability = mediaCapability,
+                        )
+                    emit(
+                        CapabilitiesLoadSnapshot(
+                            isLoading = false,
+                            capabilities = resolved,
+                        ),
+                    )
                 }
-                .onEach { snapshot ->
-                    _isCapabilitiesLoading.value = snapshot.isLoading
-                    _capabilities.value = snapshot.capabilities
-                }
-                .launchIn(viewModelScope)
+            }.onEach { snapshot ->
+                _isCapabilitiesLoading.value = snapshot.isLoading
+                _capabilities.value = snapshot.capabilities
+            }.launchIn(viewModelScope)
         }
 
         fun onMicClick() {
@@ -316,7 +320,8 @@ class MultimodalViewModel
                         speechState = playbackInputs.speechState,
                         isPlayingTts = playbackInputs.isPlayingTts,
                         referenceMediaType = promptInputs.referenceMediaType,
-                        hasVideoModel = playbackInputs.hasVideoModel,
+                        hasImageEditModel = playbackInputs.hasImageEditModel,
+                        hasImageToVideoModel = playbackInputs.hasImageToVideoModel,
                     ),
                 )
             }.stateIn(
@@ -484,7 +489,14 @@ class MultimodalViewModel
                             videoResolution = DEFAULT_VIDEO_RESOLUTION,
                         )
                 } else {
-                    generationCoordinator.startDetailVideoGeneration(asset, customPrompt)
+                    if (!hasImageToVideoModelFlow.first()) {
+                        generationCoordinator.setVideoGenerationError(
+                            sourceAssetId = assetId,
+                            message = STUDIO_ANIMATE_I2V_UNAVAILABLE,
+                        )
+                    } else {
+                        generationCoordinator.startDetailVideoGeneration(asset, customPrompt, true)
+                    }
                 }
             }
         }
@@ -623,7 +635,8 @@ class MultimodalViewModel
             val isCapabilitiesLoading: Boolean,
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
-            val hasVideoModel: Boolean,
+            val hasImageEditModel: Boolean,
+            val hasImageToVideoModel: Boolean,
         )
 
         /** True when this modality's assigned provider will fetch fal OpenAPI schema. */
