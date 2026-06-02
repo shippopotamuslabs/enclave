@@ -8,8 +8,11 @@ import org.junit.jupiter.api.Test
 class ConversationSelectorTest {
     // Simple unit vector embeddings for testing
     private fun vecA() = floatArrayOf(1f, 0f, 0f)
+
     private fun vecB() = floatArrayOf(0f, 1f, 0f)
+
     private fun vecC() = floatArrayOf(0f, 0f, 1f)
+
     private fun vecNearA() = floatArrayOf(0.98f, 0.14f, 0f).normalise()
 
     private fun FloatArray.normalise(): FloatArray {
@@ -50,11 +53,12 @@ class ConversationSelectorTest {
 
     @Test
     fun `PP-83 budget stops selection when exhausted`() {
-        val candidates = listOf(
-            candidate("a", score = 0.9f, tokens = 400, embedding = vecA()),
-            candidate("b", score = 0.8f, tokens = 400, embedding = vecB()),
-            candidate("c", score = 0.7f, tokens = 400, embedding = vecC()),
-        )
+        val candidates =
+            listOf(
+                candidate("a", score = 0.9f, tokens = 400, embedding = vecA()),
+                candidate("b", score = 0.8f, tokens = 400, embedding = vecB()),
+                candidate("c", score = 0.7f, tokens = 400, embedding = vecC()),
+            )
         val result = ConversationSelector.select(candidates, tokenBudget = 800)
         assertTrue(result.totalTokens <= 800)
         assertEquals(2, result.selectedIds.size)
@@ -65,11 +69,12 @@ class ConversationSelectorTest {
         // a and nearA are very similar; b is orthogonal to a
         // Both a and nearA have higher raw score than b — but MMR should still pick b
         // after picking a, because nearA is too similar
-        val candidates = listOf(
-            candidate("a", score = 0.95f, tokens = 100, embedding = vecA()),
-            candidate("nearA", score = 0.90f, tokens = 100, embedding = vecNearA()),
-            candidate("b", score = 0.70f, tokens = 100, embedding = vecB()),
-        )
+        val candidates =
+            listOf(
+                candidate("a", score = 0.95f, tokens = 100, embedding = vecA()),
+                candidate("nearA", score = 0.90f, tokens = 100, embedding = vecNearA()),
+                candidate("b", score = 0.70f, tokens = 100, embedding = vecB()),
+            )
         val result = ConversationSelector.select(candidates, tokenBudget = 300)
         assertTrue("a" in result.selectedIds, "a should be selected (highest score)")
         // b (diverse) should beat nearA (similar to a) in 2nd pick
@@ -78,11 +83,12 @@ class ConversationSelectorTest {
 
     @Test
     fun `PP-85 deterministic selection — same inputs same result`() {
-        val candidates = listOf(
-            candidate("a", score = 0.9f, tokens = 200, embedding = vecA()),
-            candidate("b", score = 0.7f, tokens = 200, embedding = vecB()),
-            candidate("c", score = 0.5f, tokens = 200, embedding = vecC()),
-        )
+        val candidates =
+            listOf(
+                candidate("a", score = 0.9f, tokens = 200, embedding = vecA()),
+                candidate("b", score = 0.7f, tokens = 200, embedding = vecB()),
+                candidate("c", score = 0.5f, tokens = 200, embedding = vecC()),
+            )
         val r1 = ConversationSelector.select(candidates, 400)
         val r2 = ConversationSelector.select(candidates, 400)
         assertEquals(r1.selectedIds, r2.selectedIds)
@@ -90,9 +96,10 @@ class ConversationSelectorTest {
 
     @Test
     fun `PP-86 total tokens in result does not exceed budget`() {
-        val candidates = (1..20).map { i ->
-            candidate("c$i", score = i * 0.04f, tokens = 150, embedding = vecA())
-        }
+        val candidates =
+            (1..20).map { i ->
+                candidate("c$i", score = i * 0.04f, tokens = 150, embedding = vecA())
+            }
         val budget = 750
         val result = ConversationSelector.select(candidates, budget)
         assertTrue(result.totalTokens <= budget, "tokens=${result.totalTokens} budget=$budget")

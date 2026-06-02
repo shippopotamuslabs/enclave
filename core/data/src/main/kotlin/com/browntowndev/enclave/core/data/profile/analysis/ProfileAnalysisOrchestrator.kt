@@ -84,9 +84,10 @@ class ProfileAnalysisOrchestrator
 
             onProgress(totalPasses, totalPasses)
 
-            val synthesesCount = withContext(Dispatchers.IO) {
-                findingsDao.getByCategory(corpusRunId, "SYNTHESIS").size
-            }
+            val synthesesCount =
+                withContext(Dispatchers.IO) {
+                    findingsDao.getByCategory(corpusRunId, "SYNTHESIS").size
+                }
             loggingPort.info(TAG, "[$corpusRunId] all passes done — SYNTHESIS findings: $synthesesCount")
 
             saveProfileToMemory(corpusRunId)
@@ -119,32 +120,38 @@ class ProfileAnalysisOrchestrator
             configId: ApiModelConfigurationId,
             toolExecutor: ProfileAnalysisToolExecutor,
         ) {
-            val conversations = withContext(Dispatchers.IO) {
-                corpusDao.getSelectedConversations(corpusRunId)
-            }
+            val conversations =
+                withContext(Dispatchers.IO) {
+                    corpusDao.getSelectedConversations(corpusRunId)
+                }
             loggingPort.info(TAG, "[$corpusRunId] EXTRACTION: ${conversations.size} conversations")
 
             if (conversations.isEmpty()) return
 
             // Build text for every conversation up front so we can measure token counts.
-            data class ConvWithText(val conv: ProfileCorpusConversationEntity, val text: String)
+            data class ConvWithText(
+                val conv: ProfileCorpusConversationEntity,
+                val text: String,
+            )
 
-            val withText = withContext(Dispatchers.IO) {
-                conversations.mapNotNull { conv ->
-                    val messages = corpusDao.getMessagesForConversation(conv.id)
-                    val text = buildConversationText(messages)
-                    if (text.isBlank()) null else ConvWithText(conv, text)
+            val withText =
+                withContext(Dispatchers.IO) {
+                    conversations.mapNotNull { conv ->
+                        val messages = corpusDao.getMessagesForConversation(conv.id)
+                        val text = buildConversationText(messages)
+                        if (text.isBlank()) null else ConvWithText(conv, text)
+                    }
                 }
-            }
             loggingPort.info(TAG, "[$corpusRunId] EXTRACTION: ${withText.size} non-empty conversations after text build")
 
             val contextWindow = inferencePort.getContextWindowTokens(configId)
             val batchBudget = (contextWindow * EXTRACTION_INPUT_RATIO).toInt()
             loggingPort.info(TAG, "[$corpusRunId] EXTRACTION: contextWindow=$contextWindow batchBudget=$batchBudget tokens")
 
-            val batches = ProfileCorpusBatcher.pack(withText, batchBudget) { item ->
-                JTokkitTokenCounter.countTokens(item.text)
-            }
+            val batches =
+                ProfileCorpusBatcher.pack(withText, batchBudget) { item ->
+                    JTokkitTokenCounter.countTokens(item.text)
+                }
             loggingPort.info(TAG, "[$corpusRunId] EXTRACTION: ${batches.size} batches")
 
             val extractionTools = listOf(ProfileAnalysisTools.RECORD_FINDING)
@@ -153,32 +160,35 @@ class ProfileAnalysisOrchestrator
                 val batchPassName = "EXTRACTION[batch ${batchIndex + 1}/${batches.size}]"
                 loggingPort.debug(TAG, "[$corpusRunId] $batchPassName — ${batch.size} conversations")
 
-                val userContent = buildString {
-                    for ((i, item) in batch.withIndex()) {
-                        appendLine("--- Conversation ${i + 1} of ${batch.size}: \"${item.conv.title}\" ---")
-                        appendLine()
-                        appendLine(item.text)
-                    }
-                }.trimEnd()
+                val userContent =
+                    buildString {
+                        for ((i, item) in batch.withIndex()) {
+                            appendLine("--- Conversation ${i + 1} of ${batch.size}: \"${item.conv.title}\" ---")
+                            appendLine()
+                            appendLine(item.text)
+                        }
+                    }.trimEnd()
 
-                val seed = mutableListOf(
-                    AgentLoopMessage(
-                        id = UUID.randomUUID().toString(),
-                        role = Role.USER,
-                        content = userContent,
-                    ),
-                )
+                val seed =
+                    mutableListOf(
+                        AgentLoopMessage(
+                            id = UUID.randomUUID().toString(),
+                            role = Role.USER,
+                            content = userContent,
+                        ),
+                    )
 
-                val loop = ProfileAgentLoop(
-                    inferencePort = inferencePort,
-                    configId = configId,
-                    systemPrompt = ProfileAnalysisPrompts.EXTRACTION_BATCH,
-                    tools = extractionTools,
-                    toolExecutor = toolExecutor,
-                    loggingPort = loggingPort,
-                    passName = batchPassName,
-                    requireRecordFinding = false,
-                )
+                val loop =
+                    ProfileAgentLoop(
+                        inferencePort = inferencePort,
+                        configId = configId,
+                        systemPrompt = ProfileAnalysisPrompts.EXTRACTION_BATCH,
+                        tools = extractionTools,
+                        toolExecutor = toolExecutor,
+                        loggingPort = loggingPort,
+                        passName = batchPassName,
+                        requireRecordFinding = false,
+                    )
                 loop.run(seed)
             }
         }
@@ -186,11 +196,12 @@ class ProfileAnalysisOrchestrator
         private fun buildConversationText(messages: List<ProfileCorpusMessageEntity>): String =
             buildString {
                 for (msg in messages) {
-                    val label = when (msg.role.uppercase()) {
-                        "USER" -> "User"
-                        "ASSISTANT" -> "Assistant"
-                        else -> continue
-                    }
+                    val label =
+                        when (msg.role.uppercase()) {
+                            "USER" -> "User"
+                            "ASSISTANT" -> "Assistant"
+                            else -> continue
+                        }
                     val content = msg.content.take(MAX_MESSAGE_CHARS)
                     appendLine("$label: $content")
                 }
@@ -203,38 +214,43 @@ class ProfileAnalysisOrchestrator
             toolExecutor: ProfileAnalysisToolExecutor,
         ) {
             val systemPrompt = ProfileAnalysisPrompts.ALL[passIndex]
-            val messages = mutableListOf(
-                AgentLoopMessage(
-                    id = UUID.randomUUID().toString(),
-                    role = Role.USER,
-                    content = "Begin your analysis for this pass.",
-                ),
-            )
+            val messages =
+                mutableListOf(
+                    AgentLoopMessage(
+                        id = UUID.randomUUID().toString(),
+                        role = Role.USER,
+                        content = "Begin your analysis for this pass.",
+                    ),
+                )
 
-            val loop = ProfileAgentLoop(
-                inferencePort = inferencePort,
-                configId = configId,
-                systemPrompt = systemPrompt,
-                tools = analysisTools,
-                toolExecutor = toolExecutor,
-                loggingPort = loggingPort,
-                passName = passName,
-            )
+            val loop =
+                ProfileAgentLoop(
+                    inferencePort = inferencePort,
+                    configId = configId,
+                    systemPrompt = systemPrompt,
+                    tools = analysisTools,
+                    toolExecutor = toolExecutor,
+                    loggingPort = loggingPort,
+                    passName = passName,
+                )
             loop.run(messages)
         }
 
         private suspend fun saveProfileToMemory(corpusRunId: String) {
-            val syntheses = withContext(Dispatchers.IO) {
-                findingsDao.getByCategory(corpusRunId, "SYNTHESIS")
-            }
+            val syntheses =
+                withContext(Dispatchers.IO) {
+                    findingsDao.getByCategory(corpusRunId, "SYNTHESIS")
+                }
             val profileContent = syntheses.lastOrNull()?.content
             if (profileContent == null) {
                 loggingPort.warning(TAG, "[$corpusRunId] no SYNTHESIS finding — profile will not be saved to memory")
                 return
             }
 
-            val existing = memoriesRepository.getCoreMemories()
-                .firstOrNull { it.category == MemoryCategory.PSYCH_PROFILE }
+            val existing =
+                memoriesRepository
+                    .getCoreMemories()
+                    .firstOrNull { it.category == MemoryCategory.PSYCH_PROFILE }
             if (existing != null) {
                 memoriesRepository.updateMemory(existing.id, profileContent, MemoryCategory.PSYCH_PROFILE)
             } else {

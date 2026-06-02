@@ -14,19 +14,27 @@ interface ConversationExportParser {
      *
      * Returns null if this parser cannot handle the given entry.
      */
-    fun canHandle(entryName: String, contentPreview: String): Boolean
+    fun canHandle(
+        entryName: String,
+        contentPreview: String,
+    ): Boolean
 
     /**
      * Parse [content] into a list of [ConversationRecord]s plus a [ParseHealthReport].
      * Must never throw — malformed items are skipped and counted in the report.
      */
-    fun parse(entryName: String, content: String): Pair<List<ConversationRecord>, ParseHealthReport>
+    fun parse(
+        entryName: String,
+        content: String,
+    ): Pair<List<ConversationRecord>, ParseHealthReport>
 
     /**
      * Streaming variant — reads from [reader] without loading the full entry into memory.
      * Default implementation reads all text and delegates to [parse]; override for large-file support.
      * Must never throw.
      */
-    fun parseReader(entryName: String, reader: Reader): Pair<List<ConversationRecord>, ParseHealthReport> =
-        parse(entryName, reader.readText())
+    fun parseReader(
+        entryName: String,
+        reader: Reader,
+    ): Pair<List<ConversationRecord>, ParseHealthReport> = parse(entryName, reader.readText())
 }

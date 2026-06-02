@@ -13,6 +13,10 @@ data class SelectedCorpus(
     val coveragePercent: Float,
 ) {
     val selectionPercent: Float
-        get() = if (totalConversationsInCorpus == 0) 0f
-                else selectedConversationIds.size.toFloat() / totalConversationsInCorpus
+        get() =
+            if (totalConversationsInCorpus == 0) {
+                0f
+            } else {
+                selectedConversationIds.size.toFloat() / totalConversationsInCorpus
+            }
 }

@@ -1,7 +1,8 @@
 package com.browntowndev.enclave.core.data.profile.analysis
 
 object ProfileAnalysisPrompts {
-    val EXTRACTION = """
+    val EXTRACTION =
+        """
 You are conducting a rigorous psychological analysis of a user's AI conversation history. This is Pass 1: RAW EVIDENCE EXTRACTION.
 
 Your task: identify concrete, specific behavioural moments from the conversation corpus. You are looking for:
@@ -20,9 +21,10 @@ Use list_conversations to survey the corpus, read_conversation to read promising
 For each concrete behavioural moment, call record_finding with category=EVIDENCE. Quote or paraphrase exact content. Be specific — no generalisations. You MUST call record_finding at least 5 times. Read at least 8 conversations before finishing this pass.
 
 Do not be flattering. Do not infer what cannot be evidenced. Be honest.
-    """.trimIndent()
+        """.trimIndent()
 
-    val CLUSTERING = """
+    val CLUSTERING =
+        """
 You are conducting a rigorous psychological analysis. This is Pass 2: PATTERN CLUSTERING.
 
 First, call read_findings with category=EVIDENCE to review all evidence gathered in Pass 1.
@@ -37,9 +39,10 @@ Your task: group the evidence into recurring patterns and dynamics. Look for:
 - Blind spots: areas where their reasoning is weaker than they seem to realise
 
 For each identified pattern, call record_finding with category=PATTERN. Each finding should name the pattern, describe it concisely, and cite at least one piece of evidence from Pass 1. Be analytical, not flattering.
-    """.trimIndent()
+        """.trimIndent()
 
-    val SYNTHESIS = """
+    val SYNTHESIS =
+        """
 You are synthesising a dense, psychoanalytic user profile. This is Pass 3: PROFILE SYNTHESIS.
 
 First, call read_findings with category=EVIDENCE and read_findings with category=PATTERN to review all gathered material.
@@ -67,9 +70,10 @@ Where they are actively developing, how they have changed, where they seem to be
 How they prefer to be engaged with, what they find annoying or patronising, explicit or implicit preferences for the conversational dynamic. 2 sentences.
 
 Call record_finding with category=SYNTHESIS containing the full profile. Aim for 400-600 words. Dense, specific, honest.
-    """.trimIndent()
+        """.trimIndent()
 
-    val CRITIQUE = """
+    val CRITIQUE =
+        """
 You are reviewing and revising a psychological profile you just drafted. This is Pass 4: SELF-CRITIQUE AND REVISION.
 
 Call read_findings with category=SYNTHESIS to read the draft profile.
@@ -88,9 +92,10 @@ Call read_findings with category=EVIDENCE or PATTERN if you need to re-check spe
 Then write your FINAL, revised profile using the same six-section structure. Call record_finding with category=SYNTHESIS containing the FINAL version. This replaces the draft.
 
 The final profile must be honest, specific, and immediately useful to any model that reads it at the start of a conversation with this person.
-    """.trimIndent()
+        """.trimIndent()
 
-    val EXTRACTION_BATCH = """
+    val EXTRACTION_BATCH =
+        """
 You are extracting psychological evidence from a set of AI conversations.
 
 Look for: pushback or disagreement with the AI, vulnerability or self-disclosure, emotional moments, recurring preoccupations, reaction to challenge or being wrong, avoidance or deflection, how they frame problems (locus of control), relationship to uncertainty. Cross-reference patterns you notice across multiple conversations in this batch.
@@ -100,7 +105,7 @@ For each noteworthy behavioural moment: call record_finding with category=EVIDEN
 Skip conversations that reveal nothing about the user's psychology (e.g. purely technical lookups with no personal signal).
 
 Do not be flattering. Do not infer what cannot be evidenced.
-    """.trimIndent()
+        """.trimIndent()
 
     val ALL = listOf(EXTRACTION, CLUSTERING, SYNTHESIS, CRITIQUE)
 }

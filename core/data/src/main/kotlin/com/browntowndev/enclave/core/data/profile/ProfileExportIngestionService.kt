@@ -74,7 +74,10 @@ class ProfileExportIngestionService
                 Unit
             }
 
-        private suspend fun ingestSingleZip(uri: String, corpusRunId: String): List<ParseHealthReport> {
+        private suspend fun ingestSingleZip(
+            uri: String,
+            corpusRunId: String,
+        ): List<ParseHealthReport> {
             val reports = mutableListOf<ParseHealthReport>()
             val androidUri = Uri.parse(uri)
             val stream = context.contentResolver.openInputStream(androidUri) ?: return reports
@@ -116,10 +119,17 @@ class ProfileExportIngestionService
          * Replays [prefix] chars then delegates to [rest]. Does not close [rest] — the caller
          * (ZipInputStream use-block) owns the underlying stream lifecycle.
          */
-        private class PrependedReader(private val prefix: String, private val rest: Reader) : Reader() {
+        private class PrependedReader(
+            private val prefix: String,
+            private val rest: Reader,
+        ) : Reader() {
             private var pos = 0
 
-            override fun read(cbuf: CharArray, off: Int, len: Int): Int {
+            override fun read(
+                cbuf: CharArray,
+                off: Int,
+                len: Int,
+            ): Int {
                 if (pos < prefix.length) {
                     val toCopy = minOf(len, prefix.length - pos)
                     prefix.toCharArray(cbuf, off, pos, pos + toCopy)
@@ -132,48 +142,56 @@ class ProfileExportIngestionService
             override fun close() = Unit
         }
 
-        private suspend fun persistRecords(records: List<ConversationRecord>, corpusRunId: String) {
+        private suspend fun persistRecords(
+            records: List<ConversationRecord>,
+            corpusRunId: String,
+        ) {
             for (record in records) {
-                val conversationId = java.util.UUID.randomUUID().toString()
+                val conversationId =
+                    java.util.UUID
+                        .randomUUID()
+                        .toString()
                 val userText = record.userMessages.joinToString(" ") { it.content }
                 val assistantText = record.assistantMessages.joinToString(" ") { it.content }
                 val userTokens = JTokkitTokenCounter.countTokens(userText)
                 val assistantTokens = JTokkitTokenCounter.countTokens(assistantText)
 
-                val seedText = buildString {
-                    append(record.title)
-                    record.userMessages.firstOrNull()?.let { append(" ").append(it.content.take(SEED_TEXT_PREVIEW_CHARS)) }
-                }
+                val seedText =
+                    buildString {
+                        append(record.title)
+                        record.userMessages.firstOrNull()?.let { append(" ").append(it.content.take(SEED_TEXT_PREVIEW_CHARS)) }
+                    }
 
-                val conversationEntity = ProfileCorpusConversationEntity(
-                    id = conversationId,
-                    corpusRunId = corpusRunId,
-                    externalId = record.externalId,
-                    title = record.title,
-                    provider = record.provider.name,
-                    createdAtMs = record.createdAtMs,
-                    userTokenCount = userTokens,
-                    assistantTokenCount = assistantTokens,
-                    messageCount = record.messages.size,
-                    userMessageCount = record.userMessages.size,
-                    embeddingSeedText = seedText,
-                )
+                val conversationEntity =
+                    ProfileCorpusConversationEntity(
+                        id = conversationId,
+                        corpusRunId = corpusRunId,
+                        externalId = record.externalId,
+                        title = record.title,
+                        provider = record.provider.name,
+                        createdAtMs = record.createdAtMs,
+                        userTokenCount = userTokens,
+                        assistantTokenCount = assistantTokens,
+                        messageCount = record.messages.size,
+                        userMessageCount = record.userMessages.size,
+                        embeddingSeedText = seedText,
+                    )
                 dao.insertConversation(conversationEntity)
 
-                val messageEntities = record.messages.map { msg ->
-                    ProfileCorpusMessageEntity(
-                        conversationId = conversationId,
-                        corpusRunId = corpusRunId,
-                        role = msg.role.name,
-                        content = msg.content,
-                        createdAtMs = msg.createdAtMs,
-                        orderIndex = msg.orderIndex,
-                    )
-                }
+                val messageEntities =
+                    record.messages.map { msg ->
+                        ProfileCorpusMessageEntity(
+                            conversationId = conversationId,
+                            corpusRunId = corpusRunId,
+                            role = msg.role.name,
+                            content = msg.content,
+                            createdAtMs = msg.createdAtMs,
+                            orderIndex = msg.orderIndex,
+                        )
+                    }
                 dao.insertMessages(messageEntities)
             }
         }
 
-        private fun tempDirForRun(corpusRunId: String): File =
-            File(context.cacheDir, "profile_corpus_$corpusRunId")
+        private fun tempDirForRun(corpusRunId: String): File = File(context.cacheDir, "profile_corpus_$corpusRunId")
     }

@@ -39,13 +39,22 @@ interface ProfileCorpusDao {
     suspend fun updateConversation(entity: ProfileCorpusConversationEntity)
 
     @Query("UPDATE profile_corpus_conversations SET signal_score = :score WHERE id = :id")
-    suspend fun updateSignalScore(id: String, score: Float)
+    suspend fun updateSignalScore(
+        id: String,
+        score: Float,
+    )
 
     @Query("UPDATE profile_corpus_conversations SET cluster_id = :clusterId WHERE id = :id")
-    suspend fun updateClusterId(id: String, clusterId: Int)
+    suspend fun updateClusterId(
+        id: String,
+        clusterId: Int,
+    )
 
     @Query("UPDATE profile_corpus_conversations SET selected_for_analysis = :selected WHERE id = :id")
-    suspend fun updateSelected(id: String, selected: Boolean)
+    suspend fun updateSelected(
+        id: String,
+        selected: Boolean,
+    )
 
     @Query("DELETE FROM profile_corpus_conversations WHERE corpus_run_id = :runId")
     suspend fun deleteConversationsForRun(runId: String)

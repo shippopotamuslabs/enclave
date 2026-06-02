@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.profile
 
 import com.browntowndev.enclave.domain.model.profile.ConversationScoringPolicy
-import kotlin.math.sqrt
 
 /**
  * Pure max-marginal-relevance (MMR) selector.
@@ -31,9 +30,10 @@ object ConversationSelector {
         candidates: List<Candidate>,
         tokenBudget: Int,
     ): SelectionResult {
-        val eligible = candidates
-            .filter { it.signalScore >= ConversationScoringPolicy.MIN_ELIGIBLE_SCORE }
-            .sortedByDescending { it.signalScore }
+        val eligible =
+            candidates
+                .filter { it.signalScore >= ConversationScoringPolicy.MIN_ELIGIBLE_SCORE }
+                .sortedByDescending { it.signalScore }
 
         if (eligible.isEmpty()) return SelectionResult(emptyList(), 0)
 
@@ -68,7 +68,10 @@ object ConversationSelector {
         }
     }
 
-    private fun cosine(a: FloatArray, b: FloatArray): Float {
+    private fun cosine(
+        a: FloatArray,
+        b: FloatArray,
+    ): Float {
         // Embeddings from MiniLM are L2-normalised → dot product = cosine similarity
         var dot = 0f
         for (i in a.indices) dot += a[i] * b[i]

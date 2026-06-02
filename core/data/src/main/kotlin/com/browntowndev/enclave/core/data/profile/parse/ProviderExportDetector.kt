@@ -11,7 +11,10 @@ class ProviderExportDetector(
     private val parsers: List<ConversationExportParser>,
     private val fallback: GenericFallbackParser,
 ) {
-    fun detect(entryName: String, contentPreview: String): ConversationExportParser? {
+    fun detect(
+        entryName: String,
+        contentPreview: String,
+    ): ConversationExportParser? {
         val specific = parsers.firstOrNull { it.canHandle(entryName, contentPreview) }
         if (specific != null) return specific
         if (fallback.canHandle(entryName, contentPreview)) return fallback

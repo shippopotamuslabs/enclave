@@ -6,10 +6,11 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class ProviderExportDetectorTest {
-    private val detector = ProviderExportDetector(
-        parsers = listOf(OpenAiExportParser(), AnthropicExportParser(), GoogleExportParser(), XaiExportParser()),
-        fallback = GenericFallbackParser(),
-    )
+    private val detector =
+        ProviderExportDetector(
+            parsers = listOf(OpenAiExportParser(), AnthropicExportParser(), GoogleExportParser(), XaiExportParser()),
+            fallback = GenericFallbackParser(),
+        )
 
     @Test
     fun `PP-10 detects OpenAI conversations json by mapping key`() {

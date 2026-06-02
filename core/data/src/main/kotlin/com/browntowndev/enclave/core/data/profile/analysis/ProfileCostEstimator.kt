@@ -30,11 +30,14 @@ class ProfileCostEstimator
 
             val promptRate = pricing?.promptUsdPerMillion
             val completionRate = pricing?.completionUsdPerMillion
-            val costUsd = if (promptRate != null && completionRate != null) {
-                val inputCost = totalInput * promptRate / TOKENS_PER_MILLION
-                val outputCost = totalOutput * completionRate / TOKENS_PER_MILLION
-                BigDecimal.valueOf(inputCost + outputCost).setScale(COST_SCALE, RoundingMode.HALF_UP)
-            } else null
+            val costUsd =
+                if (promptRate != null && completionRate != null) {
+                    val inputCost = totalInput * promptRate / TOKENS_PER_MILLION
+                    val outputCost = totalOutput * completionRate / TOKENS_PER_MILLION
+                    BigDecimal.valueOf(inputCost + outputCost).setScale(COST_SCALE, RoundingMode.HALF_UP)
+                } else {
+                    null
+                }
 
             return ProfileCostEstimate(
                 estimatedInputTokens = totalInput,

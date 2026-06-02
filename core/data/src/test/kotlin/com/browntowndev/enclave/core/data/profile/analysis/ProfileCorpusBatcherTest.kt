@@ -5,9 +5,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ProfileCorpusBatcherTest {
-
-    private fun pack(items: List<String>, budget: Int): List<List<String>> =
-        ProfileCorpusBatcher.pack(items, budget) { it.length }
+    private fun pack(
+        items: List<String>,
+        budget: Int,
+    ): List<List<String>> = ProfileCorpusBatcher.pack(items, budget) { it.length }
 
     @Test
     fun `PB-100 empty input returns empty list`() {

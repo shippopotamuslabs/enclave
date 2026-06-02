@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test
 class AnthropicExportParserTest {
     private val parser = AnthropicExportParser()
 
-    private val sampleJson = """
+    private val sampleJson =
+        """
         [
           {
             "uuid": "anth-conv-001",
@@ -33,7 +34,7 @@ class AnthropicExportParserTest {
             ]
           }
         ]
-    """.trimIndent()
+        """.trimIndent()
 
     @Test
     fun `PP-30 canHandle returns true for Anthropic chat_messages JSON`() {
@@ -91,9 +92,10 @@ class AnthropicExportParserTest {
 
     @Test
     fun `PP-38 malformed entry is skipped and counted`() {
-        val withJunk = """[$sampleJson[0], "not-an-object"]""".let {
-            """[${sampleJson.removePrefix("[").removeSuffix("]")}, "not-an-object"]"""
-        }
+        val withJunk =
+            """[$sampleJson[0], "not-an-object"]""".let {
+                """[${sampleJson.removePrefix("[").removeSuffix("]")}, "not-an-object"]"""
+            }
         val (records, report) = parser.parse("conversations.json", withJunk)
         assertTrue(report.skippedMalformed >= 1)
         assertTrue(records.isNotEmpty())

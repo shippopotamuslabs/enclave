@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.domain.port.profile
 
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
 import com.browntowndev.enclave.domain.model.profile.ProfileAnalysisProgress
+import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
 import kotlinx.coroutines.flow.Flow
 
 interface ProfileAnalysisPort {
@@ -17,11 +17,7 @@ interface ProfileAnalysisPort {
         configId: ApiModelConfigurationId,
     )
 
-    fun observeAnalysisProgress(
-        corpusRunId: String,
-    ): Flow<ProfileAnalysisProgress>
+    fun observeAnalysisProgress(corpusRunId: String): Flow<ProfileAnalysisProgress>
 
-    suspend fun getLatestProfileSynthesis(
-        corpusRunId: String,
-    ): String?
+    suspend fun getLatestProfileSynthesis(corpusRunId: String): String?
 }
