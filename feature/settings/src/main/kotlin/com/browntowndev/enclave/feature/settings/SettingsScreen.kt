@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Feedback
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
@@ -285,18 +285,18 @@ fun SettingsScreen(
                         icon = Icons.Default.Visibility,
                         onClick = { onShowVisionSettingsSheet(true) },
                     )
-                }
-            }
-
-            item {
-                NeoSectionHeader(text = "Data & Privacy")
-                NeoSettingsSection {
                     NeoNavRow(
                         title = "Psychological Profile",
                         subtitle = "Build a profile from your AI conversation exports",
                         icon = Icons.Default.Psychology,
                         onClick = onNavigateToProfileBuilder,
                     )
+                }
+            }
+
+            item {
+                NeoSectionHeader(text = "Data & Privacy")
+                NeoSettingsSection {
                     NeoNavRow(
                         title = "Usage & Spend",
                         icon = Icons.Default.BarChart,

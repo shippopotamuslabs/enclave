@@ -24,14 +24,18 @@ class BulkAssignApiProviderUseCaseImpl
             targetSlots: List<ModelType>,
         ): Result<ApiCredentialsId> =
             runCatching {
+                require(credentials.provider.supportsChat) {
+                    "${credentials.provider.displayName} is media-only and cannot be assigned to chat model slots."
+                }
                 val credentialsId = saveApiCredentialsUseCase(credentials, apiKey)
 
-                val config = ApiModelConfiguration(
-                    apiCredentialsId = credentialsId,
-                    modelId = modelId,
-                    displayName = displayName,
-                    isMultimodal = false,
-                )
+                val config =
+                    ApiModelConfiguration(
+                        apiCredentialsId = credentialsId,
+                        modelId = modelId,
+                        displayName = displayName,
+                        isMultimodal = false,
+                    )
                 val saveConfigResult = saveApiModelConfigurationUseCase(config)
                 val configId = saveConfigResult.getOrThrow()
 

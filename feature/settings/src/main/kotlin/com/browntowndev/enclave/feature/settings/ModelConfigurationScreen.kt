@@ -202,11 +202,12 @@ fun DefaultAssignmentsCard(
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
         NeoSectionHeader(text = title)
         assignments.forEach { assignment ->
+            val rowDisplay = assignment.assignmentRowDisplay
             SettingsAssignmentRow(
                 displayLabel = assignment.displayLabel,
-                headline = assignment.assignmentHeadlineName,
-                providerName = assignment.providerName,
-                presetName = assignment.presetName,
+                presetName = rowDisplay.presetName,
+                providerName = rowDisplay.providerName,
+                modelName = rowDisplay.modelName,
                 isMultimodal = assignment.isMultimodal,
                 modelTypeDescription = assignment.modelType.description,
                 onEditClick = { onEditAssignment(assignment.modelType) },

@@ -120,11 +120,12 @@ object FakeDiscoverModelsPort {
         if (shouldFail) throw RuntimeException("Discovery failed")
         return ApiModelDiscoveryResult(
             models = modelsToReturn,
-            scope = ApiModelDiscoveryScope(
-                provider = request.provider,
-                baseUrl = request.baseUrl.orEmpty(),
-                credentialAlias = request.credentialAlias,
-            ),
+            scope =
+                ApiModelDiscoveryScope(
+                    provider = request.provider,
+                    baseUrl = request.baseUrl.orEmpty(),
+                    credentialAlias = request.credentialAlias,
+                ),
         )
     }
 }
@@ -134,8 +135,24 @@ object FakeDiscoverModelsPort {
 // ---------------------------------------------------------------------------
 
 class FakeLoggingPort : LoggingPort {
-    override fun debug(tag: String, message: String) {}
-    override fun info(tag: String, message: String) {}
-    override fun warning(tag: String, message: String) {}
-    override fun error(tag: String, message: String, throwable: Throwable?) {}
+    override fun debug(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun info(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun warning(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun error(
+        tag: String,
+        message: String,
+        throwable: Throwable?,
+    ) {}
 }

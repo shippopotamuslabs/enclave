@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.presentation
 
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
-import com.browntowndev.enclave.domain.security.VaultKeystoreAliases
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
@@ -10,9 +9,12 @@ import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
+import com.browntowndev.enclave.domain.security.VaultKeystoreAliases
+import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.domain.usecase.auth.LoginWithGoogleUseCase
 import com.browntowndev.enclave.domain.usecase.download.InitializeModelsUseCase
@@ -23,8 +25,6 @@ import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliatio
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -114,25 +114,26 @@ class MainViewModelTest {
         logging: LoggingPort = loggingPort,
         errHandler: ViewModelErrorHandler = errorHandler,
         settings: SettingsRepository = settingsRepository,
-    ): MainViewModel = MainViewModel(
-        getAuthState,
-        loginWithGoogle,
-        initializeModels,
-        crypto,
-        cloudSync,
-        vaultMetadata,
-        biometric,
-        bioManager,
-        createVault,
-        unlockVault,
-        detectReconciliation,
-        adoptCloud,
-        bootstrapCloud,
-        startCloudSync,
-        logging,
-        errHandler,
-        settings,
-    )
+    ): MainViewModel =
+        MainViewModel(
+            getAuthState,
+            loginWithGoogle,
+            initializeModels,
+            crypto,
+            cloudSync,
+            vaultMetadata,
+            biometric,
+            bioManager,
+            createVault,
+            unlockVault,
+            detectReconciliation,
+            adoptCloud,
+            bootstrapCloud,
+            startCloudSync,
+            logging,
+            errHandler,
+            settings,
+        )
 
     @BeforeEach
     fun setUp() {

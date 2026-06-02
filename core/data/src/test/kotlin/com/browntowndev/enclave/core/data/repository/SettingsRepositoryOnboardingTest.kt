@@ -65,15 +65,17 @@ class SettingsRepositoryOnboardingTest {
     // -------- helpers --------
 
     private fun createRepository(scope: CoroutineScope): SettingsRepositoryImpl {
-        val dataStore = PreferenceDataStoreFactory.create(
-            scope = scope,
-            produceFile = { tempDir.resolve("settings-${System.nanoTime()}.preferences_pb").toFile() },
-        )
-        val apiKeyManager = mockk<ApiKeyManager> {
-            every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
-            every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
-            every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
-        }
+        val dataStore =
+            PreferenceDataStoreFactory.create(
+                scope = scope,
+                produceFile = { tempDir.resolve("settings-${System.nanoTime()}.preferences_pb").toFile() },
+            )
+        val apiKeyManager =
+            mockk<ApiKeyManager> {
+                every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
+                every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
+                every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
+            }
         return SettingsRepositoryImpl(
             dataStore = dataStore,
             apiKeyManager = apiKeyManager,

@@ -81,15 +81,10 @@ fun VisionSettingsBottomSheet(
 
 private fun formatVisionAssignmentSubtitle(assignment: DefaultModelAssignmentUi?): String {
     if (assignment == null) return "None"
-    val provider = assignment.providerName
-    val modelLabel =
-        assignment.modelId?.takeIf { it.isNotBlank() }
-            ?: assignment.presetName
-            ?: assignment.currentModelName.takeIf { it != "None Assigned" }
-    return when {
-        provider != null && modelLabel != null -> "$provider • $modelLabel"
-        provider != null -> provider
-        modelLabel != null -> modelLabel
-        else -> "None"
-    }
+    val display = assignment.assignmentRowDisplay
+    return listOfNotNull(
+        display.presetName.takeIf { it != "None Assigned" },
+        display.providerName,
+        display.modelName,
+    ).joinToString(" • ").ifBlank { "None" }
 }

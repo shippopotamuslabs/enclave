@@ -131,8 +131,9 @@ internal class MediaProvidersCoordinator
                         )
                     mediaState.update { state ->
                         state.copy(
-                            discoveredApiModels = result.models.filterMediaModels(draft.capability),
+                            discoveredApiModels = result.models.filterMediaModels(draft.capability, draft.provider),
                             discoveredApiModelScope = result.scope,
+                            isDiscoveryTruncated = result.isTruncated,
                         )
                     }
                 } finally {
@@ -173,6 +174,7 @@ internal class MediaProvidersCoordinator
             onSuccess: () -> Unit,
         ) {
             val draft = mediaState.value.assetDraft ?: return
+            val credentialAlias = resolveMediaCredentialAlias(mediaState.value, draft).orEmpty()
 
             scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to save media provider", "Failed to save provider")) {
                 val mediaId =
@@ -184,7 +186,7 @@ internal class MediaProvidersCoordinator
                             capability = draft.capability,
                             modelName = draft.modelName,
                             baseUrl = draft.baseUrl,
-                            credentialAlias = draft.credentialAlias,
+                            credentialAlias = credentialAlias,
                         ),
                         apiKey = currentApiKey.value.takeIf { it.isNotBlank() },
                     )

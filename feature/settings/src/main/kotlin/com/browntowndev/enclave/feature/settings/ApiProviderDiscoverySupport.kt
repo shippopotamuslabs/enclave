@@ -2,6 +2,8 @@ package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 
@@ -72,20 +74,37 @@ internal fun List<DiscoveredApiModel>.mergeSelectedModel(preset: ApiModelConfigU
         else -> listOf(DiscoveredApiModel(id = preset.modelId)) + this
     }
 
-internal fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> = filter { it.id.isGoogleTtsModelCandidate() }
+internal fun List<DiscoveredApiModel>.filterTtsModels(provider: ApiProvider): List<DiscoveredApiModel> =
+    filter { model ->
+        when (provider) {
+            ApiProvider.GOOGLE -> model.id.isGoogleTtsModelCandidate()
+            ApiProvider.FAL -> ApiProviderModelPolicy.isFalTtsModelCandidate(model.id)
+            else -> model.id.isGoogleTtsModelCandidate() || model.isAudioGenerationCapable
+        }
+    }
 
 internal fun List<DiscoveredApiModel>.filterChatModels(): List<DiscoveredApiModel> = filter { it.isChatCapable }
 
-internal fun List<DiscoveredApiModel>.filterMediaModels(capability: MediaCapability): List<DiscoveredApiModel> =
+internal fun List<DiscoveredApiModel>.filterMediaModels(capability: MediaCapability, provider: ApiProvider): List<DiscoveredApiModel> =
     filter { model ->
         when (capability) {
             MediaCapability.IMAGE -> model.isImageGenerationCapable
             MediaCapability.VIDEO -> model.isVideoGenerationCapable
-            MediaCapability.MUSIC -> model.isAudioGenerationCapable
+            MediaCapability.MUSIC -> {
+                if (provider == ApiProvider.FAL) {
+                    ApiProviderModelPolicy.isFalMusicModelCandidate(model.id)
+                } else {
+                    model.isAudioGenerationCapable
+                }
+            }
         }
     }
 
 internal fun String.isGoogleTtsModelCandidate(): Boolean = endsWith("-tts") || endsWith("-tts-preview")
+
+internal fun String.isFalTtsModelCandidate(): Boolean = ApiProviderModelPolicy.isFalTtsModelCandidate(this)
+
+internal fun String.isFalMusicModelCandidate(): Boolean = ApiProviderModelPolicy.isFalMusicModelCandidate(this)
 
 internal fun ApiModelAssetUi.toDiscoveryScope(): ApiModelDiscoveryScope =
     ApiModelDiscoveryScope(

@@ -102,17 +102,18 @@ fun EnclaveNavGraph(
     ) {
         onboardingNavGraph(
             onOnboardingComplete = { modelChoice ->
-                val filtered = if (modelChoice == ModelChoice.API) {
-                    modelsResult?.let { result ->
-                        val utilityShas = result.utilityAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
-                        result.copy(
-                            allModels = emptyMap(),
-                            modelsToDownload = result.modelsToDownload.filter { it.metadata.sha256 in utilityShas },
-                        )
+                val filtered =
+                    if (modelChoice == ModelChoice.API) {
+                        modelsResult?.let { result ->
+                            val utilityShas = result.utilityAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
+                            result.copy(
+                                allModels = emptyMap(),
+                                modelsToDownload = result.modelsToDownload.filter { it.metadata.sha256 in utilityShas },
+                            )
+                        }
+                    } else {
+                        modelsResult
                     }
-                } else {
-                    modelsResult
-                }
                 effectiveModelsResult = filtered
 
                 val needsDownload = errorMessage != null || filtered?.modelsToDownload?.isNotEmpty() == true

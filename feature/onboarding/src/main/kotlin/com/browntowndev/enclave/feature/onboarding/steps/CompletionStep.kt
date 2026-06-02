@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber")
+
 package com.browntowndev.enclave.feature.onboarding.steps
 
 import androidx.compose.foundation.layout.Arrangement
@@ -9,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
@@ -34,32 +34,35 @@ fun CompletionStep(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "YOU'RE ALL SET!",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                ),
+                style =
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                    ),
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             NeoPanel(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
                 ) {
                     Text(
                         text = "Enclave is Ready",
@@ -81,7 +84,7 @@ fun CompletionStep(
                     text = it,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
         }
@@ -90,26 +93,27 @@ fun CompletionStep(
         if (isSaving) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
             ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                NeoCircularProgressIndicator()
             }
         } else {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 NeoSecondaryButton(
                     text = "BACK",
                     onClick = onPrevious,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 NeoPrimaryButton(
                     text = "START CHATTING",
                     onClick = onCompleteOnboarding,
-                    modifier = Modifier.weight(1.5f)
+                    modifier = Modifier.weight(1.5f),
                 )
             }
         }

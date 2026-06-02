@@ -16,8 +16,8 @@ import com.browntowndev.enclave.feature.settings.ByokCustomHeadersRoute
 import com.browntowndev.enclave.feature.settings.LocalModelConfigureRoute
 import com.browntowndev.enclave.feature.settings.MediaConfigureRoute
 import com.browntowndev.enclave.feature.settings.ModelConfigurationRoute
-import com.browntowndev.enclave.feature.settings.SettingsRoute
 import com.browntowndev.enclave.feature.settings.ProfileBuilderRoute
+import com.browntowndev.enclave.feature.settings.SettingsRoute
 import com.browntowndev.enclave.feature.settings.TtsConfigureRoute
 
 internal fun NavGraphBuilder.settingsMainRoute(
@@ -161,9 +161,7 @@ internal fun NavGraphBuilder.settingsModelConfigureRoute(navController: NavContr
     }
 }
 
-internal fun NavGraphBuilder.profileBuilderMainRoute(
-    onBack: () -> Unit,
-) {
+internal fun NavGraphBuilder.profileBuilderMainRoute(onBack: () -> Unit) {
     composable(
         route = "profile_builder_main",
         enterTransition = { settingsEnterTransition() },

@@ -140,6 +140,7 @@ data class ApiModelDiscoveryRequest(
 data class ApiModelDiscoveryResult(
     val models: List<DiscoveredApiModel>,
     val scope: ApiModelDiscoveryScope,
+    val isTruncated: Boolean = false,
 )
 
 data class ApiModelMetadataDefaults(

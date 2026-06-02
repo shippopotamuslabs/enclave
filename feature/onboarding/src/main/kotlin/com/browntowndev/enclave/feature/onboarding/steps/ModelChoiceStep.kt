@@ -1,4 +1,5 @@
 @file:Suppress("LongParameterList", "MagicNumber")
+
 package com.browntowndev.enclave.feature.onboarding.steps
 
 import androidx.compose.foundation.clickable
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -56,61 +56,67 @@ fun ModelChoiceStep(
 ) {
     val borderColor = neoBorderColor()
     val scrollState = rememberScrollState()
-    
-    val canContinue = when (selectedModelChoice) {
-        ModelChoice.LOCAL -> true
-        ModelChoice.API -> selectedProvider != null && apiKey.isNotBlank() && selectedModelId.isNotBlank()
-        else -> false
-    }
+
+    val canContinue =
+        when (selectedModelChoice) {
+            ModelChoice.LOCAL -> true
+            ModelChoice.API -> selectedProvider != null && apiKey.isNotBlank() && selectedModelId.isNotBlank()
+            else -> false
+        }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding, vertical = 24.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         // Scrollable content area
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(scrollState)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState),
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "CHOOSE YOUR MODEL SOURCE",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                ),
+                style =
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                    ),
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             // Local Models card
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .neoSurface(
-                        backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = if (selectedModelChoice == ModelChoice.LOCAL) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            borderColor
-                        },
-                    )
-                    .clickable { onModelChoiceSelected(ModelChoice.LOCAL) }
-                    .semantics { contentDescription = "Use Local Models" }
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor =
+                                if (selectedModelChoice == ModelChoice.LOCAL) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    borderColor
+                                },
+                        ).clickable { onModelChoiceSelected(ModelChoice.LOCAL) }
+                        .semantics { contentDescription = "Use Local Models" }
+                        .padding(16.dp),
             ) {
                 Text(
                     text = "Use Local Models",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (selectedModelChoice == ModelChoice.LOCAL) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    color =
+                        if (selectedModelChoice == ModelChoice.LOCAL) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -124,33 +130,36 @@ fun ModelChoiceStep(
 
             // API Provider card
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .neoSurface(
-                        backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = if (selectedModelChoice == ModelChoice.API) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            borderColor
-                        },
-                    )
-                    .clickable { onModelChoiceSelected(ModelChoice.API) }
-                    .semantics { contentDescription = "Use an API Provider" }
-                    .padding(16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .neoSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            borderColor =
+                                if (selectedModelChoice == ModelChoice.API) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    borderColor
+                                },
+                        ).clickable { onModelChoiceSelected(ModelChoice.API) }
+                        .semantics { contentDescription = "Use an API Provider" }
+                        .padding(16.dp),
             ) {
                 Text(
                     text = "Use an API Provider",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (selectedModelChoice == ModelChoice.API) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    color =
+                        if (selectedModelChoice == ModelChoice.API) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Connect to premium cloud-based providers (like OpenAI, xAI, " +
-                        "OpenRouter) for advanced capabilities.",
+                    text =
+                        "Connect to premium cloud-based providers (like OpenAI, xAI, " +
+                            "OpenRouter) for advanced capabilities.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -160,50 +169,54 @@ fun ModelChoiceStep(
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
                     text = "API PROVIDER CONFIGURATION",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
-                    ),
+                    style =
+                        MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp,
+                        ),
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Provider selection panel
                 NeoPanel(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        ApiProvider.entries.forEach { provider ->
+                        ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
                             val isSelected = selectedProvider == provider
-                            val label = if (provider == ApiProvider.OPENROUTER) {
-                                "${provider.displayName} (Recommended)"
-                            } else {
-                                provider.displayName
-                            }
+                            val label =
+                                if (provider == ApiProvider.OPENROUTER) {
+                                    "${provider.displayName} (Recommended)"
+                                } else {
+                                    provider.displayName
+                                }
                             val bgSelected = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .neoSurface(
-                                        backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
-                                        borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
-                                    )
-                                    .clickable { onProviderSelected(provider) }
-                                    .semantics { contentDescription = label }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .neoSurface(
+                                            backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
+                                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
+                                        ).clickable { onProviderSelected(provider) }
+                                        .semantics { contentDescription = label }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                    ),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    style =
+                                        MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        ),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -226,7 +239,7 @@ fun ModelChoiceStep(
                     text = if (isDiscoveringModels) "DISCOVERING..." else "DISCOVER MODELS",
                     onClick = onDiscoverModels,
                     enabled = !isDiscoveringModels && apiKey.isNotBlank() && selectedProvider != null,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 discoveryError?.let {
@@ -235,7 +248,7 @@ fun ModelChoiceStep(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
                 }
 
@@ -244,36 +257,38 @@ fun ModelChoiceStep(
                     Text(
                         text = "SELECT MODEL",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     NeoPanel(modifier = Modifier.fillMaxWidth()) {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             discoveredModels.forEach { model ->
                                 val isSelected = selectedModelId == model.id
                                 val bgSelected = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .neoSurface(
-                                            backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
-                                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
-                                        )
-                                        .clickable { onModelSelected(model.id) }
-                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .neoSurface(
+                                                backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
+                                                borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
+                                            ).clickable { onModelSelected(model.id) }
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
                                 ) {
                                     Text(
                                         text = model.id,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                        ),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        style =
+                                            MaterialTheme.typography.bodyLarge.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            ),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
                             }
@@ -281,27 +296,28 @@ fun ModelChoiceStep(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
         }
 
         // Bottom Navigation Bar
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             NeoSecondaryButton(
                 text = "BACK",
                 onClick = onPrevious,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             NeoPrimaryButton(
                 text = "CONTINUE",
                 onClick = onNext,
                 enabled = canContinue,
-                modifier = Modifier.weight(1.5f)
+                modifier = Modifier.weight(1.5f),
             )
         }
     }

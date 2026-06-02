@@ -41,10 +41,11 @@ fun OnboardingScreen(
     onCompleteOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = uiState.currentStep,
-        pageCount = { ONBOARDING_STEP_COUNT },
-    )
+    val pagerState =
+        rememberPagerState(
+            initialPage = uiState.currentStep,
+            pageCount = { ONBOARDING_STEP_COUNT },
+        )
 
     // Sync pager to ViewModel currentStep
     LaunchedEffect(uiState.currentStep) {
@@ -59,54 +60,59 @@ fun OnboardingScreen(
     ) { paddingValues ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
             userScrollEnabled = false,
         ) { page ->
             when (page) {
-                0 -> WelcomeAgeGateStep(
-                    ageConfirmed = uiState.ageConfirmed,
-                    onAgeConfirmedChange = onAgeConfirmedChange,
-                    automaticErrorTrackingEnabled = uiState.automaticErrorTrackingEnabled,
-                    onAutomaticErrorTrackingChange = onAutomaticErrorTrackingChange,
-                    onNext = onNextStep,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                1 -> ModelChoiceStep(
-                    selectedModelChoice = uiState.selectedModelChoice,
-                    selectedProvider = uiState.selectedProvider,
-                    apiKey = uiState.apiKey,
-                    discoveredModels = uiState.discoveredModels,
-                    selectedModelId = uiState.selectedModelId,
-                    isDiscoveringModels = uiState.isDiscoveringModels,
-                    discoveryError = uiState.discoveryError,
-                    onModelChoiceSelected = onModelChoiceSelected,
-                    onProviderSelected = onProviderSelected,
-                    onApiKeyChanged = onApiKeyChanged,
-                    onDiscoverModels = onDiscoverModels,
-                    onModelSelected = onModelSelected,
-                    onNext = onNextStep,
-                    onPrevious = onPreviousStep,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                2 -> MediaStep(
-                    isTtsConfigured = uiState.isTtsConfigured,
-                    isMediaConfigured = uiState.isMediaConfigured,
-                    onSaveTtsProvider = onSaveTtsProvider,
-                    onSaveMediaProvider = onSaveMediaProvider,
-                    onSkipMedia = onSkipMedia,
-                    onNext = onNextStep,
-                    onPrevious = onPreviousStep,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                3 -> CompletionStep(
-                    isSaving = uiState.isSaving,
-                    saveError = uiState.saveError,
-                    onCompleteOnboarding = onCompleteOnboarding,
-                    onPrevious = onPreviousStep,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                0 ->
+                    WelcomeAgeGateStep(
+                        ageConfirmed = uiState.ageConfirmed,
+                        onAgeConfirmedChange = onAgeConfirmedChange,
+                        automaticErrorTrackingEnabled = uiState.automaticErrorTrackingEnabled,
+                        onAutomaticErrorTrackingChange = onAutomaticErrorTrackingChange,
+                        onNext = onNextStep,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                1 ->
+                    ModelChoiceStep(
+                        selectedModelChoice = uiState.selectedModelChoice,
+                        selectedProvider = uiState.selectedProvider,
+                        apiKey = uiState.apiKey,
+                        discoveredModels = uiState.discoveredModels,
+                        selectedModelId = uiState.selectedModelId,
+                        isDiscoveringModels = uiState.isDiscoveringModels,
+                        discoveryError = uiState.discoveryError,
+                        onModelChoiceSelected = onModelChoiceSelected,
+                        onProviderSelected = onProviderSelected,
+                        onApiKeyChanged = onApiKeyChanged,
+                        onDiscoverModels = onDiscoverModels,
+                        onModelSelected = onModelSelected,
+                        onNext = onNextStep,
+                        onPrevious = onPreviousStep,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                2 ->
+                    MediaStep(
+                        isTtsConfigured = uiState.isTtsConfigured,
+                        isMediaConfigured = uiState.isMediaConfigured,
+                        onSaveTtsProvider = onSaveTtsProvider,
+                        onSaveMediaProvider = onSaveMediaProvider,
+                        onSkipMedia = onSkipMedia,
+                        onNext = onNextStep,
+                        onPrevious = onPreviousStep,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                3 ->
+                    CompletionStep(
+                        isSaving = uiState.isSaving,
+                        saveError = uiState.saveError,
+                        onCompleteOnboarding = onCompleteOnboarding,
+                        onPrevious = onPreviousStep,
+                        modifier = Modifier.fillMaxSize(),
+                    )
             }
         }
     }
@@ -140,11 +146,12 @@ internal fun OnboardingScreenLightPreview() {
 internal fun OnboardingScreenDarkPreview() {
     EnclaveTheme(darkTheme = true) {
         OnboardingScreen(
-            uiState = OnboardingUiState(
-                currentStep = 1,
-                selectedModelChoice = ModelChoice.LOCAL,
-                discoveredModels = listOf(DiscoveredApiModel(id = "model-1")),
-            ),
+            uiState =
+                OnboardingUiState(
+                    currentStep = 1,
+                    selectedModelChoice = ModelChoice.LOCAL,
+                    discoveredModels = listOf(DiscoveredApiModel(id = "model-1")),
+                ),
             onAgeConfirmedChange = {},
             onAutomaticErrorTrackingChange = {},
             onNextStep = {},

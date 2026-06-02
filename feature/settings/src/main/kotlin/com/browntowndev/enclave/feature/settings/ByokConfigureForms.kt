@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,9 +43,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
@@ -131,7 +132,7 @@ fun ProviderSelectionField(
             expanded = providerDropdownExpanded,
             onDismissRequest = { providerDropdownExpanded = false },
         ) {
-            ApiProvider.entries.forEach { provider ->
+            ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
                 DropdownMenuItem(
                     text = { Text(provider.displayName) },
                     onClick = {
@@ -155,32 +156,37 @@ fun ProviderSelectionField(
     }
 }
 
+@Composable
+private fun DiscoveryTruncationNotice(isTruncated: Boolean) {
+    if (!isTruncated) return
+    Text(
+        text = "Model list may be incomplete (provider catalog truncated). You can still enter a model ID manually.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 4.dp, end = 16.dp),
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelSelectionField(
     config: ApiModelConfigUi,
-    availableModels: List<DiscoveredApiModelUi>,
-    filteredModels: List<DiscoveredApiModelUi>,
-    isFetchingModels: Boolean,
+    discovery: ApiModelDiscoveryUiState,
     canFetchModels: Boolean,
-    searchQuery: String,
-    providerFilters: Set<String>,
-    sortOption: ModelSortOption,
     onConfigChange: (ApiModelConfigUi) -> Unit,
-    onFetchModels: () -> Unit,
-    onUpdateSearchQuery: (String) -> Unit,
-    onToggleProviderFilter: (String) -> Unit,
-    onClearProviderFilters: () -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
+    callbacks: ModelDiscoveryFieldCallbacks,
 ) {
     var showModelSelectionSheet by remember { mutableStateOf(false) }
-    val hasModels = availableModels.isNotEmpty()
+    val hasModels = discovery.models.isNotEmpty()
 
     Column {
         val modelHint =
             when {
-                isFetchingModels -> "Fetching models..."
-                hasModels -> "${availableModels.size} models discovered"
+                discovery.isLoading -> "Fetching models..."
+                hasModels -> "${discovery.models.size} models discovered"
                 else -> "Load models for better configuration"
             }
         Box(
@@ -237,6 +243,7 @@ fun ModelSelectionField(
                     .fillMaxWidth()
                     .padding(start = 16.dp, top = 4.dp, end = 16.dp),
         )
+        DiscoveryTruncationNotice(isTruncated = discovery.isTruncated)
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -244,17 +251,12 @@ fun ModelSelectionField(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
-                onClick = onFetchModels,
-                enabled = !isFetchingModels && canFetchModels,
+                onClick = callbacks.onFetchModels,
+                enabled = !discovery.isLoading && canFetchModels,
             ) {
-                if (isFetchingModels) {
-                    CircularProgressIndicator(
-                        modifier =
-                            Modifier
-                                .padding(end = 8.dp)
-                                .size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary, // Keep it primary or use contentColor
+                if (discovery.isLoading) {
+                    NeoCircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp).size(16.dp),
                     )
                     Text("Loading models\u2026")
                 } else {
@@ -274,15 +276,15 @@ fun ModelSelectionField(
 
     if (showModelSelectionSheet) {
         ModelSelectionBottomSheet(
-            availableModels = availableModels,
-            filteredModels = filteredModels,
-            searchQuery = searchQuery,
-            providerFilters = providerFilters,
-            sortOption = sortOption,
-            onUpdateSearchQuery = onUpdateSearchQuery,
-            onToggleProviderFilter = onToggleProviderFilter,
-            onClearProviderFilters = onClearProviderFilters,
-            onUpdateSortOption = onUpdateSortOption,
+            availableModels = discovery.models,
+            filteredModels = discovery.filteredModels,
+            searchQuery = discovery.searchQuery,
+            providerFilters = discovery.providerFilters,
+            sortOption = discovery.sortOption,
+            onUpdateSearchQuery = callbacks.onUpdateSearchQuery,
+            onToggleProviderFilter = callbacks.onToggleProviderFilter,
+            onClearProviderFilters = callbacks.onClearProviderFilters,
+            onUpdateSortOption = callbacks.onUpdateSortOption,
             onModelSelected = { selectedModelId ->
                 onConfigChange(config.copy(modelId = selectedModelId))
             },
@@ -295,36 +297,17 @@ fun ModelSelectionField(
 @Composable
 fun ProviderModelSelectionField(
     modelId: String,
-    availableModels: List<DiscoveredApiModelUi>,
-    filteredModels: List<DiscoveredApiModelUi>,
-    isFetchingModels: Boolean,
+    discovery: ApiModelDiscoveryUiState,
     canFetchModels: Boolean,
-    searchQuery: String,
-    providerFilters: Set<String>,
-    sortOption: ModelSortOption,
     onModelIdChange: (String) -> Unit,
-    onFetchModels: () -> Unit,
-    onUpdateSearchQuery: (String) -> Unit,
-    onToggleProviderFilter: (String) -> Unit,
-    onClearProviderFilters: () -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
+    callbacks: ModelDiscoveryFieldCallbacks,
 ) {
-    val presetConfig = ApiModelConfigUi(modelId = modelId)
     ModelSelectionField(
-        config = presetConfig,
-        availableModels = availableModels,
-        filteredModels = filteredModels,
-        isFetchingModels = isFetchingModels,
+        config = ApiModelConfigUi(modelId = modelId),
+        discovery = discovery,
         canFetchModels = canFetchModels,
-        searchQuery = searchQuery,
-        providerFilters = providerFilters,
-        sortOption = sortOption,
         onConfigChange = { onModelIdChange(it.modelId) },
-        onFetchModels = onFetchModels,
-        onUpdateSearchQuery = onUpdateSearchQuery,
-        onToggleProviderFilter = onToggleProviderFilter,
-        onClearProviderFilters = onClearProviderFilters,
-        onUpdateSortOption = onUpdateSortOption,
+        callbacks = callbacks,
     )
 }
 
@@ -365,11 +348,137 @@ fun VisionCapabilitySwitch(
     }
 }
 
+internal fun reusableCredentialsForProvider(
+    provider: com.browntowndev.enclave.domain.model.inference.ApiProvider,
+    apiAssets: List<ApiModelAssetUi>,
+    mediaAssets: List<MediaProviderAssetUi> = emptyList(),
+    ttsAssets: List<TtsProviderAssetUi> = emptyList(),
+    excludeApiCredentialsId: com.browntowndev.enclave.domain.model.config.ApiCredentialsId? = null,
+    excludeMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId? = null,
+    excludeTtsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId? = null,
+): List<ReusableApiCredentialUi> {
+    val fromApi =
+        apiAssets
+            .filter { asset ->
+                asset.provider == provider &&
+                    asset.credentialsId != excludeApiCredentialsId &&
+                    asset.credentialAlias.isNotBlank()
+            }.map { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId = asset.credentialsId,
+                    displayName = asset.displayName,
+                    providerLabel = asset.provider.displayName,
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+    val fromMedia =
+        mediaAssets
+            .filter { asset ->
+                asset.provider == provider &&
+                    asset.id != excludeMediaProviderId &&
+                    asset.credentialAlias.isNotBlank()
+            }.map { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+                    displayName = asset.displayName,
+                    providerLabel = "${asset.provider.displayName} • ${asset.capability.displayName}",
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+    val fromTts =
+        ttsAssets
+            .filter { asset ->
+                asset.provider == provider &&
+                    asset.id != excludeTtsProviderId &&
+                    asset.credentialAlias.isNotBlank()
+            }.map { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+                    displayName = asset.displayName,
+                    providerLabel = asset.provider.displayName,
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+    return (fromApi + fromMedia + fromTts).distinctBy { it.credentialAlias }
+}
+
+internal fun resolveSelectedReusableCredential(
+    alias: String?,
+    displayNameFallback: String?,
+    apiModels: List<ApiModelAssetUi>,
+    mediaModels: List<MediaProviderAssetUi>,
+    ttsModels: List<TtsProviderAssetUi>,
+): ReusableApiCredentialUi? {
+    if (alias.isNullOrBlank()) return null
+    apiModels.find { it.credentialAlias == alias }?.let { asset ->
+        return ReusableApiCredentialUi(
+            credentialsId = asset.credentialsId,
+            displayName = asset.displayName,
+            providerLabel = asset.provider.displayName,
+            credentialAlias = asset.credentialAlias,
+        )
+    }
+    mediaModels.find { it.credentialAlias == alias }?.let { asset ->
+        return ReusableApiCredentialUi(
+            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            displayName = asset.displayName,
+            providerLabel = "${asset.provider.displayName} • ${asset.capability.displayName}",
+            credentialAlias = asset.credentialAlias,
+        )
+    }
+    ttsModels.find { it.credentialAlias == alias }?.let { asset ->
+        return ReusableApiCredentialUi(
+            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            displayName = asset.displayName,
+            providerLabel = asset.provider.displayName,
+            credentialAlias = asset.credentialAlias,
+        )
+    }
+    return displayNameFallback?.let { displayName ->
+        ReusableApiCredentialUi(
+            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            displayName = displayName,
+            providerLabel = "",
+            credentialAlias = alias,
+        )
+    }
+}
+
+@Composable
+fun ApiKeyWithReuseSection(
+    reusableCredentials: List<ReusableApiCredentialUi>,
+    selectedReusableCredential: ReusableApiCredentialUi?,
+    canUseStoredCredential: Boolean,
+    apiKey: String,
+    keyPresent: Boolean,
+    onApiKeyChange: (String) -> Unit,
+    onSelectReusableCredential: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    apiKeyLabel: String = "API Key",
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing)) {
+        if (canUseStoredCredential) {
+            ReusableCredentialDropdown(
+                reusableCredentials = reusableCredentials,
+                selectedReusableCredential = selectedReusableCredential,
+                onSelectReusableCredential = onSelectReusableCredential,
+            )
+        }
+        NeoApiKeyField(
+            label = apiKeyLabel,
+            value = apiKey,
+            onValueChange = onApiKeyChange,
+            keyPresent = keyPresent,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
 @Composable
 fun ReusableCredentialDropdown(
     reusableCredentials: List<ReusableApiCredentialUi>,
     selectedReusableCredential: ReusableApiCredentialUi?,
-    onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
+    onSelectReusableCredential: (String?) -> Unit,
 ) {
     var reusableCredentialDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -413,7 +522,7 @@ fun ReusableCredentialDropdown(
                         }
                     },
                     onClick = {
-                        onSelectReusableCredential(credential.credentialsId)
+                        onSelectReusableCredential(credential.credentialAlias)
                         reusableCredentialDropdownExpanded = false
                     },
                 )
@@ -433,7 +542,7 @@ fun CredentialsConfigurationForm(
     connectionTestStatus: ApiConnectionTestStatus,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
+    onSelectReusableCredential: (String?) -> Unit,
     onTestConnection: () -> Unit,
 ) {
     val isKeySaved = selectedReusableCredential != null || asset.credentialsId.value.isNotEmpty()
@@ -451,21 +560,14 @@ fun CredentialsConfigurationForm(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        val canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty()
-        if (canUseStoredCredential) {
-            ReusableCredentialDropdown(
-                reusableCredentials = reusableCredentials,
-                selectedReusableCredential = selectedReusableCredential,
-                onSelectReusableCredential = onSelectReusableCredential,
-            )
-        }
-
-        NeoApiKeyField(
-            label = "API Key",
-            value = apiKey,
-            onValueChange = onApiKeyChange,
+        ApiKeyWithReuseSection(
+            reusableCredentials = reusableCredentials,
+            selectedReusableCredential = selectedReusableCredential,
+            canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty(),
+            apiKey = apiKey,
             keyPresent = isKeySaved,
-            modifier = Modifier.fillMaxWidth(),
+            onApiKeyChange = onApiKeyChange,
+            onSelectReusableCredential = onSelectReusableCredential,
         )
 
         val canTestConnection =
@@ -483,12 +585,8 @@ fun CredentialsConfigurationForm(
             ) {
                 when (connectionTestStatus) {
                     ApiConnectionTestStatus.TESTING -> {
-                        CircularProgressIndicator(
-                            modifier =
-                                Modifier
-                                    .padding(end = 8.dp)
-                                    .size(16.dp),
-                            strokeWidth = 2.dp,
+                        NeoCircularProgressIndicator(
+                            modifier = Modifier.padding(end = 8.dp).size(16.dp),
                         )
                         Text("Testing…")
                     }
@@ -849,20 +947,11 @@ fun PresetConfigurationForm(
     parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
-    availableModels: List<DiscoveredApiModelUi>,
-    filteredModels: List<DiscoveredApiModelUi>,
-    isFetchingModels: Boolean,
+    discovery: ApiModelDiscoveryUiState,
     canFetchModels: Boolean,
-    searchQuery: String,
-    providerFilters: Set<String>,
-    sortOption: ModelSortOption,
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
-    onFetchModels: () -> Unit,
-    onUpdateSearchQuery: (String) -> Unit,
-    onToggleProviderFilter: (String) -> Unit,
-    onClearProviderFilters: () -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
+    discoveryCallbacks: ModelDiscoveryFieldCallbacks,
 ) {
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
@@ -878,19 +967,10 @@ fun PresetConfigurationForm(
         PresetModelAndVisionSection(
             config = config,
             selectedModelMetadata = selectedModelMetadata,
-            availableModels = availableModels,
-            filteredModels = filteredModels,
-            isFetchingModels = isFetchingModels,
+            discovery = discovery,
             canFetchModels = canFetchModels,
-            searchQuery = searchQuery,
-            providerFilters = providerFilters,
-            sortOption = sortOption,
             onConfigChange = onConfigChange,
-            onFetchModels = onFetchModels,
-            onUpdateSearchQuery = onUpdateSearchQuery,
-            onToggleProviderFilter = onToggleProviderFilter,
-            onClearProviderFilters = onClearProviderFilters,
-            onUpdateSortOption = onUpdateSortOption,
+            callbacks = discoveryCallbacks,
         )
 
         SystemPromptConfiguration(
