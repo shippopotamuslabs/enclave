@@ -25,8 +25,8 @@ import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
@@ -297,6 +297,8 @@ class InferenceFactoryImpl
                                     telemetrySupport = telemetrySupport,
                                     telemetryEventPort = telemetryEventPort,
                                 )
+                            ApiProvider.FAL ->
+                                throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
                             else ->
                                 ApiInferenceServiceImpl(
                                     client =
@@ -432,6 +434,8 @@ class InferenceFactoryImpl
                                         telemetrySupport = telemetrySupport,
                                         telemetryEventPort = telemetryEventPort,
                                     )
+                                ApiProvider.FAL ->
+                                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
                                 else ->
                                     ApiInferenceServiceImpl(
                                         client =
@@ -569,12 +573,15 @@ class InferenceFactoryImpl
         }
 
         private suspend fun resolveRawServiceForApiConfig(configId: ApiModelConfigurationId): RustCompatibleInferenceService {
-            val apiConfig = apiModelRepository.getConfigurationById(configId)
-                ?: throw IllegalStateException("No model configuration found for id=$configId")
-            val apiCreds = apiModelRepository.getCredentialsById(apiConfig.apiCredentialsId)
-                ?: throw IllegalStateException("No credentials for config id=$configId")
-            val apiKey = apiKeyProvider.getApiKey(apiCreds.credentialAlias)
-                ?: throw IllegalStateException("No API key for alias=${apiCreds.credentialAlias}")
+            val apiConfig =
+                apiModelRepository.getConfigurationById(configId)
+                    ?: throw IllegalStateException("No model configuration found for id=$configId")
+            val apiCreds =
+                apiModelRepository.getCredentialsById(apiConfig.apiCredentialsId)
+                    ?: throw IllegalStateException("No credentials for config id=$configId")
+            val apiKey =
+                apiKeyProvider.getApiKey(apiCreds.credentialAlias)
+                    ?: throw IllegalStateException("No API key for alias=${apiCreds.credentialAlias}")
 
             val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
             val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
@@ -630,6 +637,8 @@ class InferenceFactoryImpl
                         telemetrySupport = telemetrySupport,
                         telemetryEventPort = telemetryEventPort,
                     )
+                ApiProvider.FAL ->
+                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
                 else ->
                     ApiInferenceServiceImpl(
                         client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),

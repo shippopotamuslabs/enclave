@@ -3,6 +3,8 @@ package com.browntowndev.enclave.feature.studio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
@@ -18,7 +20,7 @@ import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
@@ -34,8 +36,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -49,7 +54,7 @@ class MultimodalViewModel
         private val studioRepository: StudioRepositoryPort,
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
-        private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
+        private val resolveMediaProviderCapabilitiesUseCase: ResolveMediaProviderCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
         private val speechCoordinator: StudioSpeechCoordinator,
@@ -89,10 +94,10 @@ class MultimodalViewModel
                 }
             }
 
-        private val capabilitiesFlow =
-            activeProviderFlow.map { provider ->
-                getProviderCapabilitiesUseCase(provider?.provider?.name)
-            }
+        private val _capabilities = MutableStateFlow<ProviderCapabilities?>(null)
+        private val _isCapabilitiesLoading = MutableStateFlow(false)
+        private val capabilitiesFlow: StateFlow<ProviderCapabilities?> = _capabilities
+        private val isCapabilitiesLoadingFlow: StateFlow<Boolean> = _isCapabilitiesLoading
 
         private val hasTtsProviderAssignedFlow =
             defaultModelRepository
@@ -187,15 +192,29 @@ class MultimodalViewModel
                 )
             }
 
-        private val playbackInputsFlow =
+        private val capabilitiesPlaybackFlow =
             combine(
                 capabilitiesFlow,
+                isCapabilitiesLoadingFlow,
+                activeProviderFlow,
+            ) { capabilities, isCapabilitiesLoading, activeProvider ->
+                CapabilitiesPlaybackInputs(
+                    capabilities = capabilities,
+                    isCapabilitiesLoading =
+                        isCapabilitiesLoading && requiresRemoteCapabilities(activeProvider),
+                )
+            }
+
+        private val playbackInputsFlow =
+            combine(
+                capabilitiesPlaybackFlow,
                 speechCoordinator.speechState,
                 playbackCoordinator.isPlayingTts,
                 hasVideoModelFlow,
-            ) { capabilities, speechState, isPlayingTts, hasVideoModel ->
+            ) { capabilitiesPlayback, speechState, isPlayingTts, hasVideoModel ->
                 PlaybackInputs(
-                    capabilities = capabilities,
+                    capabilities = capabilitiesPlayback.capabilities,
+                    isCapabilitiesLoading = capabilitiesPlayback.isCapabilitiesLoading,
                     speechState = speechState,
                     isPlayingTts = isPlayingTts,
                     hasVideoModel = hasVideoModel,
@@ -212,6 +231,43 @@ class MultimodalViewModel
                 settings = _settings,
                 capabilitiesFlow = capabilitiesFlow,
             )
+            combine(activeProviderFlow, _mediaType) { provider, mediaCapability ->
+                provider to mediaCapability
+            }
+                .distinctUntilChanged { previous, next ->
+                    previous.second == next.second &&
+                        remoteCapabilitiesRequestKey(previous.first) ==
+                        remoteCapabilitiesRequestKey(next.first)
+                }
+                .flatMapLatest { (provider, mediaCapability) ->
+                    flow {
+                        val requiresRemoteSchema = requiresRemoteCapabilities(provider)
+                        if (requiresRemoteSchema) {
+                            emit(
+                                CapabilitiesLoadSnapshot(
+                                    isLoading = true,
+                                    capabilities = null,
+                                ),
+                            )
+                        }
+                        val resolved =
+                            resolveMediaProviderCapabilitiesUseCase(
+                                mediaProvider = provider,
+                                mediaCapability = mediaCapability,
+                            )
+                        emit(
+                            CapabilitiesLoadSnapshot(
+                                isLoading = false,
+                                capabilities = resolved,
+                            ),
+                        )
+                    }
+                }
+                .onEach { snapshot ->
+                    _isCapabilitiesLoading.value = snapshot.isLoading
+                    _capabilities.value = snapshot.capabilities
+                }
+                .launchIn(viewModelScope)
         }
 
         fun onMicClick() {
@@ -248,6 +304,7 @@ class MultimodalViewModel
                         albums = selectionInputs.albums,
                         settings = promptInputs.settings,
                         capabilities = playbackInputs.capabilities,
+                        isCapabilitiesLoading = playbackInputs.isCapabilitiesLoading,
                         selectedTemplateId = promptInputs.selectedTemplateId,
                         isSettingsOpen = promptInputs.isSettingsOpen,
                         isSaveBottomSheetOpen = selectionInputs.isSaveBottomSheetOpen,
@@ -551,12 +608,38 @@ class MultimodalViewModel
             val isSaveBottomSheetOpen: Boolean,
         )
 
+        private data class CapabilitiesLoadSnapshot(
+            val isLoading: Boolean,
+            val capabilities: ProviderCapabilities?,
+        )
+
+        private data class CapabilitiesPlaybackInputs(
+            val capabilities: ProviderCapabilities?,
+            val isCapabilitiesLoading: Boolean,
+        )
+
         private data class PlaybackInputs(
             val capabilities: ProviderCapabilities?,
+            val isCapabilitiesLoading: Boolean,
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
             val hasVideoModel: Boolean,
         )
+
+        /** True when this modality's assigned provider will fetch fal OpenAPI schema. */
+        private fun requiresRemoteCapabilities(provider: MediaProviderAsset?): Boolean {
+            if (provider == null || provider.provider != ApiProvider.FAL) return false
+            return !provider.modelName.isNullOrBlank()
+        }
+
+        private fun remoteCapabilitiesRequestKey(provider: MediaProviderAsset?): String =
+            buildString {
+                append(provider?.id?.value.orEmpty())
+                append('|')
+                append(provider?.provider?.name.orEmpty())
+                append('|')
+                append(provider?.modelName.orEmpty())
+            }
 
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L

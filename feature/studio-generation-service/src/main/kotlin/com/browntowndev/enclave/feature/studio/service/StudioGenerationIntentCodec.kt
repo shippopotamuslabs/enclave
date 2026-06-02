@@ -20,6 +20,7 @@ object StudioGenerationIntentCodec {
     private const val EXTRA_REFERENCE_IMAGE_URI = "REFERENCE_IMAGE_URI"
     private const val EXTRA_SEED = "SEED"
     private const val EXTRA_GENERATION_COUNT = "GENERATION_COUNT"
+    private const val EXTRA_IMAGE_RESOLUTION = "IMAGE_RESOLUTION"
     private const val EXTRA_VIDEO_DURATION = "VIDEO_DURATION"
     private const val EXTRA_VIDEO_RESOLUTION = "VIDEO_RESOLUTION"
     private const val EXTRA_AUTO_GENERATE_VIDEO = "AUTO_GENERATE_VIDEO"
@@ -40,6 +41,7 @@ object StudioGenerationIntentCodec {
                 intent.putExtra(EXTRA_REFERENCE_IMAGE_URI, settings.referenceImageUri)
                 intent.putExtra(EXTRA_SEED, settings.seed)
                 intent.putExtra(EXTRA_GENERATION_COUNT, settings.generationCount)
+                settings.imageResolution?.let { intent.putExtra(EXTRA_IMAGE_RESOLUTION, it) }
             }
             is VideoGenerationSettings -> {
                 intent.putExtra(EXTRA_SETTINGS_KIND, KIND_VIDEO)
@@ -68,6 +70,7 @@ object StudioGenerationIntentCodec {
                     referenceImageUri = intent.getStringExtra(EXTRA_REFERENCE_IMAGE_URI),
                     seed = intent.getStringExtra(EXTRA_SEED).orEmpty(),
                     generationCount = intent.getIntExtra(EXTRA_GENERATION_COUNT, 1),
+                    imageResolution = intent.getStringExtra(EXTRA_IMAGE_RESOLUTION),
                 )
             KIND_VIDEO ->
                 VideoGenerationSettings(

@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +38,7 @@ import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionsOverlay
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaDetailScaffold
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaPagerContent
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
@@ -241,7 +241,10 @@ private fun DetailMedia(
                         .semantics { contentDescription = "Animating image" },
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = Color.White)
+                NeoCircularProgressIndicator(
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.3f),
+                )
             }
         }
     }

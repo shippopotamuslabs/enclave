@@ -33,20 +33,20 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
+import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
-import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.feature.inference.appendonly.ContextSidecarCompaction
 import com.browntowndev.enclave.feature.inference.appendonly.clearAppendOnlyOnRustCompactionBoundary
 import com.browntowndev.enclave.feature.inference.appendonly.resetAppendOnlyForNewPrompt
+import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -59,7 +59,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -322,13 +321,13 @@ class RustLoopInferenceService(
                                 )
                             }
                             is AgentLoopEvent.Finished -> {
-                                 telemetryEventPort.emitInferenceExecutionOutcome(
-                                     startedAtMs = startedAtMs,
-                                     provider = provider,
-                                     modelId = modelType.name,
-                                     success = true,
-                                     baseUrl = baseUrl,
-                                 )
+                                telemetryEventPort.emitInferenceExecutionOutcome(
+                                    startedAtMs = startedAtMs,
+                                    provider = provider,
+                                    modelId = modelType.name,
+                                    success = true,
+                                    baseUrl = baseUrl,
+                                )
                                 options.userMessageId?.let { userMessageId ->
                                     committedInferencePrompts.commit(
                                         userMessageId = userMessageId,
@@ -351,14 +350,14 @@ class RustLoopInferenceService(
                                 send(InferenceEvent.Finished(modelType))
                             }
                             is AgentLoopEvent.Failed -> {
-                                 telemetryEventPort.emitInferenceExecutionOutcome(
-                                     startedAtMs = startedAtMs,
-                                     provider = provider,
-                                     modelId = modelType.name,
-                                     success = false,
-                                     errorMessage = event.message,
-                                     baseUrl = baseUrl,
-                                 )
+                                telemetryEventPort.emitInferenceExecutionOutcome(
+                                    startedAtMs = startedAtMs,
+                                    provider = provider,
+                                    modelId = modelType.name,
+                                    success = false,
+                                    errorMessage = event.message,
+                                    baseUrl = baseUrl,
+                                )
                                 send(InferenceEvent.Error(Exception("Agent loop failed: ${event.message}"), modelType))
                             }
                         }
@@ -431,25 +430,28 @@ class RustLoopInferenceService(
         }
 
     private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean {
-        val metadata = runCatching {
-            if (metadataJson != "null" && metadataJson.isNotBlank()) {
-                Json.parseToJsonElement(metadataJson).jsonObject
-            } else {
-                null
-            }
-        }.getOrNull()
+        val metadata =
+            runCatching {
+                if (metadataJson != "null" && metadataJson.isNotBlank()) {
+                    Json.parseToJsonElement(metadataJson).jsonObject
+                } else {
+                    null
+                }
+            }.getOrNull()
 
         if (metadata != null) {
             if (metadata.containsKey("agent_tool_budget") ||
                 metadata.containsKey("tools_blocked_nudge") ||
-                metadata.containsKey("envelope_parse_failure")) {
+                metadata.containsKey("envelope_parse_failure")
+            ) {
                 return true
             }
         }
 
-        val contentObj = runCatching {
-            Json.parseToJsonElement(content).jsonObject
-        }.getOrNull()
+        val contentObj =
+            runCatching {
+                Json.parseToJsonElement(content).jsonObject
+            }.getOrNull()
         if (contentObj != null && contentObj.size == 1 && contentObj.containsKey("_agent")) {
             return true
         }
@@ -649,8 +651,9 @@ class RustLoopInferenceService(
         if (call.name in INTERNET_DEPENDENT_TOOL_NAMES && !deviceEnvironmentRepository.isNetworkAvailable()) {
             return AgentToolResult(
                 callId = call.callId,
-                resultJson = "{\"error\":\"network_unavailable\"," +
-                    "\"message\":\"No internet access. Web search and X tools are currently disabled.\"}",
+                resultJson =
+                    "{\"error\":\"network_unavailable\"," +
+                        "\"message\":\"No internet access. Web search and X tools are currently disabled.\"}",
                 truncated = false,
                 softFailure = true,
             )
@@ -793,18 +796,19 @@ class RustLoopInferenceService(
             fileContextIndexJson?.let(ContextSidecarCompaction::compactFileContextIndexJson)
 
         val isNetworkAvailable = deviceEnvironmentRepository.isNetworkAvailable()
-        val networkStatus = if (isNetworkAvailable) {
-            if (hasBeenOfflineInSession) {
-                "Internet status: Online. Search and X tools are now re-enabled. You may use them if needed."
+        val networkStatus =
+            if (isNetworkAvailable) {
+                if (hasBeenOfflineInSession) {
+                    "Internet status: Online. Search and X tools are now re-enabled. You may use them if needed."
+                } else {
+                    ""
+                }
             } else {
-                ""
+                hasBeenOfflineInSession = true
+                "Internet status: Offline. The following tools are currently disabled due to no internet access: " +
+                    "web_search, web_extract, search_x_recent, x_get_thread, x_trending, " +
+                    "x_user_tweets, x_mention_search. Do not attempt to use them."
             }
-        } else {
-            hasBeenOfflineInSession = true
-            "Internet status: Offline. The following tools are currently disabled due to no internet access: " +
-                "web_search, web_extract, search_x_recent, x_get_thread, x_trending, " +
-                "x_user_tweets, x_mention_search. Do not attempt to use them."
-        }
 
         val jsonSidecars = listOfNotNull(compactLedger, compactToolIndex, compactFileIndex)
         val isAllEmpty = contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()
