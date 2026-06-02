@@ -16,6 +16,7 @@ class ImageGenerationPortImpl
         private val openAiAdapter: OpenAiImageGenerationAdapter,
         private val googleAdapter: GoogleImageGenerationAdapter,
         private val xaiAdapter: XaiImageGenerationAdapter,
+        private val falAdapter: FalImageGenerationAdapter,
     ) : ImageGenerationPort {
         override suspend fun generateImage(
             prompt: String,
@@ -64,6 +65,15 @@ class ImageGenerationPortImpl
                         provider.baseUrl,
                         settings,
                         referenceImageBytes,
+                    )
+                ApiProvider.FAL ->
+                    falAdapter.generateImage(
+                        prompt = prompt,
+                        apiKey = apiKey,
+                        modelId = provider.modelName ?: "fal-ai/flux-pro/kontext",
+                        baseUrl = provider.baseUrl,
+                        settings = settings,
+                        referenceImage = referenceImageBytes,
                     )
                 else -> Result.failure(UnsupportedOperationException("Image generation not supported for provider: ${provider.provider}"))
             }

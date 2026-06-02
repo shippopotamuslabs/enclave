@@ -3,7 +3,9 @@ package com.browntowndev.enclave.feature.inference.repository
 import android.util.Log
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.feature.inference.fal.FalOpenApiInputSchemaParser
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
 import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
@@ -16,6 +18,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -119,6 +122,180 @@ private data class XaiModel(
     val aliases: List<String> = emptyList(),
 )
 
+@Serializable
+private data class FalModelsResponse(
+    val models: List<FalModel> = emptyList(),
+    val data: List<FalModel> = emptyList(),
+    val cursor: String? = null,
+    @SerialName("next_cursor")
+    val nextCursor: String? = null,
+)
+
+@Serializable
+private data class FalModelMetadata(
+    @SerialName("display_name")
+    val displayName: String? = null,
+    val category: String? = null,
+    val description: String? = null,
+    val tags: List<String> = emptyList(),
+)
+
+@Serializable
+private data class FalModel(
+    val id: String? = null,
+    @SerialName("endpoint_id")
+    val endpointId: String? = null,
+    val name: String? = null,
+    val category: String? = null,
+    val categories: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val description: String? = null,
+    val metadata: FalModelMetadata? = null,
+    val openapi: JsonObject? = null,
+)
+
+private fun FalModel.resolvedId(): String? =
+    endpointId?.takeIf { it.isNotBlank() } ?: id?.takeIf { it.isNotBlank() }
+
+private const val FAL_MODELS_URL = "https://api.fal.ai/v1/models"
+private const val FAL_MAX_PAGES = 50
+
+private fun getFalModelsUrl(baseUrl: String?): String {
+    val trimmed = baseUrl?.trim()?.removeSuffix("/").orEmpty()
+    if (
+        trimmed.isBlank() ||
+        trimmed.equals("https://queue.fal.run", ignoreCase = true) ||
+        trimmed.equals("https://fal.run", ignoreCase = true)
+    ) {
+        return FAL_MODELS_URL
+    }
+    return if (trimmed.endsWith("/v1/models") || trimmed.endsWith("/models")) {
+        trimmed
+    } else {
+        "$trimmed/v1/models"
+    }
+}
+
+private val featuredFalModelIds =
+    listOf(
+        DiscoveredApiModel(id = "fal-ai/flux-pro/kontext", name = "FLUX Pro Kontext"),
+        DiscoveredApiModel(id = "fal-ai/recraft/v3", name = "Recraft V3"),
+        DiscoveredApiModel(id = "fal-ai/kling-video/v2.1/master/image-to-video", name = "Kling Video 2.1"),
+        DiscoveredApiModel(id = "fal-ai/minimax/video-01", name = "MiniMax Video 01"),
+        DiscoveredApiModel(id = "fal-ai/minimax/speech-02-hd", name = "MiniMax Speech 02 HD"),
+        DiscoveredApiModel(id = "fal-ai/stable-audio", name = "Stable Audio"),
+        DiscoveredApiModel(id = "fal-ai/ace-step", name = "ACE-Step"),
+    )
+
+private fun fetchFalModels(
+    httpClient: Call.Factory,
+    json: Json,
+    apiKey: String,
+    baseUrl: String?,
+): Pair<List<DiscoveredApiModel>, Boolean> {
+    val trimmedApiKey = apiKey.trim()
+    val discovered = mutableListOf<DiscoveredApiModel>()
+    val modelsUrl = getFalModelsUrl(baseUrl)
+    var cursor: String? = null
+    repeat(FAL_MAX_PAGES) { pageIndex ->
+        val url =
+            modelsUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    cursor?.takeIf { it.isNotBlank() }?.let { addQueryParameter("cursor", it) }
+                }.build()
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Key $trimmedApiKey")
+                .header("Accept", "application/json")
+                .build()
+
+        val responseBody =
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body.string()
+                    error("fal.ai model discovery failed with HTTP ${response.code}: $errorBody")
+                }
+                response.body.string()
+            }
+        val response = json.decodeFromString<FalModelsResponse>(responseBody)
+        discovered += parseFalModels(response)
+        cursor = response.nextCursor ?: response.cursor
+        if (cursor.isNullOrBlank()) {
+            return Pair(mergeFalFeaturedModels(discovered), false)
+        }
+        if (pageIndex == FAL_MAX_PAGES - 1) {
+            Log.w("ApiModelCatalog", "FAL model discovery truncated at $FAL_MAX_PAGES pages. Some models might be missing.")
+        }
+    }
+    return Pair(mergeFalFeaturedModels(discovered), true)
+}
+
+private fun parseFalModels(response: FalModelsResponse): List<DiscoveredApiModel> {
+    val models = response.models.ifEmpty { response.data }
+    return models
+        .mapNotNull(FalModel::toDiscoveredApiModel)
+        .distinctBy(DiscoveredApiModel::id)
+        .sortedBy(DiscoveredApiModel::id)
+}
+
+private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
+    val modelId = resolvedId() ?: return null
+    val hints = capabilityHints()
+    val isImageGen =
+        hints.any { it.mediaHintMatches("image") } ||
+            modelId.mediaHintMatchesAny("flux", "imagen", "seedream", "recraft", "ideogram", "stable-diffusion")
+    val isVideoGen =
+        hints.any { it.mediaHintMatches("video") } ||
+            modelId.mediaHintMatchesAny("video", "kling", "seedance", "wan", "hailuo")
+    val isAudioGen =
+        hints.any { it.mediaHintMatches("audio") || it.mediaHintMatches("music") } ||
+            modelId.mediaHintMatchesAny("audio", "music", "stable-audio", "ace-step", "tts", "speech", "elevenlabs")
+    val isUnclassified = !isImageGen && !isVideoGen && !isAudioGen
+    val displayName =
+        name?.takeIf { it.isNotBlank() }
+            ?: metadata?.displayName?.takeIf { it.isNotBlank() }
+            ?: modelId
+    val inputSchema = openapi?.let(FalOpenApiInputSchemaParser::parse)
+    return DiscoveredApiModel(
+        id = modelId,
+        name = displayName,
+        isChatCapable = false,
+        isImageGenerationCapable = isImageGen || isUnclassified,
+        isVideoGenerationCapable = isVideoGen,
+        isAudioGenerationCapable = isAudioGen,
+        inputSchema = inputSchema,
+    )
+}
+
+private fun mergeFalFeaturedModels(discovered: List<DiscoveredApiModel>): List<DiscoveredApiModel> =
+    (
+        discovered +
+            featuredFalModelIds.mapNotNull {
+                FalModel(id = it.id, name = it.name, category = it.name).toDiscoveredApiModel()
+            }
+    ).distinctBy(DiscoveredApiModel::id)
+        .sortedBy(DiscoveredApiModel::id)
+
+private fun FalModel.capabilityHints(): List<String> =
+    buildList {
+        category?.let(::add)
+        metadata?.category?.let(::add)
+        addAll(categories)
+        addAll(tags)
+        metadata?.tags?.let { addAll(it) }
+        description?.let(::add)
+        metadata?.description?.let(::add)
+    }
+
+private fun String.mediaHintMatches(value: String): Boolean = contains(value, ignoreCase = true)
+
+private fun String.mediaHintMatchesAny(vararg values: String): Boolean = values.any { mediaHintMatches(it) }
+
 @Singleton
 class ApiModelCatalogRepositoryImpl
     @Inject
@@ -141,65 +318,73 @@ class ApiModelCatalogRepositoryImpl
             provider: ApiProvider,
             apiKey: String,
             baseUrl: String?,
-        ): List<DiscoveredApiModel> =
+        ): ApiModelCatalogResult =
             withContext(Dispatchers.IO) {
                 require(
                     provider == ApiProvider.OPENAI ||
                         provider == ApiProvider.ANTHROPIC ||
                         provider == ApiProvider.GOOGLE ||
                         provider == ApiProvider.OPENROUTER ||
-                        provider == ApiProvider.XAI,
+                        provider == ApiProvider.XAI ||
+                        provider == ApiProvider.FAL,
                 ) {
-                    "Model discovery is currently supported for OpenAI, Anthropic, Google, OpenRouter, and xAI."
+                    "Model discovery is currently supported for OpenAI, Anthropic, Google, OpenRouter, xAI, and fal.ai."
                 }
                 val resolvedBaseUrl = baseUrl?.takeIf { it.isNotBlank() } ?: provider.defaultBaseUrl()
 
                 when (provider) {
                     ApiProvider.ANTHROPIC ->
-                        fetchAnthropicModels(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
+                        ApiModelCatalogResult(
+                            fetchAnthropicModels(apiKey = apiKey, baseUrl = resolvedBaseUrl),
                         )
 
                     ApiProvider.GOOGLE ->
-                        googleGenAiClientProvider
-                            .listModels(
-                                apiKey = apiKey,
-                                baseUrl = resolvedBaseUrl,
-                            ).asSequence()
-                            .mapNotNull { toGoogleDiscoveredModel(it) }
-                            .filter { it.id.isNotBlank() }
-                            .distinctBy(DiscoveredApiModel::id)
-                            .sortedBy(DiscoveredApiModel::id)
-                            .toList()
+                        ApiModelCatalogResult(
+                            googleGenAiClientProvider
+                                .listModels(apiKey = apiKey, baseUrl = resolvedBaseUrl)
+                                .asSequence()
+                                .mapNotNull { toGoogleDiscoveredModel(it) }
+                                .filter { it.id.isNotBlank() }
+                                .distinctBy(DiscoveredApiModel::id)
+                                .sortedBy(DiscoveredApiModel::id)
+                                .toList(),
+                        )
 
                     ApiProvider.OPENROUTER ->
-                        fetchOpenRouterModels(
-                            apiKey = apiKey,
-                            baseUrl = checkNotNull(resolvedBaseUrl),
+                        ApiModelCatalogResult(
+                            fetchOpenRouterModels(apiKey = apiKey, baseUrl = checkNotNull(resolvedBaseUrl)),
                         )
 
                     ApiProvider.XAI ->
-                        fetchXaiModels(
-                            apiKey = apiKey,
-                            baseUrl = checkNotNull(resolvedBaseUrl),
+                        ApiModelCatalogResult(
+                            fetchXaiModels(apiKey = apiKey, baseUrl = checkNotNull(resolvedBaseUrl)),
                         )
 
+                    ApiProvider.FAL -> {
+                        val (models, isTruncated) = fetchFalModels(
+                            httpClient = httpClient,
+                            json = json,
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                        )
+                        ApiModelCatalogResult(models = models, isTruncated = isTruncated)
+                    }
+
                     else ->
-                        openAiClientProvider
-                            .getClient(
-                                apiKey = apiKey,
-                                baseUrl = resolvedBaseUrl,
-                            ).models()
-                            .list()
-                            .data()
-                            .mapNotNull {
-                                DiscoveredApiModel(
-                                    id = it.id(),
-                                    created = it.created(),
-                                ).applyCapabilities(provider)
-                            }.distinctBy(DiscoveredApiModel::id)
-                            .sortedBy(DiscoveredApiModel::id)
+                        ApiModelCatalogResult(
+                            openAiClientProvider
+                                .getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl)
+                                .models()
+                                .list()
+                                .data()
+                                .mapNotNull {
+                                    DiscoveredApiModel(
+                                        id = it.id(),
+                                        created = it.created(),
+                                    ).applyCapabilities(provider)
+                                }.distinctBy(DiscoveredApiModel::id)
+                                .sortedBy(DiscoveredApiModel::id),
+                        )
                 }
             }
 
@@ -212,6 +397,13 @@ class ApiModelCatalogRepositoryImpl
             withContext(Dispatchers.IO) {
                 val resolvedBaseUrl = baseUrl?.takeIf { it.isNotBlank() } ?: provider.defaultBaseUrl()
                 when (provider) {
+                    ApiProvider.FAL ->
+                        fetchFalModelDetail(
+                            apiKey = apiKey,
+                            modelId = modelId,
+                            baseUrl = resolvedBaseUrl,
+                        )
+
                     ApiProvider.XAI ->
                         fetchXaiModelDetail(
                             apiKey = apiKey,
@@ -222,6 +414,39 @@ class ApiModelCatalogRepositoryImpl
                     else -> null
                 }
             }
+
+        private fun fetchFalModelDetail(
+            apiKey: String,
+            modelId: String,
+            baseUrl: String?,
+        ): DiscoveredApiModel? {
+            val trimmedApiKey = apiKey.trim()
+            val url =
+                getFalModelsUrl(baseUrl)
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("endpoint_id", modelId.trim())
+                    .addQueryParameter("expand", "openapi-3.0")
+                    .build()
+            val request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .get()
+                    .header("Authorization", "Key $trimmedApiKey")
+                    .header("Accept", "application/json")
+                    .build()
+            val responseBody =
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errorBody = response.body.string()
+                        error("fal.ai model detail failed with HTTP ${response.code}: $errorBody")
+                    }
+                    response.body.string()
+                }
+            val response = json.decodeFromString<FalModelsResponse>(responseBody)
+            return parseFalModels(response).firstOrNull { it.id == modelId.trim() }
+        }
 
         private fun toGoogleDiscoveredModel(model: Model): DiscoveredApiModel? =
             DiscoveredApiModel(
@@ -540,6 +765,9 @@ class ApiModelCatalogRepositoryImpl
             return null
         }
 
+        internal fun parseFalModels(responseBody: String): List<DiscoveredApiModel> =
+            parseFalModels(json.decodeFromString<FalModelsResponse>(responseBody))
+
         internal fun parseXaiModels(
             responseBody: String,
             isChat: Boolean = false,
@@ -662,6 +890,9 @@ class ApiModelCatalogRepositoryImpl
                             )
                     }
                     ApiProvider.XAI -> isImageGenOverride ?: false
+                    ApiProvider.FAL ->
+                        supportedGenerationMethods.any { it.mediaHintMatches("image") } ||
+                            id.mediaHintMatchesAny("flux", "imagen", "seedream", "recraft", "ideogram", "stable-diffusion")
                     else -> false
                 }
 
@@ -672,12 +903,18 @@ class ApiModelCatalogRepositoryImpl
                             supportedGenerationMethods.any { it.equals("predictLongRunning", ignoreCase = true) }
                     }
                     ApiProvider.XAI -> isVideoGenOverride ?: false
+                    ApiProvider.FAL ->
+                        supportedGenerationMethods.any { it.mediaHintMatches("video") } ||
+                            id.mediaHintMatchesAny("video", "kling", "seedance", "wan", "hailuo")
                     else -> false
                 }
 
             val isMusicGen =
                 when (provider) {
                     ApiProvider.GOOGLE -> id.contains("lyria", ignoreCase = true)
+                    ApiProvider.FAL ->
+                        supportedGenerationMethods.any { it.mediaHintMatches("audio") || it.mediaHintMatches("music") } ||
+                            id.mediaHintMatchesAny("audio", "music", "stable-audio", "ace-step", "tts", "speech", "elevenlabs")
                     else -> false
                 }
 
@@ -689,7 +926,8 @@ class ApiModelCatalogRepositoryImpl
 
             val isChat =
                 isChatOverride ?: (
-                    !isMediaOnly &&
+                    provider.supportsChat &&
+                        !isMediaOnly &&
                         !id.startsWith("whisper", ignoreCase = true) &&
                         !id.startsWith("tts-", ignoreCase = true)
                 )

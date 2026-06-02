@@ -16,7 +16,8 @@ import org.junit.jupiter.api.Test
 class MusicGenerationIntegrationTest {
     private val apiKeyProvider = mockk<com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort>()
     private val googleAdapter = mockk<GoogleMusicGenerationAdapter>()
-    private val musicPort = MusicGenerationPortImpl(apiKeyProvider, googleAdapter)
+    private val falAdapter = mockk<FalMusicGenerationAdapter>()
+    private val musicPort = MusicGenerationPortImpl(apiKeyProvider, googleAdapter, falAdapter)
 
     @Test
     fun `generateMusic delegates to Google adapter when provider is Google`() =
@@ -74,6 +75,33 @@ class MusicGenerationIntegrationTest {
         }
 
     @Test
+    fun `generateMusic delegates to fal adapter when provider is fal`() =
+        runTest {
+            val prompt = "test music"
+            val settings = MusicGenerationSettings()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("fal"),
+                    displayName = "fal.ai",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.MUSIC,
+                    modelName = "fal-ai/stable-audio",
+                    credentialAlias = "fal-alias",
+                )
+            val expectedBytes = "fal music bytes".toByteArray()
+
+            coEvery { apiKeyProvider.getApiKey("fal-alias") } returns "test-key"
+            coEvery {
+                falAdapter.generateMusic(prompt, "test-key", "fal-ai/stable-audio", any(), settings)
+            } returns Result.success(expectedBytes)
+
+            val result = musicPort.generateMusic(prompt, provider, settings)
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals(expectedBytes, result.getOrNull())
+        }
+
+    @Test
     fun `generateMusic returns failure for unsupported provider`() =
         runTest {
             val prompt = "test music"
@@ -93,5 +121,31 @@ class MusicGenerationIntegrationTest {
 
             assertTrue(result.isFailure)
             assertEquals("Music generation not supported for provider: OPENAI", result.exceptionOrNull()?.message)
+        }
+
+    @Test
+    fun `generateMusic uses default model when FAL provider has no model configured`() =
+        runTest {
+            val prompt = "test music"
+            val settings = MusicGenerationSettings()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("fal"),
+                    displayName = "fal.ai",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "fal-alias",
+                )
+            val expectedBytes = "fal music bytes".toByteArray()
+
+            coEvery { apiKeyProvider.getApiKey("fal-alias") } returns "test-key"
+            coEvery {
+                falAdapter.generateMusic(prompt, "test-key", "fal-ai/stable-audio", any(), settings)
+            } returns Result.success(expectedBytes)
+
+            val result = musicPort.generateMusic(prompt, provider, settings)
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals(expectedBytes, result.getOrNull())
         }
 }

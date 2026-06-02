@@ -20,21 +20,38 @@ class ApiProviderModelPolicyTest {
     )
 
     @Test
-    fun `supports model discovery for openai anthropic google openrouter and xai`() {
+    fun `supports model discovery for openai anthropic google openrouter xai and fal`() {
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENAI))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ANTHROPIC))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.GOOGLE))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENROUTER))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.XAI))
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.FAL))
     }
 
     @Test
-    fun `provider defaults include hosted endpoints for google openrouter and xai`() {
+    fun `fal tts and music model candidates exclude cross-capability ids`() {
+        assertTrue(ApiProviderModelPolicy.isFalTtsModelCandidate("fal-ai/minimax/speech-02-hd"))
+        assertFalse(ApiProviderModelPolicy.isFalTtsModelCandidate("fal-ai/elevenlabs/tts/turbo-v2.5"))
+        assertFalse(ApiProviderModelPolicy.isFalTtsModelCandidate("fal-ai/stable-audio"))
+        assertTrue(ApiProviderModelPolicy.isFalMusicModelCandidate("fal-ai/stable-audio"))
+        assertFalse(ApiProviderModelPolicy.isFalMusicModelCandidate("fal-ai/minimax/speech-02-hd"))
+    }
+
+    @Test
+    fun `provider defaults include hosted endpoints for google openrouter xai and fal`() {
         assertEquals("https://generativelanguage.googleapis.com", ApiProvider.GOOGLE.defaultBaseUrl())
         assertEquals("https://openrouter.ai/api/v1", ApiProvider.OPENROUTER.defaultBaseUrl())
         assertEquals("https://api.x.ai/v1", ApiProvider.XAI.defaultBaseUrl())
+        assertEquals("https://queue.fal.run", ApiProvider.FAL.defaultBaseUrl())
         assertEquals(null, ApiProvider.OPENAI.defaultBaseUrl())
         assertEquals(null, ApiProvider.ANTHROPIC.defaultBaseUrl())
+    }
+
+    @Test
+    fun `fal is media-only and not chat selectable`() {
+        assertFalse(ApiProvider.FAL.supportsChat)
+        assertTrue(ApiProvider.OPENAI.supportsChat)
     }
 
     @Test

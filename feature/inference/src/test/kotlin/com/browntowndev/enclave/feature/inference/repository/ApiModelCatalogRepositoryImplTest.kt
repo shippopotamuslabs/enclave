@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.repository
 
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
 import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
@@ -17,6 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.OffsetDateTime
@@ -87,7 +89,7 @@ class ApiModelCatalogRepositoryImplTest {
                         """.trimIndent(),
                 )
 
-            val models =
+            val catalog =
                 repo.fetchModels(
                     provider = ApiProvider.ANTHROPIC,
                     apiKey = "key",
@@ -112,7 +114,7 @@ class ApiModelCatalogRepositoryImplTest {
                         isChatCapable = true,
                     ),
                 ),
-                models,
+                catalog.models,
             )
             assertEquals("https://opencode.ai/zen/go/v1/models", requestSlot.captured.url.toString())
             assertEquals("key", requestSlot.captured.header("x-api-key"))
@@ -170,7 +172,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `fetchModels uses google model discovery path for google provider`() =
         runTest {
-            val models = repo.fetchModels(ApiProvider.GOOGLE, apiKey = "key", baseUrl = null)
+            val catalog = repo.fetchModels(ApiProvider.GOOGLE, apiKey = "key", baseUrl = null)
 
             assertEquals(
                 listOf(
@@ -187,7 +189,7 @@ class ApiModelCatalogRepositoryImplTest {
                         isChatCapable = true,
                     ),
                 ),
-                models,
+                catalog.models,
             )
             verify {
                 googleGenAiClientProvider.listModels(
@@ -457,10 +459,118 @@ class ApiModelCatalogRepositoryImplTest {
                         }
                 }
 
-            val models = repo.fetchModels(ApiProvider.OPENAI, apiKey = "key", baseUrl = null)
+            val catalog = repo.fetchModels(ApiProvider.OPENAI, apiKey = "key", baseUrl = null)
 
-            assertEquals(1, models.size)
-            assertEquals("gpt-4o", models[0].id)
+            assertEquals(1, catalog.models.size)
+            assertEquals("gpt-4o", catalog.models[0].id)
+        }
+
+    @Test
+    fun `parseFalModels decodes platform v1 response with endpoint_id and metadata`() {
+        val models =
+            repo.parseFalModels(
+                """
+                {
+                  "models": [
+                    {
+                      "endpoint_id": "fal-ai/flux/dev",
+                      "metadata": {
+                        "display_name": "FLUX.1 [dev]",
+                        "category": "text-to-image",
+                        "description": "Fast text-to-image generation",
+                        "status": "active",
+                        "tags": ["fast", "pro"],
+                        "updated_at": "2025-01-15T12:00:00Z",
+                        "is_favorited": false,
+                        "thumbnail_url": "https://fal.media/files/example.jpg",
+                        "model_url": "https://fal.run/fal-ai/flux/dev",
+                        "date": "2024-08-01T00:00:00Z",
+                        "highlighted": false,
+                        "pinned": false
+                      }
+                    },
+                    {
+                      "endpoint_id": "fal-ai/kling-video/v2.1/master/image-to-video",
+                      "metadata": {
+                        "display_name": "Kling Video 2.1",
+                        "category": "image-to-video",
+                        "description": "Image to video",
+                        "status": "active",
+                        "tags": [],
+                        "updated_at": "2025-01-15T12:00:00Z",
+                        "is_favorited": null,
+                        "thumbnail_url": "https://fal.media/files/kling.jpg",
+                        "model_url": "https://fal.run/fal-ai/kling-video/v2.1/master/image-to-video",
+                        "date": "2024-08-01T00:00:00Z",
+                        "highlighted": false,
+                        "pinned": false
+                      }
+                    }
+                  ],
+                  "next_cursor": null,
+                  "has_more": false
+                }
+                """.trimIndent(),
+            )
+
+        assertEquals(2, models.size)
+        val flux = models.first { it.id == "fal-ai/flux/dev" }
+        val kling = models.first { it.id == "fal-ai/kling-video/v2.1/master/image-to-video" }
+        assertEquals("FLUX.1 [dev]", flux.name)
+        assertEquals(true, flux.isImageGenerationCapable)
+        assertEquals(false, flux.isChatCapable)
+        assertEquals("Kling Video 2.1", kling.name)
+        assertEquals(true, kling.isVideoGenerationCapable)
+    }
+
+    @Test
+    fun `parseFalModels classifies media capabilities and keeps fal media-only`() {
+        val models =
+            repo.parseFalModels(
+                """
+                {
+                  "models": [
+                    {"id": "fal-ai/flux-pro", "category": "image"},
+                    {"id": "fal-ai/kling-video/v2", "category": "video"},
+                    {"id": "fal-ai/stable-audio", "category": "audio"},
+                    {"id": "fal-ai/minimax/speech-02-hd", "tags": ["speech"]},
+                    {"id": "fal-ai/mystery-model", "description": "custom endpoint"}
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val flux = models.first { it.id == "fal-ai/flux-pro" }
+        val video = models.first { it.id == "fal-ai/kling-video/v2" }
+        val audio = models.first { it.id == "fal-ai/stable-audio" }
+        val speech = models.first { it.id == "fal-ai/minimax/speech-02-hd" }
+        val mystery = models.first { it.id == "fal-ai/mystery-model" }
+
+        assertEquals(false, flux.isChatCapable)
+        assertEquals(true, flux.isImageGenerationCapable)
+        assertEquals(true, video.isVideoGenerationCapable)
+        assertEquals(true, audio.isAudioGenerationCapable)
+        assertEquals(true, speech.isAudioGenerationCapable)
+        assertEquals(true, mystery.isImageGenerationCapable)
+    }
+
+    @Test
+    fun `fetchModels falProvider truncatesAtMaxPages`() =
+        runTest {
+            val call = mockk<Call>()
+            every { httpClient.newCall(any()) } returns call
+            every { call.execute() } answers {
+                jsonResponse(
+                    request = Request.Builder().url("https://api.fal.ai/v1/models").build(),
+                    body = """{"models": [], "next_cursor": "more-data"}""",
+                )
+            }
+
+            val catalog = repo.fetchModels(ApiProvider.FAL, apiKey = "key", baseUrl = null)
+
+            verify(exactly = 50) { httpClient.newCall(any()) }
+            assertTrue(catalog.isTruncated)
+            assertTrue(catalog.models.isNotEmpty())
         }
 
     private fun jsonResponse(

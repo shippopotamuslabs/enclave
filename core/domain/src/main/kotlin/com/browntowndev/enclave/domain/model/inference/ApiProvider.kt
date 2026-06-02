@@ -11,6 +11,7 @@ enum class ApiProvider(
     OPENROUTER("OpenRouter"),
     XAI("xAI"),
     GOOGLE("Google"),
+    FAL("fal.ai"),
     ;
 
     fun defaultBaseUrl(): String? =
@@ -18,14 +19,22 @@ enum class ApiProvider(
             GOOGLE -> "https://generativelanguage.googleapis.com"
             OPENROUTER -> "https://openrouter.ai/api/v1"
             XAI -> "https://api.x.ai/v1"
+            FAL -> "https://queue.fal.run"
             else -> null
         }
+
+    val supportsChat: Boolean
+        get() =
+            when (this) {
+                FAL -> false
+                ANTHROPIC, OPENAI, OPENROUTER, XAI, GOOGLE -> true
+            }
 
     /** Model list/detail APIs that include per-million token pricing for telemetry estimates. */
     val exposesDiscoveryModelPricing: Boolean
         get() =
             when (this) {
                 OPENROUTER, XAI -> true
-                ANTHROPIC, OPENAI, GOOGLE -> false
+                ANTHROPIC, OPENAI, GOOGLE, FAL -> false
             }
 }

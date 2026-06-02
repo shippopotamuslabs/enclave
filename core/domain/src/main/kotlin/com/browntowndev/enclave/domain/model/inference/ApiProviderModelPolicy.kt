@@ -64,7 +64,8 @@ object ApiProviderModelPolicy {
             provider == ApiProvider.ANTHROPIC ||
             provider == ApiProvider.GOOGLE ||
             provider == ApiProvider.OPENROUTER ||
-            provider == ApiProvider.XAI
+            provider == ApiProvider.XAI ||
+            provider == ApiProvider.FAL
 
     fun isXaiMultiAgentModel(modelId: String): Boolean = modelId.matchesXaiMultiAgent()
 
@@ -245,4 +246,23 @@ object ApiProviderModelPolicy {
             "claude-3-sonnet-20241022",
             "claude-3-haiku-20240307",
         )
+
+    fun isFalTtsModelCandidate(modelId: String): Boolean {
+        val lower = modelId.lowercase()
+        return (lower.contains("tts") || lower.contains("speech")) &&
+            !lower.contains("stable-audio") &&
+            !lower.contains("ace-step") &&
+            !lower.contains("elevenlabs")
+    }
+
+    fun isFalMusicModelCandidate(modelId: String): Boolean {
+        val lower = modelId.lowercase()
+        val isTtsOrSpeech = lower.contains("tts") || lower.contains("speech") || lower.contains("elevenlabs")
+        val hasMusicHints =
+            lower.contains("stable-audio") ||
+                lower.contains("ace-step") ||
+                lower.contains("music") ||
+                lower.contains("audio")
+        return hasMusicHints && !isTtsOrSpeech
+    }
 }
