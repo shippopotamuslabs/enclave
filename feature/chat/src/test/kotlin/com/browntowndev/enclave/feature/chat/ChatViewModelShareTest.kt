@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.chat
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.enclave.domain.model.share.SharedChat
@@ -18,7 +19,6 @@ import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import io.mockk.coEvery

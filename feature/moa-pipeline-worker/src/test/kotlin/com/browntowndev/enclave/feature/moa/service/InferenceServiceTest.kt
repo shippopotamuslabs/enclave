@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.moa.service
 
 import android.app.NotificationManager
 import android.content.Intent
+import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineState
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
@@ -10,7 +11,6 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -288,8 +288,8 @@ class InferenceServiceTest {
                     "chat-123",
                     match { state ->
                         state is MessageGenerationState.Failed &&
-                        state.error.message == "response was killed by Android due to thermal shutdown"
-                    }
+                            state.error.message == "response was killed by Android due to thermal shutdown"
+                    },
                 )
             }
             verify { service.stopSelf() }

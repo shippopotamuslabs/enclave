@@ -54,8 +54,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.robolectric.Shadows
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowNotificationManager
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
@@ -91,7 +91,8 @@ class ChatInferenceServiceTest {
     private val defaultModelRepository = mockk<com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort>(relaxed = true)
     private val mediaToolDefinitionFactory = mockk<com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory>(relaxed = true)
-    private val getProviderCapabilitiesUseCase = mockk<com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase>(relaxed = true)
+    private val getProviderCapabilitiesUseCase =
+        mockk<com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase>(relaxed = true)
     private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>()
     private val monotonicToolActivation = mockk<MonotonicToolActivationPort>(relaxed = true)
     private val committedInferencePrompts = mockk<CommittedInferencePromptPort>(relaxed = true)
@@ -225,8 +226,7 @@ class ChatInferenceServiceTest {
             putExtra(ChatInferenceService.EXTRA_MODEL_TYPE, ModelType.FAST.name)
         }
 
-    private fun processLifecycleRegistry(): LifecycleRegistry =
-        ProcessLifecycleOwner.get().lifecycle as LifecycleRegistry
+    private fun processLifecycleRegistry(): LifecycleRegistry = ProcessLifecycleOwner.get().lifecycle as LifecycleRegistry
 
     private fun shadowNotificationManager(): ShadowNotificationManager {
         val notificationManager =

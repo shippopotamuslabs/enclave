@@ -468,9 +468,10 @@ class AnthropicInferenceServiceImpl(
                 "Anthropic cache outcome model=$modelId useCaching=$useCaching cacheCreationInputTokens=${response.cacheCreationInputTokens} cacheReadInputTokens=${response.cacheReadInputTokens} inputTokens=${response.inputTokens} stopReason=${response.stopReason}",
             )
 
-            val toolCalls = response.toolUses.map { tu ->
-                AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson)
-            }
+            val toolCalls =
+                response.toolUses.map { tu ->
+                    AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson)
+                }
             val bufferedText = accumulatedText.toString()
 
             val telemetry =
@@ -803,9 +804,10 @@ class AnthropicInferenceServiceImpl(
                 }
             }
 
-            val capturedToolUses = pendingToolUses.entries
-                .sortedBy { it.key }
-                .mapNotNull { (_, pending) -> pending.toCapturedToolUse() }
+            val capturedToolUses =
+                pendingToolUses.entries
+                    .sortedBy { it.key }
+                    .mapNotNull { (_, pending) -> pending.toCapturedToolUse() }
             return StreamedAnthropicResponse(
                 emittedAny = emittedAny,
                 toolUses = capturedToolUses,

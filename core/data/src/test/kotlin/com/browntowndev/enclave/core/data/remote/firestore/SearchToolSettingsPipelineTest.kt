@@ -200,11 +200,12 @@ class SearchToolSettingsPipelineTest {
             val handler = SearchToolSettingsSyncHandler(ctx)
             val localStore = SearchToolSettingsLocalStore(handler)
             val stateStore = FirestoreSyncStateStore()
-            val applier = FirestoreSyncEventApplier(
-                sourceDocuments = sourceDocuments,
-                localStore = localStore,
-                stateStore = stateStore,
-            )
+            val applier =
+                FirestoreSyncEventApplier(
+                    sourceDocuments = sourceDocuments,
+                    localStore = localStore,
+                    stateStore = stateStore,
+                )
 
             // Synthetic remote snapshot: search_enabled=true, x_search_enabled=true, EXA.
             val updatedAt = 1700000000000L

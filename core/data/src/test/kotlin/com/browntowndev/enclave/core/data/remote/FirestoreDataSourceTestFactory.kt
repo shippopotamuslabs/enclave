@@ -81,11 +81,13 @@ internal fun createTestFirestoreDataSource(
     // Default to a relaxed no-op mock so existing tests don't trigger live Firestore calls during
     // cache prefetch in applyLiveEvents, which would cause UncompletedCoroutinesError.
     documentCache: FirestoreSyncDocumentCache = mockk(relaxed = true),
-    searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue = SearchToolSettingsSyncQueue(
-        dataStore = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
-            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
-        ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
-    ),
+    searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue =
+        SearchToolSettingsSyncQueue(
+            dataStore =
+                androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
+                    scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
+                ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
+        ),
     settingsRepository: SettingsRepositoryImpl = mockk(relaxed = true),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)

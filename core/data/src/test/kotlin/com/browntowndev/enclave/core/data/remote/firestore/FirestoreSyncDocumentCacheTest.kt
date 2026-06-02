@@ -127,11 +127,16 @@ class FirestoreSyncDocumentCacheTest {
                 syncEventApplier = syncEventApplier,
                 syncStateStore = syncStateStore,
                 documentCache = documentCache,
-                searchToolSettingsSyncQueue = SearchToolSettingsSyncQueue(
-                    dataStore = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
-                        scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
-                    ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
-                ),
+                searchToolSettingsSyncQueue =
+                    SearchToolSettingsSyncQueue(
+                        dataStore =
+                            androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
+                                scope =
+                                    kotlinx.coroutines.CoroutineScope(
+                                        kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob(),
+                                    ),
+                            ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
+                    ),
                 settingsRepository = mockk<SettingsRepositoryImpl>(relaxed = true),
             )
         return FirestoreDataSource(facade, externalScope)

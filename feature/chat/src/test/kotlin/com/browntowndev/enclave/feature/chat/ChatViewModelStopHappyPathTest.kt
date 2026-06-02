@@ -22,13 +22,11 @@ import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -209,9 +207,7 @@ class ChatViewModelStopHappyPathTest {
             assertNull(viewModel.uiState.value.activeToolCallBanner)
         }
 
-    private fun com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator.seedRequestedTurnKey(
-        key: ActiveChatTurnKey?,
-    ) {
+    private fun com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator.seedRequestedTurnKey(key: ActiveChatTurnKey?) {
         val field =
             com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator::class.java
                 .getDeclaredField("_requestedTurnKey")

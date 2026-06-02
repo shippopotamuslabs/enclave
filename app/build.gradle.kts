@@ -38,8 +38,7 @@ fun String.toBuildConfigStringLiteral(): String {
     return "\"$escaped\""
 }
 
-fun Properties.buildConfigString(propertyName: String): String =
-    getProperty(propertyName, "").toBuildConfigStringLiteral()
+fun Properties.buildConfigString(propertyName: String): String = getProperty(propertyName, "").toBuildConfigStringLiteral()
 
 kotlin {
     jvmToolchain(17)

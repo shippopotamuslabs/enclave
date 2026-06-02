@@ -40,7 +40,10 @@ class FirestoreShareRepository
             const val IV_LENGTH_BYTES = 12
         }
 
-        override suspend fun shareChat(messages: List<Message>, chatId: ChatId?): SharedChat {
+        override suspend fun shareChat(
+            messages: List<Message>,
+            chatId: ChatId?,
+        ): SharedChat {
             val shareId =
                 java.util.UUID
                     .randomUUID()
