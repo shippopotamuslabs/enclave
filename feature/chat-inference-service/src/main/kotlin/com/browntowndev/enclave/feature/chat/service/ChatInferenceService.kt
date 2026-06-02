@@ -11,7 +11,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.browntowndev.enclave.core.ui.R as CoreUiR
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -51,6 +50,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import com.browntowndev.enclave.core.ui.R as CoreUiR
 
 @AndroidEntryPoint
 class ChatInferenceService : Service() {

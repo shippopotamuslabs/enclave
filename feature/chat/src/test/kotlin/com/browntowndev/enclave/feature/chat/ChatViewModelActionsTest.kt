@@ -477,7 +477,9 @@ class ChatViewModelActionsTest {
             val apiVision =
                 ActiveModelConfiguration(
                     modelId = "api-vision",
-                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId("vision"),
+                    id =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiModelConfigurationId("vision"),
                     isLocal = false,
                     name = "API Vision",
                     systemPrompt = null,
@@ -494,7 +496,9 @@ class ChatViewModelActionsTest {
                 )
             val localThinking =
                 apiVision.copy(
-                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId("local-thinking"),
+                    id =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiModelConfigurationId("local-thinking"),
                     isLocal = true,
                     modelId = "local-thinking",
                 )
@@ -521,7 +525,11 @@ class ChatViewModelActionsTest {
             advanceUntilIdle()
 
             assertEquals(1, chatViewModel.uiState.value.selectedImageUris.size)
-            assertEquals("staged://one", chatViewModel.uiState.value.selectedImageUris.single())
+            assertEquals(
+                "staged://one",
+                chatViewModel.uiState.value.selectedImageUris
+                    .single(),
+            )
             collectJob.cancel()
         }
 }

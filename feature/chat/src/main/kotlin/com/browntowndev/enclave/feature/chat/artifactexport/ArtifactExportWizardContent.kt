@@ -63,7 +63,7 @@ fun ArtifactExportWizardContent(
                     contentDescription = stringResource(R.string.artifact_export_close),
                     enabled = !state.isExporting,
                 )
-            }
+            },
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -150,8 +150,7 @@ fun ArtifactExportWizardContent(
                             backgroundColor = MaterialTheme.colorScheme.errorContainer,
                             borderColor = MaterialTheme.colorScheme.error,
                             withShadow = false,
-                        )
-                        .padding(12.dp),
+                        ).padding(12.dp),
             ) {
                 Text(
                     text = message,
@@ -222,4 +221,3 @@ private fun ArtifactExportWizardFooter(
         }
     }
 }
-

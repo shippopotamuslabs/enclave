@@ -182,7 +182,10 @@ class ModelDownloadOrchestratorImplTest {
             orchestrator.cancelDownloads()
 
             assertEquals(DownloadStatus.IDLE, orchestrator.downloadState.value.status)
-            assertTrue(orchestrator.downloadState.value.currentDownloads.isEmpty())
+            assertTrue(
+                orchestrator.downloadState.value.currentDownloads
+                    .isEmpty(),
+            )
             assertEquals(0f, orchestrator.downloadState.value.overallProgress)
             assertEquals(0, orchestrator.downloadState.value.modelsComplete)
             verify(exactly = 1) { workScheduler.cancel() }

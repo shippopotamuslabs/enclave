@@ -153,8 +153,9 @@ private fun MemoriesListView(
             }
         } else {
             val groupedMemories = memories.groupBy { it.category }
-            val orderedCategories = listOf(MemoryCategory.PSYCH_PROFILE) +
-                MemoryCategory.entries.filter { it != MemoryCategory.PSYCH_PROFILE }
+            val orderedCategories =
+                listOf(MemoryCategory.PSYCH_PROFILE) +
+                    MemoryCategory.entries.filter { it != MemoryCategory.PSYCH_PROFILE }
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),

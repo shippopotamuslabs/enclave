@@ -278,10 +278,11 @@ class SearchToolSettingsSyncHandlerTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val queue = createQueue(backgroundScope)
-            val repository = createSettingsRepository(
-                dataStore = dataStore,
-                initialSearchEnabled = false,
-            )
+            val repository =
+                createSettingsRepository(
+                    dataStore = dataStore,
+                    initialSearchEnabled = false,
+                )
             val ctx = createContext(queue = queue, settingsRepository = repository)
             val handler = SearchToolSettingsSyncHandler(ctx)
 
@@ -341,10 +342,11 @@ class SearchToolSettingsSyncHandlerTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val queue = createQueue(backgroundScope)
-            val repository = createSettingsRepository(
-                dataStore = dataStore,
-                initialSearchEnabled = true,
-            )
+            val repository =
+                createSettingsRepository(
+                    dataStore = dataStore,
+                    initialSearchEnabled = true,
+                )
             val ctx = createContext(queue = queue, settingsRepository = repository)
             val handler = SearchToolSettingsSyncHandler(ctx)
 
@@ -389,10 +391,11 @@ class SearchToolSettingsSyncHandlerTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val queue = createQueue(backgroundScope)
-            val repository = createSettingsRepository(
-                dataStore = dataStore,
-                initialProvider = SearchProvider.EXA,
-            )
+            val repository =
+                createSettingsRepository(
+                    dataStore = dataStore,
+                    initialProvider = SearchProvider.EXA,
+                )
             val ctx = createContext(queue = queue, settingsRepository = repository)
             val handler = SearchToolSettingsSyncHandler(ctx)
             val doc =
@@ -424,11 +427,12 @@ class SearchToolSettingsSyncHandlerTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val queue = createQueue(backgroundScope)
-            val repository = createSettingsRepository(
-                dataStore = dataStore,
-                initialSearchEnabled = true,
-                initialTavilyKeyPresent = true,
-            )
+            val repository =
+                createSettingsRepository(
+                    dataStore = dataStore,
+                    initialSearchEnabled = true,
+                    initialTavilyKeyPresent = true,
+                )
             val ctx = createContext(queue = queue, settingsRepository = repository)
             val handler = SearchToolSettingsSyncHandler(ctx)
 
@@ -468,10 +472,11 @@ class SearchToolSettingsSyncHandlerTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val queue = createQueue(backgroundScope)
-            val repository = createSettingsRepository(
-                dataStore = dataStore,
-                initialProvider = SearchProvider.TAVILY,
-            )
+            val repository =
+                createSettingsRepository(
+                    dataStore = dataStore,
+                    initialProvider = SearchProvider.TAVILY,
+                )
             val ctx = createContext(queue = queue, settingsRepository = repository)
             val handler = SearchToolSettingsSyncHandler(ctx)
             val doc =

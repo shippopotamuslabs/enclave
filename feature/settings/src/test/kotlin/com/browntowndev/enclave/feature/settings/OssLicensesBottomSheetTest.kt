@@ -107,7 +107,7 @@ class OssLicensesBottomSheetTest {
         @BeforeEach
         fun setup() {
             factory =
-                SettingsUiStateFactory(
+                buildSettingsUiStateFactory(
                     localModelAssetUiMapper = LocalModelAssetUiMapper(),
                     apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                     ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
@@ -470,7 +470,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     return SettingsViewModel(
         settingsUseCases = settingsUseCases,
         settingsUiStateFactory =
-            SettingsUiStateFactory(
+            buildSettingsUiStateFactory(
                 localModelAssetUiMapper,
                 apiModelAssetUiMapper,
                 ttsProviderAssetUiMapper,
