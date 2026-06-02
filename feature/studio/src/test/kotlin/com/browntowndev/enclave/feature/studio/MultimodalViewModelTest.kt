@@ -22,6 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
@@ -111,9 +112,16 @@ class MultimodalViewModelTest {
                 modelType = ModelType.MUSIC_GENERATION,
                 mediaProviderId = mediaProviderId,
             )
+        val imageToVideoAssignment =
+            DefaultModelAssignment(
+                modelType = ModelType.IMAGE_TO_VIDEO,
+                mediaProviderId = mediaProviderId,
+            )
 
-        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment, videoAssignment, musicAssignment))
+        every { defaultModelRepository.observeDefaults() } returns
+            flowOf(listOf(assignment, videoAssignment, musicAssignment, imageToVideoAssignment))
         coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
+        coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns imageToVideoAssignment
         coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
 
@@ -151,7 +159,6 @@ class MultimodalViewModelTest {
                 supportedVideoQualities = listOf(GenerationQuality.SPEED),
                 supportedVideoResolutions = listOf("480p"),
                 supportedVideoDurations = listOf(5),
-                supportsReferenceImage = true,
                 supportsVideo = true,
             )
 
@@ -173,6 +180,7 @@ class MultimodalViewModelTest {
             studioRepository = studioRepository,
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
+            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
@@ -247,7 +255,6 @@ class MultimodalViewModelTest {
                     supportedVideoQualities = emptyList(),
                     supportedVideoResolutions = emptyList(),
                     supportedVideoDurations = emptyList(),
-                    supportsReferenceImage = false,
                     supportsVideo = false,
                 )
             coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns capabilities
@@ -288,8 +295,18 @@ class MultimodalViewModelTest {
                     modelType = ModelType.VIDEO_GENERATION,
                     mediaProviderId = mediaProviderId,
                 )
+            val imageEditAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    mediaProviderId = mediaProviderId,
+                )
+            val imageToVideoAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_TO_VIDEO,
+                    mediaProviderId = mediaProviderId,
+                )
             every { defaultModelRepository.observeDefaults() } returns
-                flowOf(listOf(imageAssignment, videoAssignment))
+                flowOf(listOf(imageAssignment, videoAssignment, imageEditAssignment, imageToVideoAssignment))
             every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(falProvider))
 
             val remoteFetchGate = CompletableDeferred<Unit>()
@@ -300,7 +317,6 @@ class MultimodalViewModelTest {
                     supportedVideoQualities = listOf(GenerationQuality.SPEED),
                     supportedVideoResolutions = listOf("480p"),
                     supportedVideoDurations = listOf(5),
-                    supportsReferenceImage = false,
                     supportsVideo = true,
                 )
             coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } coAnswers {
@@ -345,6 +361,29 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             assertEquals("Prompt rejected due to moderation.", viewModel.uiState.value.error)
+            job.cancel()
+        }
+
+    @Test
+    fun `generate exposes fal content policy failure as snackbar message`() =
+        runTest {
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.onPromptChange("mock microsoft")
+            viewModel.generate()
+
+            generationErrorFlow.value =
+                "fal video generation failed: could not fetch queue result from " +
+                "https://queue.fal.run/bytedance/seedance-2.0/requests/test " +
+                "(fal queue result failed: 422 Output video has sensitive content.)"
+            advanceUntilIdle()
+
+            val error = viewModel.uiState.value.error
+            assertTrue(error?.contains("sensitive content", ignoreCase = true) == true)
+            assertTrue(error?.contains("blocked", ignoreCase = true) == true)
             job.cancel()
         }
 

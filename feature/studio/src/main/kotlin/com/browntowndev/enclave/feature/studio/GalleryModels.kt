@@ -7,7 +7,7 @@ import com.browntowndev.enclave.core.ui.model.AlbumSelectionItem
 data class GalleryUiState(
     val albums: List<GalleryAlbumUi> = emptyList(),
     val isLoading: Boolean = false,
-    val hasVideoModel: Boolean = false,
+    val hasImageToVideoModel: Boolean = false,
 )
 
 @Immutable

@@ -79,7 +79,7 @@ fun StudioDetailScreen(
     onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
-    hasVideoModel: Boolean = false,
+    hasImageToVideoModel: Boolean = false,
     viewModel: StudioDetailViewModel = hiltViewModel(),
 ) {
     val initialIndex =
@@ -96,7 +96,7 @@ fun StudioDetailScreen(
             assets = assets,
             initialIndex = initialIndex,
             videoGenerationState = videoGenerationState,
-            hasVideoModel = hasVideoModel,
+            hasImageToVideoModel = hasImageToVideoModel,
             hazeState = hazeState,
             onEdit = { asset ->
                 onEditMedia(asset.id)
@@ -123,7 +123,7 @@ private fun DetailContent(
     assets: List<StudioMediaUi>,
     initialIndex: Int,
     videoGenerationState: VideoGenerationState,
-    hasVideoModel: Boolean,
+    hasImageToVideoModel: Boolean,
     hazeState: HazeState,
     onEdit: (StudioMediaUi) -> Unit,
     onAnimate: (StudioMediaUi, Boolean, String?) -> Unit,
@@ -166,7 +166,7 @@ private fun DetailContent(
                 actions =
                     studioDetailActions(
                         asset = asset,
-                        hasVideoModel = hasVideoModel,
+                        hasImageToVideoModel = hasImageToVideoModel,
                         onEdit = { onEdit(asset) },
                         onAnimate = { autoAnimate ->
                             if (autoAnimate) {
@@ -252,7 +252,7 @@ private fun DetailMedia(
 
 private fun studioDetailActions(
     asset: StudioMediaUi,
-    hasVideoModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
@@ -273,9 +273,9 @@ private fun studioDetailActions(
                     icon = Icons.Default.Movie,
                     label = "Animate",
                     onClick = { onAnimate(false) },
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
                 ),
             )
             add(
@@ -283,9 +283,9 @@ private fun studioDetailActions(
                     icon = Icons.Default.FastForward,
                     label = "Quick Animate",
                     onClick = { onAnimate(true) },
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
                 ),
             )
         }
@@ -321,7 +321,7 @@ private fun StudioDetailImagePreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Idle,
-        hasVideoModel = true,
+        hasImageToVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },
@@ -339,7 +339,7 @@ private fun StudioDetailLoadingPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Loading("asset-1"),
-        hasVideoModel = true,
+        hasImageToVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },
@@ -357,7 +357,7 @@ private fun StudioDetailVideoPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
-        hasVideoModel = true,
+        hasImageToVideoModel = true,
         hazeState = rememberHazeState(),
         onEdit = {},
         onAnimate = { _, _, _ -> },

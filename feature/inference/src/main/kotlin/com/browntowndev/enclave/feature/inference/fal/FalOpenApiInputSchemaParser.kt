@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference.fal
 
+import com.browntowndev.enclave.domain.model.media.ImageInputRequirement
 import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -11,7 +12,16 @@ import kotlinx.serialization.json.jsonPrimitive
 
 internal object FalOpenApiInputSchemaParser {
     fun parse(openApiDocument: JsonObject): ModelGenerationInputSchema? {
-        val inputProperties = findInputProperties(openApiDocument) ?: return null
+        val schemas = openApiDocument["components"]?.jsonObject?.get("schemas")?.jsonObject ?: return null
+        val inputSchema =
+            schemas.entries
+                .map { it.value.jsonObject }
+                .firstOrNull { schema ->
+                    schema["properties"]?.jsonObject?.containsKey("prompt") == true
+                } ?: return null
+        val inputProperties = inputSchema["properties"]?.jsonObject ?: return null
+        val requiredArray = inputSchema["required"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty()
+
         val aspectRatioOptions = stringEnumOptions(inputProperties, "aspect_ratio")
         val resolutionOptions = stringEnumOptions(inputProperties, "resolution")
         val durationTokens = stringEnumOptions(inputProperties, "duration")
@@ -19,11 +29,16 @@ internal object FalOpenApiInputSchemaParser {
         val numImagesRange = intRange(inputProperties, "num_images")
         val musicDurationRange = intRange(inputProperties, "duration", "music_duration", "length")
         val musicTempoRange = intRange(inputProperties, "tempo", "bpm")
-        val supportsReferenceImage =
-            inputProperties.containsKey("image_url") ||
-                inputProperties.containsKey("image") ||
-                inputProperties.containsKey("reference_image") ||
-                inputProperties.containsKey("start_image_url")
+
+        val imageFields = listOf("image_url", "image", "reference_image", "start_image_url")
+        val foundImageField = imageFields.firstOrNull { inputProperties.containsKey(it) }
+
+        val imageInput =
+            when {
+                foundImageField == null -> ImageInputRequirement.NONE
+                requiredArray.contains(foundImageField) -> ImageInputRequirement.REQUIRED
+                else -> ImageInputRequirement.OPTIONAL
+            }
 
         return ModelGenerationInputSchema(
             aspectRatioOptions = aspectRatioOptions,
@@ -33,19 +48,8 @@ internal object FalOpenApiInputSchemaParser {
             numImagesRange = numImagesRange,
             musicDurationRange = musicDurationRange,
             musicTempoRange = musicTempoRange,
-            supportsReferenceImage = supportsReferenceImage,
+            imageInput = imageInput,
         )
-    }
-
-    private fun findInputProperties(openApiDocument: JsonObject): JsonObject? {
-        val schemas = openApiDocument["components"]?.jsonObject?.get("schemas")?.jsonObject ?: return null
-        val inputSchema =
-            schemas.entries
-                .map { it.value.jsonObject }
-                .firstOrNull { schema ->
-                    schema["properties"]?.jsonObject?.containsKey("prompt") == true
-                }
-        return inputSchema?.get("properties")?.jsonObject
     }
 
     private fun stringEnumOptions(
@@ -86,12 +90,14 @@ internal object FalOpenApiInputSchemaParser {
     private fun JsonElement.enumValues(): List<String> =
         when (this) {
             is JsonObject ->
-                this["enum"]?.jsonArray?.mapNotNull { element ->
-                    when (element) {
-                        is JsonPrimitive -> element.contentOrNull
-                        else -> null
-                    }
-                }.orEmpty()
+                this["enum"]
+                    ?.jsonArray
+                    ?.mapNotNull { element ->
+                        when (element) {
+                            is JsonPrimitive -> element.contentOrNull
+                            else -> null
+                        }
+                    }.orEmpty()
             else -> emptyList()
         }
 }

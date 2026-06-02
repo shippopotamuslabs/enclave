@@ -36,12 +36,12 @@ class GalleryViewModel
                 assets.map { asset -> asset.toUi() }
             }
 
-        private val hasVideoModelFlow =
+        private val hasImageToVideoModelFlow =
             defaultModelRepository
                 .observeDefaults()
                 .map { assignments ->
                     assignments.any { assignment ->
-                        assignment.modelType == ModelType.VIDEO_GENERATION && assignment.mediaProviderId != null
+                        assignment.modelType == ModelType.IMAGE_TO_VIDEO && assignment.mediaProviderId != null
                     }
                 }.distinctUntilChanged()
 
@@ -50,8 +50,8 @@ class GalleryViewModel
                 mediaItems,
                 userAlbums,
                 itemAspectRatios,
-                hasVideoModelFlow,
-            ) { media, albums, ratios, hasVideoModel ->
+                hasImageToVideoModelFlow,
+            ) { media, albums, ratios, hasImageToVideoModel ->
                 val albumItems = mutableMapOf<String, MutableList<StudioMediaUi>>()
                 albumItems[DEFAULT_GALLERY_ALBUM_ID] = mutableListOf()
                 albums.forEach { albumItems[it.id] = mutableListOf() }
@@ -79,7 +79,7 @@ class GalleryViewModel
                                 )
                             },
                     isLoading = false,
-                    hasVideoModel = hasVideoModel,
+                    hasImageToVideoModel = hasImageToVideoModel,
                 )
             }.stateIn(
                 scope = viewModelScope,

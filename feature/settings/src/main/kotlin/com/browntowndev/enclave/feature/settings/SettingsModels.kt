@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
@@ -339,6 +340,7 @@ data class MediaProviderAssetUi(
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val capability: MediaCapability = MediaCapability.IMAGE,
+    val tasks: Set<MediaTask> = emptySet(),
     val modelName: String = "",
     val baseUrl: String? = null,
     val credentialAlias: String = "",
@@ -429,6 +431,7 @@ data class DiscoveredApiModelUi(
     val isImageGenerationCapable: Boolean = false,
     val isVideoGenerationCapable: Boolean = false,
     val isAudioGenerationCapable: Boolean = false,
+    val tasks: Set<MediaTask> = emptySet(),
 )
 
 @Immutable
@@ -489,7 +492,9 @@ private fun String?.toReadableAssignmentLabel(): String? = this?.takeIf { it.isR
 private val MEDIA_ASSIGNMENT_TYPES =
     setOf(
         ModelType.IMAGE_GENERATION,
+        ModelType.IMAGE_EDIT,
         ModelType.VIDEO_GENERATION,
+        ModelType.IMAGE_TO_VIDEO,
         ModelType.MUSIC_GENERATION,
     )
 
@@ -542,7 +547,9 @@ internal val ModelType.displayLabel: String
             ModelType.VISION -> "Vision (API)"
             ModelType.TTS -> "Text-to-Speech"
             ModelType.IMAGE_GENERATION -> "Image Generation"
+            ModelType.IMAGE_EDIT -> "Image Edit"
             ModelType.VIDEO_GENERATION -> "Video Generation"
+            ModelType.IMAGE_TO_VIDEO -> "Image to Video"
             ModelType.MUSIC_GENERATION -> "Music Generation"
             ModelType.DRAFT_ONE -> "Draft 1"
             ModelType.DRAFT_TWO -> "Draft 2"
@@ -559,7 +566,9 @@ internal val ModelType.description: String
             ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
             ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
             ModelType.IMAGE_GENERATION -> "Generate images from text prompts."
+            ModelType.IMAGE_EDIT -> "Edit or transform images using a reference image."
             ModelType.VIDEO_GENERATION -> "Generate videos from text prompts."
+            ModelType.IMAGE_TO_VIDEO -> "Animate a reference image into video."
             ModelType.MUSIC_GENERATION -> "Generate music from text prompts."
             ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Council pipeline."
             ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Council pipeline."

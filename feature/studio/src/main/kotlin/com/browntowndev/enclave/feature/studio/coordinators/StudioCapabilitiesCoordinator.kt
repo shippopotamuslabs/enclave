@@ -24,8 +24,7 @@ class StudioCapabilitiesCoordinator
                 .onEach { caps ->
                     caps ?: return@onEach
                     applyCapabilitiesToSettings(settings, caps)
-                }
-                .launchIn(scope)
+                }.launchIn(scope)
         }
 
         private fun applyCapabilitiesToSettings(

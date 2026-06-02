@@ -15,6 +15,8 @@ data class MediaProviderEntity(
     val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String,
+    @androidx.room.ColumnInfo(name = "tasks_mask")
+    val tasksMask: Int = 0,
     @androidx.room.ColumnInfo(name = "pending_sync")
     val pendingSync: Int = 0,
     @androidx.room.ColumnInfo(name = "updated_at")

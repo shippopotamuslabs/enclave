@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -60,7 +61,7 @@ class ImageGenerationPortImplTest {
     fun generateImage_falProvider_loadsReferenceAndUsesDefaultModel() =
         runTest {
             coEvery {
-                falAdapter.generateImage(any(), any(), any(), any(), any(), any())
+                falAdapter.generateImage(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success(listOf("fal".toByteArray()))
 
             val settings = ImageGenerationSettings(referenceImageUri = "cache://reference.png")
@@ -68,7 +69,7 @@ class ImageGenerationPortImplTest {
             val result =
                 port.generateImage(
                     prompt = "draw",
-                    provider = provider(ApiProvider.FAL, modelName = null),
+                    provider = provider(ApiProvider.FAL, modelName = null).copy(tasks = setOf(MediaTask.EDIT_IMAGE)),
                     settings = settings,
                 )
 
@@ -82,6 +83,7 @@ class ImageGenerationPortImplTest {
                     baseUrl = null,
                     settings = settings,
                     referenceImage = match { it.contentEquals("png".toByteArray()) },
+                    supportsEdit = true,
                 )
             }
         }

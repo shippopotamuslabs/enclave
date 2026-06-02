@@ -1,24 +1,17 @@
 package com.browntowndev.enclave.feature.settings
 
-import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
-import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
-import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
-import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
-import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
-import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -202,61 +195,61 @@ class SettingsUiStateFactory
 
         @Suppress("LongParameterList")
         internal fun create(
-        persistedSettings: SettingsData,
-        localAssets: List<LocalModelAsset>,
-        apiAssets: List<ApiModelAsset>,
-        ttsAssets: List<TtsProviderAsset>,
-        mediaAssets: List<MediaProviderAsset>,
-        defaultModels: List<DefaultModelAssignment>,
-        authState: AuthState,
-        sheetVisibility: SheetVisibilityState,
-        memories: List<StoredMemory>,
-        feedbackText: String,
-        localModelsState: LocalModelsTransientState,
-        apiState: ApiProvidersTransientState,
-        ttsState: TtsProvidersTransientState,
-        mediaState: MediaProvidersTransientState,
-        searchSkillState: SearchSkillTransientState,
-        assignmentsState: AssignmentDialogTransientState,
-        deletionState: DeletionTransientState,
-        memoriesState: MemoriesTransientState,
-        dataControlsState: DataControlsTransientState,
-        currentTavilyApiKey: String,
-        currentExaApiKey: String,
-        currentXApiKey: String,
-        xSearchState: XSearchTransientState,
-        isReindexing: Boolean,
-        reindexProgress: Float,
-        vaultReauthSheet: VaultReauthSheetState,
-        usageSpendSummary: UsageSpendSummary,
-    ): SettingsUiState =
-        assembler.create(
-            persistedSettings,
-            localAssets,
-            apiAssets,
-            ttsAssets,
-            mediaAssets,
-            defaultModels,
-            authState,
-            sheetVisibility,
-            memories,
-            feedbackText,
-            localModelsState,
-            apiState,
-            ttsState,
-            mediaState,
-            searchSkillState,
-            assignmentsState,
-            deletionState,
-            memoriesState,
-            dataControlsState,
-            currentTavilyApiKey,
-            currentExaApiKey,
-            currentXApiKey,
-            xSearchState,
-            isReindexing,
-            reindexProgress,
-            vaultReauthSheet,
-            usageSpendSummary,
-        )
-}
+            persistedSettings: SettingsData,
+            localAssets: List<LocalModelAsset>,
+            apiAssets: List<ApiModelAsset>,
+            ttsAssets: List<TtsProviderAsset>,
+            mediaAssets: List<MediaProviderAsset>,
+            defaultModels: List<DefaultModelAssignment>,
+            authState: AuthState,
+            sheetVisibility: SheetVisibilityState,
+            memories: List<StoredMemory>,
+            feedbackText: String,
+            localModelsState: LocalModelsTransientState,
+            apiState: ApiProvidersTransientState,
+            ttsState: TtsProvidersTransientState,
+            mediaState: MediaProvidersTransientState,
+            searchSkillState: SearchSkillTransientState,
+            assignmentsState: AssignmentDialogTransientState,
+            deletionState: DeletionTransientState,
+            memoriesState: MemoriesTransientState,
+            dataControlsState: DataControlsTransientState,
+            currentTavilyApiKey: String,
+            currentExaApiKey: String,
+            currentXApiKey: String,
+            xSearchState: XSearchTransientState,
+            isReindexing: Boolean,
+            reindexProgress: Float,
+            vaultReauthSheet: VaultReauthSheetState,
+            usageSpendSummary: UsageSpendSummary,
+        ): SettingsUiState =
+            assembler.create(
+                persistedSettings,
+                localAssets,
+                apiAssets,
+                ttsAssets,
+                mediaAssets,
+                defaultModels,
+                authState,
+                sheetVisibility,
+                memories,
+                feedbackText,
+                localModelsState,
+                apiState,
+                ttsState,
+                mediaState,
+                searchSkillState,
+                assignmentsState,
+                deletionState,
+                memoriesState,
+                dataControlsState,
+                currentTavilyApiKey,
+                currentExaApiKey,
+                currentXApiKey,
+                xSearchState,
+                isReindexing,
+                reindexProgress,
+                vaultReauthSheet,
+                usageSpendSummary,
+            )
+    }

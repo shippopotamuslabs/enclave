@@ -11,7 +11,6 @@ import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
@@ -20,17 +19,19 @@ import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDef
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import javax.inject.Inject
 
-class SettingsUiStateAssembler @Inject constructor(
-    private val localModelAssetUiMapper: LocalModelAssetUiMapper,
-    private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
-    private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
-    private val mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
-    private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
-    private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
-    private val usageSpendUiMapper: UsageSpendUiMapper,
-) {
-    @Suppress("LongParameterList", "CyclomaticComplexMethod")
-    internal fun create(
+class SettingsUiStateAssembler
+    @Inject
+    constructor(
+        private val localModelAssetUiMapper: LocalModelAssetUiMapper,
+        private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
+        private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
+        private val mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
+        private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
+        private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+        private val usageSpendUiMapper: UsageSpendUiMapper,
+    ) {
+        @Suppress("LongParameterList", "CyclomaticComplexMethod")
+        internal fun create(
             persistedSettings: SettingsData,
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
@@ -392,7 +393,7 @@ class SettingsUiStateAssembler @Inject constructor(
             )
         }
 
-    private fun buildVisibleAssignments(
+        private fun buildVisibleAssignments(
             defaultModels: List<DefaultModelAssignment>,
             localModels: List<LocalModelAssetUi>,
             apiModels: List<ApiModelAssetUi>,
@@ -414,7 +415,7 @@ class SettingsUiStateAssembler @Inject constructor(
             }
         }
 
-    private fun isMultimodalAssignment(
+        private fun isMultimodalAssignment(
             assignment: DefaultModelAssignment,
             localModels: List<LocalModelAssetUi>,
             apiModels: List<ApiModelAssetUi>,
@@ -433,43 +434,45 @@ class SettingsUiStateAssembler @Inject constructor(
                 else -> false
             }
 
-    private fun emptyAssignment(modelType: ModelType): DefaultModelAssignmentUi =
-        DefaultModelAssignmentUi(
-            modelType = modelType,
-            source = ModelSource.API,
-            currentModelName = "None Assigned",
-            displayLabel = modelType.displayLabel,
-        )
-
-    private fun AuthState.toUi(): AuthStateUi =
-        when (this) {
-            is AuthState.Authenticated -> AuthStateUi.Authenticated(user.toUi())
-            AuthState.Loading -> AuthStateUi.Loading
-            AuthState.Unauthenticated -> AuthStateUi.Unauthenticated
-            is AuthState.Error -> AuthStateUi.Error(message)
-        }
-
-    private fun UserProfile.toUi(): UserProfileUi =
-        UserProfileUi(
-            uid = uid,
-            displayName = displayName,
-            email = email,
-            photoUrl = photoUrl,
-        )
-
-    private companion object {
-        val VISIBLE_MODEL_ASSIGNMENT_TYPES =
-            listOf(
-                ModelType.FAST,
-                ModelType.THINKING,
-                ModelType.DRAFT_ONE,
-                ModelType.DRAFT_TWO,
-                ModelType.MAIN,
-                ModelType.FINAL_SYNTHESIS,
-                ModelType.TTS,
-                ModelType.IMAGE_GENERATION,
-                ModelType.VIDEO_GENERATION,
-                ModelType.VISION,
+        private fun emptyAssignment(modelType: ModelType): DefaultModelAssignmentUi =
+            DefaultModelAssignmentUi(
+                modelType = modelType,
+                source = ModelSource.API,
+                currentModelName = "None Assigned",
+                displayLabel = modelType.displayLabel,
             )
+
+        private fun AuthState.toUi(): AuthStateUi =
+            when (this) {
+                is AuthState.Authenticated -> AuthStateUi.Authenticated(user.toUi())
+                AuthState.Loading -> AuthStateUi.Loading
+                AuthState.Unauthenticated -> AuthStateUi.Unauthenticated
+                is AuthState.Error -> AuthStateUi.Error(message)
+            }
+
+        private fun UserProfile.toUi(): UserProfileUi =
+            UserProfileUi(
+                uid = uid,
+                displayName = displayName,
+                email = email,
+                photoUrl = photoUrl,
+            )
+
+        private companion object {
+            val VISIBLE_MODEL_ASSIGNMENT_TYPES =
+                listOf(
+                    ModelType.FAST,
+                    ModelType.THINKING,
+                    ModelType.DRAFT_ONE,
+                    ModelType.DRAFT_TWO,
+                    ModelType.MAIN,
+                    ModelType.FINAL_SYNTHESIS,
+                    ModelType.TTS,
+                    ModelType.IMAGE_GENERATION,
+                    ModelType.IMAGE_EDIT,
+                    ModelType.VIDEO_GENERATION,
+                    ModelType.IMAGE_TO_VIDEO,
+                    ModelType.VISION,
+                )
+        }
     }
-}

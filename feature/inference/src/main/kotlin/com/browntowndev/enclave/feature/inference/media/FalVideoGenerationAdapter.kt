@@ -2,11 +2,16 @@ package com.browntowndev.enclave.feature.inference.media
 
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.feature.inference.fal.FalMediaResponseDiagnostics
+import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalQueuePoller
+import com.browntowndev.enclave.feature.inference.fal.FalRequest
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Base64
@@ -14,10 +19,14 @@ import javax.inject.Inject
 
 class FalVideoGenerationAdapter(
     private val falService: FalService,
+    private val outputSchemaResolver: FalOutputSchemaResolver,
     private val pollDelayMillis: Long,
 ) {
     @Inject
-    constructor(falService: FalService) : this(falService, DEFAULT_POLL_DELAY_MILLIS)
+    constructor(
+        falService: FalService,
+        outputSchemaResolver: FalOutputSchemaResolver,
+    ) : this(falService, outputSchemaResolver, DEFAULT_POLL_DELAY_MILLIS)
 
     suspend fun generateVideo(
         prompt: String,
@@ -26,6 +35,7 @@ class FalVideoGenerationAdapter(
         baseUrl: String?,
         settings: GenerationSettings,
         referenceImage: ByteArray? = null,
+        supportsImageToVideo: Boolean = false,
     ): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             try {
@@ -33,7 +43,7 @@ class FalVideoGenerationAdapter(
                     "Settings must be VideoGenerationSettings"
                 }
                 val videoSettings = settings
-                require(!isImageToVideoModel(modelId) || referenceImage != null) {
+                require(!supportsImageToVideo || referenceImage != null) {
                     "Model '$modelId' requires a reference image but none was provided."
                 }
                 val request =
@@ -44,21 +54,30 @@ class FalVideoGenerationAdapter(
                         body =
                             buildJsonObject {
                                 put("prompt", prompt)
-                                videoSettings.apiDuration?.let { put("duration", it) }
-                                    ?: put("duration", videoSettings.videoDuration)
+                                put("duration", videoSettings.falDurationValue())
                                 put("aspect_ratio", videoSettings.aspectRatio.ratio)
                                 put("resolution", videoSettings.falResolution())
-                                if (referenceImage != null) {
+                                if (referenceImage != null && supportsImageToVideo) {
                                     put("image_url", "data:image/png;base64,${Base64.getEncoder().encodeToString(referenceImage)}")
                                 }
                             },
                     )
+                val outputSchema = outputSchemaResolver.resolve(modelId = modelId, apiKey = apiKey, baseUrl = baseUrl)
                 val poller = FalQueuePoller(falService, pollDelayMillis, "fal video generation")
                 val result = poller.pollUntilComplete(apiKey = apiKey, request = request)
+                FalMediaResponseDiagnostics.extractPayloadErrorMessage(result)?.let { message ->
+                    throw IllegalStateException("fal video generation failed: $message")
+                }
                 val videoUrl =
-                    falService.primaryMediaUrls(result).firstOrNull()
-                        ?: falService.mediaUrls(result).firstOrNull()
-                        ?: throw IllegalStateException("No fal video URL returned")
+                    falService.primaryVideoUrls(result, outputSchema).firstOrNull()
+                        ?: falService.primaryMediaUrls(result, outputSchema).firstOrNull()
+                        ?: falService.mediaUrls(result, outputSchema).firstOrNull()
+                        ?: throwNoVideoUrl(
+                            modelId = modelId,
+                            request = request,
+                            payload = result,
+                            outputSchema = outputSchema,
+                        )
                 Result.success(falService.resolveMediaBytes(videoUrl, apiKey))
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -68,17 +87,38 @@ class FalVideoGenerationAdapter(
         }
 
     private companion object {
-        private const val DEFAULT_POLL_DELAY_MILLIS = 5_000L
+        private const val DEFAULT_POLL_DELAY_MILLIS = 2_000L
         private val FAL_VIDEO_RESOLUTIONS = setOf("720p", "1080p", "4k")
 
-        private fun VideoGenerationSettings.falResolution(): String =
-            videoResolution.takeIf { it in FAL_VIDEO_RESOLUTIONS } ?: "1080p"
+        private fun VideoGenerationSettings.falResolution(): String = videoResolution.takeIf { it in FAL_VIDEO_RESOLUTIONS } ?: "1080p"
 
-        fun isImageToVideoModel(modelId: String): Boolean =
-            modelId.contains("image-to-video", ignoreCase = true) ||
-                modelId.contains("/i2v", ignoreCase = true) ||
-                modelId.contains("img2vid", ignoreCase = true) ||
-                modelId.contains("img-to-video", ignoreCase = true) ||
-                modelId.contains("image2video", ignoreCase = true)
+        /** Fal video models often use string duration enums (e.g. Seedance `"6"`, `"auto"`). */
+        private fun VideoGenerationSettings.falDurationValue(): String = apiDuration ?: videoDuration.toString()
+
+        private fun throwNoVideoUrl(
+            modelId: String,
+            request: FalRequest,
+            payload: JsonObject,
+            outputSchema: ModelGenerationOutputSchema?,
+        ): Nothing {
+            val resultFetchUrl =
+                request.responseUrl ?: FalService.deriveResponseUrl(request.statusUrl)
+            FalMediaResponseDiagnostics.logVideoUrlExtractionFailure(
+                modelId = modelId,
+                request = request,
+                payload = payload,
+                outputSchema = outputSchema,
+                resultFetchFailed = false,
+                resultFetchUrl = resultFetchUrl,
+            )
+            throw IllegalStateException(
+                FalMediaResponseDiagnostics.buildVideoUrlMissingMessage(
+                    modelId = modelId,
+                    payload = payload,
+                    resultFetchFailed = false,
+                    resultFetchUrl = resultFetchUrl,
+                ),
+            )
+        }
     }
 }

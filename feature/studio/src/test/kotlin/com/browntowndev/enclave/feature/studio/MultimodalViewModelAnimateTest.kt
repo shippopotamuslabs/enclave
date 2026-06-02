@@ -22,6 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
@@ -77,6 +78,11 @@ class MultimodalViewModelAnimateTest {
                 modelType = ModelType.VIDEO_GENERATION,
                 mediaProviderId = mediaProviderId,
             )
+        val imageToVideoAssignment =
+            DefaultModelAssignment(
+                modelType = ModelType.IMAGE_TO_VIDEO,
+                mediaProviderId = mediaProviderId,
+            )
         val providerAsset =
             MediaProviderAsset(
                 id = mediaProviderId,
@@ -86,8 +92,9 @@ class MultimodalViewModelAnimateTest {
                 credentialAlias = "test-alias",
             )
 
-        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(videoAssignment))
+        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(videoAssignment, imageToVideoAssignment))
         coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
+        coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns imageToVideoAssignment
         coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
@@ -101,7 +108,6 @@ class MultimodalViewModelAnimateTest {
                 supportedVideoQualities = listOf(GenerationQuality.SPEED),
                 supportedVideoResolutions = listOf("480p"),
                 supportedVideoDurations = listOf(5),
-                supportsReferenceImage = true,
                 supportsVideo = true,
             )
 
@@ -118,6 +124,7 @@ class MultimodalViewModelAnimateTest {
                 studioRepository = studioRepository,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
+                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                 resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,

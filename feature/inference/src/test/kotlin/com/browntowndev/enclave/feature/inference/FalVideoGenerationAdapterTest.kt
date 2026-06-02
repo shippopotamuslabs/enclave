@@ -1,30 +1,53 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalRequest
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import com.browntowndev.enclave.feature.inference.media.FalVideoGenerationAdapter
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import okhttp3.OkHttpClient
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.OkHttpClient
+import io.mockk.clearMocks
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
 
 class FalVideoGenerationAdapterTest {
+    private val outputSchemaResolver =
+        mockk<FalOutputSchemaResolver>().also { resolver ->
+            coEvery { resolver.resolve(any(), any(), any()) } returns null
+        }
     private val falService = mockk<FalService>()
-    private val adapter = FalVideoGenerationAdapter(falService, pollDelayMillis = 0L)
+    private val adapter =
+        FalVideoGenerationAdapter(
+            falService = falService,
+            outputSchemaResolver = outputSchemaResolver,
+            pollDelayMillis = 0L,
+        )
+
+    @BeforeEach
+    fun resetFalServiceMocks() {
+        clearMocks(falService, answers = false)
+        every { falService.awaitStatusStream(any(), any()) } throws IllegalStateException("stream unavailable")
+        every { falService.result(any(), any()) } returns buildJsonObject {}
+    }
 
     @Test
     fun generateVideo_happyHorseNestedVideoObject_extractsUrlWithRealFalService() =
@@ -64,7 +87,8 @@ class FalVideoGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns resultJson
-            every { falService.primaryMediaUrls(resultJson) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -105,10 +129,11 @@ class FalVideoGenerationAdapterTest {
     @Test
     fun generateVideo_failedStatusWithErrorDetail_includesDetailInMessage() =
         runTest {
-            val status = buildJsonObject {
-                put("status", "FAILED")
-                put("error", "content policy violation")
-            }
+            val status =
+                buildJsonObject {
+                    put("status", "FAILED")
+                    put("error", "content policy violation")
+                }
             every { falService.submitQueue(any(), any(), any(), any()) } returns
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
@@ -134,14 +159,15 @@ class FalVideoGenerationAdapterTest {
             every { falService.submitQueue(any(), any(), any(), any()) } returns
                 FalRequest(
                     requestId = "request-1",
-                    statusUrl = "https://queue.test/status",
+                    statusUrl = "https://queue.test/requests/request-1",
                     responseUrl = null,
                     cancelUrl = null,
                 )
-            every { falService.status("key", "https://queue.test/status") } returns status
+            every { falService.status("key", "https://queue.test/requests/request-1") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns emptyList()
             every { falService.mediaUrls(status) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -177,8 +203,9 @@ class FalVideoGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns emptyResult
-            every { falService.primaryMediaUrls(emptyResult) } returns emptyList()
-            every { falService.primaryMediaUrls(status) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.mediaUrls(status) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/status-video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/status-video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -204,8 +231,10 @@ class FalVideoGenerationAdapterTest {
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(status) } returns emptyList()
-            every { falService.mediaUrls(status) } returns listOf(dataUri)
+            every { falService.result(any(), any()) } returns buildJsonObject { put("video_url", dataUri) }
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf(dataUri)
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf(dataUri)
+            every { falService.mediaUrls(any(), any()) } returns listOf(dataUri)
             every { falService.resolveMediaBytes(dataUri, any()) } returns bytes
 
             val result =
@@ -248,7 +277,12 @@ class FalVideoGenerationAdapterTest {
     @Test
     fun generateVideo_coroutineCancellation_cancelsQueueAndRethrowsCancellation() =
         runTest {
-            val waitingAdapter = FalVideoGenerationAdapter(falService, pollDelayMillis = 10_000L)
+            val waitingAdapter =
+                FalVideoGenerationAdapter(
+                    falService = falService,
+                    outputSchemaResolver = outputSchemaResolver,
+                    pollDelayMillis = 10_000L,
+                )
             val status = buildJsonObject { put("status", "IN_QUEUE") }
             val statusPolled = CompletableDeferred<Unit>()
             every { falService.submitQueue(any(), any(), any(), any()) } returns
@@ -285,7 +319,8 @@ class FalVideoGenerationAdapterTest {
                 FalRequest("request-1", "https://queue.test/status", null, null)
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns null
-            every { falService.primaryMediaUrls(status) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -318,8 +353,11 @@ class FalVideoGenerationAdapterTest {
                 )
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
-            every { falService.result("key", "https://queue.test/result") } throws IllegalStateException("fal queue result failed: 503 Service Unavailable")
-            every { falService.primaryMediaUrls(status) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.result("key", "https://queue.test/result") } throws
+                IllegalStateException("fal queue result failed: 503 Service Unavailable")
+            every { falService.mediaUrls(status) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/status-video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/status-video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/status-video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -354,8 +392,9 @@ class FalVideoGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns previewOnlyResult
-            every { falService.primaryMediaUrls(previewOnlyResult) } returns emptyList()
-            every { falService.primaryMediaUrls(status) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.mediaUrls(status) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -386,8 +425,11 @@ class FalVideoGenerationAdapterTest {
                 listOf(inProgressWithPreview, completedStatus)
             every { falService.statusValue(inProgressWithPreview) } returns "IN_PROGRESS"
             every { falService.statusValue(completedStatus) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(completedStatus) } returns emptyList()
-            every { falService.mediaUrls(completedStatus) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.mediaUrls(completedStatus) } returns emptyList()
+            every { falService.mediaUrls(completedStatus) } returns emptyList()
+            every { falService.result(any(), any()) } returns buildJsonObject { put("video_url", "https://cdn.test/video.mp4") }
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -418,8 +460,11 @@ class FalVideoGenerationAdapterTest {
                 listOf(unknownWithPreview, completedStatus)
             every { falService.statusValue(unknownWithPreview) } returns null
             every { falService.primaryMediaUrls(unknownWithPreview) } returns emptyList()
+            every { falService.mediaUrls(unknownWithPreview) } returns emptyList()
             every { falService.statusValue(completedStatus) } returns "COMPLETED"
-            every { falService.primaryMediaUrls(completedStatus) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.mediaUrls(completedStatus) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(completedStatus, any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(completedStatus, any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -449,7 +494,8 @@ class FalVideoGenerationAdapterTest {
             every { falService.status("key", "https://queue.test/status") } returns status
             every { falService.statusValue(status) } returns "COMPLETED"
             every { falService.result("key", "https://queue.test/result") } returns resultWithBothUrls
-            every { falService.primaryMediaUrls(resultWithBothUrls) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
             every { falService.resolveMediaBytes("https://cdn.test/video.mp4", any()) } returns "mp4".toByteArray()
 
             val result =
@@ -467,6 +513,40 @@ class FalVideoGenerationAdapterTest {
         }
 
     @Test
+    fun generateVideo_defaultDuration_sendsStringDurationForFalEnums() =
+        runTest {
+            val bodySlot = slot<kotlinx.serialization.json.JsonObject>()
+            val status = buildJsonObject { put("status", "COMPLETED") }
+            val resultJson =
+                buildJsonObject {
+                    putJsonObject("video") {
+                        put("url", "https://cdn.test/seedance.mp4")
+                    }
+                }
+            every { falService.submitQueue(any(), any(), capture(bodySlot), any()) } returns
+                FalRequest("request-1", "https://queue.test/status", "https://queue.test/result", null)
+            every { falService.status("key", "https://queue.test/status") } returns status
+            every { falService.statusValue(status) } returns "COMPLETED"
+            every { falService.result("key", "https://queue.test/result") } returns resultJson
+            every { falService.result("key", "https://queue.test") } returns resultJson
+            every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/seedance.mp4")
+            every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/seedance.mp4")
+            every { falService.resolveMediaBytes("https://cdn.test/seedance.mp4", any()) } returns "mp4".toByteArray()
+
+            val result =
+                adapter.generateVideo(
+                    prompt = "animate",
+                    apiKey = "key",
+                    modelId = "bytedance/seedance-2.0/image-to-video",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(videoDuration = 6),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals("6", bodySlot.captured["duration"]?.jsonPrimitive?.content)
+        }
+
+    @Test
     fun generateVideo_imageToVideoModelWithoutReferenceImage_returnsValidationFailure() =
         runTest {
             val result =
@@ -477,6 +557,7 @@ class FalVideoGenerationAdapterTest {
                     baseUrl = null,
                     settings = VideoGenerationSettings(),
                     referenceImage = null,
+                    supportsImageToVideo = true,
                 )
 
             assertTrue(result.isFailure)
@@ -496,6 +577,7 @@ class FalVideoGenerationAdapterTest {
                     baseUrl = null,
                     settings = VideoGenerationSettings(),
                     referenceImage = null,
+                    supportsImageToVideo = true,
                 )
 
             assertTrue(result.isFailure)

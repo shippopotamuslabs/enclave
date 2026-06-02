@@ -5100,9 +5100,10 @@ internal object uniffiCallbackInterfaceAgentSummarizerCallback {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAgentSummarizerCallback.handleMap.get(uniffiHandle)
-            val makeCall = {  uniffiObj.`summarize`(
-                FfiConverterTypeFfiSummaryRequest.lift(`request`),
-            )
+            val makeCall = {
+                uniffiObj.`summarize`(
+                    FfiConverterTypeFfiSummaryRequest.lift(`request`),
+                )
             }
             val writeReturn = { value: FfiSummaryResult -> uniffiOutReturn.setValue(FfiConverterTypeFfiSummaryResult.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -5151,9 +5152,10 @@ internal object uniffiCallbackInterfaceAgentToolExecutorCallback {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAgentToolExecutorCallback.handleMap.get(uniffiHandle)
-            val makeCall = {  uniffiObj.`executeTools`(
-                FfiConverterSequenceTypeFfiToolCallRecord.lift(`calls`),
-            )
+            val makeCall = {
+                uniffiObj.`executeTools`(
+                    FfiConverterSequenceTypeFfiToolCallRecord.lift(`calls`),
+                )
             }
             val writeReturn = { value: List<FfiToolResultRecord> ->
                 uniffiOutReturn.setValue(FfiConverterSequenceTypeFfiToolResultRecord.lower(value))
@@ -5207,9 +5209,10 @@ internal object uniffiCallbackInterfaceAgentTransportCallback {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAgentTransportCallback.handleMap.get(uniffiHandle)
-            val makeCall = {  uniffiObj.`completeModelTurn`(
-                FfiConverterTypeFfiModelRequest.lift(`request`),
-            )
+            val makeCall = {
+                uniffiObj.`completeModelTurn`(
+                    FfiConverterTypeFfiModelRequest.lift(`request`),
+                )
             }
             val writeReturn = { value: FfiModelResponse -> uniffiOutReturn.setValue(FfiConverterTypeFfiModelResponse.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)

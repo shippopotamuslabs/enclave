@@ -39,7 +39,7 @@ fun GalleryDetailScreen(
     onShareMedia: (String) -> Unit,
     onSendToStudio: (String, String, String?) -> Unit,
     onDeleteMedia: (String) -> Unit,
-    hasVideoModel: Boolean = false,
+    hasImageToVideoModel: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val album =
@@ -89,7 +89,7 @@ fun GalleryDetailScreen(
                     actions =
                         galleryDetailActions(
                             asset = asset,
-                            hasVideoModel = hasVideoModel,
+                            hasImageToVideoModel = hasImageToVideoModel,
                             onEdit = { onSendToStudio(asset.id, "edit", null) },
                             onAnimate = { showCustomPromptInput = true },
                             onQuickAnimate = { onSendToStudio(asset.id, "quick_animate", null) },
@@ -123,7 +123,7 @@ fun GalleryDetailScreen(
 
 private fun galleryDetailActions(
     asset: StudioMediaUi,
-    hasVideoModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: () -> Unit,
     onQuickAnimate: () -> Unit,
@@ -144,9 +144,9 @@ private fun galleryDetailActions(
                     icon = Icons.Default.Movie,
                     label = "Animate",
                     onClick = onAnimate,
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
                 ),
             )
             add(
@@ -154,9 +154,9 @@ private fun galleryDetailActions(
                     icon = Icons.Default.FastForward,
                     label = "Quick Animate",
                     onClick = onQuickAnimate,
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
                 ),
             )
         }

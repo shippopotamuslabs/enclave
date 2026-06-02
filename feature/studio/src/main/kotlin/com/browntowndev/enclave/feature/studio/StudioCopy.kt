@@ -1,0 +1,10 @@
+package com.browntowndev.enclave.feature.studio
+
+internal const val STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE =
+    "This image model generates from text only. Set an image-edit model in Settings to use a reference image."
+
+internal const val STUDIO_REFERENCE_I2V_UNAVAILABLE =
+    "This video model generates from text only. Set an image-to-video model in Settings to use a reference image."
+
+internal const val STUDIO_ANIMATE_I2V_UNAVAILABLE =
+    "No image-to-video model is set. Choose one in Settings to animate."

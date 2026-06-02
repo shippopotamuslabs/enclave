@@ -114,7 +114,40 @@ class FalServiceTest {
                 service.runSync("key", "fal-ai/test-model", kotlinx.serialization.json.buildJsonObject {}, null)
             }
 
-        assertEquals("fal sync request failed: 401 {\"error\":\"bad key\"}", thrown.message)
+        assertEquals("fal sync request failed: 401 bad key", thrown.message)
+    }
+
+    @Test
+    fun result_httpErrorExtractsApiMessageWithoutHugeBase64Echo() {
+        val hugeBase64 = "B".repeat(8_000)
+        everyResponses(
+            requests = mutableListOf(),
+            jsonResponse(
+                """
+                {
+                  "detail": [
+                    {
+                      "type": "content_policy_violation",
+                      "msg": "Output video has sensitive content.",
+                      "input": { "image_url": "data:image/png;base64,$hugeBase64" }
+                    }
+                  ]
+                }
+                """.trimIndent(),
+                code = 422,
+            ),
+        )
+
+        val thrown =
+            assertThrows(IllegalStateException::class.java) {
+                service.result("key", "https://queue.fal.run/bytedance/seedance-2.0/requests/test-id")
+            }
+
+        assertEquals(
+            "fal queue result failed: 422 Output video has sensitive content.",
+            thrown.message,
+        )
+        assertTrue((thrown.message?.length ?: 0) < 512)
     }
 
     @Test
@@ -141,8 +174,8 @@ class FalServiceTest {
 
         assertEquals(
             listOf(
-                "data:audio/mpeg;base64,bXAz",
                 "https://cdn.test/image.png",
+                "data:audio/mpeg;base64,bXAz",
                 "https://cdn.test/preview.png",
             ),
             service.mediaUrls(response),
@@ -231,6 +264,34 @@ class FalServiceTest {
 
         assertEquals(listOf("https://cdn.test/happy-horse.mp4"), service.primaryMediaUrls(response))
         assertEquals(listOf("https://cdn.test/happy-horse.mp4"), service.mediaUrls(response))
+    }
+
+    @Test
+    fun primaryVideoUrls_seedanceShape_prefersVideoOverEchoedImageUrl() {
+        val response =
+            Json
+                .parseToJsonElement(
+                    """
+                    {
+                      "image_url": "https://cdn.test/input.jpg",
+                      "video": {
+                        "url": "https://cdn.test/seedance-output.mp4",
+                        "content_type": "video/mp4"
+                      },
+                      "seed": 42
+                    }
+                    """.trimIndent(),
+                ).jsonObject
+
+        assertEquals(listOf("https://cdn.test/seedance-output.mp4"), service.primaryVideoUrls(response))
+    }
+
+    @Test
+    fun deriveResponseUrl_stripsStatusSuffix() {
+        assertEquals(
+            "https://queue.fal.run/fal-ai/video/requests/request-1",
+            FalService.deriveResponseUrl("https://queue.fal.run/fal-ai/video/requests/request-1/status"),
+        )
     }
 
     @Test

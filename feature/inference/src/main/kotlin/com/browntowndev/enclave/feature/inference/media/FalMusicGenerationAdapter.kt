@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.media
 
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
+import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalQueuePoller
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import kotlinx.coroutines.CancellationException
@@ -13,10 +14,14 @@ import javax.inject.Inject
 
 class FalMusicGenerationAdapter(
     private val falService: FalService,
+    private val outputSchemaResolver: FalOutputSchemaResolver,
     private val pollDelayMillis: Long,
 ) {
     @Inject
-    constructor(falService: FalService) : this(falService, DEFAULT_POLL_DELAY_MILLIS)
+    constructor(
+        falService: FalService,
+        outputSchemaResolver: FalOutputSchemaResolver,
+    ) : this(falService, outputSchemaResolver, DEFAULT_POLL_DELAY_MILLIS)
 
     suspend fun generateMusic(
         prompt: String,
@@ -42,11 +47,12 @@ class FalMusicGenerationAdapter(
                                 put("tempo", musicSettings.tempo)
                             },
                     )
+                val outputSchema = outputSchemaResolver.resolve(modelId = modelId, apiKey = apiKey, baseUrl = baseUrl)
                 val poller = FalQueuePoller(falService, pollDelayMillis, "fal music generation")
                 val result = poller.pollUntilComplete(apiKey = apiKey, request = request)
                 val mediaUrl =
-                    falService.primaryMediaUrls(result).firstOrNull()
-                        ?: falService.mediaUrls(result).firstOrNull()
+                    falService.primaryMediaUrls(result, outputSchema).firstOrNull()
+                        ?: falService.mediaUrls(result, outputSchema).firstOrNull()
                         ?: throw IllegalStateException("No fal music URL returned")
                 Result.success(falService.resolveMediaBytes(mediaUrl, apiKey))
             } catch (cancellation: CancellationException) {
@@ -57,6 +63,6 @@ class FalMusicGenerationAdapter(
         }
 
     private companion object {
-        private const val DEFAULT_POLL_DELAY_MILLIS = 5_000L
+        private const val DEFAULT_POLL_DELAY_MILLIS = 2_000L
     }
 }

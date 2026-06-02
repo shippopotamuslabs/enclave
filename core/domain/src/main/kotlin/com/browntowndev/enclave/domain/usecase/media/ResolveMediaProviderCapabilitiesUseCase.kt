@@ -32,7 +32,11 @@ class ResolveMediaProviderCapabilitiesUseCase
         private suspend fun loadFalInputSchema(mediaProvider: MediaProviderAsset?): ModelGenerationInputSchema? {
             val providerAsset =
                 mediaProvider?.takeIf { it.provider == ApiProvider.FAL } ?: return null
-            val modelId = providerAsset.modelName?.trim().orEmpty().takeIf { it.isNotBlank() } ?: return null
+            val modelId =
+                providerAsset.modelName
+                    ?.trim()
+                    .orEmpty()
+                    .takeIf { it.isNotBlank() } ?: return null
             val apiKey =
                 apiKeyProvider
                     .getApiKey(providerAsset.credentialAlias)

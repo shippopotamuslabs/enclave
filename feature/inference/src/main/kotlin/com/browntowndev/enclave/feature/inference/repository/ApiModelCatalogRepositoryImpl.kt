@@ -1,12 +1,17 @@
 package com.browntowndev.enclave.feature.inference.repository
 
 import android.util.Log
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.feature.inference.fal.FalOpenApiInputSchemaParser
+import com.browntowndev.enclave.domain.model.media.ImageInputRequirement
+import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
+import com.browntowndev.enclave.feature.inference.fal.FalOpenApiInputSchemaParser
+import com.browntowndev.enclave.feature.inference.fal.FalOpenApiOutputSchemaParser
 import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
 import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
 import com.google.genai.types.Model
@@ -26,6 +31,20 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+internal fun deriveFalMediaTasks(
+    capability: MediaCapability,
+    inputSchema: ModelGenerationInputSchema?,
+    endpointId: String? = null,
+    category: String? = null,
+): Set<MediaTask> =
+    deriveFalTasks(
+        modelId = endpointId.orEmpty(),
+        category = category,
+        isImageGen = capability == MediaCapability.IMAGE,
+        isVideoGen = capability == MediaCapability.VIDEO,
+        imageInput = inputSchema?.imageInput,
+    )
 
 @Serializable
 private data class OpenRouterModelsResponse(
@@ -154,8 +173,7 @@ private data class FalModel(
     val openapi: JsonObject? = null,
 )
 
-private fun FalModel.resolvedId(): String? =
-    endpointId?.takeIf { it.isNotBlank() } ?: id?.takeIf { it.isNotBlank() }
+private fun FalModel.resolvedId(): String? = endpointId?.takeIf { it.isNotBlank() } ?: id?.takeIf { it.isNotBlank() }
 
 private const val FAL_MODELS_URL = "https://api.fal.ai/v1/models"
 private const val FAL_MAX_PAGES = 50
@@ -243,6 +261,65 @@ private fun parseFalModels(response: FalModelsResponse): List<DiscoveredApiModel
         .sortedBy(DiscoveredApiModel::id)
 }
 
+@Suppress("ReturnCount")
+private fun deriveFalTasks(
+    modelId: String,
+    category: String?,
+    isImageGen: Boolean,
+    isVideoGen: Boolean,
+    imageInput: ImageInputRequirement?,
+): Set<MediaTask> {
+    if (category != null) {
+        when (category) {
+            "text-to-image" -> return setOf(MediaTask.TEXT_TO_IMAGE)
+            "image-to-image" -> return setOf(MediaTask.EDIT_IMAGE)
+            "text-to-video" -> return setOf(MediaTask.TEXT_TO_VIDEO)
+            "image-to-video" -> return setOf(MediaTask.IMAGE_TO_VIDEO)
+        }
+    }
+
+    val cleanId = modelId.lowercase()
+    val isImageToVideo =
+        listOf("/image-to-video", "/i2v", "img2vid", "img-to-video", "image2video")
+            .any { cleanId.contains(it) }
+    if (isImageToVideo) {
+        return setOf(MediaTask.IMAGE_TO_VIDEO)
+    }
+    if (cleanId.contains("/text-to-video")) {
+        return setOf(MediaTask.TEXT_TO_VIDEO)
+    }
+    if (cleanId.contains("/text-to-image")) {
+        return setOf(MediaTask.TEXT_TO_IMAGE)
+    }
+
+    if (imageInput != null) {
+        if (isImageGen) {
+            when (imageInput) {
+                ImageInputRequirement.NONE -> return setOf(MediaTask.TEXT_TO_IMAGE)
+                ImageInputRequirement.REQUIRED -> return setOf(MediaTask.EDIT_IMAGE)
+                ImageInputRequirement.OPTIONAL -> return setOf(MediaTask.TEXT_TO_IMAGE, MediaTask.EDIT_IMAGE)
+            }
+        }
+        if (isVideoGen) {
+            when (imageInput) {
+                ImageInputRequirement.NONE -> return setOf(MediaTask.TEXT_TO_VIDEO)
+                ImageInputRequirement.REQUIRED -> return setOf(MediaTask.IMAGE_TO_VIDEO)
+                ImageInputRequirement.OPTIONAL -> return setOf(MediaTask.TEXT_TO_VIDEO, MediaTask.IMAGE_TO_VIDEO)
+            }
+        }
+    }
+
+    val cleanModelId = modelId.trim().removeSuffix("/")
+    when (cleanModelId) {
+        "fal-ai/flux-pro/kontext" -> return setOf(MediaTask.TEXT_TO_IMAGE, MediaTask.EDIT_IMAGE)
+        "fal-ai/recraft/v3" -> return setOf(MediaTask.TEXT_TO_IMAGE)
+        "fal-ai/kling-video/v2.1/master/image-to-video" -> return setOf(MediaTask.IMAGE_TO_VIDEO)
+        "fal-ai/minimax/video-01" -> return setOf(MediaTask.TEXT_TO_VIDEO)
+    }
+
+    return emptySet()
+}
+
 private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
     val modelId = resolvedId() ?: return null
     val hints = capabilityHints()
@@ -261,6 +338,15 @@ private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
             ?: metadata?.displayName?.takeIf { it.isNotBlank() }
             ?: modelId
     val inputSchema = openapi?.let(FalOpenApiInputSchemaParser::parse)
+    val outputSchema = openapi?.let(FalOpenApiOutputSchemaParser::parse)
+    val derivedTasks =
+        deriveFalTasks(
+            modelId = modelId,
+            category = category,
+            isImageGen = isImageGen || isUnclassified,
+            isVideoGen = isVideoGen,
+            imageInput = inputSchema?.imageInput,
+        )
     return DiscoveredApiModel(
         id = modelId,
         name = displayName,
@@ -268,7 +354,9 @@ private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
         isImageGenerationCapable = isImageGen || isUnclassified,
         isVideoGenerationCapable = isVideoGen,
         isAudioGenerationCapable = isAudioGen,
+        tasks = derivedTasks,
         inputSchema = inputSchema,
+        outputSchema = outputSchema,
     )
 }
 
@@ -361,12 +449,13 @@ class ApiModelCatalogRepositoryImpl
                         )
 
                     ApiProvider.FAL -> {
-                        val (models, isTruncated) = fetchFalModels(
-                            httpClient = httpClient,
-                            json = json,
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                        )
+                        val (models, isTruncated) =
+                            fetchFalModels(
+                                httpClient = httpClient,
+                                json = json,
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                            )
                         ApiModelCatalogResult(models = models, isTruncated = isTruncated)
                     }
 
@@ -932,11 +1021,28 @@ class ApiModelCatalogRepositoryImpl
                         !id.startsWith("tts-", ignoreCase = true)
                 )
 
+            val derivedTasks =
+                if (provider != ApiProvider.FAL) {
+                    val t = mutableSetOf<MediaTask>()
+                    if (isImageGen) {
+                        t.add(MediaTask.TEXT_TO_IMAGE)
+                        t.add(MediaTask.EDIT_IMAGE)
+                    }
+                    if (isVideoGen) {
+                        t.add(MediaTask.TEXT_TO_VIDEO)
+                        t.add(MediaTask.IMAGE_TO_VIDEO)
+                    }
+                    t
+                } else {
+                    tasks
+                }
+
             return copy(
                 isChatCapable = isChat,
                 isImageGenerationCapable = isImageGen,
                 isVideoGenerationCapable = isVideoGen,
                 isAudioGenerationCapable = isMusicGen,
+                tasks = derivedTasks,
             )
         }
     }

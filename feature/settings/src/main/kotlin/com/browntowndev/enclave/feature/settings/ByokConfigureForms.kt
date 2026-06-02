@@ -379,7 +379,9 @@ internal fun reusableCredentialsForProvider(
                     asset.credentialAlias.isNotBlank()
             }.map { asset ->
                 ReusableApiCredentialUi(
-                    credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+                    credentialsId =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiCredentialsId(""),
                     displayName = asset.displayName,
                     providerLabel = "${asset.provider.displayName} • ${asset.capability.displayName}",
                     credentialAlias = asset.credentialAlias,
@@ -393,7 +395,9 @@ internal fun reusableCredentialsForProvider(
                     asset.credentialAlias.isNotBlank()
             }.map { asset ->
                 ReusableApiCredentialUi(
-                    credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+                    credentialsId =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiCredentialsId(""),
                     displayName = asset.displayName,
                     providerLabel = asset.provider.displayName,
                     credentialAlias = asset.credentialAlias,
@@ -420,7 +424,9 @@ internal fun resolveSelectedReusableCredential(
     }
     mediaModels.find { it.credentialAlias == alias }?.let { asset ->
         return ReusableApiCredentialUi(
-            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            credentialsId =
+                com.browntowndev.enclave.domain.model.config
+                    .ApiCredentialsId(""),
             displayName = asset.displayName,
             providerLabel = "${asset.provider.displayName} • ${asset.capability.displayName}",
             credentialAlias = asset.credentialAlias,
@@ -428,7 +434,9 @@ internal fun resolveSelectedReusableCredential(
     }
     ttsModels.find { it.credentialAlias == alias }?.let { asset ->
         return ReusableApiCredentialUi(
-            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            credentialsId =
+                com.browntowndev.enclave.domain.model.config
+                    .ApiCredentialsId(""),
             displayName = asset.displayName,
             providerLabel = asset.provider.displayName,
             credentialAlias = asset.credentialAlias,
@@ -436,7 +444,9 @@ internal fun resolveSelectedReusableCredential(
     }
     return displayNameFallback?.let { displayName ->
         ReusableApiCredentialUi(
-            credentialsId = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
+            credentialsId =
+                com.browntowndev.enclave.domain.model.config
+                    .ApiCredentialsId(""),
             displayName = displayName,
             providerLabel = "",
             credentialAlias = alias,

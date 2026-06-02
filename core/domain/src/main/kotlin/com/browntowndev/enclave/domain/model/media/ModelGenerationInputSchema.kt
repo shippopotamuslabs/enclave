@@ -2,6 +2,12 @@ package com.browntowndev.enclave.domain.model.media
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 
+enum class ImageInputRequirement {
+    NONE,
+    OPTIONAL,
+    REQUIRED,
+}
+
 /**
  * Normalized input constraints extracted from a provider model schema (e.g. fal OpenAPI).
  */
@@ -15,7 +21,7 @@ data class ModelGenerationInputSchema(
     val numImagesRange: IntRange? = null,
     val musicDurationRange: IntRange? = null,
     val musicTempoRange: IntRange? = null,
-    val supportsReferenceImage: Boolean = false,
+    val imageInput: ImageInputRequirement = ImageInputRequirement.NONE,
 )
 
 fun ModelGenerationInputSchema.toProviderCapabilities(
@@ -34,7 +40,6 @@ fun ModelGenerationInputSchema.toProviderCapabilities(
                 supportedImageQualities = emptyList(),
                 supportedImageResolutions =
                     resolutionOptions.ifEmpty { fallback.supportedImageResolutions },
-                supportsReferenceImage = supportsReferenceImage || fallback.supportsReferenceImage,
             )
         MediaCapability.VIDEO ->
             fallback.copy(
@@ -42,16 +47,16 @@ fun ModelGenerationInputSchema.toProviderCapabilities(
                 supportedVideoResolutions =
                     resolutionOptions.ifEmpty { fallback.supportedVideoResolutions },
                 supportedVideoDurations =
-                    videoDurationSeconds.ifEmpty {
-                        videoDurationTokens.mapNotNull { token ->
-                            token.removeSuffix("s").toIntOrNull()
-                        }
-                    }.ifEmpty { fallback.supportedVideoDurations },
+                    videoDurationSeconds
+                        .ifEmpty {
+                            videoDurationTokens.mapNotNull { token ->
+                                token.removeSuffix("s").toIntOrNull()
+                            }
+                        }.ifEmpty { fallback.supportedVideoDurations },
                 supportedVideoDurationTokens =
                     videoDurationTokens.ifEmpty {
                         videoDurationSeconds.map { "${it}s" }
                     },
-                supportsReferenceImage = supportsReferenceImage || fallback.supportsReferenceImage,
                 supportsVideo = true,
             )
         MediaCapability.MUSIC ->

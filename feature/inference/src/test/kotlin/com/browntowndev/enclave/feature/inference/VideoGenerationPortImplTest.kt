@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -66,7 +67,7 @@ class VideoGenerationPortImplTest {
             val result =
                 port.generateVideo(
                     prompt = "prompt",
-                    provider = provider(ApiProvider.OPENAI, modelName = null),
+                    provider = provider(ApiProvider.OPENAI, modelName = null).copy(tasks = setOf(MediaTask.IMAGE_TO_VIDEO)),
                     settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
                 )
 
@@ -124,21 +125,21 @@ class VideoGenerationPortImplTest {
     fun generateVideo_falProvider_routesToFalAdapter() =
         runTest {
             coEvery {
-                falAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+                falAdapter.generateVideo(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success("fal".toByteArray())
 
             val result = port.generateVideo("prompt", provider(ApiProvider.FAL), VideoGenerationSettings())
 
             assertTrue(result.isSuccess)
             assertArrayEquals("fal".toByteArray(), result.getOrThrow())
-            coVerify { falAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null) }
+            coVerify { falAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null, false) }
         }
 
     @Test
     fun generateVideo_falProviderNullModelName_usesDefaultVideoModel() =
         runTest {
             coEvery {
-                falAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+                falAdapter.generateVideo(any(), any(), any(), any(), any(), any(), any())
             } returns Result.success("fal".toByteArray())
 
             val result = port.generateVideo("prompt", provider(ApiProvider.FAL, modelName = null), VideoGenerationSettings())
@@ -153,6 +154,7 @@ class VideoGenerationPortImplTest {
                     baseUrl = null,
                     settings = VideoGenerationSettings(),
                     referenceImage = null,
+                    supportsImageToVideo = false,
                 )
             }
         }

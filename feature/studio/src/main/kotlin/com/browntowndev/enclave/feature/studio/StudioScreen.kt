@@ -178,6 +178,8 @@ fun StudioScreen(
                 referenceMediaType = uiState.referenceMediaType,
                 isGenerating = uiState.isGenerating,
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
+                hasImageEditModel = uiState.hasImageEditModel,
+                hasImageToVideoModel = uiState.hasImageToVideoModel,
                 onPromptChange = viewModel::onPromptChange,
                 onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
                 onClearReferenceImage = viewModel::onClearReferenceImage,

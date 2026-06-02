@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals

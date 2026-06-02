@@ -42,7 +42,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
 const val FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP =
-    "Setup a video model in Settings to enable."
+    "Your video model only supports text-to-video. Set an image-to-video model in Settings to animate."
 
 data class FullscreenMediaAction(
     val icon: ImageVector,
