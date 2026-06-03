@@ -1,0 +1,23 @@
+# Pinned dependencies for the on-device criminal/illegal intent classifier.
+#   - scripts/train_criminal_intent_classifier.py  (train + export INT8 ONNX)
+#   - scripts/eval_criminal_intent_classifier.py    (evaluate exported model)
+#
+# Target: Python 3.12 (matches scripts/.venv_classifier).
+#
+# Recreate on a fresh machine:
+#   python3.12 -m venv scripts/.venv_classifier
+#   scripts/.venv_classifier/bin/pip install --upgrade pip
+#   scripts/.venv_classifier/bin/pip install -r scripts/requirements-criminal-intent.txt
+#   scripts/.venv_classifier/bin/python scripts/train_criminal_intent_classifier.py
+#
+# torch is pinned without a CUDA suffix; pip resolves the right CPU/GPU build
+# for the host. For a CPU-only box, prefit with:
+#   pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.12.0
+transformers==4.57.6
+datasets==4.8.5
+accelerate==1.13.0
+onnx==1.21.0
+onnxruntime==1.26.0
+numpy==2.4.6
+pandas==3.0.3
