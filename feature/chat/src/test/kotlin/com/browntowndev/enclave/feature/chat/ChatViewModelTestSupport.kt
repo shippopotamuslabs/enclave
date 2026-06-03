@@ -18,6 +18,7 @@ import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
@@ -69,6 +70,7 @@ object ChatViewModelTestSupport {
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
             coEvery { this@mockk.invoke(any()) } returns true
         },
+        submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): ChatViewModel =
         createHarness(
             settingsUseCases = settingsUseCases,
@@ -91,6 +93,7 @@ object ChatViewModelTestSupport {
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             moderatePromptUseCase = moderatePromptUseCase,
             shouldModeratePromptUseCase = shouldModeratePromptUseCase,
+            submitModerationReportUseCase = submitModerationReportUseCase,
         ).viewModel
 
     fun createHarness(
@@ -116,6 +119,7 @@ object ChatViewModelTestSupport {
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
             coEvery { this@mockk.invoke(any()) } returns true
         },
+        submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
@@ -191,6 +195,7 @@ object ChatViewModelTestSupport {
                     studioRepository = studioRepository,
                     moderatePromptUseCase = moderatePromptUseCase,
                     shouldModeratePromptUseCase = shouldModeratePromptUseCase,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
                     inferenceOrchestrator = inferenceOrchestrator,
                     chatInputCoordinator = chatInputCoordinator,
                     speechInputCoordinator = speechInputCoordinator,
