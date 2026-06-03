@@ -49,6 +49,7 @@ dependencies {
 
     // LiteRT
     implementation(libs.litertlm.android)
+    implementation(libs.onnxruntime.android)
     implementation(libs.firebase.crashlytics)
 
     // OpenAI

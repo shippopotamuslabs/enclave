@@ -1,0 +1,70 @@
+{
+  "model_path": "model.onnx",
+  "tokenizer_path": "tokenizer.json",
+  "max_sequence_length": 256,
+  "labels": [
+    "illicit_drug_instruction",
+    "weapons_explosives_instruction",
+    "malware_cyber_abuse",
+    "phishing_fraud_scam",
+    "violent_or_organized_crime",
+    "other_illegal_instruction",
+    "criminal_intent_harmful"
+  ],
+  "label_aliases": {
+    "illicit_drug_instruction": [
+      "illicit_drug_instruction"
+    ],
+    "weapons_explosives_instruction": [
+      "weapons_explosives_instruction"
+    ],
+    "malware_cyber_abuse": [
+      "malware_cyber_abuse"
+    ],
+    "phishing_fraud_scam": [
+      "phishing_fraud_scam"
+    ],
+    "violent_or_organized_crime": [
+      "violent_or_organized_crime"
+    ],
+    "other_illegal_instruction": [
+      "other_illegal_instruction"
+    ],
+    "criminal_intent_harmful": [
+      "criminal_intent_harmful"
+    ]
+  },
+  "thresholds": {
+    "illicit_drug_instruction": 0.7,
+    "weapons_explosives_instruction": 0.7,
+    "malware_cyber_abuse": 0.72,
+    "phishing_fraud_scam": 0.72,
+    "violent_or_organized_crime": 0.72,
+    "other_illegal_instruction": 0.78,
+    "criminal_intent_harmful": 0.75
+  },
+  "combined_illegal_labels": [
+    "illicit_drug_instruction",
+    "weapons_explosives_instruction",
+    "malware_cyber_abuse",
+    "phishing_fraud_scam",
+    "violent_or_organized_crime",
+    "other_illegal_instruction"
+  ],
+  "provenance_summary": {
+    "HardNegatives": 7000,
+    "AdvBench": 4160,
+    "NQ-Open": 3000,
+    "Dolly-15k": 2978,
+    "ClearHarm": 1432,
+    "Clinc150": 1000,
+    "JBB-Behaviors": 900,
+    "HarmBench": 640,
+    "HarmfulPositives": 320
+  },
+  "eval_metrics": {
+    "eval_loss": 0.08600310981273651,
+    "exact_match_ratio": 0.8379471228615863,
+    "mean_accuracy": 0.9739613419240168
+  }
+}

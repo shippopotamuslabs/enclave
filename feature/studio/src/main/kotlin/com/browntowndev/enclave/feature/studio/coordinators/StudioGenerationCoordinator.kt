@@ -217,6 +217,12 @@ class StudioGenerationCoordinator
             _error.value = null
         }
 
+        fun rejectPrompt(message: String) {
+            _error.value = message
+            _isGenerating.value = false
+            _isContinualGenerationActive.value = false
+        }
+
         fun resetGeneratingFlags() {
             _isGenerating.value = false
         }

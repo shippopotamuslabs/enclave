@@ -131,6 +131,7 @@ class MultimodalViewModelAnimateTest {
             MultimodalViewModel(
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
+                moderatePromptUseCase = allowPromptModerationUseCase(),
                 resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
