@@ -118,6 +118,142 @@ internal object OssLicenses {
                 licenseText = "Copyright 2024 Coil Contributors\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
+                name = "Dataset: AdvBench",
+                version = "2023",
+                licenseType = "MIT",
+                copyrightHolder = "llm-attacks authors",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) llm-attacks authors
+
+                    Used as harmful prompt training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: ClearHarm",
+                version = "2024",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "AlignmentResearch",
+                licenseText =
+                    """
+                    Copyright AlignmentResearch contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Used as safety training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: CLINC150",
+                version = "2019",
+                licenseType = "MIT",
+                copyrightHolder = "CLINC, Inc.",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) CLINC, Inc. and contributors
+
+                    Used as benign intent training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: Gretel Safety Alignment",
+                version = "1.0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "Gretel.ai",
+                licenseText =
+                    """
+                    Copyright Gretel.ai
+
+                    Licensed under the Apache License, Version 2.0.
+                    Used as synthetic safety training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: HarmBench",
+                version = "2024",
+                licenseType = "MIT",
+                copyrightHolder = "Center for AI Safety",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) Center for AI Safety and HarmBench contributors
+
+                    Used as harmful prompt training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: JailbreakBench JBB-Behaviors",
+                version = "2024",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "JailbreakBench contributors",
+                licenseText =
+                    """
+                    Copyright JailbreakBench contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Used as harmful and benign prompt training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: Natural Questions Open",
+                version = "2019",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "Google LLC",
+                licenseText =
+                    """
+                    Copyright Google LLC
+
+                    Licensed under the Apache License, Version 2.0.
+                    Used as benign question training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: OpenAI Moderation",
+                version = "2022",
+                licenseType = "MIT",
+                copyrightHolder = "OpenAI",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) OpenAI
+
+                    Used as prompt moderation evaluation and training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: OpenAssistant OASST1",
+                version = "2023-04-12",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "OpenAssistant contributors",
+                licenseText =
+                    """
+                    Copyright OpenAssistant contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Used as benign conversational training data for Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Dataset: Project-Generated Safety Prompts",
+                version = "2026-06-03",
+                licenseType = "BSD-0",
+                copyrightHolder = "Enclave contributors",
+                licenseText =
+                    """
+                    BSD Zero Clause License
+
+                    Copyright Enclave contributors
+
+                    Project-generated synthetic adversarial prompts and hard negatives used for
+                    Enclave's on-device criminal intent classifier.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
                 name = "CommonMark Java",
                 version = "0.28.0",
                 licenseType = "BSD 2-Clause",

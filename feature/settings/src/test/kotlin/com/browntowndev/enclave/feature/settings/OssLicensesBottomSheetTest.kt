@@ -222,6 +222,16 @@ class OssLicensesBottomSheetTest {
                 "jtokkit",
                 "Anthropic Java SDK",
                 "Firebase Android SDK",
+                "Dataset: AdvBench",
+                "Dataset: ClearHarm",
+                "Dataset: CLINC150",
+                "Dataset: Gretel Safety Alignment",
+                "Dataset: HarmBench",
+                "Dataset: JailbreakBench JBB-Behaviors",
+                "Dataset: Natural Questions Open",
+                "Dataset: OpenAI Moderation",
+                "Dataset: OpenAssistant OASST1",
+                "Dataset: Project-Generated Safety Prompts",
             ).forEach { expected ->
                 assertTrue(expected in names, "Missing required library: $expected")
             }
