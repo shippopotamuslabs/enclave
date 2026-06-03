@@ -35,10 +35,11 @@ class OnnxCriminalIntentClassifier
                 val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
                 // Multi-label sequence classification output has sigmoid probabilities
                 val probabilities = logits.map { logit -> sigmoid(logit) }
+                val scoresByLabel = model.config.labels.zip(probabilities).associate { (label, score) ->
+                    label to score
+                }
                 PromptModerationScores(
-                    scoresByLabel = model.config.labels.zip(probabilities).associate { (label, score) ->
-                        label to score
-                    },
+                    scoresByLabel = scoresByLabel,
                     labelAliases = model.config.labelAliases,
                     thresholds = model.config.thresholds,
                     combinedIllegalLabels = model.config.combinedIllegalLabels,
