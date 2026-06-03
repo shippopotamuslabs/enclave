@@ -5,8 +5,8 @@ import javax.inject.Inject
 class ChatUseCasesImpl
     @Inject
     constructor(
-        override val processPromptUseCase: CreateUserMessageUseCase,
         override val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase,
+        override val processPromptWithSafetyGateUseCase: ProcessPromptWithSafetyGateUseCase,
         override val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase,
         override val generateChatResponseUseCase: GenerateChatResponseUseCase,
         override val generateChatTitleUseCase: GenerateChatTitleUseCase,

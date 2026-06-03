@@ -406,6 +406,6 @@ class ChatInferenceServiceTest {
             service.onStartCommand(Intent(ChatInferenceService.ACTION_STOP), 0, 2)
             advanceUntilIdle()
 
-            coVerify { progressSession.flush(markIncompleteAsCancelled = true) }
+            coVerify(timeout = 2000) { progressSession.flush(markIncompleteAsCancelled = true) }
         }
 }

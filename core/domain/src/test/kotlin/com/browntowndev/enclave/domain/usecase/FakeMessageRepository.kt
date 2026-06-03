@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assertions
  */
 class FakeMessageRepository : MessageRepository {
     private val savedMessages = mutableListOf<Message>()
+    private val softDeletedMessageIds = mutableSetOf<MessageId>()
     private var getMessageByIdResult: Message? = null
     private var getMessagesForChatResult: List<Message> = emptyList()
     private val messages = mutableMapOf<ChatId, MutableList<Message>>()
@@ -29,11 +30,16 @@ class FakeMessageRepository : MessageRepository {
     // Methods to simulate errors
     var shouldThrowOnSaveMessage = false
 
-    override suspend fun saveMessage(message: Message): MessageId {
+    override suspend fun saveMessage(
+        message: Message,
+    ): MessageId {
         if (shouldThrowOnSaveMessage) throw RuntimeException("Simulated error on saveMessage")
-        savedMessages.add(message)
-        val id = MessageId((nextMessageId++).toString())
-        return id
+        val persisted = message.copy(id = message.id.takeIf { it.value.isNotBlank() } ?: MessageId(nextMessageId++.toString()))
+        savedMessages.add(persisted)
+        message.chatId?.let { chatId ->
+            messages.getOrPut(chatId) { mutableListOf() }.add(persisted)
+        }
+        return persisted.id
     }
 
     override suspend fun saveEmbedding(
@@ -110,6 +116,17 @@ class FakeMessageRepository : MessageRepository {
         // no-op for testing
     }
 
+    override suspend fun softDeleteMessage(messageId: MessageId) {
+        softDeletedMessageIds.add(messageId)
+        savedMessages.removeAll { it.id == messageId }
+        messages.values.forEach { chatMessages ->
+            chatMessages.removeAll { it.id == messageId }
+        }
+    }
+
+    fun activeMessagesForChat(chatId: ChatId): List<Message> =
+        messages[chatId]?.filter { it.id !in softDeletedMessageIds }.orEmpty()
+
     fun setMessagesForChat(messages: List<Message>) {
         getMessagesForChatResult = messages
     }
@@ -138,6 +155,8 @@ class FakeMessageRepository : MessageRepository {
 
     fun reset() {
         savedMessages.clear()
+        softDeletedMessageIds.clear()
+        messages.clear()
         shouldThrowOnSaveMessage = false
         getMessageByIdResult = null
         getMessagesForChatResult = emptyList()

@@ -24,7 +24,6 @@ import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -86,7 +85,6 @@ class ChatViewModel
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
         private val studioRepository: StudioRepositoryPort,
-        private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val submitModerationReportUseCase: SubmitModerationReportUseCase,
         private val inferenceOrchestrator: InferenceOrchestrator,
@@ -611,20 +609,6 @@ class ChatViewModel
                             shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS)
                     }
                 }
-                if (shouldModerate) {
-                    val moderationResult = moderatePromptUseCase(input)
-                    if (moderationResult.blocked) {
-                        lastBlockedPrompt = input
-                        loggingPort.debug(
-                            TAG,
-                            "Prompt moderation rejected chat input labels=${moderationResult.triggeredLabels} " +
-                                "combined=${moderationResult.combinedIllegalScore}",
-                        )
-                        _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
-                        return@launch
-                    }
-                }
-
                 val selectedImageUris =
                     if (photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value).isEnabled) {
                         chatInputCoordinator.selectedImageUris.value
@@ -644,7 +628,16 @@ class ChatViewModel
                     selectedImageUris = selectedImageUris,
                     fileAttachments = fileAttachments,
                     initialChatId = initialChatId,
+                    shouldModerate = shouldModerate,
                     onInputCleared = { chatInputCoordinator.clearInput() },
+                    onModerationBlocked = { blockedPrompt ->
+                        lastBlockedPrompt = blockedPrompt
+                        loggingPort.debug(TAG, "Prompt moderation rejected chat input after persist")
+                        chatInputCoordinator.onInputChange(blockedPrompt)
+                        viewModelScope.launch {
+                            _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
+                        }
+                    },
                 )
             }
         }

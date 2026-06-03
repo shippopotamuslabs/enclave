@@ -66,7 +66,6 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-        moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
             coEvery { this@mockk.invoke(any()) } returns true
         },
@@ -91,7 +90,6 @@ object ChatViewModelTestSupport {
             chatRepository = chatRepository,
             exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-            moderatePromptUseCase = moderatePromptUseCase,
             shouldModeratePromptUseCase = shouldModeratePromptUseCase,
             submitModerationReportUseCase = submitModerationReportUseCase,
         ).viewModel
@@ -115,7 +113,6 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-        moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
             coEvery { this@mockk.invoke(any()) } returns true
         },
@@ -193,7 +190,6 @@ object ChatViewModelTestSupport {
                     errorHandler = errorHandler,
                     loggingPort = loggingPort,
                     studioRepository = studioRepository,
-                    moderatePromptUseCase = moderatePromptUseCase,
                     shouldModeratePromptUseCase = shouldModeratePromptUseCase,
                     submitModerationReportUseCase = submitModerationReportUseCase,
                     inferenceOrchestrator = inferenceOrchestrator,

@@ -8,14 +8,14 @@ import kotlinx.coroutines.flow.Flow
 
 interface ChatUseCases {
     /**
-     * Creates the initial user prompt.
-     */
-    val processPromptUseCase: CreateUserMessageUseCase
-
-    /**
      * Persists the assistant placeholder after the user message is saved.
      */
     val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase
+
+    /**
+     * Persists user + assistant placeholder, then runs ONNX moderation with rollback on block.
+     */
+    val processPromptWithSafetyGateUseCase: ProcessPromptWithSafetyGateUseCase
 
     /**
      * Merges database messages with an optimistic user row for UI projection.
@@ -53,10 +53,10 @@ interface ChatUseCases {
     val processFileAttachmentUseCase: ProcessFileAttachmentUseCase
 
     /**
-     * Creates the initial user prompt.
-     * @param message The user's input text
+     * Persists user + assistant placeholder, then moderates; rolls back on block.
      */
-    suspend fun processPrompt(message: Message): UserPromptResult = processPromptUseCase(message)
+    suspend fun processPromptWithSafetyGate(request: PromptSafetyGateRequest): PromptSafetyGateResult =
+        processPromptWithSafetyGateUseCase(request)
 
     /**
      * Persists an empty assistant placeholder row after the user message.

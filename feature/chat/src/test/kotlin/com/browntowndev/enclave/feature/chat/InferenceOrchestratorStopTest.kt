@@ -76,19 +76,11 @@ class InferenceOrchestratorStopTest {
                 savedStateHandle = SavedStateHandle(),
             )
 
-        coEvery { chatUseCases.processPrompt(any()) } returns
-            UserPromptResult(
-                userMessageId = MessageId("user-stop-1"),
-                chatId = ChatId("chat-stop-1"),
-                userMessageCreatedAtMillis = 100L,
-            )
-        coEvery {
-            chatUseCases.createAssistantPlaceholder(
-                chatId = any(),
-                userMessageCreatedAtMillis = any(),
-                assistantMessageId = any(),
-            )
-        } returns AssistantPlaceholderResult(assistantMessageId = MessageId("placeholder-unused"))
+        mockAllowedSafetyGate(
+            chatUseCases = chatUseCases,
+            userMessageId = MessageId("user-stop-1"),
+            chatId = ChatId("chat-stop-1"),
+        )
         coEvery {
             chatUseCases.generateChatResponse(
                 prompt = any(),
@@ -116,7 +108,9 @@ class InferenceOrchestratorStopTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
+                    shouldModerate = true,
                     onInputCleared = {},
+                    onModerationBlocked = {},
                 )
             }
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)

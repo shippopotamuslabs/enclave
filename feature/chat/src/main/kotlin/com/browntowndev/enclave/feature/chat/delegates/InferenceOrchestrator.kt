@@ -16,6 +16,8 @@ import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
+import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
+import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.ChatModeMapper.toDomain
@@ -73,7 +75,9 @@ class InferenceOrchestrator
             selectedImageUris: List<String>,
             fileAttachments: List<FileAttachment>,
             initialChatId: ChatId?,
+            shouldModerate: Boolean,
             onInputCleared: () -> Unit,
+            onModerationBlocked: (promptText: String) -> Unit,
         ) {
             inferenceJob?.cancel()
 
@@ -88,7 +92,6 @@ class InferenceOrchestrator
 
                 if (input.isNotBlank() || selectedImageUris.isNotEmpty() || fileAttachments.isNotEmpty()) {
                     val chatIdForMessage: ChatId? = _currentChatId.value ?: initialChatId
-                    val wasNewChat = chatIdForMessage == null
                     val assistantMessageId = MessageId(UUID.randomUUID().toString())
 
                     val domainMessage =
@@ -109,9 +112,16 @@ class InferenceOrchestrator
                     _optimisticUserMessage.value = domainMessage
                     onInputCleared()
 
-                    val userResult =
+                    val gateResult =
                         try {
-                            chatUseCases.processPrompt(domainMessage)
+                            chatUseCases.processPromptWithSafetyGate(
+                                PromptSafetyGateRequest(
+                                    message = domainMessage,
+                                    promptTextForModeration = input,
+                                    shouldModerate = shouldModerate,
+                                    assistantMessageId = assistantMessageId,
+                                ),
+                            )
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -125,71 +135,59 @@ class InferenceOrchestrator
                             return@launch
                         }
 
-                    _currentChatId.value = userResult.chatId
-                    savedStateHandle["chatId"] = userResult.chatId.value
+                    when (gateResult) {
+                        is PromptSafetyGateResult.Blocked -> {
+                            _optimisticUserMessage.value = null
+                            onModerationBlocked(input)
+                            return@launch
+                        }
+                        is PromptSafetyGateResult.Allowed -> {
+                            val userResult = gateResult.userResult
+                            _currentChatId.value = userResult.chatId
+                            savedStateHandle["chatId"] = userResult.chatId.value
 
-                    // Upgrade the truncated title with an on-device model for newly created chats.
-                    // Detached from inferenceJob so stopping the response does not cancel title
-                    // generation; runs on the utility-ONNX lane (no inference lock) in parallel
-                    // with the main LLM. Failures are silent — the truncated title remains.
-                    if (wasNewChat && input.isNotBlank()) {
-                        scope.launch {
-                            try {
-                                chatUseCases.generateChatTitle(userResult.chatId, input)
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Title generation failed; keeping fallback title", e)
+                            val persistedUserMessage =
+                                domainMessage.copy(
+                                    id = userResult.userMessageId,
+                                    chatId = userResult.chatId,
+                                    createdAt = userResult.userMessageCreatedAtMillis,
+                                )
+                            _optimisticUserMessage.value = persistedUserMessage
+
+                            delay(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS.milliseconds)
+
+                            val turnKey =
+                                ActiveChatTurnKey(
+                                    chatId = userResult.chatId,
+                                    assistantMessageId = assistantMessageId,
+                                )
+                            _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("sendMessage-unack") { keys ->
+                                keys - turnKey
                             }
+                            _requestedTurnKey.value = turnKey
+
+                            inferenceJob =
+                                chatUseCases
+                                    .generateChatResponse(
+                                        prompt = input,
+                                        userMessageId = userResult.userMessageId,
+                                        assistantMessageId = assistantMessageId,
+                                        chatId = userResult.chatId,
+                                        mode = selectedMode.toDomain(),
+                                        backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
+                                    ).onEach {
+                                        // Snapshot publication is owned by the generation pipeline
+                                    }.catch { cause ->
+                                        val userMessage =
+                                            if (cause is ActiveModelConfigurationDecryptException) {
+                                                cause.message ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
+                                            } else {
+                                                "Failed to generate response. Please try again."
+                                            }
+                                        errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
+                                    }.launchIn(scope)
                         }
                     }
-
-                    val persistedUserMessage =
-                        domainMessage.copy(
-                            id = userResult.userMessageId,
-                            chatId = userResult.chatId,
-                            createdAt = userResult.userMessageCreatedAtMillis,
-                        )
-                    _optimisticUserMessage.value = persistedUserMessage
-
-                    delay(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS.milliseconds)
-
-                    chatUseCases.createAssistantPlaceholder(
-                        chatId = userResult.chatId,
-                        userMessageCreatedAtMillis = userResult.userMessageCreatedAtMillis,
-                        assistantMessageId = assistantMessageId,
-                    )
-
-                    val turnKey =
-                        ActiveChatTurnKey(
-                            chatId = userResult.chatId,
-                            assistantMessageId = assistantMessageId,
-                        )
-                    _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("sendMessage-unack") { keys ->
-                        keys - turnKey
-                    }
-                    _requestedTurnKey.value = turnKey
-
-                    inferenceJob =
-                        chatUseCases
-                            .generateChatResponse(
-                                prompt = input,
-                                userMessageId = userResult.userMessageId,
-                                assistantMessageId = assistantMessageId,
-                                chatId = userResult.chatId,
-                                mode = selectedMode.toDomain(),
-                                backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
-                            ).onEach {
-                                // Snapshot publication is owned by the generation pipeline
-                            }.catch { cause ->
-                                val userMessage =
-                                    if (cause is ActiveModelConfigurationDecryptException) {
-                                        cause.message ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
-                                    } else {
-                                        "Failed to generate response. Please try again."
-                                    }
-                                errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
-                            }.launchIn(scope)
                 }
             }
         }
