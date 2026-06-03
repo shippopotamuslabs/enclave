@@ -234,6 +234,7 @@ private fun GalleryDetailRoute(
             galleryViewModel.deleteMedia(setOf(id))
             actions.onNavigateBack()
         },
+        onShowSnackbar = actions.onShowSnackbar,
     )
 }
 

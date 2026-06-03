@@ -21,15 +21,15 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class StudioDetailViewModelTest {
+class FullscreenMediaSaveViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private val mediaSaverPort = mockk<MediaSaverPort>()
-    private lateinit var viewModel: StudioDetailViewModel
+    private lateinit var viewModel: FullscreenMediaSaveViewModel
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        viewModel = StudioDetailViewModel(SaveMediaToGalleryUseCase(mediaSaverPort))
+        viewModel = FullscreenMediaSaveViewModel(SaveMediaToGalleryUseCase(mediaSaverPort))
     }
 
     @AfterEach
@@ -44,7 +44,7 @@ class StudioDetailViewModelTest {
 
             viewModel.saveFeedback.test {
                 viewModel.saveToGallery(sampleAsset())
-                assertEquals(StudioDetailViewModel.SAVE_SUCCESS_MESSAGE, awaitItem())
+                assertEquals(FullscreenMediaSaveViewModel.SAVE_SUCCESS_MESSAGE, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -56,7 +56,7 @@ class StudioDetailViewModelTest {
 
             viewModel.saveFeedback.test {
                 viewModel.saveToGallery(sampleAsset())
-                assertEquals(StudioDetailViewModel.SAVE_FAILURE_MESSAGE, awaitItem())
+                assertEquals(FullscreenMediaSaveViewModel.SAVE_FAILURE_MESSAGE, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
         }

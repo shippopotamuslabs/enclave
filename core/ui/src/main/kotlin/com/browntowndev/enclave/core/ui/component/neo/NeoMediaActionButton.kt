@@ -25,6 +25,7 @@ fun NeoMediaActionButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isDestructive: Boolean = false,
+    showLabel: Boolean = true,
 ) {
     val tint =
         when {
@@ -66,11 +67,13 @@ fun NeoMediaActionButton(
                 tint = tint,
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = tint,
-        )
+        if (showLabel) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = tint,
+            )
+        }
     }
 }
