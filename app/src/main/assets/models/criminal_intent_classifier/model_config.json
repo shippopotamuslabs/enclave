@@ -22,17 +22,17 @@
     "SyntheticHardNegatives": "BSD-0 project-generated"
   },
   "eval_metrics": {
-    "block_recall": 0.9714912280701754,
+    "block_recall": 0.9583333333333334,
     "epoch": 3.0,
     "exact_match_ratio": 0.7504496402877698,
-    "false_positive_rate": 0.0333710407239819,
-    "loss": 0.1035032868385315,
+    "false_positive_rate": 0.029411764705882353,
+    "loss": 0.1035032793879509,
     "mean_accuracy": 0.9119989722507709,
     "negative_count": 1768.0,
     "positive_count": 456.0,
-    "runtime": 3.1473,
-    "samples_per_second": 706.634,
-    "steps_per_second": 22.241
+    "runtime": 3.1647,
+    "samples_per_second": 702.75,
+    "steps_per_second": 22.119
   },
   "label_aliases": {
     "criminal_intent_harmful": [

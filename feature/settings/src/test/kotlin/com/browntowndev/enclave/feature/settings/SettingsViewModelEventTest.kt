@@ -157,7 +157,12 @@ class SettingsViewModelEventTest {
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
             )
-        val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
+        val searchDelegate =
+            SettingsSearchDelegate(
+                settingsUseCases.preferences,
+                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                errorHandler,
+            )
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
 
         val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, settingsUseCases.preferences, errorHandler)

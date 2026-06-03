@@ -511,7 +511,12 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
             ),
-        searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler),
+        searchDelegate =
+            SettingsSearchDelegate(
+                settingsUseCases.preferences,
+                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                errorHandler,
+            ),
         assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler),
         deletionHelper = deletionHelper,
         errorHandler = errorHandler,
