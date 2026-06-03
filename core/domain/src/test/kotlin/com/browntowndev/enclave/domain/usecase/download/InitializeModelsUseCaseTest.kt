@@ -26,6 +26,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -73,6 +76,7 @@ class InitializeModelsUseCaseTest {
                 checkModelsUseCase,
                 syncUtilityModelRegistryUseCase,
                 trustedDomainRepository,
+                externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
                 logPort,
             )
     }

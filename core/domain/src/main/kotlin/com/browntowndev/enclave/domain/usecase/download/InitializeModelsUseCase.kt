@@ -11,7 +11,10 @@ import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
+import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -30,6 +33,7 @@ class InitializeModelsUseCase
         private val checkModelsUseCase: CheckModelsUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
         private val trustedDomainRepository: TrustedDomainRepositoryPort,
+        @param:ApplicationScope private val externalScope: CoroutineScope,
         private val logPort: LoggingPort,
     ) {
         companion object {
@@ -51,8 +55,10 @@ class InitializeModelsUseCase
          */
         private suspend fun checkModelsResult(): DownloadModelsResult {
             // Sync trusted domains asynchronously at startup
-            runCatching {
-                trustedDomainRepository.syncTrustedDomains()
+            externalScope.launch {
+                runCatching {
+                    trustedDomainRepository.syncTrustedDomains()
+                }
             }
 
             // Fetch remote config

@@ -111,6 +111,7 @@ class ChatViewModel
         val shareUiEvents = chatShareCoordinator.shareUiEvents
         private val _moderationMessages = Channel<String>(Channel.BUFFERED)
         val moderationMessages: Flow<String> = _moderationMessages.receiveAsFlow()
+        private var lastBlockedPrompt: String? = null
 
         private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
@@ -470,8 +471,10 @@ class ChatViewModel
         fun onEditMessage(message: String) = chatInputCoordinator.onInputChange(message)
 
         fun reportBlockedPrompt(prompt: String) {
+            val reportedPrompt = lastBlockedPrompt ?: prompt
+            lastBlockedPrompt = null
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
-                submitModerationReportUseCase(prompt, "blocked")
+                submitModerationReportUseCase(reportedPrompt, "blocked")
                 _moderationMessages.send("Got it. Feedback submitted!")
             }
         }
@@ -611,6 +614,7 @@ class ChatViewModel
                 if (shouldModerate) {
                     val moderationResult = moderatePromptUseCase(input)
                     if (moderationResult.blocked) {
+                        lastBlockedPrompt = input
                         loggingPort.debug(
                             TAG,
                             "Prompt moderation rejected chat input labels=${moderationResult.triggeredLabels} " +
