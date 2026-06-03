@@ -89,6 +89,7 @@ internal fun MessageListItem(
             MessageBubble(
                 message = message,
                 onEditClick = callbacks.onEditMessage,
+                onReportClick = callbacks.onReportMessage,
             )
         } else {
             AssistantResponse(

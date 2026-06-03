@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,12 +61,15 @@ fun EnclaveApp(
                 startDestination = initialRoute,
                 modelsResult = modelsResult,
                 errorMessage = errorMessage,
-                onShowSnackbar = { message, actionLabel ->
+                onShowSnackbar = { message, actionLabel, onActionClick ->
                     scope.launch {
-                        snackbarHostState.showSnackbar(
+                        val result = snackbarHostState.showSnackbar(
                             message = message,
                             actionLabel = actionLabel,
                         )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            onActionClick?.invoke()
+                        }
                     }
                 },
             )

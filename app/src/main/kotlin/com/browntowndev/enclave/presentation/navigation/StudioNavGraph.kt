@@ -208,7 +208,7 @@ private fun StudioRoute(
         onNavigateToHistory = actions.onNavigateToHistory,
         onNavigateToGallery = actions.onNavigateToGallery,
         onMediaClick = actions.onNavigateToStudioDetail,
-        onShowSnackbar = actions.onShowSnackbar,
+        onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
     )
 }
 
@@ -234,7 +234,7 @@ private fun GalleryDetailRoute(
             galleryViewModel.deleteMedia(setOf(id))
             actions.onNavigateBack()
         },
-        onShowSnackbar = actions.onShowSnackbar,
+        onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
     )
 }
 
@@ -288,7 +288,7 @@ private fun StudioDetailRoute(
         },
         onShareMedia = studioViewModel.mediaActionsCoordinator::shareSingleMedia,
         onDeleteMedia = studioViewModel.mediaActionsCoordinator::deleteMedia,
-        onShowSnackbar = actions.onShowSnackbar,
+        onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
         videoGenerationState = studioUiState.videoGenerationState,
         hasImageToVideoModel = studioUiState.hasImageToVideoModel,
     )
