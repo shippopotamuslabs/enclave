@@ -26,6 +26,7 @@ import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisti
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.BuildConfig
@@ -87,6 +88,7 @@ class ChatViewModel
         private val studioRepository: StudioRepositoryPort,
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
+        private val submitModerationReportUseCase: SubmitModerationReportUseCase,
         private val inferenceOrchestrator: InferenceOrchestrator,
         private val chatInputCoordinator: ChatInputCoordinator,
         private val speechInputCoordinator: SpeechInputCoordinator,
@@ -466,6 +468,20 @@ class ChatViewModel
         fun onInputChange(inputText: String) = chatInputCoordinator.onInputChange(inputText)
 
         fun onEditMessage(message: String) = chatInputCoordinator.onInputChange(message)
+
+        fun reportBlockedPrompt(prompt: String) {
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
+                submitModerationReportUseCase(prompt, "blocked")
+                _moderationMessages.send("Got it. Feedback submitted!")
+            }
+        }
+
+        fun reportUnblockedPrompt(prompt: String) {
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
+                submitModerationReportUseCase(prompt, "allowed")
+                _moderationMessages.send("Got it. Feedback submitted!")
+            }
+        }
 
         fun onPlayTts(text: String) {
             ttsController.onPlayTts(

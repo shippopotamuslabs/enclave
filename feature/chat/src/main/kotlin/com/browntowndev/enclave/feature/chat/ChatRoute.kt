@@ -61,17 +61,12 @@ fun ChatRoute(
 
     LaunchedEffect(Unit) {
         viewModel.moderationMessages.collect { message ->
-            onShowSnackbar(message, "Got it wrong?") {
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = android.net.Uri.parse("mailto:")
-                    putExtra(Intent.EXTRA_EMAIL, arrayOf("browntown.development@gmail.com"))
-                    putExtra(Intent.EXTRA_SUBJECT, "Enclave Moderation Report")
-                    putExtra(
-                        Intent.EXTRA_TEXT,
-                        "Prompt: ${uiState.inputText}\nOutcome: BLOCKED (Should have been allowed)"
-                    )
+            val isPromptRejected = message == "Prompt rejected due to moderation"
+            val actionLabel = if (isPromptRejected) "Got it wrong?" else null
+            onShowSnackbar(message, actionLabel) {
+                if (isPromptRejected) {
+                    viewModel.reportBlockedPrompt(uiState.inputText)
                 }
-                runCatching { context.startActivity(intent) }
             }
         }
     }
@@ -116,16 +111,7 @@ fun ChatRoute(
             },
             onSendMessage = { viewModel.onSendMessage() },
             onReportMessage = { prompt ->
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = android.net.Uri.parse("mailto:")
-                    putExtra(Intent.EXTRA_EMAIL, arrayOf("browntown.development@gmail.com"))
-                    putExtra(Intent.EXTRA_SUBJECT, "Enclave Moderation Report")
-                    putExtra(
-                        Intent.EXTRA_TEXT,
-                        "Prompt: $prompt\nOutcome: NOT BLOCKED (Should have been blocked)"
-                    )
-                }
-                runCatching { context.startActivity(intent) }
+                viewModel.reportUnblockedPrompt(prompt)
             },
             onStopGenerating = viewModel::stopGeneration,
             onModeChange = viewModel::onModeChange,

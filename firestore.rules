@@ -89,5 +89,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // Write-only moderation reports for false positives/negatives.
+    match /moderation/{reportId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }
