@@ -13,7 +13,7 @@ import com.browntowndev.enclave.feature.onboarding.ModelChoice
 @Composable
 fun EnclaveNavGraph(
     navController: NavHostController,
-    onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    onShowSnackbar: (message: String, actionLabel: String?, onActionClick: (() -> Unit)?) -> Unit,
     startDestination: String,
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,

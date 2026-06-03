@@ -22,7 +22,7 @@ import com.browntowndev.enclave.feature.chat.stats.ResponseStatsBottomSheet
 @Composable
 fun ChatRoute(
     onNavigateToHistory: () -> Unit,
-    onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    onShowSnackbar: (message: String, actionLabel: String?, onActionClick: (() -> Unit)?) -> Unit,
     onNewChat: () -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     navigationChatId: ChatId? = null,
@@ -55,13 +55,24 @@ fun ChatRoute(
 
     LaunchedEffect(Unit) {
         viewModel.artifactExportMessages.collect { message ->
-            onShowSnackbar(message, null)
+            onShowSnackbar(message, null, null)
         }
     }
 
     LaunchedEffect(Unit) {
         viewModel.moderationMessages.collect { message ->
-            onShowSnackbar(message, null)
+            onShowSnackbar(message, "Got it wrong?") {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = android.net.Uri.parse("mailto:")
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf("browntown.development@gmail.com"))
+                    putExtra(Intent.EXTRA_SUBJECT, "Enclave Moderation Report")
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        "Prompt: ${uiState.inputText}\nOutcome: BLOCKED (Should have been allowed)"
+                    )
+                }
+                runCatching { context.startActivity(intent) }
+            }
         }
     }
 
@@ -104,6 +115,18 @@ fun ChatRoute(
                 onNewChat()
             },
             onSendMessage = { viewModel.onSendMessage() },
+            onReportMessage = { prompt ->
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = android.net.Uri.parse("mailto:")
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf("browntown.development@gmail.com"))
+                    putExtra(Intent.EXTRA_SUBJECT, "Enclave Moderation Report")
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        "Prompt: $prompt\nOutcome: NOT BLOCKED (Should have been blocked)"
+                    )
+                }
+                runCatching { context.startActivity(intent) }
+            },
             onStopGenerating = viewModel::stopGeneration,
             onModeChange = viewModel::onModeChange,
             onInputChange = viewModel::onInputChange,
@@ -116,7 +139,7 @@ fun ChatRoute(
             onClearFile = viewModel::clearSelectedFile,
             onShieldTap = {
                 if (uiState.isGlobalInferenceBlocked) {
-                    onShowSnackbar("Procedural harm blocked – Inference is currently blocked", null)
+                    onShowSnackbar("Procedural harm blocked – Inference is currently blocked", null, null)
                 }
             },
             onMicClick = viewModel::onMicClick,

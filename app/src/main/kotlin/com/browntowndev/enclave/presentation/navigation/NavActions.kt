@@ -12,7 +12,7 @@ data class ChatNavActions(
         types: List<String>,
         prompts: List<String>,
     ) -> Unit,
-    val onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    val onShowSnackbar: (message: String, actionLabel: String?, onActionClick: (() -> Unit)?) -> Unit,
     val onNavigateToImportedChat: (com.browntowndev.enclave.domain.model.chat.ChatId) -> Unit = {},
 )
 
@@ -31,5 +31,5 @@ data class StudioNavActions(
     val onNavigateToStudioDetail: (assetId: String) -> Unit,
     val onNavigateToGalleryDetail: (albumId: String, assetId: String) -> Unit,
     val onSendToStudioFromGallery: (assetId: String, mode: String, prompt: String?) -> Unit,
-    val onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    val onShowSnackbar: (message: String, actionLabel: String?, onActionClick: (() -> Unit)?) -> Unit,
 )
