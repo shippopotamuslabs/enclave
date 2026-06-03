@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
+import com.browntowndev.enclave.core.ui.component.sheet.TOS_TEXT
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort

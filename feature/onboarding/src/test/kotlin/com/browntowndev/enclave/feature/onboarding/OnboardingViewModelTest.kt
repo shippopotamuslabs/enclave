@@ -115,6 +115,7 @@ class OnboardingViewModelTest {
         runTest {
             advanceUntilIdle()
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -161,6 +162,7 @@ class OnboardingViewModelTest {
 
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -185,6 +187,7 @@ class OnboardingViewModelTest {
         runTest {
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -205,6 +208,7 @@ class OnboardingViewModelTest {
         runTest {
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -226,6 +230,7 @@ class OnboardingViewModelTest {
         runTest {
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -244,6 +249,7 @@ class OnboardingViewModelTest {
         runTest {
             // Navigate to step 2
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
@@ -271,6 +277,7 @@ class OnboardingViewModelTest {
 
             // Navigate to step 3 via API path
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
@@ -310,6 +317,7 @@ class OnboardingViewModelTest {
         runTest {
             // Navigate to step 3 via LOCAL path
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
@@ -344,6 +352,7 @@ class OnboardingViewModelTest {
 
             // Navigate to step 3 via API path
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
@@ -413,6 +422,7 @@ class OnboardingViewModelTest {
             fakeBulkAssign.resultToReturn = Result.success(ApiCredentialsId("creds-123"))
 
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
@@ -440,6 +450,7 @@ class OnboardingViewModelTest {
     fun `OB-11b onCompleteOnboarding LOCAL path emits NavigateToChat with LOCAL model choice`() =
         runTest {
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
@@ -469,6 +480,7 @@ class OnboardingViewModelTest {
 
             // Navigate to step 2
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
@@ -550,6 +562,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
 
             viewModel.events.test {
                 viewModel.onNextStep()
@@ -560,6 +573,68 @@ class OnboardingViewModelTest {
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.RESTORED, event.modelChoice)
                 assertEquals(0, fakeBulkAssign.callCount)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // -------- OB-TOS --------
+
+    @Test
+    @DisplayName("OB-TOS-01 — Step 0 continue disabled when TOS not accepted")
+    fun `OB-TOS-01 step 0 with age confirmed but TOS not accepted does not advance`() =
+        runTest {
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(false)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(0, state.currentStep)
+        }
+
+    @Test
+    @DisplayName("OB-TOS-02 — Step 0 continue disabled when age not confirmed but TOS accepted")
+    fun `OB-TOS-02 step 0 with age not confirmed but TOS accepted does not advance`() =
+        runTest {
+            viewModel.onAgeConfirmedChange(false)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(0, state.currentStep)
+        }
+
+    @Test
+    @DisplayName("OB-TOS-03 — UI state tracks TOS reviewed and accepted changes")
+    fun `OB-TOS-03 uiState reflects tosReviewed and tosAccepted updates`() =
+        runTest {
+            assertFalse(viewModel.uiState.value.tosReviewed)
+            assertFalse(viewModel.uiState.value.tosAccepted)
+
+            viewModel.onTosReviewedChange(true)
+            assertTrue(viewModel.uiState.value.tosReviewed)
+
+            viewModel.onTosAcceptedChange(true)
+            assertTrue(viewModel.uiState.value.tosAccepted)
+        }
+
+    @Test
+    @DisplayName("OB-TOS-04 — Completing without tosAccepted=true does NOT set onboardingCompleted")
+    fun `OB-TOS-04 onCompleteOnboarding without tosAccepted does not set onboardingCompleted`() =
+        runTest {
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(false) // TOS not accepted
+
+            viewModel.events.test {
+                viewModel.onCompleteOnboarding()
+                advanceUntilIdle()
+
+                assertFalse(fakeSettingsRepository.onboardingCompleted)
+                expectNoEvents()
+
+                val state = viewModel.uiState.value
+                assertEquals("Terms of Service agreement is required", state.saveError)
                 cancelAndIgnoreRemainingEvents()
             }
         }

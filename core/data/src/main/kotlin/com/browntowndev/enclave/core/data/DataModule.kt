@@ -68,6 +68,8 @@ import com.browntowndev.enclave.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.enclave.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.CompositeToolExecutor
+import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
@@ -126,6 +128,8 @@ import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigProvider
 import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
@@ -536,6 +540,14 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): ModelConfigFetcherPort
+
+    @Binds
+    @Singleton
+    abstract fun bindTrustedDomainRepository(impl: TrustedDomainRepositoryImpl): TrustedDomainRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindModerationReportRepository(impl: ModerationReportRepositoryImpl): ModerationReportRepositoryPort
 
     @Binds
     @Singleton

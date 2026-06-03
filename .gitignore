@@ -126,3 +126,7 @@ functions/node_modules/
 node_modules/
 build_output.txt
 .antigravitycli/
+
+# Exclude generated model binaries and tokenizers from git tracking
+/app/src/main/assets/models/**/*
+!/app/src/main/assets/models/**/model_config.json
