@@ -43,13 +43,13 @@ from transformers import (
 # benign ~0.75). malware stays high because defensive-analysis prompts overlap
 # the low end of true-positive malware scores.
 DEFAULT_THRESHOLDS = {
-    "illicit_drug_instruction": 0.85,
-    "weapons_explosives_instruction": 0.78,
-    "malware_cyber_abuse": 0.90,
-    "phishing_fraud_scam": 0.85,
-    "violent_or_organized_crime": 0.80,
-    "other_illegal_instruction": 0.78,
-    "criminal_intent_harmful": 0.78,
+    "illicit_drug_instruction": 0.90,
+    "weapons_explosives_instruction": 0.82,
+    "malware_cyber_abuse": 0.95,
+    "phishing_fraud_scam": 0.90,
+    "violent_or_organized_crime": 0.88,
+    "other_illegal_instruction": 0.85,
+    "criminal_intent_harmful": 0.90,
 }
 
 LABEL_NAMES = [

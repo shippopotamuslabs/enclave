@@ -83,13 +83,13 @@
     "SyntheticHardNegatives": 453
   },
   "thresholds": {
-    "criminal_intent_harmful": 0.78,
-    "illicit_drug_instruction": 0.85,
-    "malware_cyber_abuse": 0.9,
-    "other_illegal_instruction": 0.78,
-    "phishing_fraud_scam": 0.85,
-    "violent_or_organized_crime": 0.8,
-    "weapons_explosives_instruction": 0.78
+    "criminal_intent_harmful": 0.9,
+    "illicit_drug_instruction": 0.9,
+    "malware_cyber_abuse": 0.95,
+    "other_illegal_instruction": 0.85,
+    "phishing_fraud_scam": 0.9,
+    "violent_or_organized_crime": 0.88,
+    "weapons_explosives_instruction": 0.82
   },
   "tokenizer_path": "tokenizer.json",
   "training_methodology": {
