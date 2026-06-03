@@ -88,6 +88,7 @@ class InferenceOrchestrator
 
                 if (input.isNotBlank() || selectedImageUris.isNotEmpty() || fileAttachments.isNotEmpty()) {
                     val chatIdForMessage: ChatId? = _currentChatId.value ?: initialChatId
+                    val wasNewChat = chatIdForMessage == null
                     val assistantMessageId = MessageId(UUID.randomUUID().toString())
 
                     val domainMessage =
@@ -126,6 +127,23 @@ class InferenceOrchestrator
 
                     _currentChatId.value = userResult.chatId
                     savedStateHandle["chatId"] = userResult.chatId.value
+
+                    // Upgrade the truncated title with an on-device model for newly created chats.
+                    // Detached from inferenceJob so stopping the response does not cancel title
+                    // generation; runs on the utility-ONNX lane (no inference lock) in parallel
+                    // with the main LLM. Failures are silent — the truncated title remains.
+                    if (wasNewChat && input.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                chatUseCases.generateChatTitle(userResult.chatId, input)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Title generation failed; keeping fallback title", e)
+                            }
+                        }
+                    }
+
                     val persistedUserMessage =
                         domainMessage.copy(
                             id = userResult.userMessageId,

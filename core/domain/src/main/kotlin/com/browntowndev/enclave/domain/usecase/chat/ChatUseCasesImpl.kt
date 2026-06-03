@@ -9,6 +9,7 @@ class ChatUseCasesImpl
         override val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase,
         override val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase,
         override val generateChatResponseUseCase: GenerateChatResponseUseCase,
+        override val generateChatTitleUseCase: GenerateChatTitleUseCase,
         override val getChatUseCase: GetChatUseCase,
         override val mergeMessagesUseCase: MergeMessagesUseCase,
         override val listenToSpeechUseCase: ListenToSpeechUseCase,

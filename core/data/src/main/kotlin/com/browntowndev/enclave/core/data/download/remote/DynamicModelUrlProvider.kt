@@ -47,12 +47,15 @@ class DynamicModelUrlProvider
                     )
                 }
             return when (source) {
-                DownloadSource.CLOUDFLARE_R2 ->
-                    R2_BUCKET_URL
-                        .newBuilder()
-                        .addPathSegment(DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName"))
+                DownloadSource.CLOUDFLARE_R2 -> {
+                    val builder = R2_BUCKET_URL.newBuilder()
+                    spec.huggingFacePath?.takeIf { it.isNotBlank() }?.let { path ->
+                        path.split('/').forEach { builder.addPathSegment(it) }
+                    }
+                    builder.addPathSegment(DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName"))
                         .build()
                         .toString()
+                }
                 DownloadSource.HUGGING_FACE -> {
                     val (owner, repo) = DownloadSecurity.requireHuggingFaceRepoId(spec.huggingFaceModelName)
                     val fileName = DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName")

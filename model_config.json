@@ -160,6 +160,39 @@
       "utilityType": "onnx_vocab",
       "isMultimodal": false,
       "configurations": []
+    },
+    {
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "encoder_model.onnx",
+      "sha256": "cfabb870393155293c7f1774f783c8e3ebc2076ee3667c7bf3959ae58a4e61be",
+      "sizeInBytes": 141460468,
+      "source": "R2",
+      "utilityType": "title_generator_encoder",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "decoder_model.onnx",
+      "sha256": "dc74eeebb3d9815eb43eb3a8224b9fd98024aff422eace93585de671f95573b0",
+      "sizeInBytes": 232568968,
+      "source": "R2",
+      "utilityType": "title_generator_decoder",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "tokenizer.json",
+      "sha256": "de5063033dfcc243b7dfa5912d47605f5fc55910f4603d83f45c7ac01282314f",
+      "sizeInBytes": 2424233,
+      "source": "R2",
+      "utilityType": "title_generator_tokenizer",
+      "isMultimodal": false,
+      "configurations": []
     }
   ]
 }
