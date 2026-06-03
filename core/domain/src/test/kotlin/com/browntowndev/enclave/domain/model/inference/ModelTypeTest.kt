@@ -18,14 +18,16 @@ class ModelTypeTest {
         assertEquals("FINAL_SYNTHESIS", ModelType.FINAL_SYNTHESIS.name)
         assertEquals("TTS", ModelType.TTS.name)
         assertEquals("IMAGE_GENERATION", ModelType.IMAGE_GENERATION.name)
+        assertEquals("IMAGE_EDIT", ModelType.IMAGE_EDIT.name)
         assertEquals("VIDEO_GENERATION", ModelType.VIDEO_GENERATION.name)
+        assertEquals("IMAGE_TO_VIDEO", ModelType.IMAGE_TO_VIDEO.name)
         assertEquals("MUSIC_GENERATION", ModelType.MUSIC_GENERATION.name)
         assertEquals("UNASSIGNED", ModelType.UNASSIGNED.name)
     }
 
     @Test
-    fun `ModelType has exactly 12 values`() {
-        assertEquals(12, ModelType.entries.size)
+    fun `ModelType has exactly 14 values`() {
+        assertEquals(14, ModelType.entries.size)
     }
 
     @Test
@@ -39,7 +41,9 @@ class ModelTypeTest {
         assertEquals(ModelType.FINAL_SYNTHESIS, ModelType.fromApiValue("final_synthesis"))
         assertEquals(ModelType.TTS, ModelType.fromApiValue("tts"))
         assertEquals(ModelType.IMAGE_GENERATION, ModelType.fromApiValue("image_generation"))
+        assertEquals(ModelType.IMAGE_EDIT, ModelType.fromApiValue("image_edit"))
         assertEquals(ModelType.VIDEO_GENERATION, ModelType.fromApiValue("video_generation"))
+        assertEquals(ModelType.IMAGE_TO_VIDEO, ModelType.fromApiValue("image_to_video"))
         assertEquals(ModelType.MUSIC_GENERATION, ModelType.fromApiValue("music_generation"))
         assertEquals(ModelType.UNASSIGNED, ModelType.fromApiValue("unassigned"))
     }
@@ -59,7 +63,9 @@ class ModelTypeTest {
     fun `isTextModel returns false for utility or generation slots`() {
         assert(!ModelType.TTS.isTextModel)
         assert(!ModelType.IMAGE_GENERATION.isTextModel)
+        assert(!ModelType.IMAGE_EDIT.isTextModel)
         assert(!ModelType.VIDEO_GENERATION.isTextModel)
+        assert(!ModelType.IMAGE_TO_VIDEO.isTextModel)
         assert(!ModelType.MUSIC_GENERATION.isTextModel)
         assert(!ModelType.UNASSIGNED.isTextModel)
     }

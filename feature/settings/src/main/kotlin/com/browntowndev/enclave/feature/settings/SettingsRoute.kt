@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 @Composable
 internal fun SettingsRoute(
     onCloseClick: () -> Unit,
+    onNavigateToProfileBuilder: () -> Unit = {},
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onNavigateToTtsConfigure: () -> Unit,
@@ -30,6 +31,7 @@ internal fun SettingsRoute(
     SettingsScreen(
         uiState = uiState,
         onCloseClick = onCloseClick,
+        onNavigateToProfileBuilder = onNavigateToProfileBuilder,
         onLoginClick = viewModel::onLoginWithGoogle,
         onLogoutClick = viewModel::onLogout,
         onThemeChange = viewModel::onThemeChange,

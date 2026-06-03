@@ -115,7 +115,12 @@ class ChatViewModelNavigationHappyPathTest {
             viewModel.uiState.test {
                 val initial = awaitItem()
                 assertEquals(chatA, initial.chatId)
-                assertEquals("Alpha thread", initial.messages.single().content.text)
+                assertEquals(
+                    "Alpha thread",
+                    initial.messages
+                        .single()
+                        .content.text,
+                )
 
                 savedStateHandle["chatId"] = chatB.value
                 viewModel.onNavigationChatIdChanged(chatB)
@@ -124,7 +129,10 @@ class ChatViewModelNavigationHappyPathTest {
                 while (switched == null) {
                     val next = awaitItem()
                     if (next.chatId == chatB &&
-                        next.messages.singleOrNull()?.content?.text == "Beta thread"
+                        next.messages
+                            .singleOrNull()
+                            ?.content
+                            ?.text == "Beta thread"
                     ) {
                         switched = next
                     }

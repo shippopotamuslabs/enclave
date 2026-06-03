@@ -25,7 +25,9 @@ import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
@@ -51,7 +53,7 @@ import javax.inject.Provider
  * Resolves the correct inference service (Llama, LiteRT) dynamically
  * based on the active model's file extension at inference time.
  */
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "LargeClass", "ThrowsCount")
 class InferenceFactoryImpl
     @Inject
     constructor(
@@ -79,6 +81,7 @@ class InferenceFactoryImpl
         private val telemetryEventPort: TelemetryEventPort,
         private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
         private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
+        private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -294,6 +297,8 @@ class InferenceFactoryImpl
                                     telemetrySupport = telemetrySupport,
                                     telemetryEventPort = telemetryEventPort,
                                 )
+                            ApiProvider.FAL ->
+                                throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
                             else ->
                                 ApiInferenceServiceImpl(
                                     client =
@@ -429,6 +434,8 @@ class InferenceFactoryImpl
                                         telemetrySupport = telemetrySupport,
                                         telemetryEventPort = telemetryEventPort,
                                     )
+                                ApiProvider.FAL ->
+                                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
                                 else ->
                                     ApiInferenceServiceImpl(
                                         client =
@@ -557,6 +564,96 @@ class InferenceFactoryImpl
             }
         }
 
+        override suspend fun <T> withRawApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T {
+            val service = withContext(Dispatchers.IO) { resolveRawServiceForApiConfig(configId) }
+            return block(service)
+        }
+
+        private suspend fun resolveRawServiceForApiConfig(configId: ApiModelConfigurationId): RustCompatibleInferenceService {
+            val apiConfig =
+                apiModelRepository.getConfigurationById(configId)
+                    ?: throw IllegalStateException("No model configuration found for id=$configId")
+            val apiCreds =
+                apiModelRepository.getCredentialsById(apiConfig.apiCredentialsId)
+                    ?: throw IllegalStateException("No credentials for config id=$configId")
+            val apiKey =
+                apiKeyProvider.getApiKey(apiCreds.credentialAlias)
+                    ?: throw IllegalStateException("No API key for alias=${apiCreds.credentialAlias}")
+
+            val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
+            val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
+            val modelType = ModelType.MAIN
+
+            return when (apiCreds.provider) {
+                ApiProvider.ANTHROPIC ->
+                    AnthropicInferenceServiceImpl(
+                        client = anthropicClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
+                        modelId = apiConfig.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                        toolStreamGatePort = toolStreamGatePort,
+                        telemetrySupport = telemetrySupport,
+                        telemetryEventPort = telemetryEventPort,
+                    )
+                ApiProvider.GOOGLE -> {
+                    val client = googleGenAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders)
+                    val sdkClient = GoogleGenAiSdkClientImpl(clientProvider = { client }, modelType = modelType, loggingPort = loggingPort)
+                    GoogleInferenceServiceImpl(
+                        sdkClient = sdkClient,
+                        modelId = apiConfig.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                        toolStreamGatePort = toolStreamGatePort,
+                        telemetrySupport = telemetrySupport,
+                        telemetryEventPort = telemetryEventPort,
+                    )
+                }
+                ApiProvider.OPENROUTER ->
+                    OpenRouterInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
+                        modelId = apiConfig.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolStreamGatePort = toolStreamGatePort,
+                        telemetrySupport = telemetrySupport,
+                        telemetryEventPort = telemetryEventPort,
+                    )
+                ApiProvider.XAI ->
+                    XaiInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
+                        modelId = apiConfig.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolStreamGatePort = toolStreamGatePort,
+                        telemetrySupport = telemetrySupport,
+                        telemetryEventPort = telemetryEventPort,
+                    )
+                ApiProvider.FAL ->
+                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
+                else ->
+                    ApiInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
+                        modelId = apiConfig.modelId,
+                        provider = apiCreds.provider.name,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolStreamGatePort = toolStreamGatePort,
+                        telemetrySupport = telemetrySupport,
+                        telemetryEventPort = telemetryEventPort,
+                    )
+            }
+        }
+
         private fun wrapWithRustLoop(
             service: LlmInferencePort,
             provider: String,
@@ -577,6 +674,7 @@ class InferenceFactoryImpl
                     committedInferencePrompts = committedInferencePrompts,
                     committedInferenceTranscripts = committedInferenceTranscripts,
                     telemetryEventPort = telemetryEventPort,
+                    deviceEnvironmentRepository = deviceEnvironmentRepository,
                 )
             } else {
                 service

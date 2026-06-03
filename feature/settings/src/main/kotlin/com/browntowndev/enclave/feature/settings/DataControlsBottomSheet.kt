@@ -1,8 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,8 +10,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoDestructiveRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
@@ -195,9 +195,8 @@ fun DataControlsBottomSheet(
                     if (dc.isDeleting) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
+                            NeoCircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.error,
                             )
                             Spacer(modifier = Modifier.width(12.dp))

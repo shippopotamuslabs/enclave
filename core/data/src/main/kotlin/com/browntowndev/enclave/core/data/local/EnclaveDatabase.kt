@@ -29,10 +29,15 @@ import androidx.room.TypeConverters
         MessageInferenceTelemetryEntity::class,
         MessageCommittedInferencePromptEntity::class,
         TelemetryEventEntity::class,
+        ProfileCorpusConversationEntity::class,
+        ProfileCorpusMessageEntity::class,
+        ProfileFindingsEntity::class,
+        ProfileAnalysisRunEntity::class,
     ],
-    version = 5,
+    version = 1,
 )
 @TypeConverters(ModelTypeConverters::class)
+@Suppress("TooManyFunctions")
 abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
 
@@ -87,4 +92,10 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun messageCommittedInferencePromptDao(): MessageCommittedInferencePromptDao
 
     abstract fun telemetryEventDao(): TelemetryEventDao
+
+    abstract fun profileCorpusDao(): ProfileCorpusDao
+
+    abstract fun profileFindingsDao(): ProfileFindingsDao
+
+    abstract fun profileAnalysisRunDao(): ProfileAnalysisRunDao
 }

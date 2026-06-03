@@ -1,5 +1,11 @@
 package com.browntowndev.enclave.feature.studio.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,12 +35,14 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoStepper
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.*
 import com.browntowndev.enclave.feature.studio.R
 import com.browntowndev.enclave.feature.studio.StudioUiState
+import kotlin.math.roundToInt
 
 @Composable
 fun StudioTemplateRow(
@@ -224,6 +232,206 @@ fun PillSelector(
     )
 }
 
+private const val MAX_DURATION_PILL_OPTIONS = 6
+
+@Composable
+private fun StudioShimmerColors(): Pair<Color, Color> {
+    val colorScheme = MaterialTheme.colorScheme
+    return colorScheme.onSurface.copy(alpha = 0.05f) to colorScheme.onSurface.copy(alpha = 0.15f)
+}
+
+@Composable
+private fun StudioSettingsShimmerBar(
+    progressState: State<Float>,
+    baseColor: Color,
+    highlightColor: Color,
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 40.dp,
+) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(height)
+                .clip(RoundedCornerShape(8.dp))
+                .shimmerEffect(
+                    progressState = progressState,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor,
+                ),
+    )
+}
+
+@Composable
+private fun StudioSettingsShimmerBlock(
+    rowCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "studioSettingsShimmer")
+    val progressState =
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "studioSettingsShimmerProgress",
+        )
+    val (baseColor, highlightColor) = StudioShimmerColors()
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        repeat(rowCount) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                StudioSettingsShimmerBar(
+                    progressState = progressState,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor,
+                    height = 16.dp,
+                    modifier = Modifier.fillMaxWidth(0.35f),
+                )
+                StudioSettingsShimmerBar(
+                    progressState = progressState,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudioAspectRatioShimmer(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "studioAspectShimmer")
+    val progressState =
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "studioAspectShimmerProgress",
+        )
+    val (baseColor, highlightColor) = StudioShimmerColors()
+    LazyRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items(5) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(width = 48.dp, height = 64.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .shimmerEffect(
+                                progressState = progressState,
+                                baseColor = baseColor,
+                                highlightColor = highlightColor,
+                            ),
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .width(32.dp)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .shimmerEffect(
+                                progressState = progressState,
+                                baseColor = baseColor,
+                                highlightColor = highlightColor,
+                            ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoDurationControl(
+    settings: VideoGenerationSettings,
+    durationOptions: List<String>,
+    onUpdateSettings: (VideoGenerationSettings) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (durationOptions.size > MAX_DURATION_PILL_OPTIONS) {
+        val selectedLabel =
+            settings.apiDuration
+                ?: durationOptions.firstOrNull { token ->
+                    token.removeSuffix("s").toIntOrNull() == settings.videoDuration
+                }
+                ?: "${settings.videoDuration}s"
+        val selectedIndex = durationOptions.indexOf(selectedLabel).coerceAtLeast(0)
+        val sliderSteps = (durationOptions.size - 2).coerceAtLeast(0)
+        Column(modifier = modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = selectedLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "${selectedIndex + 1} / ${durationOptions.size}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Slider(
+                value = selectedIndex.toFloat(),
+                onValueChange = { raw ->
+                    val index = raw.roundToInt().coerceIn(0, durationOptions.lastIndex)
+                    val durationStr = durationOptions[index]
+                    val seconds = durationStr.removeSuffix("s").toIntOrNull() ?: settings.videoDuration
+                    onUpdateSettings(
+                        settings.copy(
+                            videoDuration = seconds,
+                            apiDuration = durationStr,
+                        ),
+                    )
+                },
+                valueRange = 0f..durationOptions.lastIndex.toFloat(),
+                steps = sliderSteps,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    } else {
+        PillSelector(
+            selected =
+                settings.apiDuration
+                    ?: durationOptions.firstOrNull { token ->
+                        token.removeSuffix("s").toIntOrNull() == settings.videoDuration
+                    }
+                    ?: "${settings.videoDuration}s",
+            options = durationOptions,
+            onSelected = { durationStr ->
+                val seconds = durationStr.removeSuffix("s").toIntOrNull() ?: settings.videoDuration
+                onUpdateSettings(
+                    settings.copy(
+                        videoDuration = seconds,
+                        apiDuration = durationStr,
+                    ),
+                )
+            },
+            modifier = modifier,
+        )
+    }
+}
+
 @Composable
 fun StudioOptionsSheetContent(
     state: StudioUiState,
@@ -290,6 +498,8 @@ fun StudioOptionsSheetContent(
             MediaCapability.MUSIC -> {
                 MusicSettingsSection(
                     settings = state.settings as? MusicGenerationSettings ?: MusicGenerationSettings(),
+                    capabilities = state.capabilities,
+                    isCapabilitiesLoading = state.isCapabilitiesLoading,
                     onUpdateSettings = onUpdateSettings,
                 )
             }
@@ -318,6 +528,7 @@ private fun VisualSettingsSection(
     AspectRatioSettingsCard(
         settings = state.settings,
         capabilities = state.capabilities,
+        isCapabilitiesLoading = state.isCapabilitiesLoading,
         onUpdateSettings = onUpdateSettings,
     )
 
@@ -328,6 +539,7 @@ private fun VisualSettingsSection(
             VideoSettingsSection(
                 settings = state.settings as? VideoGenerationSettings ?: VideoGenerationSettings(),
                 capabilities = state.capabilities,
+                isCapabilitiesLoading = state.isCapabilitiesLoading,
                 onUpdateSettings = onUpdateSettings,
             )
         }
@@ -335,6 +547,7 @@ private fun VisualSettingsSection(
             ImageSettingsSection(
                 settings = state.settings as? ImageGenerationSettings ?: ImageGenerationSettings(),
                 capabilities = state.capabilities,
+                isCapabilitiesLoading = state.isCapabilitiesLoading,
                 continualMode = state.continualMode,
                 onUpdateSettings = onUpdateSettings,
                 onContinualModeChange = onContinualModeChange,
@@ -364,6 +577,7 @@ private fun VisualStylePresetsSection(
 private fun AspectRatioSettingsCard(
     settings: GenerationSettings,
     capabilities: ProviderCapabilities?,
+    isCapabilitiesLoading: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
     SettingsCard {
@@ -384,6 +598,7 @@ private fun AspectRatioSettingsCard(
             AspectRatioSettingsContent(
                 settings = settings,
                 capabilities = capabilities,
+                isCapabilitiesLoading = isCapabilitiesLoading,
                 onUpdateSettings = onUpdateSettings,
             )
         }
@@ -394,14 +609,15 @@ private fun AspectRatioSettingsCard(
 private fun AspectRatioSettingsContent(
     settings: GenerationSettings,
     capabilities: ProviderCapabilities?,
+    isCapabilitiesLoading: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
+    if (isCapabilitiesLoading) {
+        StudioAspectRatioShimmer()
+        return
+    }
+
     if (capabilities == null) {
-        Text(
-            text = "Loading capabilities...",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         return
     }
 
@@ -440,41 +656,48 @@ private fun AspectRatioSettingsContent(
 private fun VideoSettingsSection(
     settings: VideoGenerationSettings,
     capabilities: ProviderCapabilities?,
+    isCapabilitiesLoading: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
     NeoSectionHeader(text = "Video")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
+    if (isCapabilitiesLoading) {
+        SettingsCard {
+            StudioSettingsShimmerBlock(
+                rowCount = 2,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        return
+    }
+
     capabilities?.let { caps ->
         GroupedSettingsCard {
-            if (caps.supportedVideoDurations.isNotEmpty()) {
+            val durationOptions =
+                caps.supportedVideoDurationTokens.ifEmpty {
+                    caps.supportedVideoDurations.map { "${it}s" }
+                }
+            if (durationOptions.isNotEmpty()) {
                 SettingRow(
                     label = "Duration",
-                    controlFullWidth = caps.supportedVideoDurations.size > 2,
+                    controlFullWidth = true,
                 ) {
-                    PillSelector(
-                        selected = "${settings.videoDuration}s",
-                        options = caps.supportedVideoDurations.map { "${it}s" },
-                        onSelected = { durationStr ->
-                            val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
-                            onUpdateSettings(settings.copy(videoDuration = duration))
-                        },
-                        modifier =
-                            if (caps.supportedVideoDurations.size > 2) {
-                                Modifier.fillMaxWidth()
-                            } else {
-                                Modifier
-                            },
+                    VideoDurationControl(
+                        settings = settings,
+                        durationOptions = durationOptions,
+                        onUpdateSettings = { updated -> onUpdateSettings(updated) },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-            if (caps.supportedVideoDurations.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
+            if (durationOptions.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
                 SettingsGroupDivider()
             }
             if (caps.supportedVideoResolutions.isNotEmpty()) {
                 SettingRow(
                     label = "Resolution",
-                    controlFullWidth = caps.supportedVideoResolutions.size > 2,
+                    controlFullWidth = true,
                 ) {
                     PillSelector(
                         selected = settings.videoResolution,
@@ -482,12 +705,7 @@ private fun VideoSettingsSection(
                         onSelected = { res ->
                             onUpdateSettings(settings.copy(videoResolution = res))
                         },
-                        modifier =
-                            if (caps.supportedVideoResolutions.size > 2) {
-                                Modifier.fillMaxWidth()
-                            } else {
-                                Modifier
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -499,6 +717,7 @@ private fun VideoSettingsSection(
 private fun ImageSettingsSection(
     settings: ImageGenerationSettings,
     capabilities: ProviderCapabilities?,
+    isCapabilitiesLoading: Boolean,
     continualMode: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
@@ -506,15 +725,26 @@ private fun ImageSettingsSection(
     NeoSectionHeader(text = "Image")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
+    if (isCapabilitiesLoading) {
+        SettingsCard {
+            StudioSettingsShimmerBlock(
+                rowCount = 1,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        return
+    }
+
     capabilities?.let { caps ->
         val qualityOptions = caps.supportedImageQualities.map { it.displayName }
+        val resolutionOptions = caps.supportedImageResolutions
         GroupedSettingsCard {
-            SettingRow(
-                label = "Quality",
-                subLabel = "Speed for faster generations; Quality for higher fidelity.",
-                controlFullWidth = true,
-            ) {
-                if (qualityOptions.isNotEmpty()) {
+            if (qualityOptions.isNotEmpty()) {
+                SettingRow(
+                    label = "Quality",
+                    subLabel = "Speed for faster generations; Quality for higher fidelity.",
+                    controlFullWidth = true,
+                ) {
                     PillSelector(
                         selected = settings.quality.displayName,
                         options = qualityOptions,
@@ -527,11 +757,27 @@ private fun ImageSettingsSection(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                } else {
-                    Text("Default", style = MaterialTheme.typography.bodySmall)
                 }
+                SettingsGroupDivider()
             }
-            SettingsGroupDivider()
+            if (resolutionOptions.isNotEmpty()) {
+                SettingRow(
+                    label = "Resolution",
+                    controlFullWidth = true,
+                ) {
+                    PillSelector(
+                        selected =
+                            settings.imageResolution?.takeIf { it in resolutionOptions }
+                                ?: resolutionOptions.first(),
+                        options = resolutionOptions,
+                        onSelected = { resolution ->
+                            onUpdateSettings(settings.copy(imageResolution = resolution))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                SettingsGroupDivider()
+            }
             SettingRow(label = "Generation Count") {
                 GenerationCountPicker(
                     count = settings.generationCount,
@@ -557,18 +803,36 @@ private fun ImageSettingsSection(
 @Composable
 private fun MusicSettingsSection(
     settings: MusicGenerationSettings,
+    capabilities: ProviderCapabilities?,
+    isCapabilitiesLoading: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
+    val durationRange =
+        capabilities?.musicDurationRange?.let { it.first.toFloat()..it.last.toFloat() }
+            ?: 5f..120f
+    val tempoRange =
+        capabilities?.musicTempoRange?.let { it.first.toFloat()..it.last.toFloat() }
+            ?: 60f..200f
     NeoSectionHeader(text = "Music Configuration")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
+
+    if (isCapabilitiesLoading) {
+        SettingsCard {
+            StudioSettingsShimmerBlock(
+                rowCount = 2,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        return
+    }
 
     SettingsCard {
         Column(modifier = Modifier.padding(16.dp)) {
             MusicSliderSetting(
                 label = "Duration",
                 valueText = "${settings.duration}s",
-                value = settings.duration.toFloat(),
-                valueRange = 5f..120f,
+                value = settings.duration.toFloat().coerceIn(durationRange),
+                valueRange = durationRange,
                 onValueChange = { onUpdateSettings(settings.copy(duration = it.toInt())) },
             )
 
@@ -577,8 +841,8 @@ private fun MusicSettingsSection(
             MusicSliderSetting(
                 label = "Tempo",
                 valueText = "${settings.tempo} BPM",
-                value = settings.tempo.toFloat(),
-                valueRange = 60f..200f,
+                value = settings.tempo.toFloat().coerceIn(tempoRange),
+                valueRange = tempoRange,
                 onValueChange = { onUpdateSettings(settings.copy(tempo = it.toInt())) },
             )
         }
@@ -761,7 +1025,6 @@ private val previewStudioCapabilities =
         supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
         supportedVideoResolutions = listOf("720p", "1080p"),
         supportedVideoDurations = listOf(5, 10),
-        supportsReferenceImage = true,
         supportsVideo = true,
     )
 

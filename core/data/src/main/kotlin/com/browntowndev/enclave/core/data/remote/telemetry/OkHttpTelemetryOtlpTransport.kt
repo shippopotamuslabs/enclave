@@ -72,15 +72,19 @@ class OkHttpTelemetryOtlpTransport
                 trimmed.startsWith("glc_") -> {
                     try {
                         val base64Part = trimmed.removePrefix("glc_")
-                        val decodedBytes = java.util.Base64.getDecoder().decode(base64Part)
+                        val decodedBytes =
+                            java.util.Base64
+                                .getDecoder()
+                                .decode(base64Part)
                         val decodedString = String(decodedBytes, Charsets.UTF_8)
                         val match = Regex("\"o\"\\s*:\\s*\"([^\"]+)\"").find(decodedString)
                         val instanceId = match?.groupValues?.get(1)
                         if (instanceId != null) {
                             val credentials = "$instanceId:$trimmed"
-                            val encoded = java.util.Base64.getEncoder().encodeToString(
-                                credentials.toByteArray(Charsets.UTF_8)
-                            )
+                            val encoded =
+                                java.util.Base64.getEncoder().encodeToString(
+                                    credentials.toByteArray(Charsets.UTF_8),
+                                )
                             "Basic $encoded"
                         } else {
                             "Bearer $trimmed"

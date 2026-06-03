@@ -185,6 +185,7 @@ internal class ByokProvidersCoordinator
                         state.copy(
                             discoveredApiModels = result.models.filterChatModels(),
                             discoveredApiModelScope = result.scope,
+                            isDiscoveryTruncated = result.isTruncated,
                             presetDraft = state.normalizeVisionCapability(state.presetDraft, result.models),
                         )
                     }
@@ -427,6 +428,7 @@ internal class ByokProvidersCoordinator
                     state.copy(
                         discoveredApiModels = result.models,
                         discoveredApiModelScope = result.scope,
+                        isDiscoveryTruncated = result.isTruncated,
                         presetDraft = state.normalizeVisionCapability(state.presetDraft, result.models),
                     )
                 }
@@ -471,6 +473,7 @@ internal class ByokProvidersCoordinator
                         current.copy(
                             discoveredApiModels = result.models,
                             discoveredApiModelScope = result.scope,
+                            isDiscoveryTruncated = result.isTruncated,
                             presetDraft = current.normalizeVisionCapability(current.presetDraft, result.models),
                         )
                     }

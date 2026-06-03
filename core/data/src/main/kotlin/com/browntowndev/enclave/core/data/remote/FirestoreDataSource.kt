@@ -16,11 +16,13 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncHydratio
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreVaultClient
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
+import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.security.VaultMetadata
@@ -243,6 +245,8 @@ class FirestoreSyncDependenciesFacade
         private val localEncryption: LocalDataEncryptionService,
         private val sensitiveSelfHealer: SensitivePersistenceSelfHealer,
         private val purgeInProgress: AtomicBoolean,
+        private val searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+        private val settingsRepository: SettingsRepositoryImpl,
         internal val syncEventFeedClient: FirestoreSyncEventFeedClient,
         internal val syncEventApplier: FirestoreSyncEventDispatcher,
         internal val syncStateStore: FirestoreSyncStateStore,
@@ -264,21 +268,25 @@ class FirestoreSyncDependenciesFacade
             @ApplicationScope externalScope: CoroutineScope,
             database: com.browntowndev.enclave.core.data.local.EnclaveDatabase,
             preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+            searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+            settingsRepository: SettingsRepositoryImpl,
         ) : this(
-            firestore,
-            chatSyncDaos,
-            configSyncDaos,
-            studioSyncDaos,
-            apiKeyManager,
-            cryptoManager,
-            loggingPort,
-            userIdProvider,
-            embeddingCoordinator,
-            localEncryption,
-            externalScope,
-            database,
-            preferencesDataStore,
-            FirestoreSyncStateStore(preferencesDataStore),
+            firestore = firestore,
+            chatSyncDaos = chatSyncDaos,
+            configSyncDaos = configSyncDaos,
+            studioSyncDaos = studioSyncDaos,
+            apiKeyManager = apiKeyManager,
+            cryptoManager = cryptoManager,
+            loggingPort = loggingPort,
+            userIdProvider = userIdProvider,
+            embeddingCoordinator = embeddingCoordinator,
+            localEncryption = localEncryption,
+            externalScope = externalScope,
+            database = database,
+            preferencesDataStore = preferencesDataStore,
+            sharedStateStore = FirestoreSyncStateStore(preferencesDataStore),
+            searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+            settingsRepository = settingsRepository,
         )
 
         private constructor(
@@ -296,6 +304,8 @@ class FirestoreSyncDependenciesFacade
             database: com.browntowndev.enclave.core.data.local.EnclaveDatabase,
             preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
             sharedStateStore: FirestoreSyncStateStore,
+            searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+            settingsRepository: SettingsRepositoryImpl,
             cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
                 com.browntowndev.enclave.core.data.remote.firestore
                     .FirestoreSyncDocumentCache(firestore),
@@ -312,6 +322,8 @@ class FirestoreSyncDependenciesFacade
             localEncryption = localEncryption,
             sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
             purgeInProgress = AtomicBoolean(false),
+            searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+            settingsRepository = settingsRepository,
             syncEventFeedClient =
                 buildProductionFeedClient(firestore, externalScope, loggingPort),
             syncEventApplier =
@@ -328,6 +340,8 @@ class FirestoreSyncDependenciesFacade
                     userIdProvider = userIdProvider,
                     database = database,
                     stateStore = sharedStateStore,
+                    searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                    settingsRepository = settingsRepository,
                     cache = cache,
                 ),
             syncStateStore = sharedStateStore,
@@ -351,6 +365,8 @@ class FirestoreSyncDependenciesFacade
                 embeddingCoordinator = embeddingCoordinator,
                 userIdProvider = userIdProvider,
                 purgeInProgress = purgeInProgress,
+                searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                settingsRepository = settingsRepository,
             )
 
         internal companion object {
@@ -383,6 +399,8 @@ class FirestoreSyncDependenciesFacade
                 userIdProvider: () -> String?,
                 database: com.browntowndev.enclave.core.data.local.EnclaveDatabase,
                 stateStore: FirestoreSyncStateStore,
+                searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+                settingsRepository: SettingsRepositoryImpl,
                 cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache,
             ): FirestoreSyncEventApplier {
                 val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
@@ -403,6 +421,8 @@ class FirestoreSyncDependenciesFacade
                         apiKeyManager = apiKeyManager,
                         embeddingCoordinator = embeddingCoordinator,
                         userIdProvider = userIdProvider,
+                        searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                        settingsRepository = settingsRepository,
                     ).toContext()
                 val registry = FirestoreSyncAdapterRegistry(syncContext)
                 val adapterLookup = registry.adapters.associateBy { it.collectionPath }
@@ -446,6 +466,8 @@ class FirestoreSyncDependenciesFacade
                 localEncryption: LocalDataEncryptionService,
                 sensitiveSelfHealer: SensitivePersistenceSelfHealer,
                 purgeInProgress: AtomicBoolean,
+                searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+                settingsRepository: SettingsRepositoryImpl,
                 syncEventFeedClient: FirestoreSyncEventFeedClient = FirestoreSyncEventFeedClient(),
                 syncEventApplier: FirestoreSyncEventDispatcher = FirestoreSyncEventApplier(),
                 syncStateStore: FirestoreSyncStateStore = FirestoreSyncStateStore(),
@@ -466,6 +488,8 @@ class FirestoreSyncDependenciesFacade
                     localEncryption = localEncryption,
                     sensitiveSelfHealer = sensitiveSelfHealer,
                     purgeInProgress = purgeInProgress,
+                    searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                    settingsRepository = settingsRepository,
                     syncEventFeedClient = syncEventFeedClient,
                     syncEventApplier = syncEventApplier,
                     syncStateStore = syncStateStore,

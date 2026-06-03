@@ -83,9 +83,8 @@ internal class SettingsApiProvidersDelegate
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
-        ) = ttsCoordinator.onFetchTtsModels(scope, tag, ttsState, apiState, currentApiKey)
+        ) = ttsCoordinator.onFetchTtsModels(scope, tag, ttsState, currentApiKey)
 
         fun onStartCreateTtsProviderAsset(ttsState: MutableStateFlow<TtsProvidersTransientState>) =
             ttsCoordinator.onStartCreateTtsProviderAsset(ttsState)
@@ -94,20 +93,18 @@ internal class SettingsApiProvidersDelegate
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
             assignmentsUseCases: SettingsAssignmentUseCases,
             asset: TtsProviderAssetUi,
-        ) = ttsCoordinator.onTtsAssetFieldChange(scope, tag, ttsState, apiState, currentApiKey, assignmentsUseCases, asset)
+        ) = ttsCoordinator.onTtsAssetFieldChange(scope, tag, ttsState, currentApiKey, assignmentsUseCases, asset)
 
         fun onSelectTtsProviderAsset(
             scope: CoroutineScope,
             tag: String,
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
-            apiState: MutableStateFlow<ApiProvidersTransientState>,
             currentApiKey: MutableStateFlow<String>,
             asset: TtsProviderAssetUi?,
-        ) = ttsCoordinator.onSelectTtsProviderAsset(scope, tag, ttsState, apiState, currentApiKey, asset)
+        ) = ttsCoordinator.onSelectTtsProviderAsset(scope, tag, ttsState, currentApiKey, asset)
 
         fun onSaveTtsProvider(
             scope: CoroutineScope,

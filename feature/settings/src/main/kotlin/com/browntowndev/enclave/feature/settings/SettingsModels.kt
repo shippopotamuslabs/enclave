@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
@@ -201,6 +202,7 @@ data class TtsProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: TtsProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
 )
 
 @Immutable
@@ -223,9 +225,19 @@ data class ApiModelDiscoveryUiState(
     val models: List<DiscoveredApiModelUi> = emptyList(),
     val filteredModels: List<DiscoveredApiModelUi> = emptyList(),
     val isLoading: Boolean = false,
+    val isTruncated: Boolean = false,
     val searchQuery: String = "",
     val providerFilters: Set<String> = emptySet(),
     val sortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+)
+
+@Immutable
+data class ModelDiscoveryFieldCallbacks(
+    val onFetchModels: () -> Unit,
+    val onUpdateSearchQuery: (String) -> Unit,
+    val onToggleProviderFilter: (String) -> Unit,
+    val onClearProviderFilters: () -> Unit,
+    val onUpdateSortOption: (ModelSortOption) -> Unit,
 )
 
 @Immutable
@@ -328,6 +340,7 @@ data class MediaProviderAssetUi(
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val capability: MediaCapability = MediaCapability.IMAGE,
+    val tasks: Set<MediaTask> = emptySet(),
     val modelName: String = "",
     val baseUrl: String? = null,
     val credentialAlias: String = "",
@@ -418,6 +431,7 @@ data class DiscoveredApiModelUi(
     val isImageGenerationCapable: Boolean = false,
     val isVideoGenerationCapable: Boolean = false,
     val isAudioGenerationCapable: Boolean = false,
+    val tasks: Set<MediaTask> = emptySet(),
 )
 
 @Immutable
@@ -464,16 +478,65 @@ data class DefaultModelAssignmentUi(
     val isMultimodal: Boolean = false,
 )
 
-/** Primary assignment label in model configuration lists. API slots use the configured model id. */
-internal val DefaultModelAssignmentUi.assignmentHeadlineName: String
-    get() =
-        when (source) {
-            ModelSource.API ->
-                modelId?.takeIf { it.isNotBlank() }
-                    ?: presetName
-                    ?: currentModelName
-            else -> currentModelName
+@Immutable
+internal data class AssignmentRowDisplay(
+    val presetName: String,
+    val providerName: String? = null,
+    val modelName: String? = null,
+)
+
+private fun String.isReadableAssignmentLabel(): Boolean = isNotBlank() && this != "None Assigned"
+
+private fun String?.toReadableAssignmentLabel(): String? = this?.takeIf { it.isReadableAssignmentLabel() }
+
+private val MEDIA_ASSIGNMENT_TYPES =
+    setOf(
+        ModelType.IMAGE_GENERATION,
+        ModelType.IMAGE_EDIT,
+        ModelType.VIDEO_GENERATION,
+        ModelType.IMAGE_TO_VIDEO,
+        ModelType.MUSIC_GENERATION,
+    )
+
+/**
+ * Model Role Assignment card body: preset name, provider, then catalog/base model id.
+ * Mapping differs by source (API preset vs local config vs media/TTS provider).
+ */
+internal val DefaultModelAssignmentUi.assignmentRowDisplay: AssignmentRowDisplay
+    get() {
+        if (currentModelName == "None Assigned") {
+            return AssignmentRowDisplay(presetName = currentModelName)
         }
+        return when (source) {
+            ModelSource.ON_DEVICE ->
+                AssignmentRowDisplay(
+                    presetName = presetName.toReadableAssignmentLabel() ?: currentModelName,
+                    providerName = providerName ?: "Local",
+                    modelName = currentModelName.toReadableAssignmentLabel(),
+                )
+            ModelSource.API ->
+                when (modelType) {
+                    in MEDIA_ASSIGNMENT_TYPES ->
+                        AssignmentRowDisplay(
+                            presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = presetName.toReadableAssignmentLabel(),
+                        )
+                    ModelType.TTS ->
+                        AssignmentRowDisplay(
+                            presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = presetName.toReadableAssignmentLabel(),
+                        )
+                    else ->
+                        AssignmentRowDisplay(
+                            presetName = presetName.toReadableAssignmentLabel() ?: currentModelName,
+                            providerName = providerName,
+                            modelName = modelId.toReadableAssignmentLabel(),
+                        )
+                }
+        }
+    }
 
 internal val ModelType.displayLabel: String
     get() =
@@ -484,7 +547,9 @@ internal val ModelType.displayLabel: String
             ModelType.VISION -> "Vision (API)"
             ModelType.TTS -> "Text-to-Speech"
             ModelType.IMAGE_GENERATION -> "Image Generation"
+            ModelType.IMAGE_EDIT -> "Image Edit"
             ModelType.VIDEO_GENERATION -> "Video Generation"
+            ModelType.IMAGE_TO_VIDEO -> "Image to Video"
             ModelType.MUSIC_GENERATION -> "Music Generation"
             ModelType.DRAFT_ONE -> "Draft 1"
             ModelType.DRAFT_TWO -> "Draft 2"
@@ -501,7 +566,9 @@ internal val ModelType.description: String
             ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
             ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
             ModelType.IMAGE_GENERATION -> "Generate images from text prompts."
+            ModelType.IMAGE_EDIT -> "Edit or transform images using a reference image."
             ModelType.VIDEO_GENERATION -> "Generate videos from text prompts."
+            ModelType.IMAGE_TO_VIDEO -> "Animate a reference image into video."
             ModelType.MUSIC_GENERATION -> "Generate music from text prompts."
             ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Council pipeline."
             ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Council pipeline."

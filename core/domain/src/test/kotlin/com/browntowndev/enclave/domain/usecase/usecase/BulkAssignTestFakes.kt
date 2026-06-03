@@ -58,6 +58,5 @@ class FakeSaveApiModelConfigurationUseCase : SaveApiModelConfigurationUseCase {
     var idToReturn: Result<ApiModelConfigurationId> =
         Result.success(ApiModelConfigurationId("fake-config"))
 
-    override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> =
-        idToReturn
+    override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> = idToReturn
 }

@@ -9,7 +9,7 @@ class MemoryRetrievalPolicyTest {
     fun `chat excluded categories cover always-injected core memories`() {
         assertTrue(MemoryCategory.CORE_IDENTITY in MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES)
         assertTrue(MemoryCategory.PREFERENCES in MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES)
-        assertEquals(2, MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES.size)
+        assertEquals(3, MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES.size)
     }
 
     @Test

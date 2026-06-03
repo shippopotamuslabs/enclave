@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
@@ -79,6 +80,7 @@ import com.browntowndev.enclave.feature.settings.usage.UsageSpendBottomSheet
 fun SettingsScreen(
     uiState: SettingsUiState,
     onCloseClick: () -> Unit,
+    onNavigateToProfileBuilder: () -> Unit = {},
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
@@ -282,6 +284,12 @@ fun SettingsScreen(
                         subtitle = ModelType.VISION.description,
                         icon = Icons.Default.Visibility,
                         onClick = { onShowVisionSettingsSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Psychological Profile",
+                        subtitle = "Build a profile from your AI conversation exports",
+                        icon = Icons.Default.Psychology,
+                        onClick = onNavigateToProfileBuilder,
                     )
                 }
             }

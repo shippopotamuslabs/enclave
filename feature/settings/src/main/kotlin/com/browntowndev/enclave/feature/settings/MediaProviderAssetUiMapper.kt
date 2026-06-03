@@ -15,6 +15,7 @@ class MediaProviderAssetUiMapper
                 displayName = asset.displayName,
                 provider = asset.provider,
                 capability = asset.capability,
+                tasks = asset.tasks,
                 modelName = asset.modelName ?: "",
                 baseUrl = asset.baseUrl,
                 credentialAlias = asset.credentialAlias,

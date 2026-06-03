@@ -25,6 +25,7 @@ class StudioUiStateReducer
             val albums: List<GalleryAlbumUi>,
             val settings: GenerationSettings,
             val capabilities: ProviderCapabilities?,
+            val isCapabilitiesLoading: Boolean,
             val selectedTemplateId: String?,
             val isSettingsOpen: Boolean,
             val isSaveBottomSheetOpen: Boolean,
@@ -36,7 +37,8 @@ class StudioUiStateReducer
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
             val referenceMediaType: MediaCapability?,
-            val hasVideoModel: Boolean,
+            val hasImageEditModel: Boolean,
+            val hasImageToVideoModel: Boolean,
         )
 
         fun reduce(params: ReduceParams): StudioUiState {
@@ -65,6 +67,7 @@ class StudioUiStateReducer
                 albums = params.albums,
                 settings = params.settings,
                 capabilities = params.capabilities,
+                isCapabilitiesLoading = params.isCapabilitiesLoading,
                 templates = templates,
                 selectedTemplateId = params.selectedTemplateId,
                 isSettingsOpen = params.isSettingsOpen,
@@ -76,7 +79,8 @@ class StudioUiStateReducer
                 videoGenerationState = params.videoGenerationState,
                 speechState = params.speechState,
                 isPlayingTts = params.isPlayingTts,
-                hasVideoModel = params.hasVideoModel,
+                hasImageEditModel = params.hasImageEditModel,
+                hasImageToVideoModel = params.hasImageToVideoModel,
             )
         }
 

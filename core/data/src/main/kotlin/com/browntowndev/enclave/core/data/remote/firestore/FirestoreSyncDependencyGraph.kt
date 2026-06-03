@@ -109,6 +109,7 @@ internal object FirestoreSyncDependencyGraph {
             "media_providers" to NO_PARENTS,
             "studio_albums" to NO_PARENTS,
             "studio_gallery" to STUDIO_GALLERY_PARENTS,
+            "search_tool_settings" to NO_PARENTS,
         )
 
     fun collectionPaths(): Set<String> = GRAPH.keys

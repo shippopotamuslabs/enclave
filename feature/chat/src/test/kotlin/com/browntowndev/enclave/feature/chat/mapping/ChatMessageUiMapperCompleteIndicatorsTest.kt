@@ -68,7 +68,12 @@ class ChatMessageUiMapperCompleteIndicatorsTest {
         val ui = mapper.map(message, displayNames)
 
         assertEquals(1, ui.content.artifacts.size)
-        assertEquals("Notes", ui.content.artifacts.first().title)
+        assertEquals(
+            "Notes",
+            ui.content.artifacts
+                .first()
+                .title,
+        )
         assertTrue(ui.indicatorState is IndicatorState.Complete)
         val complete = ui.indicatorState as IndicatorState.Complete
         assertEquals(3L, complete.thinkingData?.thinkingDurationSeconds)

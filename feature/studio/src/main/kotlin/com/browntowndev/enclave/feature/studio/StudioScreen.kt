@@ -66,7 +66,7 @@ fun StudioScreen(
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
         ) { uri ->
-            uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
+            uri?.let { viewModel.promptCoordinator.onUpdateReferenceImage(it.toString()) }
         }
 
     val permissionLauncher =
@@ -131,7 +131,7 @@ fun StudioScreen(
                 selectedCount = uiState.selectedMediaItemIds.size,
                 onClearSelection = viewModel::clearMediaSelection,
                 onSaveClick = viewModel::onToggleSaveBottomSheet,
-                onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
+                onShareClick = { viewModel.mediaActionsCoordinator.shareMedia(uiState.selectedMediaItemIds) },
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
             )
@@ -178,10 +178,12 @@ fun StudioScreen(
                 referenceMediaType = uiState.referenceMediaType,
                 isGenerating = uiState.isGenerating,
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
-                onPromptChange = viewModel::onPromptChange,
+                hasImageEditModel = uiState.hasImageEditModel,
+                hasImageToVideoModel = uiState.hasImageToVideoModel,
+                onPromptChange = viewModel.promptCoordinator::onPromptChange,
                 onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
-                onClearReferenceImage = viewModel::onClearReferenceImage,
-                onSettingsClick = viewModel::onSettingsToggle,
+                onClearReferenceImage = { viewModel.promptCoordinator.onUpdateReferenceImage(null) },
+                onSettingsClick = viewModel.promptCoordinator::onSettingsToggle,
                 onMicClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         viewModel.onMicClick()
@@ -202,11 +204,11 @@ fun StudioScreen(
     if (uiState.isSettingsOpen) {
         StudioOptionsBottomSheet(
             state = uiState,
-            onDismiss = viewModel::onSettingsToggle,
-            onUpdateSettings = viewModel::onUpdateSettings,
-            onContinualModeChange = viewModel::onContinualModeToggle,
-            onMediaTypeChange = viewModel::onMediaTypeChange,
-            onTemplateSelected = viewModel::onTemplateSelected,
+            onDismiss = viewModel.promptCoordinator::onSettingsToggle,
+            onUpdateSettings = viewModel.promptCoordinator::onUpdateSettings,
+            onContinualModeChange = viewModel.promptCoordinator::onContinualModeToggle,
+            onMediaTypeChange = viewModel.promptCoordinator::onMediaTypeChange,
+            onTemplateSelected = viewModel.promptCoordinator::onTemplateSelected,
         )
     }
 

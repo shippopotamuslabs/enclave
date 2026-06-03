@@ -10,9 +10,9 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort

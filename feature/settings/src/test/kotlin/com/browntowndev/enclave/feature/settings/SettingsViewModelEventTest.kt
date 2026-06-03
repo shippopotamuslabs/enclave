@@ -166,7 +166,7 @@ class SettingsViewModelEventTest {
             SettingsViewModel(
                 settingsUseCases = settingsUseCases,
                 settingsUiStateFactory =
-                    SettingsUiStateFactory(
+                    buildSettingsUiStateFactory(
                         localModelAssetUiMapper,
                         apiModelAssetUiMapper,
                         ttsProviderAssetUiMapper,

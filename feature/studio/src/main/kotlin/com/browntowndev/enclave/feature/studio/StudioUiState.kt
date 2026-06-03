@@ -37,6 +37,8 @@ data class StudioUiState(
     val albums: List<GalleryAlbumUi> = emptyList(),
     val settings: GenerationSettings = ImageGenerationSettings(),
     val capabilities: ProviderCapabilities? = null,
+    /** True while fal OpenAPI-backed capability options are being fetched. */
+    val isCapabilitiesLoading: Boolean = false,
     val templates: List<StudioTemplate> = emptyList(),
     val selectedTemplateId: String? = null,
     val isSettingsOpen: Boolean = false,
@@ -49,5 +51,6 @@ data class StudioUiState(
     val speechState: SpeechState = SpeechState.Idle,
     val isPlayingTts: Boolean = false,
     val groupedGallery: List<StudioGalleryGroup> = emptyList(),
-    val hasVideoModel: Boolean = false,
+    val hasImageEditModel: Boolean = false,
+    val hasImageToVideoModel: Boolean = false,
 )

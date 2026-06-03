@@ -10,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
-import com.browntowndev.enclave.core.ui.R as CoreUiR
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
@@ -32,6 +31,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.browntowndev.enclave.core.ui.R as CoreUiR
 
 /**
  * Custom foreground Service for executing the Council ChatModeUi pipeline.

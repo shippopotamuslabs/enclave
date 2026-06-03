@@ -61,7 +61,7 @@ class ByokModelOnPresetSettingsRedTest {
             )
         mapper = ApiModelAssetUiMapper()
         uiStateFactory =
-            SettingsUiStateFactory(
+            buildSettingsUiStateFactory(
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = mapper,
                 ttsProviderAssetUiMapper = mockk(relaxed = true),

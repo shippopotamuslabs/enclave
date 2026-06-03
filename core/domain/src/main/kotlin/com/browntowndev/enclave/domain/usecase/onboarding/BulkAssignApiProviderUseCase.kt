@@ -22,13 +22,14 @@ interface BulkAssignApiProviderUseCase {
 
     companion object {
         /** The six text-model slots that onboarding wires by default (VISION excluded). */
-        val TEXT_SLOTS: List<ModelType> = listOf(
-            ModelType.MAIN,
-            ModelType.FAST,
-            ModelType.THINKING,
-            ModelType.DRAFT_ONE,
-            ModelType.DRAFT_TWO,
-            ModelType.FINAL_SYNTHESIS,
-        )
+        val TEXT_SLOTS: List<ModelType> =
+            listOf(
+                ModelType.MAIN,
+                ModelType.FAST,
+                ModelType.THINKING,
+                ModelType.DRAFT_ONE,
+                ModelType.DRAFT_TWO,
+                ModelType.FINAL_SYNTHESIS,
+            )
     }
 }

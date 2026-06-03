@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.port.inference.TtsServiceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.TtsServicePort
 import com.browntowndev.enclave.feature.inference.GoogleGenAiClientProviderPort
 import com.browntowndev.enclave.feature.inference.OpenAiClientProviderPort
+import com.browntowndev.enclave.feature.inference.fal.FalService
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +20,7 @@ class TtsServiceFactory
         private val openAiClientProvider: OpenAiClientProviderPort,
         private val googleClientProvider: GoogleGenAiClientProviderPort,
         private val logger: LoggingPort,
+        private val falService: FalService,
     ) : TtsServiceFactoryPort {
         override fun create(
             provider: ApiProvider,
@@ -44,6 +46,12 @@ class TtsServiceFactory
                             googleClientProvider.getClient(apiKey, baseUrl, apiVersion = "v1beta").models
                         },
                     )
+                ApiProvider.FAL ->
+                    FalTtsService(
+                        falService = falService,
+                        apiKey = apiKey,
+                        baseUrl = baseUrl,
+                    )
                 else -> throw IllegalArgumentException("TTS not supported for provider: $provider")
             }
 
@@ -68,6 +76,9 @@ class TtsServiceFactory
                     )
                 // Google TTS via Gemini GenAI SDK does not support streaming audio generation
                 // with the current API surface. Falls back to batch mode.
+                ApiProvider.GOOGLE,
+                ApiProvider.FAL,
+                -> null
                 else -> null
             }
     }

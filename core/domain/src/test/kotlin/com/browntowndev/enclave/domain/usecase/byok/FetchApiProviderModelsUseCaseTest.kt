@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase.byok
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,9 +27,9 @@ class FetchApiProviderModelsUseCaseTest {
         runTest {
             coEvery {
                 apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
-            } returns listOf(DiscoveredApiModel(id = "gpt-5"))
+            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-5")))
 
-            val models =
+            val catalog =
                 useCase(
                     provider = ApiProvider.OPENAI,
                     currentApiKey = "live-key",
@@ -36,7 +37,7 @@ class FetchApiProviderModelsUseCaseTest {
                     baseUrl = null,
                 )
 
-            assertEquals(listOf(DiscoveredApiModel(id = "gpt-5")), models)
+            assertEquals(listOf(DiscoveredApiModel(id = "gpt-5")), catalog.models)
             coVerify(exactly = 1) {
                 apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
             }
@@ -48,9 +49,9 @@ class FetchApiProviderModelsUseCaseTest {
             coEvery { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
             coEvery {
                 apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
-            } returns listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent"))
+            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")))
 
-            val models =
+            val catalog =
                 useCase(
                     provider = ApiProvider.XAI,
                     currentApiKey = "",
@@ -58,7 +59,7 @@ class FetchApiProviderModelsUseCaseTest {
                     baseUrl = "https://api.x.ai/v1",
                 )
 
-            assertEquals(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")), models)
+            assertEquals(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")), catalog.models)
             coVerify(exactly = 1) {
                 apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
             }
@@ -69,9 +70,9 @@ class FetchApiProviderModelsUseCaseTest {
         runTest {
             coEvery {
                 apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
-            } returns listOf(DiscoveredApiModel(id = "openai/gpt-5.2"))
+            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")))
 
-            val models =
+            val catalog =
                 useCase(
                     provider = ApiProvider.OPENROUTER,
                     currentApiKey = "router-key",
@@ -79,7 +80,7 @@ class FetchApiProviderModelsUseCaseTest {
                     baseUrl = "https://openrouter.ai/api/v1",
                 )
 
-            assertEquals(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")), models)
+            assertEquals(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")), catalog.models)
             coVerify(exactly = 1) {
                 apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
             }
@@ -90,9 +91,9 @@ class FetchApiProviderModelsUseCaseTest {
         runTest {
             coEvery {
                 apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
-            } returns listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514"))
+            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")))
 
-            val models =
+            val catalog =
                 useCase(
                     provider = ApiProvider.ANTHROPIC,
                     currentApiKey = "anthropic-key",
@@ -100,7 +101,7 @@ class FetchApiProviderModelsUseCaseTest {
                     baseUrl = null,
                 )
 
-            assertEquals(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")), models)
+            assertEquals(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")), catalog.models)
             coVerify(exactly = 1) {
                 apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
             }

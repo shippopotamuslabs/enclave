@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.toModelType
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
@@ -75,21 +76,43 @@ internal class MediaProvidersCoordinator
                 scope.launch(
                     errorHandler.coroutineExceptionHandler(tag, "Failed to update default media provider", "Failed to update setting"),
                 ) {
-                    val modelType =
-                        when (asset.capability) {
-                            MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
-                            MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
-                            MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                    val modelTypes =
+                        if (asset.tasks.isNotEmpty()) {
+                            asset.tasks.map { it.toModelType() }
+                        } else {
+                            val legacyType =
+                                when (asset.capability) {
+                                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
+                                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
+                                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                                }
+                            listOf(legacyType)
                         }
                     if (asset.useAsDefault) {
-                        assignmentsUseCases.setDefaultModel(
-                            modelType = modelType,
-                            localConfigId = null,
-                            apiConfigId = null,
-                            mediaProviderId = asset.id,
-                        )
+                        modelTypes.forEach { modelType ->
+                            assignmentsUseCases.setDefaultModel(
+                                modelType = modelType,
+                                localConfigId = null,
+                                apiConfigId = null,
+                                mediaProviderId = asset.id,
+                            )
+                        }
                     } else if (previousDraft?.useAsDefault == true) {
-                        assignmentsUseCases.clearDefaultModel(modelType)
+                        val previousModelTypes =
+                            if (previousDraft.tasks.isNotEmpty()) {
+                                previousDraft.tasks.map { it.toModelType() }
+                            } else {
+                                val legacyType =
+                                    when (previousDraft.capability) {
+                                        MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
+                                        MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
+                                        MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                                    }
+                                listOf(legacyType)
+                            }
+                        previousModelTypes.forEach { modelType ->
+                            assignmentsUseCases.clearDefaultModel(modelType)
+                        }
                     }
                 }
             }
@@ -131,8 +154,14 @@ internal class MediaProvidersCoordinator
                         )
                     mediaState.update { state ->
                         state.copy(
-                            discoveredApiModels = result.models.filterMediaModels(draft.capability),
+                            discoveredApiModels =
+                                result.models.filterMediaModels(
+                                    capability = draft.capability,
+                                    provider = draft.provider,
+                                    requiredTasks = draft.tasks,
+                                ),
                             discoveredApiModelScope = result.scope,
+                            isDiscoveryTruncated = result.isTruncated,
                         )
                     }
                 } finally {
@@ -173,6 +202,7 @@ internal class MediaProvidersCoordinator
             onSuccess: () -> Unit,
         ) {
             val draft = mediaState.value.assetDraft ?: return
+            val credentialAlias = resolveMediaCredentialAlias(mediaState.value, draft).orEmpty()
 
             scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to save media provider", "Failed to save provider")) {
                 val mediaId =
@@ -182,26 +212,35 @@ internal class MediaProvidersCoordinator
                             displayName = draft.displayName,
                             provider = draft.provider,
                             capability = draft.capability,
+                            tasks = draft.tasks,
                             modelName = draft.modelName,
                             baseUrl = draft.baseUrl,
-                            credentialAlias = draft.credentialAlias,
+                            credentialAlias = credentialAlias,
                         ),
                         apiKey = currentApiKey.value.takeIf { it.isNotBlank() },
                     )
 
                 if (draft.useAsDefault) {
-                    val modelType =
-                        when (draft.capability) {
-                            MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
-                            MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
-                            MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                    val modelTypes =
+                        if (draft.tasks.isNotEmpty()) {
+                            draft.tasks.map { it.toModelType() }
+                        } else {
+                            val legacyType =
+                                when (draft.capability) {
+                                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
+                                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
+                                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                                }
+                            listOf(legacyType)
                         }
-                    assignmentsUseCases.setDefaultModel(
-                        modelType = modelType,
-                        localConfigId = null,
-                        apiConfigId = null,
-                        mediaProviderId = mediaId,
-                    )
+                    modelTypes.forEach { modelType ->
+                        assignmentsUseCases.setDefaultModel(
+                            modelType = modelType,
+                            localConfigId = null,
+                            apiConfigId = null,
+                            mediaProviderId = mediaId,
+                        )
+                    }
                 }
 
                 currentApiKey.value = ""

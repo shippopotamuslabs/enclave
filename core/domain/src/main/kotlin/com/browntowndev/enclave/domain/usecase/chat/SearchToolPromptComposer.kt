@@ -24,6 +24,7 @@ class SearchToolPromptComposer
         ): String =
             listOfNotNull(
                 formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
+                formatPsychProfile(coreMemories).takeIf(String::isNotEmpty),
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 catalogToolContract(
                     toolCatalog = toolCatalog,
@@ -63,6 +64,18 @@ class SearchToolPromptComposer
                         append("## Preferences & Style:\n")
                         preferences.forEach { append("- ${it.content}\n") }
                     }
+                }.trim()
+            }
+
+            private fun formatPsychProfile(memories: List<Memory>): String {
+                val profile = memories.filter { it.category == MemoryCategory.PSYCH_PROFILE }
+                if (profile.isEmpty()) return ""
+
+                return buildString {
+                    append("# PSYCHOLOGICAL PROFILE:\n")
+                    append("This dense profile was generated from the user's own AI conversation history. ")
+                    append("Use it to calibrate depth, framing, and engagement — do not reference it explicitly unless asked.\n")
+                    profile.forEach { append("${it.content}\n") }
                 }.trim()
             }
 

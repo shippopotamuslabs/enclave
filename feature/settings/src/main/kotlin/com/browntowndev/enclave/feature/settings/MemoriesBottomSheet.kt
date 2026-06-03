@@ -8,14 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -56,7 +55,6 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 
 private const val MEMORY_TEXT_FIELD_MIN_LINES = 3
-private const val MEMORY_TEXT_FIELD_MAX_LINES = 8
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,11 +153,14 @@ private fun MemoriesListView(
             }
         } else {
             val groupedMemories = memories.groupBy { it.category }
+            val orderedCategories =
+                listOf(MemoryCategory.PSYCH_PROFILE) +
+                    MemoryCategory.entries.filter { it != MemoryCategory.PSYCH_PROFILE }
             LazyColumn(
                 modifier = Modifier.weight(1f, fill = false),
                 verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
             ) {
-                MemoryCategory.entries.forEach { category ->
+                orderedCategories.forEach { category ->
                     val categoryMemories = groupedMemories[category]
                     if (!categoryMemories.isNullOrEmpty()) {
                         item(key = "header_${category.name}") {
@@ -267,7 +268,7 @@ private fun MemoryEditView(
     var expanded by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
     ) {
         NeoSheetHeader(
@@ -276,58 +277,51 @@ private fun MemoryEditView(
             onBackClick = onCancel,
         )
 
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                OutlinedTextField(
-                    value = draft.category.displayName,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                    shape = EnclaveNeoTokens.shape,
-                    modifier =
-                        Modifier
-                            .menuAnchor()
-                            .fillMaxWidth(),
-                )
+            OutlinedTextField(
+                value = draft.category.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Category") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                shape = EnclaveNeoTokens.shape,
+                modifier =
+                    Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+            )
 
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    MemoryCategory.entries.forEach { category ->
-                        DropdownMenuItem(
-                            text = { Text(category.displayName) },
-                            onClick = {
-                                onUpdateDraft(draft.text, category)
-                                expanded = false
-                            },
-                        )
-                    }
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                MemoryCategory.entries.forEach { category ->
+                    DropdownMenuItem(
+                        text = { Text(category.displayName) },
+                        onClick = {
+                            onUpdateDraft(draft.text, category)
+                            expanded = false
+                        },
+                    )
                 }
             }
+        }
 
+        Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = { onUpdateDraft(it, draft.category) },
                 label = { Text("Memory") },
                 placeholder = { Text("Enter memory text...") },
                 shape = EnclaveNeoTokens.shape,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                 minLines = MEMORY_TEXT_FIELD_MIN_LINES,
-                maxLines = MEMORY_TEXT_FIELD_MAX_LINES,
+                maxLines = Int.MAX_VALUE,
             )
         }
 
@@ -361,6 +355,7 @@ private val MemoryCategory.displayName: String
             MemoryCategory.PREFERENCES -> "Preferences"
             MemoryCategory.FACTS -> "Facts"
             MemoryCategory.PROJECT_CONTEXT -> "Project Context"
+            MemoryCategory.PSYCH_PROFILE -> "Psychological Profile"
         }
 
 @Preview(showBackground = true)

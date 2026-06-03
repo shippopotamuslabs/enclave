@@ -45,6 +45,8 @@ data class DefaultModelAssignmentView(
     val mediaAssetName: String?,
     @ColumnInfo(name = "mediaProviderName")
     val mediaProviderName: ApiProvider?,
+    @ColumnInfo(name = "mediaModelName")
+    val mediaModelName: String?,
     @ColumnInfo(name = "mediaCapability")
     val mediaCapability: MediaCapability?,
 )

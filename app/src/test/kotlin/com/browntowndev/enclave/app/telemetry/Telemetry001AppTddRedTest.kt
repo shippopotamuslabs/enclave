@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.app.telemetry
 
-import com.browntowndev.enclave.EnclaveApplication
 import com.browntowndev.enclave.app.AppBindingModule
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import dagger.Binds
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -14,7 +14,6 @@ import kotlin.io.path.walk
 import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.jvm.javaMethod
-import dagger.Binds
 
 /**
  * TELEMETRY-001 TDD Red — app integration scenarios TEL-054, TEL-055, TEL-056.
@@ -49,7 +48,8 @@ class Telemetry001AppTddRedTest {
     @Test
     fun `TEL-057 App test fakes no longer override recordException`() {
         val methodNames =
-            com.browntowndev.enclave.testing.FakeLoggingPort::class.declaredFunctions
+            com.browntowndev.enclave.testing.FakeLoggingPort::class
+                .declaredFunctions
                 .mapNotNull { it.javaMethod?.name }
                 .toSet()
         assertTrue(!methodNames.contains("recordException"))

@@ -25,6 +25,68 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 @Composable
+fun NeoSecondaryIconButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    size: Dp = EnclaveNeoTokens.iconTileSize,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    borderColor: Color = neoBorderColor(),
+) {
+    NeoIconButtonSurface(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        size = size,
+        backgroundColor = backgroundColor,
+        borderColor = borderColor,
+        withShadow = true,
+        shadowOffset = EnclaveNeoTokens.subtleButtonShadowOffset,
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+            )
+        },
+    )
+}
+
+@Composable
+fun NeoSecondaryIconButton(
+    onClick: () -> Unit,
+    icon: Painter,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    size: Dp = EnclaveNeoTokens.iconTileSize,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    borderColor: Color = neoBorderColor(),
+) {
+    NeoIconButtonSurface(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        size = size,
+        backgroundColor = backgroundColor,
+        borderColor = borderColor,
+        withShadow = true,
+        shadowOffset = EnclaveNeoTokens.subtleButtonShadowOffset,
+        icon = {
+            Icon(
+                painter = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+            )
+        },
+    )
+}
+
+@Composable
 fun NeoIconButton(
     onClick: () -> Unit,
     icon: ImageVector,
@@ -45,13 +107,15 @@ fun NeoIconButton(
         backgroundColor = backgroundColor,
         borderColor = borderColor,
         withShadow = withShadow,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = iconTint,
-        )
-    }
+        shadowOffset = neoButtonShadowOffset(),
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+            )
+        },
+    )
 }
 
 @Composable
@@ -75,13 +139,15 @@ fun NeoIconButton(
         backgroundColor = backgroundColor,
         borderColor = borderColor,
         withShadow = withShadow,
-    ) {
-        Icon(
-            painter = icon,
-            contentDescription = contentDescription,
-            tint = iconTint,
-        )
-    }
+        shadowOffset = neoButtonShadowOffset(),
+        icon = {
+            Icon(
+                painter = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+            )
+        },
+    )
 }
 
 @Composable
@@ -93,10 +159,10 @@ private fun NeoIconButtonSurface(
     backgroundColor: Color,
     borderColor: Color,
     withShadow: Boolean,
+    shadowOffset: Dp,
     icon: @Composable () -> Unit,
 ) {
     val shadowColor = neoShadowColor()
-    val shadowOffset = neoButtonShadowOffset()
     val interactionSource = remember { MutableInteractionSource() }
     val showShadow = withShadow && enabled
 

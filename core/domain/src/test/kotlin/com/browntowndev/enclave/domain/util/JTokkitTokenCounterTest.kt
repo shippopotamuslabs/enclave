@@ -82,6 +82,16 @@ class JTokkitTokenCounterTest {
         }
 
         @Test
+        @DisplayName("countTokens does not throw on tiktoken special tokens in text")
+        fun handlesSpecialTokensWithoutThrowing() {
+            // Real user exports can contain these strings (e.g. pasted code, AI discussions).
+            // Using countTokensOrdinary treats them as regular text instead of throwing.
+            val text = "here is a special token: <|im_start|> and another <|endoftext|> end"
+            val count = JTokkitTokenCounter.countTokens(text, null)
+            assertTrue(count > 0)
+        }
+
+        @Test
         @DisplayName("countTokens with known GPT-4 model name returns consistent result")
         fun modelSpecificTokenCount() {
             val text = "This is a test."

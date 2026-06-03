@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.media
 
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.media.*
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
@@ -16,12 +17,18 @@ class ImageGenerationPortImpl
         private val openAiAdapter: OpenAiImageGenerationAdapter,
         private val googleAdapter: GoogleImageGenerationAdapter,
         private val xaiAdapter: XaiImageGenerationAdapter,
+        private val falAdapter: FalImageGenerationAdapter,
     ) : ImageGenerationPort {
         override suspend fun generateImage(
             prompt: String,
             provider: MediaProviderAsset,
             settings: GenerationSettings,
         ): Result<List<ByteArray>> {
+            val hasReferenceImage = (settings as? VisualGenerationSettings)?.referenceImageUri != null
+            if (hasReferenceImage && MediaTask.EDIT_IMAGE !in provider.tasks) {
+                return Result.failure(IllegalArgumentException("Model '${provider.modelName}' does not support image editing."))
+            }
+
             val apiKey =
                 apiKeyProvider.getApiKey(provider.credentialAlias)
                     ?: return Result.failure(IllegalStateException("API key not found for alias: ${provider.credentialAlias}"))
@@ -64,6 +71,16 @@ class ImageGenerationPortImpl
                         provider.baseUrl,
                         settings,
                         referenceImageBytes,
+                    )
+                ApiProvider.FAL ->
+                    falAdapter.generateImage(
+                        prompt = prompt,
+                        apiKey = apiKey,
+                        modelId = provider.modelName ?: "fal-ai/flux-pro/kontext",
+                        baseUrl = provider.baseUrl,
+                        settings = settings,
+                        referenceImage = referenceImageBytes,
+                        supportsEdit = MediaTask.EDIT_IMAGE in provider.tasks,
                     )
                 else -> Result.failure(UnsupportedOperationException("Image generation not supported for provider: ${provider.provider}"))
             }

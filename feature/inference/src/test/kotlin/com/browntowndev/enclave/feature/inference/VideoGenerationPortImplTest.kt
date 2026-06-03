@@ -1,12 +1,14 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.feature.inference.media.FalVideoGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.GoogleVideoGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.OpenAiVideoGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.VideoGenerationPortImpl
@@ -26,6 +28,7 @@ class VideoGenerationPortImplTest {
     private val openAiAdapter = mockk<OpenAiVideoGenerationAdapter>()
     private val googleAdapter = mockk<GoogleVideoGenerationAdapter>()
     private val xaiAdapter = mockk<XaiVideoGenerationAdapter>()
+    private val falAdapter = mockk<FalVideoGenerationAdapter>()
     private lateinit var port: VideoGenerationPortImpl
 
     @BeforeEach
@@ -37,6 +40,7 @@ class VideoGenerationPortImplTest {
                 openAiAdapter = openAiAdapter,
                 googleAdapter = googleAdapter,
                 xaiAdapter = xaiAdapter,
+                falAdapter = falAdapter,
             )
         coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
         coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
@@ -63,7 +67,7 @@ class VideoGenerationPortImplTest {
             val result =
                 port.generateVideo(
                     prompt = "prompt",
-                    provider = provider(ApiProvider.OPENAI, modelName = null),
+                    provider = provider(ApiProvider.OPENAI, modelName = null).copy(tasks = setOf(MediaTask.IMAGE_TO_VIDEO)),
                     settings = VideoGenerationSettings(referenceImageUri = "cache://reference.png"),
                 )
 
@@ -115,6 +119,44 @@ class VideoGenerationPortImplTest {
             assertTrue(result.isSuccess)
             assertArrayEquals("xai".toByteArray(), result.getOrThrow())
             coVerify { xaiAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null) }
+        }
+
+    @Test
+    fun generateVideo_falProvider_routesToFalAdapter() =
+        runTest {
+            coEvery {
+                falAdapter.generateVideo(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success("fal".toByteArray())
+
+            val result = port.generateVideo("prompt", provider(ApiProvider.FAL), VideoGenerationSettings())
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals("fal".toByteArray(), result.getOrThrow())
+            coVerify { falAdapter.generateVideo("prompt", "key", "custom-model", null, VideoGenerationSettings(), null, false) }
+        }
+
+    @Test
+    fun generateVideo_falProviderNullModelName_usesDefaultVideoModel() =
+        runTest {
+            coEvery {
+                falAdapter.generateVideo(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success("fal".toByteArray())
+
+            val result = port.generateVideo("prompt", provider(ApiProvider.FAL, modelName = null), VideoGenerationSettings())
+
+            assertTrue(result.isSuccess)
+            assertArrayEquals("fal".toByteArray(), result.getOrThrow())
+            coVerify {
+                falAdapter.generateVideo(
+                    prompt = "prompt",
+                    apiKey = "key",
+                    modelId = "fal-ai/minimax/video-01",
+                    baseUrl = null,
+                    settings = VideoGenerationSettings(),
+                    referenceImage = null,
+                    supportsImageToVideo = false,
+                )
+            }
         }
 
     @Test

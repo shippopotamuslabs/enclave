@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BulkAssignApiProviderUseCaseTest {
-
     private lateinit var fakeSaveCredentials: FakeSaveApiCredentialsUseCase
     private lateinit var fakeSaveConfig: FakeSaveApiModelConfigurationUseCase
     private lateinit var fakeSetDefault: FakeSetDefaultModelUseCase
@@ -31,68 +30,99 @@ class BulkAssignApiProviderUseCaseTest {
         fakeSaveConfig = FakeSaveApiModelConfigurationUseCase()
         fakeSetDefault = FakeSetDefaultModelUseCase()
 
-        useCase = BulkAssignApiProviderUseCaseImpl(
-            saveApiCredentialsUseCase = fakeSaveCredentials,
-            saveApiModelConfigurationUseCase = fakeSaveConfig,
-            setDefaultModelUseCase = fakeSetDefault,
-        )
+        useCase =
+            BulkAssignApiProviderUseCaseImpl(
+                saveApiCredentialsUseCase = fakeSaveCredentials,
+                saveApiModelConfigurationUseCase = fakeSaveConfig,
+                setDefaultModelUseCase = fakeSetDefault,
+            )
     }
+
+    @Test
+    fun `invoke rejects fal provider for chat slots`() =
+        runTest {
+            val credentials =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "fal.ai",
+                    provider = ApiProvider.FAL,
+                    credentialAlias = "fal",
+                )
+
+            val result =
+                useCase.invoke(
+                    credentials = credentials,
+                    apiKey = "fal-key",
+                    modelId = "fal-ai/flux-pro",
+                    displayName = "FAL",
+                    targetSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS,
+                )
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(result.exceptionOrNull()?.message?.contains("media-only") == true)
+            assertEquals(0, fakeSetDefault.recordedCalls.size)
+        }
 
     // -------- OB-14 --------
 
     @Test
     @DisplayName("OB-14 — BulkAssignApiProviderUseCase assigns all six TEXT_SLOTS")
-    fun `OB-14 invoke assigns credentials to all six TEXT_SLOTS and returns credentialsId`() = runTest {
-        fakeSaveCredentials.idToReturn = ApiCredentialsId("creds-abc")
-        fakeSaveConfig.idToReturn = Result.success(ApiModelConfigurationId("config-xyz"))
+    fun `OB-14 invoke assigns credentials to all six TEXT_SLOTS and returns credentialsId`() =
+        runTest {
+            fakeSaveCredentials.idToReturn = ApiCredentialsId("creds-abc")
+            fakeSaveConfig.idToReturn = Result.success(ApiModelConfigurationId("config-xyz"))
 
-        val credentials = ApiCredentials(
-            id = ApiCredentialsId(""),
-            displayName = "OpenRouter",
-            provider = ApiProvider.OPENROUTER,
-            credentialAlias = "openrouter",
-        )
+            val credentials =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "OpenRouter",
+                    provider = ApiProvider.OPENROUTER,
+                    credentialAlias = "openrouter",
+                )
 
-        val result = useCase.invoke(
-            credentials = credentials,
-            apiKey = "sk-key-123",
-            modelId = "openrouter/gpt-4o",
-            displayName = "OpenRouter Preset",
-            targetSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS,
-        )
+            val result =
+                useCase.invoke(
+                    credentials = credentials,
+                    apiKey = "sk-key-123",
+                    modelId = "openrouter/gpt-4o",
+                    displayName = "OpenRouter Preset",
+                    targetSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS,
+                )
 
-        // Result must be success with the persisted credential id
-        assertTrue(result.isSuccess)
-        assertEquals(ApiCredentialsId("creds-abc"), result.getOrThrow())
+            // Result must be success with the persisted credential id
+            assertTrue(result.isSuccess)
+            assertEquals(ApiCredentialsId("creds-abc"), result.getOrThrow())
 
-        // SetDefaultModel must have been called exactly 6 times (one per TEXT_SLOT)
-        assertEquals(6, fakeSetDefault.recordedCalls.size)
+            // SetDefaultModel must have been called exactly 6 times (one per TEXT_SLOT)
+            assertEquals(6, fakeSetDefault.recordedCalls.size)
 
-        // Every call must use the config-xyz id and null localConfigId
-        val expectedSlots = listOf(
-            ModelType.MAIN,
-            ModelType.FAST,
-            ModelType.THINKING,
-            ModelType.DRAFT_ONE,
-            ModelType.DRAFT_TWO,
-            ModelType.FINAL_SYNTHESIS,
-        )
-        val recordedModelTypes = fakeSetDefault.recordedCalls.map { it.modelType }
-        assertTrue(
-            recordedModelTypes.containsAll(expectedSlots),
-            "Expected all TEXT_SLOTS to be assigned, but got: $recordedModelTypes",
-        )
-
-        for (call in fakeSetDefault.recordedCalls) {
-            assertEquals(
-                ApiModelConfigurationId("config-xyz"),
-                call.apiConfigId,
-                "Each recorded call must have apiConfigId = config-xyz, but call for ${call.modelType} had ${call.apiConfigId}",
+            // Every call must use the config-xyz id and null localConfigId
+            val expectedSlots =
+                listOf(
+                    ModelType.MAIN,
+                    ModelType.FAST,
+                    ModelType.THINKING,
+                    ModelType.DRAFT_ONE,
+                    ModelType.DRAFT_TWO,
+                    ModelType.FINAL_SYNTHESIS,
+                )
+            val recordedModelTypes = fakeSetDefault.recordedCalls.map { it.modelType }
+            assertTrue(
+                recordedModelTypes.containsAll(expectedSlots),
+                "Expected all TEXT_SLOTS to be assigned, but got: $recordedModelTypes",
             )
-            assertNull(
-                call.localConfigId,
-                "Each recorded call must have localConfigId = null, but call for ${call.modelType} had ${call.localConfigId}",
-            )
+
+            for (call in fakeSetDefault.recordedCalls) {
+                assertEquals(
+                    ApiModelConfigurationId("config-xyz"),
+                    call.apiConfigId,
+                    "Each recorded call must have apiConfigId = config-xyz, but call for ${call.modelType} had ${call.apiConfigId}",
+                )
+                assertNull(
+                    call.localConfigId,
+                    "Each recorded call must have localConfigId = null, but call for ${call.modelType} had ${call.localConfigId}",
+                )
+            }
         }
-    }
 }

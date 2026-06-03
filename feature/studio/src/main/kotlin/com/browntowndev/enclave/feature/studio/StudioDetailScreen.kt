@@ -11,12 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,42 +29,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.core.ui.component.FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaAction
+import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionPlacement
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionsOverlay
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaDetailScaffold
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaPagerContent
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.rememberHazeState
-import kotlinx.coroutines.launch
-import javax.inject.Inject
-
-sealed class StudioDetailUiState {
-    data class Success(
-        val assets: List<StudioMediaUi>,
-        val initialIndex: Int,
-    ) : StudioDetailUiState()
-}
-
-@HiltViewModel
-class StudioDetailViewModel
-    @Inject
-    constructor(
-        private val saveMediaToGalleryUseCase: SaveMediaToGalleryUseCase,
-    ) : ViewModel() {
-        fun saveToGallery(asset: StudioMediaUi) {
-            viewModelScope.launch {
-                saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
-            }
-        }
-    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,16 +50,21 @@ fun StudioDetailScreen(
     onAnimateMedia: (String, Boolean, String?) -> Unit,
     onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
+    onShowSnackbar: (String, String?) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
-    hasVideoModel: Boolean = false,
-    viewModel: StudioDetailViewModel = hiltViewModel(),
+    hasImageToVideoModel: Boolean = false,
+    saveViewModel: FullscreenMediaSaveViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(saveViewModel) {
+        saveViewModel.saveFeedback.collect { message ->
+            onShowSnackbar(message, null)
+        }
+    }
+
     val initialIndex =
         remember(assets, assetId) {
             assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
         }
-    val hazeState = rememberHazeState()
-
     FullscreenMediaDetailScaffold(
         onClose = onNavigateBack,
         hasContent = assets.isNotEmpty(),
@@ -96,8 +73,7 @@ fun StudioDetailScreen(
             assets = assets,
             initialIndex = initialIndex,
             videoGenerationState = videoGenerationState,
-            hasVideoModel = hasVideoModel,
-            hazeState = hazeState,
+            hasImageToVideoModel = hasImageToVideoModel,
             onEdit = { asset ->
                 onEditMedia(asset.id)
                 onNavigateBack()
@@ -105,7 +81,7 @@ fun StudioDetailScreen(
             onAnimate = { asset, autoAnimate, customPrompt ->
                 onAnimateMedia(asset.id, autoAnimate, customPrompt)
             },
-            onSave = viewModel::saveToGallery,
+            onSave = saveViewModel::saveToGallery,
             onShare = { asset ->
                 onShareMedia(asset.id)
             },
@@ -123,8 +99,7 @@ private fun DetailContent(
     assets: List<StudioMediaUi>,
     initialIndex: Int,
     videoGenerationState: VideoGenerationState,
-    hasVideoModel: Boolean,
-    hazeState: HazeState,
+    hasImageToVideoModel: Boolean,
     onEdit: (StudioMediaUi) -> Unit,
     onAnimate: (StudioMediaUi, Boolean, String?) -> Unit,
     onSave: (StudioMediaUi) -> Unit,
@@ -152,7 +127,6 @@ private fun DetailContent(
     FullscreenMediaPagerContent(
         pagerState = pagerState,
         modifier = modifier.fillMaxSize(),
-        hazeState = hazeState,
         pageContent = { page ->
             DetailMedia(
                 asset = assets[page],
@@ -166,7 +140,7 @@ private fun DetailContent(
                 actions =
                     studioDetailActions(
                         asset = asset,
-                        hasVideoModel = hasVideoModel,
+                        hasImageToVideoModel = hasImageToVideoModel,
                         onEdit = { onEdit(asset) },
                         onAnimate = { autoAnimate ->
                             if (autoAnimate) {
@@ -195,8 +169,6 @@ private fun DetailContent(
                         onAnimate(asset, true, prompt)
                         showCustomPromptInput = false
                     },
-                    onDismiss = { showCustomPromptInput = false },
-                    hazeState = hazeState,
                 )
             }
         },
@@ -219,7 +191,7 @@ private fun DetailMedia(
 
     Box(modifier = modifier.fillMaxSize()) {
         FullscreenMediaViewer(
-            localUri = generatedVideoUri ?: asset.localUri,
+            localUri = generatedVideoUri ?: asset.effectiveLocalUri(),
             mediaType =
                 if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
                     MediaCapability.VIDEO
@@ -241,7 +213,10 @@ private fun DetailMedia(
                         .semantics { contentDescription = "Animating image" },
                 contentAlignment = Alignment.Center,
             ) {
-                CircularProgressIndicator(color = Color.White)
+                NeoCircularProgressIndicator(
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.3f),
+                )
             }
         }
     }
@@ -249,7 +224,7 @@ private fun DetailMedia(
 
 private fun studioDetailActions(
     asset: StudioMediaUi,
-    hasVideoModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
@@ -259,9 +234,19 @@ private fun studioDetailActions(
     buildList {
         add(
             FullscreenMediaAction(
+                icon = Icons.Default.Share,
+                label = "Share",
+                onClick = onShare,
+                placement = FullscreenMediaActionPlacement.PrimaryBar,
+            ),
+        )
+        add(fullscreenSaveAction(onSave))
+        add(
+            FullscreenMediaAction(
                 icon = Icons.Default.Edit,
                 label = "Edit",
                 onClick = onEdit,
+                placement = FullscreenMediaActionPlacement.PrimaryBar,
             ),
         )
         if (asset.mediaType == MediaCapability.IMAGE) {
@@ -270,9 +255,10 @@ private fun studioDetailActions(
                     icon = Icons.Default.Movie,
                     label = "Animate",
                     onClick = { onAnimate(false) },
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                    placement = FullscreenMediaActionPlacement.SheetOnly,
                 ),
             )
             add(
@@ -280,32 +266,20 @@ private fun studioDetailActions(
                     icon = Icons.Default.FastForward,
                     label = "Quick Animate",
                     onClick = { onAnimate(true) },
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                    placement = FullscreenMediaActionPlacement.SheetOnly,
                 ),
             )
         }
-        add(
-            FullscreenMediaAction(
-                icon = Icons.Default.Download,
-                label = "Save",
-                onClick = onSave,
-            ),
-        )
-        add(
-            FullscreenMediaAction(
-                icon = Icons.Default.Share,
-                label = "Share",
-                onClick = onShare,
-            ),
-        )
         add(
             FullscreenMediaAction(
                 icon = Icons.Default.Delete,
                 label = "Delete",
                 onClick = onDelete,
                 isDestructive = true,
+                placement = FullscreenMediaActionPlacement.SheetOnly,
             ),
         )
     }
@@ -318,8 +292,7 @@ private fun StudioDetailImagePreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Idle,
-        hasVideoModel = true,
-        hazeState = rememberHazeState(),
+        hasImageToVideoModel = true,
         onEdit = {},
         onAnimate = { _, _, _ -> },
         onSave = {},
@@ -336,8 +309,7 @@ private fun StudioDetailLoadingPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Loading("asset-1"),
-        hasVideoModel = true,
-        hazeState = rememberHazeState(),
+        hasImageToVideoModel = true,
         onEdit = {},
         onAnimate = { _, _, _ -> },
         onSave = {},
@@ -354,8 +326,7 @@ private fun StudioDetailVideoPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
-        hasVideoModel = true,
-        hazeState = rememberHazeState(),
+        hasImageToVideoModel = true,
         onEdit = {},
         onAnimate = { _, _, _ -> },
         onSave = {},

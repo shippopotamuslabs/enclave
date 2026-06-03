@@ -1,10 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.media
 
-import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import javax.inject.Inject
 
 /**
@@ -13,22 +11,19 @@ import javax.inject.Inject
 class GenerateVideoUseCase
     @Inject
     constructor(
-        private val defaultModelRepository: DefaultModelRepositoryPort,
-        private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
+        private val resolveAssignedMediaProviderUseCase: ResolveAssignedMediaProviderUseCase,
         private val videoGenerationPort: VideoGenerationPort,
     ) {
         suspend operator fun invoke(
             prompt: String,
             settings: GenerationSettings,
         ): Result<ByteArray> {
-            val assignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)
-            val providerId =
-                assignment?.mediaProviderId
-                    ?: return Result.failure(IllegalStateException("No video generation provider assigned"))
-
+            val modelType = resolveMediaModelTypeUseCase(MediaCapability.VIDEO, settings)
             val provider =
-                mediaProviderRepository.getMediaProvider(providerId)
-                    ?: return Result.failure(IllegalStateException("Assigned media provider not found"))
+                resolveAssignedMediaProviderUseCase(modelType).getOrElse { error ->
+                    return Result.failure(error)
+                }
 
             return videoGenerationPort.generateVideo(prompt, provider, settings)
         }

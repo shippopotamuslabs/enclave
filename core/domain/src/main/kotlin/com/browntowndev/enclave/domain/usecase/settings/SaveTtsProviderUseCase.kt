@@ -2,6 +2,8 @@ package com.browntowndev.enclave.domain.usecase.settings
 
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import javax.inject.Inject
 
@@ -12,6 +14,15 @@ class SaveTtsProviderUseCase
     ) {
         suspend operator fun invoke(draft: TtsProviderDraft): Result<TtsProviderId> =
             Result.runCatching {
+                if (draft.provider == ApiProvider.FAL) {
+                    val modelName = draft.modelName?.trim().orEmpty()
+                    require(modelName.isNotBlank()) {
+                        "fal.ai TTS requires a model ID."
+                    }
+                    require(ApiProviderModelPolicy.isFalTtsModelCandidate(modelName)) {
+                        "Model '$modelName' is not a supported fal.ai TTS endpoint."
+                    }
+                }
                 val finalCredentialAlias = draft.sourceCredentialAlias?.takeIf { it.isNotBlank() } ?: draft.credentialAlias
                 repository.saveTtsProvider(
                     asset =

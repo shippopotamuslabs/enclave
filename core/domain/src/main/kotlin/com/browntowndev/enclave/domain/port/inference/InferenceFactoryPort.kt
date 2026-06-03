@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.port.inference
 
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 
 class InferenceBusyException(
@@ -17,6 +18,16 @@ interface InferenceFactoryPort {
      */
     suspend fun <T> withInferenceService(
         modelType: ModelType,
+        block: suspend (LlmInferencePort) -> T,
+    ): T
+
+    /**
+     * Resolves a fresh, uncached inference service for a specific API model configuration
+     * and executes [block] with it. Intended for background analysis sessions that manage
+     * their own lifecycle — does not participate in the chat inference lock.
+     */
+    suspend fun <T> withRawApiServiceForConfig(
+        configId: ApiModelConfigurationId,
         block: suspend (LlmInferencePort) -> T,
     ): T
 }

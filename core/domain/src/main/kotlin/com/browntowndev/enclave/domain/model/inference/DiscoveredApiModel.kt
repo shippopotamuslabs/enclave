@@ -1,5 +1,9 @@
 package com.browntowndev.enclave.domain.model.inference
 
+import com.browntowndev.enclave.domain.model.config.MediaTask
+import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
+import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
+
 data class DiscoveredApiModel(
     val id: String,
     val name: String? = null,
@@ -14,4 +18,7 @@ data class DiscoveredApiModel(
     val isImageGenerationCapable: Boolean = false,
     val isVideoGenerationCapable: Boolean = false,
     val isAudioGenerationCapable: Boolean = false,
+    val tasks: Set<MediaTask> = emptySet(),
+    val inputSchema: ModelGenerationInputSchema? = null,
+    val outputSchema: ModelGenerationOutputSchema? = null,
 )

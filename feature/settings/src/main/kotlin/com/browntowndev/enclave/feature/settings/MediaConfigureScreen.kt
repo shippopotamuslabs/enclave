@@ -38,14 +38,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
@@ -99,7 +98,7 @@ fun MediaConfigureScreen(
     onNavigateBack: () -> Unit,
     onMediaAssetFieldChange: (MediaProviderAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
+    onSelectReusableApiCredential: (String?) -> Unit,
     onFetchMediaModels: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
     onToggleModelProviderFilter: (String) -> Unit,
@@ -114,9 +113,14 @@ fun MediaConfigureScreen(
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
 
     val isSaveEnabled =
-        draft.displayName.isNotBlank() &&
-            draft.modelName.isNotBlank() &&
-            (apiKey.isNotBlank() || isKeySaved)
+        isMediaProviderSaveEnabled(
+            displayName = draft.displayName,
+            modelName = draft.modelName,
+            capability = draft.capability,
+            tasks = draft.tasks,
+            apiKeyPresent = apiKey.isNotBlank() || isKeySaved,
+        )
+    val locksTaskToggles = draft.provider.locksMediaTaskToggles()
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -174,11 +178,16 @@ fun MediaConfigureScreen(
                     expanded = providerDropdownExpanded,
                     onDismissRequest = { providerDropdownExpanded = false },
                 ) {
-                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE).forEach { provider ->
+                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE, ApiProvider.FAL).forEach { provider ->
                         DropdownMenuItem(
                             text = { Text(provider.displayName) },
                             onClick = {
-                                onMediaAssetFieldChange(draft.copy(provider = provider))
+                                onMediaAssetFieldChange(
+                                    draft.copy(
+                                        provider = provider,
+                                        baseUrl = if (provider.showsMediaBaseUrlOverride()) draft.baseUrl else null,
+                                    ),
+                                )
                                 providerDropdownExpanded = false
                             },
                         )
@@ -219,33 +228,24 @@ fun MediaConfigureScreen(
                 }
             }
 
-            // Reusable Key Dropdown
             val reusableCredentials =
-                uiState.apiProvidersSheet.assets
-                    .filter { it.provider == draft.provider }
-                    .map {
-                        ReusableApiCredentialUi(
-                            credentialsId = it.credentialsId,
-                            displayName = it.displayName,
-                            providerLabel = it.provider.displayName,
-                            credentialAlias = it.credentialAlias,
-                        )
-                    }
-
-            if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
-                ReusableCredentialDropdown(
-                    reusableCredentials = reusableCredentials,
-                    selectedReusableCredential = uiState.mediaProviderEditor.selectedReusableCredential,
-                    onSelectReusableCredential = onSelectReusableApiCredential,
+                reusableCredentialsForProvider(
+                    provider = draft.provider,
+                    apiAssets = uiState.apiProvidersSheet.assets,
+                    mediaAssets = uiState.mediaProvidersSheet.assets,
+                    ttsAssets = uiState.ttsProvidersSheet.assets,
+                    excludeMediaProviderId = draft.id.takeIf { it.value.isNotEmpty() },
                 )
-            }
+            val canUseStoredCredential = draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()
 
-            NeoApiKeyField(
-                label = "API Key",
-                value = apiKey,
-                onValueChange = onApiKeyChange,
+            ApiKeyWithReuseSection(
+                reusableCredentials = reusableCredentials,
+                selectedReusableCredential = uiState.mediaProviderEditor.selectedReusableCredential,
+                canUseStoredCredential = canUseStoredCredential,
+                apiKey = apiKey,
                 keyPresent = isKeySaved,
-                modifier = Modifier.fillMaxWidth(),
+                onApiKeyChange = onApiKeyChange,
+                onSelectReusableCredential = onSelectReusableApiCredential,
             )
 
             // Display Name
@@ -260,30 +260,69 @@ fun MediaConfigureScreen(
             val canFetchModels = !uiState.mediaProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved)
             ModelSelectionField(
                 config = ApiModelConfigUi(modelId = draft.modelName),
-                availableModels = uiState.mediaProviderEditor.discovery.models,
-                filteredModels = uiState.mediaProviderEditor.discovery.filteredModels,
-                isFetchingModels = uiState.mediaProviderEditor.discovery.isLoading,
+                discovery = uiState.mediaProviderEditor.discovery,
                 canFetchModels = canFetchModels,
-                searchQuery = uiState.mediaProviderEditor.discovery.searchQuery,
-                providerFilters = uiState.mediaProviderEditor.discovery.providerFilters,
-                sortOption = uiState.mediaProviderEditor.discovery.sortOption,
                 onConfigChange = { updatedConfig ->
-                    onMediaAssetFieldChange(draft.copy(modelName = updatedConfig.modelId))
+                    val discoveredModel =
+                        uiState.mediaProviderEditor.discovery.models
+                            .find { it.modelId == updatedConfig.modelId }
+                    val tasks = discoveredModel?.tasks ?: emptySet()
+                    onMediaAssetFieldChange(
+                        draft.copy(
+                            modelName = updatedConfig.modelId,
+                            tasks = tasks,
+                        ),
+                    )
                 },
-                onFetchModels = onFetchMediaModels,
-                onUpdateSearchQuery = onUpdateModelSearchQuery,
-                onToggleProviderFilter = onToggleModelProviderFilter,
-                onClearProviderFilters = onClearModelProviderFilters,
-                onUpdateSortOption = onUpdateModelSortOption,
+                callbacks =
+                    ModelDiscoveryFieldCallbacks(
+                        onFetchModels = onFetchMediaModels,
+                        onUpdateSearchQuery = onUpdateModelSearchQuery,
+                        onToggleProviderFilter = onToggleModelProviderFilter,
+                        onClearProviderFilters = onClearModelProviderFilters,
+                        onUpdateSortOption = onUpdateModelSortOption,
+                    ),
             )
 
-            // Base URL (for proxies)
-            NeoOutlinedTextField(
-                value = draft.baseUrl ?: "",
-                onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
-                label = { Text("Base URL (Optional)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (draft.provider.showsMediaBaseUrlOverride()) {
+                NeoOutlinedTextField(
+                    value = draft.baseUrl ?: "",
+                    onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
+                    label = { Text("Base URL (Optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            if (draft.capability.requiresMediaTaskSelection()) {
+                Text(
+                    text = "Supported Tasks",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                val relevantTasks = MediaTask.entries.filter { it.kind == draft.capability }
+                relevantTasks.forEach { task ->
+                    val isChecked = task in draft.tasks
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = mediaTaskDisplayLabel(task),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Switch(
+                            checked = isChecked,
+                            onCheckedChange = { checked ->
+                                val newTasks = if (checked) draft.tasks + task else draft.tasks - task
+                                onMediaAssetFieldChange(draft.copy(tasks = newTasks))
+                            },
+                            enabled = !locksTaskToggles,
+                        )
+                    }
+                }
+            }
 
             // Use as Default Toggle
             Row(
@@ -323,8 +362,18 @@ fun MediaConfigureScreen(
 fun MediaConfigureScreenPreview() {
     EnclaveTheme {
         MediaConfigureScreen(
-            uiState = MockSettingsData.baseUiState,
-            apiKey = "test-key",
+            uiState =
+                MockSettingsData.baseUiState.copy(
+                    mediaProviderEditor =
+                        MediaProviderEditorUiState(
+                            assetDraft =
+                                MediaProviderAssetUi(
+                                    provider = ApiProvider.OPENAI,
+                                    capability = MediaCapability.IMAGE,
+                                ),
+                        ),
+                ),
+            apiKey = "",
             onNavigateBack = {},
             onMediaAssetFieldChange = {},
             onApiKeyChange = {},

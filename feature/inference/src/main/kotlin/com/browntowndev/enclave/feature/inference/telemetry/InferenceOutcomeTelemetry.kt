@@ -22,15 +22,17 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
     val port = this ?: return
     val completedAtMs = System.currentTimeMillis()
     val latencyMs = (completedAtMs - startedAtMs).coerceAtLeast(0)
-    val cacheHitRate = cacheReadInputTokens?.let { cached ->
-        val input = inputTokens ?: 0
-        val total = if (provider.equals("Anthropic", ignoreCase = true)) {
-            input + cached
-        } else {
-            input
+    val cacheHitRate =
+        cacheReadInputTokens?.let { cached ->
+            val input = inputTokens ?: 0
+            val total =
+                if (provider.equals("Anthropic", ignoreCase = true)) {
+                    input + cached
+                } else {
+                    input
+                }
+            if (total > 0) cached.toDouble() / total.toDouble() else 0.0
         }
-        if (total > 0) cached.toDouble() / total.toDouble() else 0.0
-    }
     runCatching {
         port.emitInferenceOutcome(
             InferenceOutcome(
@@ -88,11 +90,12 @@ private suspend fun emitProviderExecutionMetrics(
                 severity = TelemetrySeverity.INFO,
             ),
         )
-        val tokensPerSec = if (latencyMs > 0) {
-            tokens.toDouble() / (latencyMs.toDouble() / 1000.0)
-        } else {
-            0.0
-        }
+        val tokensPerSec =
+            if (latencyMs > 0) {
+                tokens.toDouble() / (latencyMs.toDouble() / 1000.0)
+            } else {
+                0.0
+            }
         port.emitProviderMetric(
             ProviderMetric(
                 eventId = UUID.randomUUID().toString(),

@@ -108,12 +108,13 @@ class MemoriesRepositoryTest {
         }
 
     @Test
-    fun `getCoreMemories returns core identity and preferences`() =
+    fun `getCoreMemories returns core identity, preferences, and psych profile`() =
         runTest {
             val coreEntities =
                 listOf(
                     MemoriesEntity(category = MemoryCategory.CORE_IDENTITY, content = "I am an AI"),
                     MemoriesEntity(category = MemoryCategory.PREFERENCES, content = "I like blue"),
+                    MemoriesEntity(category = MemoryCategory.PSYCH_PROFILE, content = "Profile content."),
                 )
             coEvery { memoriesDao.getMemoriesByCategories(any()) } returns coreEntities
 
@@ -123,7 +124,7 @@ class MemoriesRepositoryTest {
             assertEquals(coreEntities[0].content, result[0].content)
             coVerify {
                 memoriesDao.getMemoriesByCategories(
-                    listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES),
+                    listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES, MemoryCategory.PSYCH_PROFILE),
                 )
             }
         }
