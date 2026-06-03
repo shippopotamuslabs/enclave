@@ -35,6 +35,7 @@ import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
@@ -306,6 +307,54 @@ class ChatViewModelSendHappyPathTest {
 
             assertEquals("Prompt rejected due to moderation", snackbar.await())
             coVerify(exactly = 0) { chatUseCases.processPrompt(any()) }
+        }
+
+    @Test
+    @DisplayName("onSendMessage bypasses moderation when active model is trusted")
+    fun sendBypassesModerationWhenTrusted() =
+        runTest {
+            val shouldModerateMock = mockk<ShouldModeratePromptUseCase> {
+                coEvery { this@mockk.invoke(any()) } returns false
+            }
+            harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                    shouldModeratePromptUseCase = shouldModerateMock,
+                    moderatePromptUseCase =
+                        ModeratePromptUseCase(
+                            FixedPromptModerationPort(
+                                PromptModerationScores(
+                                    scoresByLabel = mapOf("S3" to 0.66, "OK" to 0.34),
+                                    labelAliases = mapOf("sexual/minors" to listOf("S3")),
+                                    thresholds = mapOf("sexual/minors" to 0.65),
+                                ),
+                            ),
+                        ),
+                )
+            viewModel = harness.viewModel
+
+            viewModel.onInputChange("blocked input but trusted")
+            viewModel.onSendMessage()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { chatUseCases.processPrompt(any()) }
         }
 
     private class FixedPromptModerationPort(

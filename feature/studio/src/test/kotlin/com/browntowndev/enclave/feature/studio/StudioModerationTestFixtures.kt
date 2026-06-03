@@ -4,6 +4,10 @@ import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 
+import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import io.mockk.coEvery
+import io.mockk.mockk
+
 internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
     ModeratePromptUseCase(
         object : PromptModerationPort {
@@ -11,3 +15,8 @@ internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
                 PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
         },
     )
+
+internal fun allowShouldModeratePromptUseCase(shouldModerate: Boolean = true): ShouldModeratePromptUseCase =
+    mockk(relaxed = true) {
+        coEvery { this@mockk.invoke(any()) } returns shouldModerate
+    }

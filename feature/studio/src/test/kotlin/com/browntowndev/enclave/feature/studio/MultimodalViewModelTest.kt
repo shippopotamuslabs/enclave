@@ -191,6 +191,7 @@ class MultimodalViewModelTest {
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
             moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+            shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
@@ -263,6 +264,48 @@ class MultimodalViewModelTest {
             assertFalse(viewModel.uiState.value.isGenerating)
             assertEquals("Prompt rejected due to moderation", viewModel.uiState.value.error)
             verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            job.cancel()
+        }
+
+    @Test
+    fun `generate bypasses moderation when active model is trusted`() =
+        runTest {
+            val shouldModerateMock = allowShouldModeratePromptUseCase(shouldModerate = false)
+            viewModel =
+                MultimodalViewModel(
+                    defaultModelRepository = defaultModelRepository,
+                    mediaProviderRepository = mediaProviderRepository,
+                    moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+                    shouldModeratePromptUseCase = shouldModerateMock,
+                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    generationCoordinator = generationCoordinator,
+                    albumSelectionCoordinator = albumSelectionCoordinator,
+                    speechCoordinator = speechCoordinator,
+                    playbackCoordinator = playbackCoordinator,
+                    studioUiStateReducer = studioUiStateReducer,
+                    capabilitiesCoordinator = StudioCapabilitiesCoordinator(),
+                    remoteCapabilitiesCoordinator = StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase),
+                    promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository),
+                    mediaActionsCoordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator),
+                )
+
+            moderationPort.scores =
+                PromptModerationScores(
+                    scoresByLabel = mapOf("S3" to 0.66, "OK" to 0.34),
+                    labelAliases = mapOf("sexual/minors" to listOf("S3")),
+                    thresholds = mapOf("sexual/minors" to 0.65),
+                )
+            viewModel.promptCoordinator.onPromptChange("blocked studio prompt but trusted")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.generate()
+            advanceUntilIdle()
+
+            // Verify that moderation didn't block and generation dispatcher was triggered
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
             job.cancel()
         }
 

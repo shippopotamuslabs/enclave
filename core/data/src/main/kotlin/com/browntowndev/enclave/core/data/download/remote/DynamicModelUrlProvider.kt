@@ -28,6 +28,13 @@ class DynamicModelUrlProvider
                 .build()
                 .toString()
 
+        override fun getTrustedDomainsUrl(): String =
+            R2_BUCKET_URL
+                .newBuilder()
+                .addPathSegment("trusted_domains.json")
+                .build()
+                .toString()
+
         override fun getModelDownloadUrl(spec: DownloadFileSpec): String {
             val source =
                 try {

@@ -117,6 +117,7 @@ class ActiveModelProviderImpl
                             completionUsdPerMillion = config.completionPriceUsdPerMillion,
                             cachedPromptUsdPerMillion = config.cachedPromptPriceUsdPerMillion,
                         ).takeIf { it.hasPromptAndCompletionRates() },
+                    apiBaseUrl = credentials.baseUrl ?: credentials.provider.defaultBaseUrl(),
                 )
             }
 
