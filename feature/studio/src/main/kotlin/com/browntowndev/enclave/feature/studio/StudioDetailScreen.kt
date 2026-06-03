@@ -45,6 +45,9 @@ import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -61,10 +64,20 @@ class StudioDetailViewModel
     constructor(
         private val saveMediaToGalleryUseCase: SaveMediaToGalleryUseCase,
     ) : ViewModel() {
+        private val _saveFeedback = MutableSharedFlow<String>(extraBufferCapacity = 1)
+        val saveFeedback: SharedFlow<String> = _saveFeedback.asSharedFlow()
+
         fun saveToGallery(asset: StudioMediaUi) {
             viewModelScope.launch {
-                saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
+                saveMediaToGalleryUseCase(asset.effectiveLocalUri(), asset.mediaType)
+                    .onSuccess { _saveFeedback.emit(SAVE_SUCCESS_MESSAGE) }
+                    .onFailure { _saveFeedback.emit(SAVE_FAILURE_MESSAGE) }
             }
+        }
+
+        internal companion object {
+            const val SAVE_SUCCESS_MESSAGE = "Saved to your device"
+            const val SAVE_FAILURE_MESSAGE = "Could not save media"
         }
     }
 
@@ -78,10 +91,17 @@ fun StudioDetailScreen(
     onAnimateMedia: (String, Boolean, String?) -> Unit,
     onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
+    onShowSnackbar: (String, String?) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     hasImageToVideoModel: Boolean = false,
     viewModel: StudioDetailViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(viewModel) {
+        viewModel.saveFeedback.collect { message ->
+            onShowSnackbar(message, null)
+        }
+    }
+
     val initialIndex =
         remember(assets, assetId) {
             assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
@@ -219,7 +239,7 @@ private fun DetailMedia(
 
     Box(modifier = modifier.fillMaxSize()) {
         FullscreenMediaViewer(
-            localUri = generatedVideoUri ?: asset.localUri,
+            localUri = generatedVideoUri ?: asset.effectiveLocalUri(),
             mediaType =
                 if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
                     MediaCapability.VIDEO
