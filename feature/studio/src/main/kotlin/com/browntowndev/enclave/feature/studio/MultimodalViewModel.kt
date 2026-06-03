@@ -3,29 +3,25 @@ package com.browntowndev.enclave.feature.studio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.media.AspectRatio
-import com.browntowndev.enclave.domain.model.media.GenerationQuality
-import com.browntowndev.enclave.domain.model.media.GenerationSettings
-import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
-import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
-import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
-import com.browntowndev.enclave.domain.port.media.ShareMediaPort
-import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
-import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
+import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
+import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
+import com.browntowndev.enclave.feature.studio.coordinators.PlaybackInputs
+import com.browntowndev.enclave.feature.studio.coordinators.PromptCoreInputs
+import com.browntowndev.enclave.feature.studio.coordinators.PromptInputs
+import com.browntowndev.enclave.feature.studio.coordinators.PromptMetaInputs
+import com.browntowndev.enclave.feature.studio.coordinators.SelectionInputs
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,13 +33,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -51,31 +43,27 @@ import javax.inject.Inject
 class MultimodalViewModel
     @Inject
     constructor(
-        private val shareMediaPort: ShareMediaPort,
-        private val studioRepository: StudioRepositoryPort,
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
         private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
-        private val resolveMediaProviderCapabilitiesUseCase: ResolveMediaProviderCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
         private val speechCoordinator: StudioSpeechCoordinator,
         private val playbackCoordinator: StudioPlaybackCoordinator,
         private val studioUiStateReducer: StudioUiStateReducer,
         private val capabilitiesCoordinator: StudioCapabilitiesCoordinator,
+        private val remoteCapabilitiesCoordinator: StudioRemoteCapabilitiesCoordinator,
+        val promptCoordinator: StudioPromptCoordinator,
+        val mediaActionsCoordinator: StudioMediaActionsCoordinator,
     ) : ViewModel() {
-        private val _prompt = MutableStateFlow("")
-        private val _mediaType = MutableStateFlow(MediaCapability.IMAGE)
-        private val _settings = MutableStateFlow<GenerationSettings>(ImageGenerationSettings())
-        private val _selectedTemplateId = MutableStateFlow<String?>(null)
-        private val _isSettingsOpen = MutableStateFlow(false)
-        private val _continualMode = MutableStateFlow(false)
-        private val _referenceMediaType = MutableStateFlow<MediaCapability?>(null)
-
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
 
         private val activeModelFlow =
-            combine(_mediaType, _settings, defaultModelRepository.observeDefaults()) { type, settings, defaults ->
+            combine(
+                promptCoordinator.mediaType,
+                promptCoordinator.settings,
+                defaultModelRepository.observeDefaults(),
+            ) { type, settings, defaults ->
                 val modelType = resolveMediaModelTypeUseCase(type, settings)
                 defaults.find { it.modelType == modelType }
             }
@@ -93,8 +81,6 @@ class MultimodalViewModel
 
         private val _capabilities = MutableStateFlow<ProviderCapabilities?>(null)
         private val _isCapabilitiesLoading = MutableStateFlow(false)
-        private val capabilitiesFlow: StateFlow<ProviderCapabilities?> = _capabilities
-        private val isCapabilitiesLoadingFlow: StateFlow<Boolean> = _isCapabilitiesLoading
 
         private val hasTtsProviderAssignedFlow =
             defaultModelRepository
@@ -125,9 +111,9 @@ class MultimodalViewModel
 
         private val promptCoreFlow =
             combine(
-                _prompt,
-                _mediaType,
-                _settings,
+                promptCoordinator.prompt,
+                promptCoordinator.mediaType,
+                promptCoordinator.settings,
             ) { prompt, mediaType, settings ->
                 PromptCoreInputs(
                     prompt = prompt,
@@ -138,10 +124,10 @@ class MultimodalViewModel
 
         private val promptMetaFlow =
             combine(
-                _selectedTemplateId,
-                _isSettingsOpen,
-                _continualMode,
-                _referenceMediaType,
+                promptCoordinator.selectedTemplateId,
+                promptCoordinator.isSettingsOpen,
+                promptCoordinator.continualMode,
+                promptCoordinator.referenceMediaType,
             ) { templateId, isSettingsOpen, continualMode, referenceMediaType ->
                 PromptMetaInputs(
                     selectedTemplateId = templateId,
@@ -200,14 +186,15 @@ class MultimodalViewModel
 
         private val capabilitiesPlaybackFlow =
             combine(
-                capabilitiesFlow,
-                isCapabilitiesLoadingFlow,
+                _capabilities,
+                _isCapabilitiesLoading,
                 activeProviderFlow,
             ) { capabilities, isCapabilitiesLoading, activeProvider ->
                 CapabilitiesPlaybackInputs(
                     capabilities = capabilities,
                     isCapabilitiesLoading =
-                        isCapabilitiesLoading && requiresRemoteCapabilities(activeProvider),
+                        isCapabilitiesLoading &&
+                            remoteCapabilitiesCoordinator.requiresRemoteCapabilitiesLoading(activeProvider),
                 )
             }
 
@@ -232,50 +219,29 @@ class MultimodalViewModel
         init {
             generationCoordinator.startObservers(viewModelScope)
             speechCoordinator.observeResults(viewModelScope) { text ->
-                _prompt.value = text
+                promptCoordinator.prompt.value = text
             }
             capabilitiesCoordinator.observe(
                 scope = viewModelScope,
-                settings = _settings,
-                capabilitiesFlow = capabilitiesFlow,
+                settings = promptCoordinator.settings,
+                capabilitiesFlow = _capabilities,
             )
-            combine(activeProviderFlow, _mediaType) { provider, mediaCapability ->
-                provider to mediaCapability
-            }.distinctUntilChanged { previous, next ->
-                previous.second == next.second &&
-                    remoteCapabilitiesRequestKey(previous.first) ==
-                    remoteCapabilitiesRequestKey(next.first)
-            }.flatMapLatest { (provider, mediaCapability) ->
-                flow {
-                    val requiresRemoteSchema = requiresRemoteCapabilities(provider)
-                    if (requiresRemoteSchema) {
-                        emit(
-                            CapabilitiesLoadSnapshot(
-                                isLoading = true,
-                                capabilities = null,
-                            ),
-                        )
-                    }
-                    val resolved =
-                        resolveMediaProviderCapabilitiesUseCase(
-                            mediaProvider = provider,
-                            mediaCapability = mediaCapability,
-                        )
-                    emit(
-                        CapabilitiesLoadSnapshot(
-                            isLoading = false,
-                            capabilities = resolved,
-                        ),
-                    )
-                }
-            }.onEach { snapshot ->
-                _isCapabilitiesLoading.value = snapshot.isLoading
-                _capabilities.value = snapshot.capabilities
-            }.launchIn(viewModelScope)
+            remoteCapabilitiesCoordinator.attach(
+                scope = viewModelScope,
+                activeProviderFlow = activeProviderFlow,
+                mediaType = promptCoordinator.mediaType,
+                capabilities = _capabilities,
+                isCapabilitiesLoading = _isCapabilitiesLoading,
+            )
+            mediaActionsCoordinator.attach(
+                scope = viewModelScope,
+                sessionMedia = sessionMedia,
+                hasImageToVideoModel = hasImageToVideoModelFlow,
+            )
         }
 
         fun onMicClick() {
-            speechCoordinator.onMicClick(viewModelScope, _prompt.value)
+            speechCoordinator.onMicClick(viewModelScope, promptCoordinator.prompt.value)
         }
 
         fun onPlayTts(text: String) {
@@ -330,36 +296,6 @@ class MultimodalViewModel
                 initialValue = StudioUiState(),
             )
 
-        fun onPromptChange(newPrompt: String) {
-            if (_prompt.value == newPrompt) return
-            _prompt.value = newPrompt
-            generationCoordinator.stopGeneration()
-            generationCoordinator.clearScrollAnchors()
-        }
-
-        fun onMediaTypeChange(type: MediaCapability) {
-            val currentRefUri = (_settings.value as? VisualGenerationSettings)?.referenceImageUri
-            _mediaType.value = type
-            _settings.value =
-                when (type) {
-                    MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = currentRefUri)
-                    MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = currentRefUri)
-                    MediaCapability.MUSIC -> MusicGenerationSettings()
-                }
-            _selectedTemplateId.value = null
-            generationCoordinator.stopGeneration()
-            generationCoordinator.resetVideoGenerationState()
-            generationCoordinator.clearScrollAnchors()
-        }
-
-        fun onTemplateSelected(template: com.browntowndev.enclave.domain.model.media.StudioTemplate) {
-            _selectedTemplateId.value = if (_selectedTemplateId.value == template.id) null else template.id
-        }
-
-        fun onSettingsToggle() {
-            _isSettingsOpen.value = !_isSettingsOpen.value
-        }
-
         fun onToggleSaveBottomSheet() {
             albumSelectionCoordinator.onToggleSaveBottomSheet()
         }
@@ -376,178 +312,16 @@ class MultimodalViewModel
             albumSelectionCoordinator.clearMediaSelection()
         }
 
-        fun shareMedia(assetIds: Set<String>) {
-            val uris =
-                sessionMedia.value
-                    .filter { it.id in assetIds }
-                    .map { it.localUri }
-
-            if (uris.isNotEmpty()) {
-                shareMediaPort.shareMedia(uris, "*/*")
-            }
-        }
-
-        fun shareSingleMedia(assetId: String) {
-            val asset = sessionMedia.value.find { it.id == assetId }
-            if (asset != null) {
-                val mimeType =
-                    when (asset.mediaType) {
-                        MediaCapability.IMAGE -> "image/*"
-                        MediaCapability.VIDEO -> "video/*"
-                        MediaCapability.MUSIC -> "audio/*"
-                    }
-                shareMediaPort.shareMedia(listOf(asset.localUri), mimeType)
-            }
-        }
-
         fun onSaveSelectedMediaToAlbum(albumId: String) {
             albumSelectionCoordinator.onSaveSelectedMediaToAlbum(viewModelScope, albumId)
         }
 
-        fun onEditMedia(
-            assetId: String?,
-            rehydrateIds: List<String> = emptyList(),
-            rehydrateUris: List<String> = emptyList(),
-            rehydrateTypes: List<String> = emptyList(),
-            rehydratePrompts: List<String> = emptyList(),
-        ) {
-            val cacheKey = assetId ?: rehydrateUris.firstOrNull()
-            if (cacheKey == null || cacheKey == generationCoordinator.lastProcessedEditAssetId) return
-            generationCoordinator.lastProcessedEditAssetId = cacheKey
-
-            viewModelScope.launch {
-                val sessionItem = assetId?.let { id -> sessionMedia.value.find { it.id == id } }
-                val asset =
-                    if (sessionItem != null) {
-                        sessionItem.toAsset()
-                    } else if (assetId != null) {
-                        studioRepository.getMediaById(assetId)
-                    } else {
-                        null
-                    }
-
-                val rehydratedAssets =
-                    if (asset == null && rehydrateUris.isNotEmpty()) {
-                        buildRehydratedAssets(rehydrateIds, rehydrateUris, rehydrateTypes, rehydratePrompts)
-                    } else {
-                        emptyList()
-                    }
-
-                val finalAsset = asset ?: rehydratedAssets.firstOrNull() ?: return@launch
-
-                _mediaType.value = finalAsset.toMediaCapability()
-                _referenceMediaType.value = finalAsset.toMediaCapability()
-                _selectedTemplateId.value = null
-                generationCoordinator.stopGeneration()
-                generationCoordinator.clearScrollAnchors()
-
-                rehydratedAssets.forEach { studioRepository.addEphemeralMedia(it) }
-            }
-        }
-
         fun clearSession() {
-            _prompt.value = ""
-            generationCoordinator.clearLastSubmittedPrompt()
-            albumSelectionCoordinator.clearSessionSavedAssets()
-            generationCoordinator.resetGeneratingFlags()
-            generationCoordinator.clearLocalError()
-            viewModelScope.launch {
-                studioRepository.clearEphemeralCache()
-            }
-        }
-
-        fun onAnimateMedia(
-            assetId: String,
-            autoAnimate: Boolean = false,
-            customPrompt: String? = null,
-        ) {
-            if (assetId == generationCoordinator.lastProcessedAnimateAssetId && customPrompt == null && !autoAnimate) {
-                return
-            }
-
-            if (!autoAnimate) {
-                generationCoordinator.lastProcessedAnimateAssetId = assetId
-            }
-
-            viewModelScope.launch {
-                val sessionItem = sessionMedia.value.find { it.id == assetId }
-                val asset =
-                    if (sessionItem != null) {
-                        sessionItem.toAsset()
-                    } else {
-                        studioRepository.getMediaById(assetId)
-                    } ?: return@launch
-
-                if (!autoAnimate) {
-                    _mediaType.value = MediaCapability.VIDEO
-                    _referenceMediaType.value = MediaCapability.VIDEO
-                    _settings.value =
-                        VideoGenerationSettings(
-                            aspectRatio = AspectRatio.ONE_ONE,
-                            quality = GenerationQuality.SPEED,
-                            videoDuration = DEFAULT_VIDEO_DURATION_SECONDS,
-                            videoResolution = DEFAULT_VIDEO_RESOLUTION,
-                        )
-                } else {
-                    if (!hasImageToVideoModelFlow.first()) {
-                        generationCoordinator.setVideoGenerationError(
-                            sourceAssetId = assetId,
-                            message = STUDIO_ANIMATE_I2V_UNAVAILABLE,
-                        )
-                    } else {
-                        generationCoordinator.startDetailVideoGeneration(asset, customPrompt, true)
-                    }
-                }
-            }
-        }
-
-        fun onContinualModeToggle(enabled: Boolean) {
-            _continualMode.value = enabled
-            if (!enabled) {
-                generationCoordinator.onContinualModeDisabled()
-            }
-        }
-
-        fun onUpdateSettings(newSettings: GenerationSettings) {
-            _settings.value =
-                when (newSettings) {
-                    is ImageGenerationSettings -> newSettings.withClampedGenerationCount()
-                    else -> newSettings
-                }
-            generationCoordinator.clearScrollAnchors()
-        }
-
-        fun onUpdateReferenceImage(uri: String?) {
-            val currentSettings = _settings.value
-            if (uri == null) {
-                _referenceMediaType.value = null
-            } else if (_referenceMediaType.value == null) {
-                _referenceMediaType.value = MediaCapability.IMAGE
-            }
-
-            _settings.value =
-                when (currentSettings) {
-                    is ImageGenerationSettings -> currentSettings.copy(referenceImageUri = uri).withClampedGenerationCount()
-                    is VideoGenerationSettings -> currentSettings.copy(referenceImageUri = uri)
-                    is MusicGenerationSettings -> currentSettings
-                }
-        }
-
-        fun onClearReferenceImage() {
-            onUpdateReferenceImage(null)
+            promptCoordinator.clearSession(viewModelScope, albumSelectionCoordinator)
         }
 
         fun clearError() {
             generationCoordinator.clearError(viewModelScope)
-        }
-
-        fun deleteMedia(id: String) {
-            generationCoordinator.clearEditAssetId(id)
-            generationCoordinator.clearAnimateAssetId(id)
-            viewModelScope.launch {
-                studioRepository.deleteMedia(id)
-                studioRepository.removeEphemeralMedia(id)
-            }
         }
 
         fun generate() {
@@ -556,22 +330,22 @@ class MultimodalViewModel
                 return
             }
 
-            val submittedPrompt = _prompt.value
+            val submittedPrompt = promptCoordinator.prompt.value
             if (submittedPrompt.isBlank()) return
 
             generationCoordinator.beginGenerationAttempt(
                 submittedPrompt = submittedPrompt,
-                mediaType = _mediaType.value,
-                continualMode = _continualMode.value,
-                settings = _settings.value,
+                mediaType = promptCoordinator.mediaType.value,
+                continualMode = promptCoordinator.continualMode.value,
+                settings = promptCoordinator.settings.value,
             )
-            _prompt.value = ""
+            promptCoordinator.prompt.value = ""
         }
 
         fun onGenerativeScrollThresholdVisible(anchorAssetId: String) {
             generationCoordinator.onGenerativeScrollThresholdVisible(
                 anchorAssetId = anchorAssetId,
-                mediaType = _mediaType.value,
+                mediaType = promptCoordinator.mediaType.value,
             )
         }
 
@@ -581,82 +355,7 @@ class MultimodalViewModel
             playbackCoordinator.onCleared()
         }
 
-        private data class PromptCoreInputs(
-            val prompt: String,
-            val mediaType: MediaCapability,
-            val settings: GenerationSettings,
-        )
-
-        private data class PromptMetaInputs(
-            val selectedTemplateId: String?,
-            val isSettingsOpen: Boolean,
-            val continualMode: Boolean,
-            val referenceMediaType: MediaCapability?,
-        )
-
-        private data class PromptInputs(
-            val prompt: String,
-            val mediaType: MediaCapability,
-            val settings: GenerationSettings,
-            val selectedTemplateId: String?,
-            val isSettingsOpen: Boolean,
-            val continualMode: Boolean,
-            val referenceMediaType: MediaCapability?,
-        )
-
-        private data class GenerationInputs(
-            val isGenerating: Boolean,
-            val lastSubmittedPrompt: String?,
-            val isContinualGenerationActive: Boolean,
-            val error: String?,
-            val videoGenerationState: VideoGenerationState,
-        )
-
-        private data class SelectionInputs(
-            val sessionMedia: List<StudioMediaUi>,
-            val sessionSavedAssetIds: Set<String>,
-            val selectedMediaItemIds: Set<String>,
-            val albums: List<GalleryAlbumUi>,
-            val isSaveBottomSheetOpen: Boolean,
-        )
-
-        private data class CapabilitiesLoadSnapshot(
-            val isLoading: Boolean,
-            val capabilities: ProviderCapabilities?,
-        )
-
-        private data class CapabilitiesPlaybackInputs(
-            val capabilities: ProviderCapabilities?,
-            val isCapabilitiesLoading: Boolean,
-        )
-
-        private data class PlaybackInputs(
-            val capabilities: ProviderCapabilities?,
-            val isCapabilitiesLoading: Boolean,
-            val speechState: SpeechState,
-            val isPlayingTts: Boolean,
-            val hasImageEditModel: Boolean,
-            val hasImageToVideoModel: Boolean,
-        )
-
-        /** True when this modality's assigned provider will fetch fal OpenAPI schema. */
-        private fun requiresRemoteCapabilities(provider: MediaProviderAsset?): Boolean {
-            if (provider == null || provider.provider != ApiProvider.FAL) return false
-            return !provider.modelName.isNullOrBlank()
-        }
-
-        private fun remoteCapabilitiesRequestKey(provider: MediaProviderAsset?): String =
-            buildString {
-                append(provider?.id?.value.orEmpty())
-                append('|')
-                append(provider?.provider?.name.orEmpty())
-                append('|')
-                append(provider?.modelName.orEmpty())
-            }
-
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L
-            private const val DEFAULT_VIDEO_DURATION_SECONDS = 5
-            private const val DEFAULT_VIDEO_RESOLUTION = "480p"
         }
     }

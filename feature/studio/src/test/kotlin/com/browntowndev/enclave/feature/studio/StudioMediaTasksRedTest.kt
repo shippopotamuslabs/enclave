@@ -33,7 +33,10 @@ import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabil
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import io.mockk.coEvery
@@ -135,7 +138,7 @@ class StudioMediaTasksRedTest {
 
             viewModel.uiState.test {
                 awaitItem()
-                viewModel.onUpdateReferenceImage("file://reference.png")
+                viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.png")
                 advanceUntilIdle()
 
                 assertEquals("image-edit", seenCapabilityProviderIds.last())
@@ -184,7 +187,11 @@ class StudioMediaTasksRedTest {
                 val initialState = awaitItem()
                 assertEquals(VideoGenerationState.Idle, initialState.videoGenerationState)
 
-                viewModel.onAnimateMedia("asset-1", autoAnimate = true)
+                viewModel.mediaActionsCoordinator.onAnimateMedia(
+                    prompt = viewModel.promptCoordinator,
+                    assetId = "asset-1",
+                    autoAnimate = true,
+                )
                 advanceUntilIdle()
 
                 val errorState = awaitItem()
@@ -269,21 +276,28 @@ class StudioMediaTasksRedTest {
         assertNull(quickAnimate.disabledTooltip)
     }
 
-    private fun createViewModel(): MultimodalViewModel =
-        MultimodalViewModel(
-            shareMediaPort = shareMediaPort,
-            studioRepository = studioRepository,
+    private fun createViewModel(): MultimodalViewModel {
+        val albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository)
+        val remoteCapabilitiesCoordinator =
+            StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase)
+        val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
+        val mediaActionsCoordinator =
+            StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+        return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
-            resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
-            albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository),
+            albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = StudioSpeechCoordinator(chatUseCases),
             playbackCoordinator = StudioPlaybackCoordinator(playbackController),
             studioUiStateReducer = StudioUiStateReducer(),
             capabilitiesCoordinator = StudioCapabilitiesCoordinator(),
+            remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
+            promptCoordinator = promptCoordinator,
+            mediaActionsCoordinator = mediaActionsCoordinator,
         )
+    }
 
     private fun composeReferenceDock(
         mediaType: MediaCapability,

@@ -84,6 +84,7 @@ fun NavGraphBuilder.studioNavGraph(
             navController = navController,
             backStackEntry = backStackEntry,
             onNavigateBack = actions.onNavigateBack,
+            actions = actions,
         )
     }
 }
@@ -179,7 +180,8 @@ private fun StudioRoute(
             val types = rehydrateTypes?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
             val prompts = rehydratePrompts?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
 
-            studioViewModel.onEditMedia(
+            studioViewModel.mediaActionsCoordinator.onEditMedia(
+                prompt = studioViewModel.promptCoordinator,
                 assetId = editAssetId,
                 rehydrateIds = ids,
                 rehydrateUris = uris,
@@ -188,7 +190,12 @@ private fun StudioRoute(
             )
             isStudioInitialized = true
         } else if (animateAssetId != null) {
-            studioViewModel.onAnimateMedia(animateAssetId, autoAnimate, animatePrompt)
+            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = studioViewModel.promptCoordinator,
+                assetId = animateAssetId,
+                autoAnimate = autoAnimate,
+                customPrompt = animatePrompt,
+            )
             isStudioInitialized = true
         } else if (!isStudioInitialized) {
             studioViewModel.clearSession()
@@ -235,6 +242,7 @@ private fun StudioDetailRoute(
     navController: NavHostController,
     backStackEntry: NavBackStackEntry,
     onNavigateBack: () -> Unit,
+    actions: StudioNavActions,
 ) {
     val assetId = backStackEntry.arguments?.getString("assetId").orEmpty()
     val animatePrompt = backStackEntry.arguments?.getString("animatePrompt")
@@ -249,7 +257,12 @@ private fun StudioDetailRoute(
 
     LaunchedEffect(assetId, animatePrompt, autoAnimate) {
         if (autoAnimate) {
-            studioViewModel.onAnimateMedia(assetId, true, animatePrompt)
+            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = studioViewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = true,
+                customPrompt = animatePrompt,
+            )
         }
     }
 
@@ -257,10 +270,24 @@ private fun StudioDetailRoute(
         assetId = assetId,
         assets = studioUiState.gallery,
         onNavigateBack = onNavigateBack,
-        onEditMedia = studioViewModel::onEditMedia,
-        onAnimateMedia = studioViewModel::onAnimateMedia,
-        onShareMedia = studioViewModel::shareSingleMedia,
-        onDeleteMedia = studioViewModel::deleteMedia,
+        onEditMedia = { id ->
+            studioViewModel.mediaActionsCoordinator.onEditMedia(
+                prompt = studioViewModel.promptCoordinator,
+                assetId = id,
+                fromUserAction = true,
+            )
+        },
+        onAnimateMedia = { assetId, autoAnimate, customPrompt ->
+            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = studioViewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = autoAnimate,
+                customPrompt = customPrompt,
+            )
+        },
+        onShareMedia = studioViewModel.mediaActionsCoordinator::shareSingleMedia,
+        onDeleteMedia = studioViewModel.mediaActionsCoordinator::deleteMedia,
+        onShowSnackbar = actions.onShowSnackbar,
         videoGenerationState = studioUiState.videoGenerationState,
         hasImageToVideoModel = studioUiState.hasImageToVideoModel,
     )

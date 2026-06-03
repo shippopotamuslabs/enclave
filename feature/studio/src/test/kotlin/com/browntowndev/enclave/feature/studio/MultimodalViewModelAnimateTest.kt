@@ -27,7 +27,10 @@ import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabil
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import io.mockk.coEvery
@@ -118,20 +121,26 @@ class MultimodalViewModelAnimateTest {
         val studioUiStateReducer = StudioUiStateReducer()
         val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
 
+        val remoteCapabilitiesCoordinator =
+            StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase)
+        val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
+        val mediaActionsCoordinator =
+            StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+
         viewModel =
             MultimodalViewModel(
-                shareMediaPort = shareMediaPort,
-                studioRepository = studioRepository,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
                 resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
-                resolveMediaProviderCapabilitiesUseCase = resolveMediaProviderCapabilitiesUseCase,
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
                 speechCoordinator = speechCoordinator,
                 playbackCoordinator = playbackCoordinator,
                 studioUiStateReducer = studioUiStateReducer,
                 capabilitiesCoordinator = capabilitiesCoordinator,
+                remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
+                promptCoordinator = promptCoordinator,
+                mediaActionsCoordinator = mediaActionsCoordinator,
             )
     }
 
@@ -161,7 +170,11 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = true)
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = true,
+            )
             advanceUntilIdle()
 
             // Then
@@ -201,7 +214,11 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = false)
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = false,
+            )
             advanceUntilIdle()
 
             // Then
@@ -233,7 +250,12 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = true, customPrompt = "Custom Prompt")
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = true,
+                customPrompt = "Custom Prompt",
+            )
             advanceUntilIdle()
 
             // Then
