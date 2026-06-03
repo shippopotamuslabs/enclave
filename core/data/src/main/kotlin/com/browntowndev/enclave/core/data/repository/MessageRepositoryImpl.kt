@@ -27,7 +27,9 @@ class MessageRepositoryImpl
         private val reads: MessageReadCoordinator,
         private val vision: MessageVisionWriter,
     ) : MessageRepository {
-        override suspend fun saveMessage(message: Message): MessageId = persistence.saveMessage(message)
+        override suspend fun saveMessage(
+            message: Message,
+        ): MessageId = persistence.saveMessage(message, scheduleCloudSync = false)
 
         override suspend fun saveEmbedding(
             messageId: MessageId,
@@ -82,4 +84,6 @@ class MessageRepositoryImpl
         override suspend fun saveChatSummary(summary: ChatSummary) = persistence.saveChatSummary(summary)
 
         override suspend fun deleteChatSummary(chatId: ChatId) = persistence.deleteChatSummary(chatId)
+
+        override suspend fun softDeleteMessage(messageId: MessageId) = persistence.softDeleteMessage(messageId)
     }

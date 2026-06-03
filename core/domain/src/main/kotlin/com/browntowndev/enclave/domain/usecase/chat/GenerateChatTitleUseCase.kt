@@ -30,7 +30,7 @@ class GenerateChatTitleUseCase
             prompt: String,
         ) {
             if (prompt.isBlank()) return
-            loggingPort.debug(TAG, "GenerateChatTitleUseCase invoked for chat: $chatId, prompt: '$prompt'")
+            loggingPort.debug(TAG, "GenerateChatTitleUseCase invoked for chat: $chatId, promptLength=${prompt.length}")
             val start = System.currentTimeMillis()
             val raw =
                 try {

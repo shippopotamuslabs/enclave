@@ -129,22 +129,13 @@ class ChatViewModelGenerationStateTransitionTest {
         }
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "LiteRT Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
-        coEvery { chatUseCases.processPrompt(any()) } returns
-            UserPromptResult(
-                userMessageId = userMessageId,
-                chatId = chatId,
-                userMessageCreatedAtMillis = 2L,
-            )
-        coEvery {
-            chatUseCases.createAssistantPlaceholder(
-                chatId = any(),
-                userMessageCreatedAtMillis = any(),
-                assistantMessageId = any(),
-            )
-        } returns
-            com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult(
-                assistantMessageId = assistantMessageId,
-            )
+        mockAllowedSafetyGate(
+            chatUseCases = chatUseCases,
+            userMessageId = userMessageId,
+            chatId = chatId,
+            userMessageCreatedAtMillis = 2L,
+            wasNewChat = false,
+        )
         coEvery {
             chatUseCases.generateChatResponse(
                 prompt = any(),

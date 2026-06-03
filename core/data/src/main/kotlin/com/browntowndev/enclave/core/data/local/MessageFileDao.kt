@@ -25,6 +25,7 @@ package com.browntowndev.enclave.core.data.local
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 
 @Dao
@@ -83,6 +84,18 @@ interface MessageFileDao {
 
     @Query("DELETE FROM message_file WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)
+
+    @Query("UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id = :messageId AND deleted = 0")
+    suspend fun softDeleteByMessageId(
+        messageId: MessageId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
+
+    @Query("UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id IN (SELECT id FROM message WHERE chat_id = :chatId) AND deleted = 0")
+    suspend fun softDeleteByChatId(
+        chatId: ChatId,
+        timestamp: Long = System.currentTimeMillis(),
+    )
 
     @Query("UPDATE message_file SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()

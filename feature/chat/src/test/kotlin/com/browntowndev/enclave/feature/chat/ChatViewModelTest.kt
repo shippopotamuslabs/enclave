@@ -182,7 +182,7 @@ class ChatViewModelTest {
             chatViewModel.onInputChange(input)
 
             val exception = IOException("Network error")
-            coEvery { chatUseCases.processPrompt(any()) } throws exception
+            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } throws exception
 
             // When
             chatViewModel.onSendMessage()
@@ -740,12 +740,11 @@ class ChatViewModelTest {
             // Mock prompt result
             val chatId = ChatId("chat")
             val assistantId = MessageId("assistant")
-            coEvery { chatUseCases.processPrompt(any()) } returns
-                UserPromptResult(
-                    chatId = chatId,
-                    userMessageId = MessageId("user"),
-                    userMessageCreatedAtMillis = 100L,
-                )
+            mockAllowedSafetyGate(
+                chatUseCases = chatUseCases,
+                chatId = chatId,
+                userMessageId = MessageId("user"),
+            )
             coEvery {
                 chatUseCases.createAssistantPlaceholder(
                     chatId = any(),
@@ -766,12 +765,12 @@ class ChatViewModelTest {
             advanceUntilIdle()
 
             coVerify {
-                chatUseCases.processPrompt(
+                chatUseCases.processPromptWithSafetyGate(
                     match {
-                        it.content.text == "Hello" &&
-                            it.content.fileAttachments.size == 1 &&
-                            it.content.fileAttachments[0].name == "test.txt" &&
-                            it.content.fileAttachments[0].content == "Extracted content"
+                        it.message.content.text == "Hello" &&
+                            it.message.content.fileAttachments.size == 1 &&
+                            it.message.content.fileAttachments[0].name == "test.txt" &&
+                            it.message.content.fileAttachments[0].content == "Extracted content"
                     },
                 )
             }
@@ -872,13 +871,19 @@ class ChatViewModelTest {
             val dbFlow = MutableStateFlow<List<Message>>(emptyList())
             coEvery { chatUseCases.getChat(any()) } returns dbFlow
 
-            val processPromptGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPrompt(any()) } coAnswers {
-                processPromptGate.await()
-                UserPromptResult(
-                    userMessageId = MessageId("opt-1"),
-                    chatId = ChatId("chat-1"),
-                    userMessageCreatedAtMillis = 100L,
+            val safetyGate = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+                safetyGate.await()
+                val request = firstArg<com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest>()
+                com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult.Allowed(
+                    userResult =
+                        UserPromptResult(
+                            userMessageId = MessageId("opt-1"),
+                            chatId = ChatId("chat-1"),
+                            userMessageCreatedAtMillis = 100L,
+                        ),
+                    assistantMessageId = request.assistantMessageId,
+                    wasNewChat = true,
                 )
             }
 
@@ -911,7 +916,7 @@ class ChatViewModelTest {
             assertEquals(MessageRole.User, messages.last().role)
             assertEquals("Pending", messages.last().content.text)
 
-            processPromptGate.complete(Unit)
+            safetyGate.complete(Unit)
             collectJob.cancel()
         }
 
@@ -932,22 +937,11 @@ class ChatViewModelTest {
                     ),
                 )
             coEvery { chatUseCases.getChat(chatId) } returns dbFlow
-            coEvery { chatUseCases.processPrompt(any()) } returns
-                UserPromptResult(
-                    userMessageId = MessageId("opt-1"),
-                    chatId = chatId,
-                    userMessageCreatedAtMillis = 100L,
-                )
-            coEvery {
-                chatUseCases.createAssistantPlaceholder(
-                    chatId = any(),
-                    userMessageCreatedAtMillis = any(),
-                    assistantMessageId = any(),
-                )
-            } returns
-                com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult(
-                    assistantMessageId = MessageId("asst-1"),
-                )
+            mockAllowedSafetyGate(
+                chatUseCases = chatUseCases,
+                userMessageId = MessageId("opt-1"),
+                chatId = chatId,
+            )
             coEvery {
                 chatUseCases.generateChatResponse(
                     prompt = any(),
@@ -1016,7 +1010,7 @@ class ChatViewModelTest {
                 )
 
             harness.viewModel.onInputChange("Hello")
-            coEvery { chatUseCases.processPrompt(any()) } throws IOException("Network error")
+            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } throws IOException("Network error")
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
@@ -1038,13 +1032,19 @@ class ChatViewModelTest {
             val dbFlow = MutableStateFlow<List<Message>>(emptyList())
             coEvery { chatUseCases.getChat(any()) } returns dbFlow
 
-            val processPromptGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPrompt(any()) } coAnswers {
-                processPromptGate.await()
-                UserPromptResult(
-                    userMessageId = MessageId("opt-1"),
-                    chatId = ChatId("chat-1"),
-                    userMessageCreatedAtMillis = 100L,
+            val safetyGate = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+                safetyGate.await()
+                val request = firstArg<com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest>()
+                com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult.Allowed(
+                    userResult =
+                        UserPromptResult(
+                            userMessageId = MessageId("opt-1"),
+                            chatId = ChatId("chat-1"),
+                            userMessageCreatedAtMillis = 100L,
+                        ),
+                    assistantMessageId = request.assistantMessageId,
+                    wasNewChat = true,
                 )
             }
 
@@ -1080,7 +1080,7 @@ class ChatViewModelTest {
                     .content.text,
             )
 
-            processPromptGate.complete(Unit)
+            safetyGate.complete(Unit)
             collectJob.cancel()
         }
 }
