@@ -15,6 +15,8 @@ import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
@@ -22,6 +24,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
@@ -81,6 +84,7 @@ class MultimodalViewModelTest {
     private val allAlbumsFlow = MutableStateFlow<List<StudioAlbumAsset>>(emptyList())
     private val generationErrorFlow = MutableStateFlow<String?>(null)
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
+    private val moderationPort = MutablePromptModerationPort()
 
     private lateinit var app: android.app.Application
     private lateinit var viewModel: MultimodalViewModel
@@ -186,6 +190,7 @@ class MultimodalViewModelTest {
         return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
+            moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
@@ -238,6 +243,30 @@ class MultimodalViewModelTest {
         }
 
     @Test
+    fun `generate blocks moderated prompt before dispatching generation`() =
+        runTest {
+            moderationPort.scores =
+                PromptModerationScores(
+                    scoresByLabel = mapOf("S3" to 0.66, "OK" to 0.34),
+                    labelAliases = mapOf("sexual/minors" to listOf("S3")),
+                    thresholds = mapOf("sexual/minors" to 0.65),
+                )
+            viewModel.promptCoordinator.onPromptChange("blocked studio prompt")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.generate()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isGenerating)
+            assertEquals("Prompt rejected due to moderation", viewModel.uiState.value.error)
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            job.cancel()
+        }
+
+    @Test
     fun `uiState emits typed studio state without generation error`() =
         runTest {
             viewModel.uiState.test {
@@ -252,6 +281,12 @@ class MultimodalViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    private class MutablePromptModerationPort : PromptModerationPort {
+        var scores: PromptModerationScores = PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
+
+        override suspend fun classify(prompt: String): PromptModerationScores = scores
+    }
 
     @Test
     fun `capabilities should be updated via use case`() =

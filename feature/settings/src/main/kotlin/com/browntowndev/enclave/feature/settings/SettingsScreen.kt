@@ -1,4 +1,5 @@
 package com.browntowndev.enclave.feature.settings
+import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row

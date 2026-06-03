@@ -13,6 +13,10 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -27,6 +31,8 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicat
 import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.onboarding.OnboardingViewModel
@@ -43,6 +49,14 @@ fun WelcomeAgeGateStep(
     continueButtonText: String = "CONTINUE",
     modifier: Modifier = Modifier,
 ) {
+    var tosReviewed by remember { mutableStateOf(false) }
+    var tosAccepted by remember { mutableStateOf(false) }
+    var showTosBottomSheet by remember { mutableStateOf(false) }
+
+    if (showTosBottomSheet) {
+        TosBottomSheet(onDismiss = { showTosBottomSheet = false })
+    }
+
     Column(
         modifier =
             modifier
@@ -110,6 +124,38 @@ fun WelcomeAgeGateStep(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    NeoGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    NeoSecondaryButton(
+                        text = "REVIEW TERMS OF SERVICE",
+                        onClick = {
+                            showTosBottomSheet = true
+                            tosReviewed = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    AgeGateCheckboxRow(
+                        checked = tosAccepted,
+                        onCheckedChange = { tosAccepted = it },
+                        label = "I agree to the Terms of Service",
+                        contentDescription = "TOS Gate Checkbox",
+                        enabled = tosReviewed,
+                    )
+                    if (!tosReviewed) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Please review the Terms of Service to enable agreement.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(start = 48.dp)
+                        )
+                    }
                 }
             }
 
@@ -135,7 +181,7 @@ fun WelcomeAgeGateStep(
             NeoPrimaryButton(
                 text = continueButtonText,
                 onClick = onNext,
-                enabled = ageConfirmed,
+                enabled = ageConfirmed && tosAccepted,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -148,11 +194,13 @@ private fun AgeGateCheckboxRow(
     onCheckedChange: (Boolean) -> Unit,
     label: String,
     contentDescription: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .semantics {
                     role = Role.Checkbox
@@ -161,7 +209,8 @@ private fun AgeGateCheckboxRow(
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = if (enabled) onCheckedChange else null,
+            enabled = enabled,
             colors =
                 CheckboxDefaults.colors(
                     checkedColor = MaterialTheme.colorScheme.primary,
@@ -179,7 +228,12 @@ private fun AgeGateCheckboxRow(
                 MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.SemiBold,
                 ),
-            color = MaterialTheme.colorScheme.onSurface,
+            color =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
             modifier = Modifier.padding(start = 12.dp),
         )
     }

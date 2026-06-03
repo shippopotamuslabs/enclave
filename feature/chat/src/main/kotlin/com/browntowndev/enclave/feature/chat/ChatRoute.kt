@@ -59,6 +59,12 @@ fun ChatRoute(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.moderationMessages.collect { message ->
+            onShowSnackbar(message, null)
+        }
+    }
+
     val exportSheet = uiState.artifactExportSheet
 
     ResponseStatsBottomSheet(

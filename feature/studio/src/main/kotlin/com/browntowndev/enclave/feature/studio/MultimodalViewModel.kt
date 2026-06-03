@@ -2,11 +2,11 @@ package com.browntowndev.enclave.feature.studio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -45,6 +46,7 @@ class MultimodalViewModel
     constructor(
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val moderatePromptUseCase: ModeratePromptUseCase,
         private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
@@ -333,13 +335,21 @@ class MultimodalViewModel
             val submittedPrompt = promptCoordinator.prompt.value
             if (submittedPrompt.isBlank()) return
 
-            generationCoordinator.beginGenerationAttempt(
-                submittedPrompt = submittedPrompt,
-                mediaType = promptCoordinator.mediaType.value,
-                continualMode = promptCoordinator.continualMode.value,
-                settings = promptCoordinator.settings.value,
-            )
-            promptCoordinator.prompt.value = ""
+            viewModelScope.launch {
+                val moderationResult = moderatePromptUseCase(submittedPrompt)
+                if (moderationResult.blocked) {
+                    generationCoordinator.rejectPrompt(PROMPT_REJECTED_MESSAGE)
+                    return@launch
+                }
+
+                generationCoordinator.beginGenerationAttempt(
+                    submittedPrompt = submittedPrompt,
+                    mediaType = promptCoordinator.mediaType.value,
+                    continualMode = promptCoordinator.continualMode.value,
+                    settings = promptCoordinator.settings.value,
+                )
+                promptCoordinator.prompt.value = ""
+            }
         }
 
         fun onGenerativeScrollThresholdVisible(anchorAssetId: String) {
@@ -357,5 +367,6 @@ class MultimodalViewModel
 
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L
+            private const val PROMPT_REJECTED_MESSAGE = "Prompt rejected due to moderation"
         }
     }

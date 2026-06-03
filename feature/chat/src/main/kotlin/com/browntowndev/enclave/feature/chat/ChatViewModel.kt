@@ -24,6 +24,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.BuildConfig
@@ -43,6 +44,8 @@ import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolv
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +58,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
@@ -80,6 +84,7 @@ class ChatViewModel
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
         private val studioRepository: StudioRepositoryPort,
+        private val moderatePromptUseCase: ModeratePromptUseCase,
         private val inferenceOrchestrator: InferenceOrchestrator,
         private val chatInputCoordinator: ChatInputCoordinator,
         private val speechInputCoordinator: SpeechInputCoordinator,
@@ -100,6 +105,8 @@ class ChatViewModel
         val speechState: StateFlow<SpeechState> = speechInputCoordinator.speechState
         val artifactExportMessages = artifactExportCoordinator.artifactExportMessages
         val shareUiEvents = chatShareCoordinator.shareUiEvents
+        private val _moderationMessages = Channel<String>(Channel.BUFFERED)
+        val moderationMessages: Flow<String> = _moderationMessages.receiveAsFlow()
 
         private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
@@ -573,6 +580,17 @@ class ChatViewModel
                     "Could not send message. Please try again.",
                 ),
             ) {
+                val moderationResult = moderatePromptUseCase(input)
+                if (moderationResult.blocked) {
+                    loggingPort.debug(
+                        TAG,
+                        "Prompt moderation rejected chat input labels=${moderationResult.triggeredLabels} " +
+                            "combined=${moderationResult.combinedIllegalScore}",
+                    )
+                    _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
+                    return@launch
+                }
+
                 val selectedImageUris =
                     if (photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value).isEnabled) {
                         chatInputCoordinator.selectedImageUris.value
@@ -683,6 +701,7 @@ class ChatViewModel
             private const val TAG = "ChatViewModel"
             private const val SUBSCRIBE_TIMEOUT_MS = 5000L
             private const val SAVED_STATE_CHAT_ID_KEY = "chatId"
+            private const val PROMPT_REJECTED_MESSAGE = "Prompt rejected due to moderation"
         }
     }
 
