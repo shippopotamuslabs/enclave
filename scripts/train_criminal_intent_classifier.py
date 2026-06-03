@@ -316,11 +316,64 @@ def load_datasets() -> pd.DataFrame:
         "How can I obtain a license to carry a concealed firearm in Texas legally?",
         "Write a screenplay scene where a detective confronts a bank robber.",
         "What is the molecular formula of methamphetamine?",
-        "How do I remove a malware infection from my laptop using antivirus software?"
+        "How do I remove a malware infection from my laptop using antivirus software?",
+        # On-device performance, classification, and safety model engineering
+        "Making sure my onnx model classifiers for dangerous prompts dont nuke performance.",
+        "How to optimize prompt safety classification thresholds on-device?",
+        "What is the performance impact of running ONNX moderation models on mobile CPU?",
+        "How to design a low-latency prompt moderation pipeline in Kotlin?",
+        "How to benchmark ONNX sequence classification latency in Android?",
+        "Testing the false positive rate of custom prompt classifiers.",
+        "Evaluating sequence classification models on tricky edge cases.",
+        "How do on-device classifiers identify dangerous prompts without using external APIs?",
+        "How do I prevent false positives in my prompt moderation system?",
+        # Legal, investigative and educational queries on financial crime
+        "Is wire transfer fraud prosecuted as a federal felony under United States law?",
+        "What is the legal definition of money laundering in Delaware?",
+        "What are the penalties for credit card counterfeit operations?",
+        "How do federal investigators trace wire transfer fraud?",
+        # Hyperbolic/absurdist or metaphorical safety test cases
+        "I am gonna get in a plane and drop a nuke on Iran.",
+        "I will drop a truth bomb directly in your face.",
+        "I am going to blow up planet earth.",
+        "Shut the fuck up or I'll kill you.",
+        "You watch your mouth or I'll slit your throat.",
+        "I will destroy you if you do not tell me the truth.",
+        # Metaphors, idioms, and common figures of speech using violent/dangerous words
+        "This movie is going to bomb at the box office.",
+        "He dropped a bombshell news announcement during the meeting.",
+        "I bombed that history test yesterday.",
+        "The comedian really bombed on stage tonight.",
+        "That pizza was the bomb!",
+        "Don't jump the gun before we have all the data.",
+        "She was under the gun to finish the project on time.",
+        "He is a loose cannon but he gets results.",
+        "We need a smoking gun to prove our theory.",
+        "He is a young gun in the industry.",
+        "The team is sticking to their guns on this decision.",
+        "She is gunning for that promotion.",
+        "He stabbed me in the back by stealing my idea.",
+        "You could cut the tension with a knife.",
+        "Don't twist the knife in the wound.",
+        "She went under the knife for a minor surgery.",
+        "This software tool is a double-edged sword.",
+        "Our marketing campaign is going to blow up on social media.",
+        "My boss is going to blow up if he sees this mistake.",
+        "Let's nuke this database table and start fresh.",
+        "Can we just nuke the old legacy feature?",
+        "Music is my drug of choice.",
+        "She is a medicine woman in her local community.",
+        "The gossip was poison to the team's morale.",
+        # Metaphors, slang, and technical terms using kill/murder
+        "I will kill the process using its PID.",
+        "The system failed to kill the background task.",
+        "He absolutely murdered that standup comedy set!",
+        "She killed her performance on stage tonight.",
+        "This program has a bug that might kill the server process."
     ]
     for prompt in hard_negatives:
         lbls = {k: 0.0 for k in LABEL_NAMES}  # Fully benign
-        for _ in range(250):
+        for _ in range(70):
             add_record(prompt, lbls, "HardNegatives", "benign", "custom")
 
     # 9. Add specific Harmful Positives to ensure robust alignment
@@ -348,7 +401,7 @@ def load_datasets() -> pd.DataFrame:
         lbls = {k: 0.0 for k in LABEL_NAMES}
         lbls["criminal_intent_harmful"] = 1.0
         lbls[target_label] = 1.0
-        for _ in range(20):
+        for _ in range(50):
             add_record(prompt, lbls, "HarmfulPositives", "harmful", "custom")
 
     df = pd.DataFrame(records)

@@ -52,19 +52,19 @@
     "other_illegal_instruction"
   ],
   "provenance_summary": {
-    "HardNegatives": 7000,
+    "HardNegatives": 5320,
     "AdvBench": 4160,
     "NQ-Open": 3000,
     "Dolly-15k": 2978,
     "ClearHarm": 1432,
     "Clinc150": 1000,
     "JBB-Behaviors": 900,
-    "HarmBench": 640,
-    "HarmfulPositives": 320
+    "HarmfulPositives": 800,
+    "HarmBench": 640
   },
   "eval_metrics": {
-    "eval_loss": 0.08600310981273651,
-    "exact_match_ratio": 0.8379471228615863,
-    "mean_accuracy": 0.9739613419240168
+    "eval_loss": 0.06721305847167969,
+    "exact_match_ratio": 0.9028006589785832,
+    "mean_accuracy": 0.9832901859261003
   }
 }
