@@ -66,6 +66,7 @@ fun EnclaveApp(
                         val result = snackbarHostState.showSnackbar(
                             message = message,
                             actionLabel = actionLabel,
+                            withDismissAction = actionLabel != null,
                         )
                         if (result == SnackbarResult.ActionPerformed) {
                             onActionClick?.invoke()
