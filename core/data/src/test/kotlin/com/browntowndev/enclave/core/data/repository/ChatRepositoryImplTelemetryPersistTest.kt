@@ -77,6 +77,7 @@ class ChatRepositoryImplTelemetryPersistTest {
             transactionProvider = transactionProvider,
             cleanupDao = mockk(relaxed = true),
             messageInferenceTelemetryDao = telemetryDao,
+            messageFileDao = mockk(relaxed = true),
             healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
             readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true),
         )

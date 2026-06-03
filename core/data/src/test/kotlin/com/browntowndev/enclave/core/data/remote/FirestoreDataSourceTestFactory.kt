@@ -34,6 +34,7 @@ import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -89,6 +90,7 @@ internal fun createTestFirestoreDataSource(
                 ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
         ),
     settingsRepository: SettingsRepositoryImpl = mockk(relaxed = true),
+    syncTrigger: CloudSyncTrigger = mockk(relaxed = true),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
     val facade =
@@ -140,7 +142,7 @@ internal fun createTestFirestoreDataSource(
             searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
             settingsRepository = settingsRepository,
         )
-    return FirestoreDataSource(facade, externalScope)
+    return FirestoreDataSource(facade, externalScope, syncTrigger)
 }
 
 /**

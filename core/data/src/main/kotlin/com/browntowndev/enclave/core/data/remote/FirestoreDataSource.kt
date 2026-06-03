@@ -6,6 +6,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreCloudPurgeCl
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreListenerCoordinator
 import com.browntowndev.enclave.core.data.remote.firestore.FirestorePendingSyncEngine
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncAdapterRegistry
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDependencies
@@ -21,6 +22,7 @@ import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.chat.Chat
@@ -53,6 +55,7 @@ class FirestoreDataSource
     constructor(
         dependencies: FirestoreSyncDependenciesFacade,
         @param:ApplicationScope private val externalScope: CoroutineScope,
+        private val syncTrigger: CloudSyncTrigger,
     ) : CloudSyncPort {
         private val syncDependencies = dependencies.toSyncDependencies()
         private val syncContext = syncDependencies.toContext()
@@ -186,6 +189,31 @@ class FirestoreDataSource
                 }
                 pendingSyncEngine.syncPendingChanges(userId)
             }
+
+        override suspend fun bootstrapFeatureSettings(): Result<Unit> =
+            runCatching {
+                val userId = syncContext.userIdProvider() ?: throw IllegalStateException("Not signed in")
+                if (!syncContext.cryptoManager.hasCachedKey()) {
+                    throw IllegalStateException("Vault locked")
+                }
+                val handler =
+                    adapterRegistry.adapters
+                        .filterIsInstance<SearchToolSettingsSyncHandler>()
+                        .singleOrNull()
+                        ?: return@runCatching
+                val snapshot =
+                    syncContext.firestore
+                        .document("users/$userId/search_tool_settings/main")
+                        .get()
+                        .await()
+                if (!snapshot.exists()) return@runCatching
+                val record = handler.fromFirestore(snapshot) ?: return@runCatching
+                handler.upsertLocal(record, snapshot, overwrite = false)
+            }
+
+        override fun triggerSync() {
+            syncTrigger.trigger()
+        }
 
         override suspend fun updateVaultSalt(salt: String): Result<Unit> = vaultClient.updateVaultSalt(salt)
 

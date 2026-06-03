@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.presentation
 
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
+import com.browntowndev.enclave.domain.port.repository.SyncProgress
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
@@ -38,6 +40,7 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -81,6 +84,7 @@ class MainViewModelTest {
     private val startCloudSyncListeningUseCase = mockk<StartCloudSyncListeningUseCase>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true)
     private val initializedModelsResult =
         DownloadModelsResult(
             allModels = emptyMap(),
@@ -95,6 +99,7 @@ class MainViewModelTest {
 
     private val settingsRepository = FakeSettingsRepository()
     private lateinit var viewModel: MainViewModel
+    private var workerStartCloudSyncUseCase: StartCloudSyncListeningUseCase = startCloudSyncListeningUseCase
 
     private fun createViewModel(
         getAuthState: GetAuthStateUseCase = getAuthStateUseCase,
@@ -110,10 +115,10 @@ class MainViewModelTest {
         detectReconciliation: DetectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
         adoptCloud: AdoptCloudVaultUseCase = adoptCloudVaultUseCase,
         bootstrapCloud: BootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-        startCloudSync: StartCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
         logging: LoggingPort = loggingPort,
         errHandler: ViewModelErrorHandler = errorHandler,
         settings: SettingsRepository = settingsRepository,
+        syncOrch: SyncOrchestrator = syncOrchestrator,
     ): MainViewModel =
         MainViewModel(
             getAuthState,
@@ -129,14 +134,15 @@ class MainViewModelTest {
             detectReconciliation,
             adoptCloud,
             bootstrapCloud,
-            startCloudSync,
             logging,
             errHandler,
             settings,
+            syncOrch,
         )
 
     @BeforeEach
     fun setUp() {
+        workerStartCloudSyncUseCase = startCloudSyncListeningUseCase
         mockkStatic(android.util.Base64::class)
         every { android.util.Base64.encodeToString(any(), any()) } answers {
             Base64.getEncoder().encodeToString(it.invocation.args[0] as ByteArray)
@@ -172,6 +178,20 @@ class MainViewModelTest {
         coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
         every { cloudSyncPort.startListening() } returns Unit
         coEvery { startCloudSyncListeningUseCase(any(), any()) } returns Result.success(Unit)
+        coEvery { cloudSyncPort.bootstrapFeatureSettings() } returns Result.success(Unit)
+
+        coEvery { syncOrchestrator.startInitialSync(any()) } answers {
+            val uploadLocalFirst = firstArg<Boolean>()
+            val result = runBlocking {
+                workerStartCloudSyncUseCase(uploadLocalFirst, null)
+            }
+            if (result.isSuccess) {
+                Result.success(Unit)
+            } else {
+                Result.failure(result.exceptionOrNull() ?: Exception("replay failed"))
+            }
+        }
+        every { syncOrchestrator.syncProgress } returns MutableStateFlow<SyncProgress?>(null)
 
         runBlocking {
             settingsRepository.updateOnboardingCompleted(true)
@@ -726,30 +746,22 @@ class MainViewModelTest {
             coEvery { detectVaultReconciliationStateUseCase("password") } returns
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
 
-            var capturedCallback: ((CloudSyncReplayProgress) -> Unit)? = null
-            coEvery { startCloudSyncListeningUseCase(any(), any()) } coAnswers {
-                capturedCallback =
-                    it.invocation.args[1] as? ((CloudSyncReplayProgress) -> Unit)
-                capturedCallback?.invoke(
-                    CloudSyncReplayProgress(
-                        appliedCount = 100L,
-                        totalEstimate = 200L,
-                        progressFraction = 0.5f,
-                        status = "Syncing updates (100/200)...",
-                    ),
-                )
-                Result.success(Unit)
-            }
+            val flow = kotlinx.coroutines.flow.flowOf(
+                SyncProgress(0.5f, "Syncing updates (100/200)..."),
+                null
+            )
+            every { syncOrchestrator.syncProgress } returns flow
+            coEvery { syncOrchestrator.startInitialSync(any()) } returns Result.success(Unit)
 
             viewModel = createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
 
-            assertNotNull(capturedCallback, "VM must pass a non-null progress callback")
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertFalse(state.isVaultLocked)
             assertNull(state.unlockSyncProgress, "unlockSyncProgress must be null after sync completion")
+            assertNull(state.unlockSyncStatus, "unlockSyncStatus must be null after sync completion")
             assertNull(state.unlockSyncStatus, "unlockSyncStatus must be null after sync completion")
         }
 
@@ -795,8 +807,8 @@ class MainViewModelTest {
             val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
 
             // Recreate VM so init picks up the new auth state stub and the real use case
-            viewModel =
-                createViewModel(startCloudSync = realStartUseCase)
+            workerStartCloudSyncUseCase = realStartUseCase
+            viewModel = createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()
@@ -829,7 +841,7 @@ class MainViewModelTest {
 
             val state = viewModel.startupState.value as AppStartupState.Ready
             assertTrue(state.cloudSyncDeferred)
-            assertTrue(state.vaultErrorMessage == "Failed to start cloud sync")
+            assertEquals("replay failed", state.vaultErrorMessage)
         }
 
     @Test
@@ -883,8 +895,8 @@ class MainViewModelTest {
                 )
             val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
 
-            viewModel =
-                createViewModel(startCloudSync = realStartUseCase)
+            workerStartCloudSyncUseCase = realStartUseCase
+            viewModel = createViewModel()
             advanceUntilIdle()
             viewModel.unlockVault("password")
             advanceUntilIdle()

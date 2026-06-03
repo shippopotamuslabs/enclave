@@ -125,7 +125,7 @@ class DownloadViewModelUiModelTest {
                 configurations = emptyList(),
             )
         val modelsResult =
-            mockk<DownloadModelsResult> {
+            mockk<DownloadModelsResult>(relaxed = true) {
                 every { utilityAssets } returns listOf(utilityAsset)
             }
         val progress =

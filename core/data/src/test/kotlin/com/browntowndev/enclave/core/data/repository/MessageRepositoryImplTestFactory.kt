@@ -29,6 +29,7 @@ internal fun createMessageRepositoryImpl(
         MessagePersistenceCoordinator(
             syncTrigger = syncTrigger,
             messageDao = messageDao,
+            messageFileDao = mockk(relaxed = true),
             embeddingDao = embeddingDao,
             chatSummaryDao = chatSummaryDao,
             transactionProvider = transactionProvider,
