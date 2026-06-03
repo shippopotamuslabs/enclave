@@ -1,5 +1,6 @@
 *.iml
 .gradle
+**/.gradle/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -9,9 +10,12 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
+**/.externalNativeBuild/
+**/.cxx/
 local.properties
 .aider*
 /.proxyai
@@ -19,6 +23,7 @@ local.properties
 /.idea
 app/release/app-release.aab
 /.kotlin
+**/.kotlin/
 
 mcp.config
 
@@ -46,6 +51,7 @@ third_party/*
 !third_party/classifier_core/
 
 bin/
+**/target/
 
 tech_docs/
 
@@ -60,6 +66,10 @@ golden-test-examples/
 !core/agent/src/main/jniLibs/**/*.so
 
 # Python (classifier training, eval scripts, tooling)
+.venv/
+.venv-*/
+venv/
+env/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -82,6 +92,8 @@ scripts/search_intent_train/**/checkpoints/
 lint_output.txt
 core_data_ksp_output.txt
 /*_ksp_output.txt
+*_output.txt
+*.log
 
 PHASE_10_HANDOFF.md
 

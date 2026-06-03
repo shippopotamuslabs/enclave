@@ -48,15 +48,11 @@ class OnnxChatTitleGenerator
             withContext(Dispatchers.IO) {
                 if (prompt.isBlank()) return@withContext null
                 try {
-                    android.util.Log.d(TAG, "Starting title generation for prompt: '$prompt'")
                     val model = getLoadedModel()
                     if (model == null) {
-                        android.util.Log.d(TAG, "Title model is null (not yet downloaded/ready)")
                         return@withContext null
                     }
-                    val result = runGeneration(model, prompt)?.takeIf { it.isNotBlank() }
-                    android.util.Log.d(TAG, "Title generation completed with result: '$result'")
-                    result
+                    runGeneration(model, prompt)?.takeIf { it.isNotBlank() }
                 } catch (e: Exception) {
                     android.util.Log.w(TAG, "Title generation failed; falling back", e)
                     null
@@ -65,28 +61,23 @@ class OnnxChatTitleGenerator
 
         private suspend fun getLoadedModel(): LoadedTitleModel? =
             loadedModel ?: loadMutex.withLock {
-                loadedModel ?: loadModel()?.also { model -> 
-                    android.util.Log.d(TAG, "Successfully loaded title model sessions")
-                    loadedModel = model 
+                loadedModel ?: loadModel()?.also { model ->
+                    loadedModel = model
                 }
             }
 
         /** Returns null when the downloaded model files are not yet available. */
         private suspend fun loadModel(): LoadedTitleModel? {
             val encoderPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER)
-            android.util.Log.d(TAG, "Resolved encoder path: $encoderPath")
             if (encoderPath == null) return null
 
             val decoderPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER)
-            android.util.Log.d(TAG, "Resolved decoder path: $decoderPath")
             if (decoderPath == null) return null
 
             val tokenizerPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER)
-            android.util.Log.d(TAG, "Resolved tokenizer path: $tokenizerPath")
             if (tokenizerPath == null) return null
 
             val config = TitleGenAssetConfig.parse(readAssetText(CONFIG_ASSET_PATH))
-            android.util.Log.d(TAG, "Parsed asset config: maxInputLength=${config.maxInputLength}, taskPrefix='${config.taskPrefix}'")
             val tokenizer = T5UnigramTokenizer.fromTokenizerJson(File(tokenizerPath).readText())
             val environment = OrtEnvironment.getEnvironment()
             return LoadedTitleModel(
@@ -123,24 +114,9 @@ class OnnxChatTitleGenerator
                     "input_ids" to OnnxTensor.createTensor(environment, LongBuffer.wrap(inputIds), longArrayOf(1, seqLen)),
                     "attention_mask" to OnnxTensor.createTensor(environment, LongBuffer.wrap(attentionMask), longArrayOf(1, seqLen)),
                 )
-            android.util.Log.d(TAG, "inputIds: ${inputIds.joinToString(", ")}")
-            android.util.Log.d(TAG, "attentionMask: ${attentionMask.joinToString(", ")}")
             try {
                 model.encoderSession.run(encoderInputs).use { encoderResult ->
                     val hidden = encoderResult[0] as OnnxTensor
-                    val fb = hidden.floatBuffer
-                    var hiddenNaNs = false
-                    val limit = fb.limit()
-                    for (i in 0 until limit) {
-                        if (fb.get(i).isNaN()) {
-                            hiddenNaNs = true
-                            break
-                        }
-                    }
-                    android.util.Log.d(
-                        TAG,
-                        "Encoder hidden states: shape=${hidden.info.shape.joinToString(", ")}, hasNaNs=$hiddenNaNs"
-                    )
 
                     val encoderAttention =
                         OnnxTensor.createTensor(
@@ -182,33 +158,15 @@ class OnnxChatTitleGenerator
                         )
                     model.decoderSession.run(decoderInputs).use { decoderResult ->
                         val outputValue = decoderResult[0].value
-                        android.util.Log.d(TAG, "[step $step] decoderResult[0] class: ${outputValue?.javaClass?.name}")
                         val logits = lastStepLogits(outputValue)
                         if (logits != null) {
-                            val hasNaNs = logits.any { it.isNaN() }
-                            val hasInfs = logits.any { it.isInfinite() }
-                            val minVal = logits.minOrNull()
-                            val maxVal = logits.maxOrNull()
-                            val firstTen = logits.take(10).joinToString(", ")
-                            android.util.Log.d(
-                                TAG,
-                                "[step $step] Logits: size=${logits.size}, hasNaNs=$hasNaNs, " +
-                                    "hasInfs=$hasInfs, min=$minVal, max=$maxVal, first10=[$firstTen]"
-                            )
-                            
                             val nextToken = argmax(logits)
-                            android.util.Log.d(
-                                TAG,
-                                "[step $step] nextToken argmax: $nextToken, value at argmax=${logits[nextToken]}"
-                            )
                             if (nextToken == config.eosTokenId || nextToken == config.padTokenId) {
-                                android.util.Log.d(TAG, "[step $step] Stop token encountered: nextToken=$nextToken")
                                 return generated
                             }
                             generated.add(nextToken)
                             decoderIds.add(nextToken.toLong())
                         } else {
-                            android.util.Log.d(TAG, "[step $step] Logits retrieved was null")
                             return generated
                         }
                     }

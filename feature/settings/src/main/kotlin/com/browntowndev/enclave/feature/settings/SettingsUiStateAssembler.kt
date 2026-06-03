@@ -98,16 +98,26 @@ class SettingsUiStateAssembler
                     }
                 }
 
-            val defaultImageProviderId = defaultModels.find { it.modelType == ModelType.IMAGE_GENERATION }?.mediaProviderId
-            val defaultVideoProviderId = defaultModels.find { it.modelType == ModelType.VIDEO_GENERATION }?.mediaProviderId
-            val defaultMusicProviderId = defaultModels.find { it.modelType == ModelType.MUSIC_GENERATION }?.mediaProviderId
+            val defaultImageProviderIds = defaultModels
+                .filter { it.modelType == ModelType.IMAGE_GENERATION || it.modelType == ModelType.IMAGE_EDIT }
+                .mapNotNull { it.mediaProviderId }
+                .toSet()
+            val defaultVideoProviderIds = defaultModels
+                .filter { it.modelType == ModelType.VIDEO_GENERATION || it.modelType == ModelType.IMAGE_TO_VIDEO }
+                .mapNotNull { it.mediaProviderId }
+                .toSet()
+            val defaultMusicProviderIds = defaultModels
+                .filter { it.modelType == ModelType.MUSIC_GENERATION }
+                .mapNotNull { it.mediaProviderId }
+                .toSet()
+
             val mediaModels =
                 mediaAssets.map { asset ->
                     val isDefault =
                         when (asset.capability) {
-                            MediaCapability.IMAGE -> asset.id == defaultImageProviderId
-                            MediaCapability.VIDEO -> asset.id == defaultVideoProviderId
-                            MediaCapability.MUSIC -> asset.id == defaultMusicProviderId
+                            MediaCapability.IMAGE -> asset.id in defaultImageProviderIds
+                            MediaCapability.VIDEO -> asset.id in defaultVideoProviderIds
+                            MediaCapability.MUSIC -> asset.id in defaultMusicProviderIds
                         }
                     mediaProviderAssetUiMapper.map(asset, isDefault = isDefault)
                 }

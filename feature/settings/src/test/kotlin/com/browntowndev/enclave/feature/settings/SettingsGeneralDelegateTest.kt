@@ -227,6 +227,7 @@ class SettingsGeneralDelegateTest {
             // Drive the entry path through a REAL use case so the test fails when the use case
             // does not actually replay before starting the listener.
             coEvery { cloudSyncPort.syncAllLocalDataToCloud() } returns Result.success(Unit)
+            coEvery { cloudSyncPort.getRemainingEventsCount() } returns Result.success(0L)
             coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
                 Result.success(
                     com.browntowndev.enclave.domain.model.sync.CloudSyncEventReplayResult(
@@ -235,6 +236,7 @@ class SettingsGeneralDelegateTest {
                         hasMore = false,
                     ),
                 )
+            coEvery { cloudSyncPort.bootstrapFeatureSettings() } returns Result.success(Unit)
             every { cloudSyncPort.startListening() } returns Unit
             val realStartUseCase =
                 com.browntowndev.enclave.domain.usecase.security
@@ -271,7 +273,9 @@ class SettingsGeneralDelegateTest {
             // Reauth path must drive upload -> replay -> live listener in order.
             coVerifyOrder {
                 cloudSyncPort.syncAllLocalDataToCloud()
+                cloudSyncPort.getRemainingEventsCount()
                 cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.bootstrapFeatureSettings()
                 cloudSyncPort.startListening()
             }
 
