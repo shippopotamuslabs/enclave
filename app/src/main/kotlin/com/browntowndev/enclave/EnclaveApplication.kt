@@ -4,13 +4,13 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil3.ImageLoader
+import com.browntowndev.enclave.app.telemetry.AutomaticErrorTrackingCoordinator
+import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.core.docgen.RustDocGenSchemaProvider
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.auth.AuthManager
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.browntowndev.enclave.app.telemetry.AutomaticErrorTrackingCoordinator
-import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.sync.CloudSyncAuthListener
 import dagger.hilt.android.HiltAndroidApp

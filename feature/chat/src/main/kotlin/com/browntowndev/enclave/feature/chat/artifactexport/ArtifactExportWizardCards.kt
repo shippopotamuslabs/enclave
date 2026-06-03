@@ -54,8 +54,7 @@ internal fun WizardSelectableCard(
                     backgroundColor = containerColor,
                     borderColor = borderColor,
                     withShadow = false,
-                )
-                .clickable(enabled = enabled, onClick = onClick)
+                ).clickable(enabled = enabled, onClick = onClick)
                 .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -98,4 +97,3 @@ internal fun WizardSelectableCard(
         }
     }
 }
-

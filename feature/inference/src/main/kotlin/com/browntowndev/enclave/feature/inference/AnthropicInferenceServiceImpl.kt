@@ -65,7 +65,7 @@ class AnthropicInferenceServiceImpl(
 ) : RustCompatibleInferenceService {
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
-        val toolUse: CapturedToolUse?,
+        val toolUses: List<CapturedToolUse>,
         val stopReason: String?,
         val inputTokens: Int? = null,
         val outputTokens: Int? = null,
@@ -469,9 +469,9 @@ class AnthropicInferenceServiceImpl(
             )
 
             val toolCalls =
-                response.toolUse?.let { tu ->
-                    listOf(AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson))
-                } ?: emptyList()
+                response.toolUses.map { tu ->
+                    AgentRawToolCall(id = tu.id, name = tu.toolName, argumentsJson = tu.argumentsJson)
+                }
             val bufferedText = accumulatedText.toString()
 
             val telemetry =
@@ -664,7 +664,6 @@ class AnthropicInferenceServiceImpl(
             var outputTextDeltaCount = 0
             var thinkingTextDeltaCount = 0
             var stopReason: String? = null
-            var toolUseIndex: Long? = null
             var inputTokens: Int? = null
             var outputTokens: Int? = null
             var reasoningTokens: Int? = null
@@ -713,7 +712,6 @@ class AnthropicInferenceServiceImpl(
                     }
                     if (block.isToolUse()) {
                         val startedToolUse = block.asToolUse()
-                        toolUseIndex = startEvent.index()
                         pendingToolUses[startEvent.index()] =
                             PendingToolUse(
                                 id = startedToolUse.id(),
@@ -806,13 +804,13 @@ class AnthropicInferenceServiceImpl(
                 }
             }
 
-            val capturedToolUse =
-                toolUseIndex
-                    ?.let { pendingToolUses[it] }
-                    ?.toCapturedToolUse()
+            val capturedToolUses =
+                pendingToolUses.entries
+                    .sortedBy { it.key }
+                    .mapNotNull { (_, pending) -> pending.toCapturedToolUse() }
             return StreamedAnthropicResponse(
                 emittedAny = emittedAny,
-                toolUse = capturedToolUse,
+                toolUses = capturedToolUses,
                 stopReason = stopReason,
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,
@@ -823,17 +821,22 @@ class AnthropicInferenceServiceImpl(
         }
     }
 
-    private fun PendingToolUse.toCapturedToolUse(): CapturedToolUse =
-        CapturedToolUse(
-            id = id,
-            toolName = toolName,
-            argumentsJson =
-                if (streamedInputJson.isNotEmpty()) {
-                    toolUseArgumentsJson(toolName, streamedInputJson.toString())
-                } else {
-                    toolUseArgumentsJson(toolName, initialInput)
-                },
-        )
+    private fun PendingToolUse.toCapturedToolUse(): CapturedToolUse? =
+        runCatching {
+            CapturedToolUse(
+                id = id,
+                toolName = toolName,
+                argumentsJson =
+                    if (streamedInputJson.isNotEmpty()) {
+                        toolUseArgumentsJson(toolName, streamedInputJson.toString())
+                    } else {
+                        toolUseArgumentsJson(toolName, initialInput)
+                    },
+            )
+        }.getOrElse { e ->
+            loggingPort.warning(TAG, "Skipping tool use with malformed/truncated JSON: tool=$toolName cause=${e.message}")
+            null
+        }
 
     private fun toolUseArgumentsJson(
         toolName: String,

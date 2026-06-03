@@ -219,10 +219,10 @@ internal fun StudioGalleryList(
                                 isExpanded = isExpanded,
                             )
                     },
+                    showSectionDivider = index > 0,
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = if (index > 0) EnclaveNeoTokens.sectionSpacing else 0.dp)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },
@@ -269,10 +269,10 @@ internal fun StudioGalleryList(
                                 isExpanded = isExpanded,
                             )
                     },
+                    showSectionDivider = groupedGallery.isNotEmpty(),
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = if (groupedGallery.isNotEmpty()) EnclaveNeoTokens.sectionSpacing else 0.dp)
                             .graphicsLayer {
                                 alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
                             },

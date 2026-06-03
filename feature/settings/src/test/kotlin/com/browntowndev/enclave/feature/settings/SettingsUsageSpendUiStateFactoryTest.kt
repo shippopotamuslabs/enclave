@@ -14,7 +14,7 @@ import java.math.BigDecimal
 
 class SettingsUsageSpendUiStateFactoryTest {
     private val factory =
-        SettingsUiStateFactory(
+        buildSettingsUiStateFactory(
             localModelAssetUiMapper = LocalModelAssetUiMapper(),
             apiModelAssetUiMapper = ApiModelAssetUiMapper(),
             ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),

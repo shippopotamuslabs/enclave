@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase
 
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
@@ -21,6 +22,14 @@ class FakeInferenceFactory : InferenceFactoryPort {
         val service =
             serviceMap[modelType] ?: serviceToReturn
                 ?: throw IllegalStateException("Service for $modelType not configured")
+        return block(service)
+    }
+
+    override suspend fun <T> withRawApiServiceForConfig(
+        configId: ApiModelConfigurationId,
+        block: suspend (LlmInferencePort) -> T,
+    ): T {
+        val service = serviceToReturn ?: throw IllegalStateException("withRawApiServiceForConfig: service not configured")
         return block(service)
     }
 }

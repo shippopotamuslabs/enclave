@@ -38,11 +38,20 @@ object TtsVoices {
             TtsVoice("Zephyr", "Zephyr (Gemini)"),
         )
 
+    val falVoices =
+        listOf(
+            TtsVoice("Wise_Woman", "Wise Woman"),
+            TtsVoice("Friendly_Person", "Friendly Person"),
+            TtsVoice("Inspirational_girl", "Inspirational Girl"),
+            TtsVoice("Deep_Voice_Man", "Deep Voice Man"),
+        )
+
     fun getVoicesForProvider(provider: ApiProvider): List<TtsVoice> =
         when (provider) {
             ApiProvider.OPENAI -> openAiVoices
             ApiProvider.XAI -> xAiVoices
             ApiProvider.GOOGLE -> googleVoices
+            ApiProvider.FAL -> falVoices
             else -> emptyList()
         }
 }

@@ -62,9 +62,9 @@ internal fun SettingsProviderCard(
 @Composable
 internal fun SettingsAssignmentRow(
     displayLabel: String,
-    headline: String,
+    presetName: String,
     providerName: String?,
-    presetName: String?,
+    modelName: String?,
     isMultimodal: Boolean,
     modelTypeDescription: String,
     onEditClick: () -> Unit,
@@ -104,7 +104,7 @@ internal fun SettingsAssignmentRow(
             }
             Spacer(modifier = Modifier.size(4.dp))
             Text(
-                text = headline,
+                text = presetName,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -115,9 +115,9 @@ internal fun SettingsAssignmentRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            presetName?.let {
+            modelName?.let {
                 Text(
-                    text = "Preset: $it",
+                    text = "Model: $it",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

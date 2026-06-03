@@ -36,3 +36,8 @@ val StudioMediaUi.bestUri: Any? get() {
     val path = localUri.replace("file://", "")
     return if (java.io.File(path).exists()) localUri else remoteUrl
 }
+
+internal fun StudioMediaUi.effectiveLocalUri(): String {
+    val best = bestUri
+    return if (best is String) best else localUri
+}

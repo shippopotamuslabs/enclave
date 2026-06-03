@@ -26,14 +26,13 @@ class TelemetryUploadWorker
             const val BATCH_SIZE = 100
         }
 
-        override suspend fun doWork(): ListenableWorker.Result {
-            return try {
+        override suspend fun doWork(): ListenableWorker.Result =
+            try {
                 uploadPendingEvents()
             } catch (error: Exception) {
                 loggingPort.warning(TAG, "Telemetry upload worker failed: ${error.message}")
                 ListenableWorker.Result.retry()
             }
-        }
 
         private suspend fun uploadPendingEvents(): ListenableWorker.Result {
             var lastUploadedIds: Set<String>? = null

@@ -6,7 +6,6 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming

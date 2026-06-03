@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -12,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,9 +28,13 @@ class GenerateImageUseCaseTest {
     fun setup() {
         useCase =
             GenerateImageUseCase(
-                defaultModelRepository,
-                mediaProviderRepository,
-                imageGenerationPort,
+                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                resolveAssignedMediaProviderUseCase =
+                    ResolveAssignedMediaProviderUseCase(
+                        defaultModelRepository = defaultModelRepository,
+                        mediaProviderRepository = mediaProviderRepository,
+                    ),
+                imageGenerationPort = imageGenerationPort,
             )
     }
 
@@ -84,5 +90,47 @@ class GenerateImageUseCaseTest {
             // Then
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is IllegalStateException)
+        }
+
+    @Test
+    fun `invoke with reference image resolves IMAGE_EDIT default`() =
+        runBlocking {
+            val editProviderId = MediaProviderId("edit-provider")
+            val provider = mockk<MediaProviderAsset>()
+            val settings = ImageGenerationSettings(referenceImageUri = "file://reference.png")
+
+            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_EDIT) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    mediaProviderId = editProviderId,
+                )
+            coEvery { mediaProviderRepository.getMediaProvider(editProviderId) } returns provider
+            coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf(ByteArray(0)))
+
+            useCase("edit prompt", settings)
+
+            coVerify {
+                imageGenerationPort.generateImage(
+                    prompt = "edit prompt",
+                    provider = provider,
+                    settings = settings,
+                )
+            }
+            coVerify(exactly = 0) { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) }
+        }
+
+    @Test
+    fun `invoke with reference image fails when no edit provider assigned`() =
+        runBlocking {
+            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_EDIT) } returns null
+
+            val result =
+                useCase(
+                    "edit prompt",
+                    ImageGenerationSettings(referenceImageUri = "file://reference.png"),
+                )
+
+            assertTrue(result.isFailure)
+            assertEquals("No image edit provider assigned", result.exceptionOrNull()?.message)
         }
 }

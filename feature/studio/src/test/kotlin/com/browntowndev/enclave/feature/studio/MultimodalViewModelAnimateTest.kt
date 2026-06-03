@@ -22,11 +22,15 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
-import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
+import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import io.mockk.coEvery
@@ -59,7 +63,8 @@ class MultimodalViewModelAnimateTest {
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>(relaxed = true)
+    private val resolveMediaProviderCapabilitiesUseCase =
+        mockk<ResolveMediaProviderCapabilitiesUseCase>(relaxed = true)
     private val chatUseCases = mockk<ChatUseCases>(relaxed = true)
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
@@ -76,6 +81,11 @@ class MultimodalViewModelAnimateTest {
                 modelType = ModelType.VIDEO_GENERATION,
                 mediaProviderId = mediaProviderId,
             )
+        val imageToVideoAssignment =
+            DefaultModelAssignment(
+                modelType = ModelType.IMAGE_TO_VIDEO,
+                mediaProviderId = mediaProviderId,
+            )
         val providerAsset =
             MediaProviderAsset(
                 id = mediaProviderId,
@@ -85,22 +95,22 @@ class MultimodalViewModelAnimateTest {
                 credentialAlias = "test-alias",
             )
 
-        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(videoAssignment))
+        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(videoAssignment, imageToVideoAssignment))
         coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
+        coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns imageToVideoAssignment
         coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
         coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://video.mp4"
-        every { getProviderCapabilitiesUseCase(any()) } returns
+        coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns
             ProviderCapabilities(
                 supportedAspectRatios = AspectRatio.entries.toList(),
                 supportedImageQualities = listOf(GenerationQuality.SPEED),
                 supportedVideoQualities = listOf(GenerationQuality.SPEED),
                 supportedVideoResolutions = listOf("480p"),
                 supportedVideoDurations = listOf(5),
-                supportsReferenceImage = true,
                 supportsVideo = true,
             )
 
@@ -111,19 +121,26 @@ class MultimodalViewModelAnimateTest {
         val studioUiStateReducer = StudioUiStateReducer()
         val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
 
+        val remoteCapabilitiesCoordinator =
+            StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase)
+        val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
+        val mediaActionsCoordinator =
+            StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+
         viewModel =
             MultimodalViewModel(
-                shareMediaPort = shareMediaPort,
-                studioRepository = studioRepository,
                 defaultModelRepository = defaultModelRepository,
                 mediaProviderRepository = mediaProviderRepository,
-                getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
                 speechCoordinator = speechCoordinator,
                 playbackCoordinator = playbackCoordinator,
                 studioUiStateReducer = studioUiStateReducer,
                 capabilitiesCoordinator = capabilitiesCoordinator,
+                remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
+                promptCoordinator = promptCoordinator,
+                mediaActionsCoordinator = mediaActionsCoordinator,
             )
     }
 
@@ -153,7 +170,11 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = true)
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = true,
+            )
             advanceUntilIdle()
 
             // Then
@@ -193,7 +214,11 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = false)
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = false,
+            )
             advanceUntilIdle()
 
             // Then
@@ -225,7 +250,12 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.onAnimateMedia(assetId, autoAnimate = true, customPrompt = "Custom Prompt")
+            viewModel.mediaActionsCoordinator.onAnimateMedia(
+                prompt = viewModel.promptCoordinator,
+                assetId = assetId,
+                autoAnimate = true,
+                customPrompt = "Custom Prompt",
+            )
             advanceUntilIdle()
 
             // Then

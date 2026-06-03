@@ -4,12 +4,19 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.navigation
 
-fun NavGraphBuilder.settingsGraph(navController: NavController) {
+fun NavGraphBuilder.profileBuilderGraph(onBack: () -> Unit) {
+    profileBuilderMainRoute(onBack = onBack)
+}
+
+fun NavGraphBuilder.settingsGraph(
+    navController: NavController,
+    onNavigateToProfileBuilder: () -> Unit = {},
+) {
     navigation(
         startDestination = SettingsDestination.MAIN,
         route = SettingsDestination.GRAPH,
     ) {
-        settingsMainRoute(navController)
+        settingsMainRoute(navController, onNavigateToProfileBuilder)
         settingsByokConfigureRoute(navController)
         settingsTtsConfigureRoute(navController)
         settingsMediaConfigureRoute(navController)

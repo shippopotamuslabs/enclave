@@ -9,6 +9,8 @@ import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import javax.inject.Inject
 
+private val CHAT_SLOT_TYPES = setOf(ModelType.MAIN, ModelType.THINKING)
+
 interface SetDefaultModelUseCase {
     suspend operator fun invoke(
         modelType: ModelType,
@@ -32,6 +34,18 @@ class SetDefaultModelUseCaseImpl
             ttsProviderId: TtsProviderId?,
             mediaProviderId: MediaProviderId?,
         ) {
+            if (modelType in CHAT_SLOT_TYPES && apiConfigId != null) {
+                val config =
+                    apiModelRepository.getConfigurationById(apiConfigId)
+                        ?: throw IllegalArgumentException("Chat slot requires a valid API model configuration.")
+                val credentials =
+                    apiModelRepository.getCredentialsById(config.apiCredentialsId)
+                        ?: throw IllegalArgumentException("Chat slot requires valid API credentials.")
+                require(credentials.provider.supportsChat) {
+                    "'${credentials.provider.name}' does not support chat."
+                }
+            }
+
             if (modelType == ModelType.VISION) {
                 require(localConfigId == null) {
                     "Vision slot is API-only."
@@ -40,6 +54,12 @@ class SetDefaultModelUseCaseImpl
                 val config =
                     apiModelRepository.getConfigurationById(configId)
                         ?: throw IllegalArgumentException("Vision slot requires a valid API model configuration.")
+                val credentials =
+                    apiModelRepository.getCredentialsById(config.apiCredentialsId)
+                        ?: throw IllegalArgumentException("Vision slot requires valid API credentials.")
+                require(credentials.provider.supportsChat) {
+                    "'${credentials.provider.name}' does not support vision."
+                }
                 require(config.isMultimodal) {
                     "Vision slot requires a multimodal API model."
                 }

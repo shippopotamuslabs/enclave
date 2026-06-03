@@ -60,6 +60,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.config.toMediaTaskOrNull
 import com.browntowndev.enclave.domain.model.inference.ModelType
 
 @Composable
@@ -106,7 +107,13 @@ fun ModelConfigurationScreen(
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
             val audioTypes = listOf(ModelType.TTS)
-            val studioMediaTypes = listOf(ModelType.IMAGE_GENERATION, ModelType.VIDEO_GENERATION)
+            val studioMediaTypes =
+                listOf(
+                    ModelType.IMAGE_GENERATION,
+                    ModelType.IMAGE_EDIT,
+                    ModelType.VIDEO_GENERATION,
+                    ModelType.IMAGE_TO_VIDEO,
+                )
 
             item {
                 DefaultAssignmentsCard(
@@ -152,7 +159,9 @@ fun ModelConfigurationScreen(
                 assignmentSlot in
                     listOf(
                         ModelType.IMAGE_GENERATION,
+                        ModelType.IMAGE_EDIT,
                         ModelType.VIDEO_GENERATION,
+                        ModelType.IMAGE_TO_VIDEO,
                         ModelType.MUSIC_GENERATION,
                     )
             val localAssets = if (isVisionSlot || isTtsSlot || isMediaSlot) emptyList() else uiState.localModelsSheet.models
@@ -165,14 +174,12 @@ fun ModelConfigurationScreen(
             val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
             val mediaAssets =
                 if (isMediaSlot) {
-                    val capability =
-                        when (assignmentSlot) {
-                            ModelType.IMAGE_GENERATION -> MediaCapability.IMAGE
-                            ModelType.VIDEO_GENERATION -> MediaCapability.VIDEO
-                            ModelType.MUSIC_GENERATION -> MediaCapability.MUSIC
-                            else -> MediaCapability.IMAGE // Should not happen given studioMediaTypes check
-                        }
-                    uiState.mediaProvidersSheet.assets.filter { it.capability == capability }
+                    val slotTask = assignmentSlot.toMediaTaskOrNull()
+                    if (assignmentSlot == ModelType.MUSIC_GENERATION) {
+                        uiState.mediaProvidersSheet.assets.filter { it.capability == MediaCapability.MUSIC }
+                    } else {
+                        uiState.mediaProvidersSheet.assets.filter { slotTask != null && slotTask in it.tasks }
+                    }
                 } else {
                     emptyList()
                 }
@@ -202,11 +209,12 @@ fun DefaultAssignmentsCard(
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
         NeoSectionHeader(text = title)
         assignments.forEach { assignment ->
+            val rowDisplay = assignment.assignmentRowDisplay
             SettingsAssignmentRow(
                 displayLabel = assignment.displayLabel,
-                headline = assignment.assignmentHeadlineName,
-                providerName = assignment.providerName,
-                presetName = assignment.presetName,
+                presetName = rowDisplay.presetName,
+                providerName = rowDisplay.providerName,
+                modelName = rowDisplay.modelName,
                 isMultimodal = assignment.isMultimodal,
                 modelTypeDescription = assignment.modelType.description,
                 onEditClick = { onEditAssignment(assignment.modelType) },

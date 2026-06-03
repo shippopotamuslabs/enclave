@@ -25,7 +25,6 @@ class MediaToolDefinitionFactoryTest {
                 supportedVideoQualities = emptyList(),
                 supportedVideoResolutions = emptyList(),
                 supportedVideoDurations = emptyList(),
-                supportsReferenceImage = true,
                 supportsVideo = false,
             )
         every { getProviderCapabilitiesUseCase("openai") } returns caps
@@ -57,7 +56,6 @@ class MediaToolDefinitionFactoryTest {
                 supportedVideoQualities = listOf(GenerationQuality.QUALITY),
                 supportedVideoResolutions = listOf("1080p"),
                 supportedVideoDurations = listOf(6, 12),
-                supportsReferenceImage = true,
                 supportsVideo = true,
             )
         every { getProviderCapabilitiesUseCase("google") } returns caps

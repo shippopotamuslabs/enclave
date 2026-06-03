@@ -12,6 +12,7 @@ class MusicGenerationPortImpl
     constructor(
         private val apiKeyProvider: ApiKeyProviderPort,
         private val googleAdapter: GoogleMusicGenerationAdapter,
+        private val falAdapter: FalMusicGenerationAdapter,
     ) : MusicGenerationPort {
         override suspend fun generateMusic(
             prompt: String,
@@ -33,6 +34,16 @@ class MusicGenerationPortImpl
                         modelId,
                         provider.baseUrl,
                         settings,
+                    )
+                }
+                ApiProvider.FAL -> {
+                    val modelId = provider.modelName ?: "fal-ai/stable-audio"
+                    falAdapter.generateMusic(
+                        prompt = prompt,
+                        apiKey = apiKey,
+                        modelId = modelId,
+                        baseUrl = provider.baseUrl,
+                        settings = settings,
                     )
                 }
                 else -> Result.failure(UnsupportedOperationException("Music generation not supported for provider: ${provider.provider}"))

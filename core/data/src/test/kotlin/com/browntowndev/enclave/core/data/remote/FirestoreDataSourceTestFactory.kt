@@ -30,10 +30,12 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDis
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
+import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
@@ -79,6 +81,14 @@ internal fun createTestFirestoreDataSource(
     // Default to a relaxed no-op mock so existing tests don't trigger live Firestore calls during
     // cache prefetch in applyLiveEvents, which would cause UncompletedCoroutinesError.
     documentCache: FirestoreSyncDocumentCache = mockk(relaxed = true),
+    searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue =
+        SearchToolSettingsSyncQueue(
+            dataStore =
+                androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(
+                    scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
+                ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
+        ),
+    settingsRepository: SettingsRepositoryImpl = mockk(relaxed = true),
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
     val facade =
@@ -127,6 +137,8 @@ internal fun createTestFirestoreDataSource(
             syncEventApplier = syncEventApplier,
             syncStateStore = syncStateStore,
             documentCache = documentCache,
+            searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+            settingsRepository = settingsRepository,
         )
     return FirestoreDataSource(facade, externalScope)
 }

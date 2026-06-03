@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -45,18 +44,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.TtsVoices
 
 private const val DEFAULT_GOOGLE_TTS_MODEL_ID = "gemini-3.1-flash-tts-preview"
+private const val DEFAULT_FAL_TTS_MODEL_ID = "fal-ai/minimax/speech-02-hd"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("CyclomaticComplexMethod")
@@ -67,7 +66,7 @@ fun TtsConfigureScreen(
     onNavigateBack: () -> Unit,
     onTtsAssetFieldChange: (TtsProviderAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
+    onSelectReusableApiCredential: (String?) -> Unit,
     onSaveTtsProvider: () -> Unit,
     onFetchApiModels: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
@@ -143,7 +142,7 @@ fun TtsConfigureScreen(
                     expanded = providerDropdownExpanded,
                     onDismissRequest = { providerDropdownExpanded = false },
                 ) {
-                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE).forEach { provider ->
+                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE, ApiProvider.FAL).forEach { provider ->
                         DropdownMenuItem(
                             text = { Text(provider.displayName) },
                             onClick = {
@@ -155,33 +154,24 @@ fun TtsConfigureScreen(
                 }
             }
 
-            // Reusable Key Dropdown
             val reusableCredentials =
-                uiState.apiProvidersSheet.assets
-                    .filter { it.provider == draft.provider }
-                    .map {
-                        ReusableApiCredentialUi(
-                            credentialsId = it.credentialsId,
-                            displayName = it.displayName,
-                            providerLabel = it.provider.displayName,
-                            credentialAlias = it.credentialAlias,
-                        )
-                    }
-
-            if (draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()) {
-                ReusableCredentialDropdown(
-                    reusableCredentials = reusableCredentials,
-                    selectedReusableCredential = uiState.ttsProviderEditor.selectedReusableCredential,
-                    onSelectReusableCredential = onSelectReusableApiCredential,
+                reusableCredentialsForProvider(
+                    provider = draft.provider,
+                    apiAssets = uiState.apiProvidersSheet.assets,
+                    mediaAssets = uiState.mediaProvidersSheet.assets,
+                    ttsAssets = uiState.ttsProvidersSheet.assets,
+                    excludeTtsProviderId = draft.id.takeIf { it.value.isNotEmpty() },
                 )
-            }
+            val canUseStoredCredential = draft.id.value.isEmpty() && reusableCredentials.isNotEmpty()
 
-            NeoApiKeyField(
-                label = "API Key",
-                value = apiKey,
-                onValueChange = onApiKeyChange,
+            ApiKeyWithReuseSection(
+                reusableCredentials = reusableCredentials,
+                selectedReusableCredential = uiState.ttsProviderEditor.selectedReusableCredential,
+                canUseStoredCredential = canUseStoredCredential,
+                apiKey = apiKey,
                 keyPresent = isKeySaved,
-                modifier = Modifier.fillMaxWidth(),
+                onApiKeyChange = onApiKeyChange,
+                onSelectReusableCredential = onSelectReusableApiCredential,
             )
 
             // Display Name
@@ -192,8 +182,8 @@ fun TtsConfigureScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            if (draft.provider == ApiProvider.GOOGLE) {
-                val discovery = uiState.apiProviderEditor.discovery
+            if (draft.provider == ApiProvider.GOOGLE || draft.provider == ApiProvider.FAL) {
+                val discovery = uiState.ttsProviderEditor.discovery
                 val hasModels = discovery.models.isNotEmpty()
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -210,7 +200,7 @@ fun TtsConfigureScreen(
                                 .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
                     ) {
                         NeoOutlinedTextField(
-                            value = draft.modelName ?: DEFAULT_GOOGLE_TTS_MODEL_ID,
+                            value = draft.modelName ?: draft.provider.defaultTtsModelId(),
                             onValueChange = { onTtsAssetFieldChange(draft.copy(modelName = it)) },
                             readOnly = hasModels,
                             enabled = !hasModels,
@@ -240,14 +230,25 @@ fun TtsConfigureScreen(
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, top = 4.dp, end = 16.dp),
                     )
+                    if (discovery.isTruncated) {
+                        Text(
+                            text = "Model list may be incomplete (provider catalog truncated). You can still enter a model ID manually.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, top = 4.dp, end = 16.dp),
+                        )
+                    }
 
                     TextButton(
                         onClick = onFetchApiModels,
-                        enabled = !uiState.apiProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved),
+                        enabled = !uiState.ttsProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved),
                         modifier = Modifier.align(Alignment.End),
                     ) {
-                        if (uiState.apiProviderEditor.discovery.isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        if (uiState.ttsProviderEditor.discovery.isLoading) {
+                            NeoCircularProgressIndicator(modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Loading models\u2026")
                         } else {
@@ -264,7 +265,7 @@ fun TtsConfigureScreen(
             }
 
             // Base URL (for proxies)
-            if (draft.provider == ApiProvider.OPENAI) {
+            if (draft.provider == ApiProvider.OPENAI || draft.provider == ApiProvider.FAL) {
                 NeoOutlinedTextField(
                     value = draft.baseUrl ?: "",
                     onValueChange = { onTtsAssetFieldChange(draft.copy(baseUrl = it)) },
@@ -340,7 +341,7 @@ fun TtsConfigureScreen(
     }
 
     if (showModelSelectionSheet) {
-        val discovery = uiState.apiProviderEditor.discovery
+        val discovery = uiState.ttsProviderEditor.discovery
         ModelSelectionBottomSheet(
             availableModels = discovery.models,
             filteredModels = discovery.filteredModels,
@@ -358,6 +359,12 @@ fun TtsConfigureScreen(
         )
     }
 }
+
+private fun ApiProvider.defaultTtsModelId(): String =
+    when (this) {
+        ApiProvider.FAL -> DEFAULT_FAL_TTS_MODEL_ID
+        else -> DEFAULT_GOOGLE_TTS_MODEL_ID
+    }
 
 // ==================== PREVIEWS ====================
 

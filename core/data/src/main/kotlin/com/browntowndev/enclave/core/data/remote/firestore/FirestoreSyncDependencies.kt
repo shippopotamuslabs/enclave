@@ -1,10 +1,12 @@
 package com.browntowndev.enclave.core.data.remote.firestore
 
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
+import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
@@ -22,6 +24,8 @@ internal data class FirestoreSyncDependencies(
     val embeddingCoordinator: EmbeddingRegenerationCoordinator,
     val userIdProvider: () -> String?,
     val purgeInProgress: AtomicBoolean = AtomicBoolean(false),
+    val searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue? = null,
+    val settingsRepository: SettingsRepositoryImpl? = null,
 ) {
     fun toContext(): FirestoreSyncContext =
         FirestoreSyncContext(
@@ -36,5 +40,7 @@ internal data class FirestoreSyncDependencies(
             embeddingCoordinator = embeddingCoordinator,
             userIdProvider = userIdProvider,
             purgeInProgress = purgeInProgress,
+            searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+            settingsRepository = settingsRepository,
         )
 }

@@ -106,20 +106,21 @@ class InitializeModelsUseCase
             // Exclude soft-deleted model types and slots the user has actively configured as API
             // so CheckModelsUseCase doesn't queue them for download.
             val softDeletedShaSet = softDeletedAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
-            val filteredSlotAssignments = buildMap<ModelType, LocalModelAsset> {
-                for ((modelType, asset) in slotAssignments) {
-                    val isDeleted = asset.metadata.sha256 in softDeletedShaSet
-                    val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
-                    val isApi = activeConfig?.isLocal == false
-                    if (!isDeleted) {
-                        if (isApi) {
-                            logPort.debug(TAG, "Skipping local download for $modelType — slot is configured as API")
-                        } else {
-                            put(modelType, asset)
+            val filteredSlotAssignments =
+                buildMap<ModelType, LocalModelAsset> {
+                    for ((modelType, asset) in slotAssignments) {
+                        val isDeleted = asset.metadata.sha256 in softDeletedShaSet
+                        val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
+                        val isApi = activeConfig?.isLocal == false
+                        if (!isDeleted) {
+                            if (isApi) {
+                                logPort.debug(TAG, "Skipping local download for $modelType — slot is configured as API")
+                            } else {
+                                put(modelType, asset)
+                            }
                         }
                     }
                 }
-            }
             val filteredUtilityAssets =
                 utilityAssets.filter { asset ->
                     asset.metadata.sha256 !in softDeletedShaSet

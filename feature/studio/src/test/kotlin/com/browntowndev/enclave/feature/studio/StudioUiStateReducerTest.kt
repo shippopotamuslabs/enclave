@@ -45,6 +45,7 @@ class StudioUiStateReducerTest {
                     albums = emptyList(),
                     settings = ImageGenerationSettings(),
                     capabilities = null,
+                    isCapabilitiesLoading = false,
                     selectedTemplateId = null,
                     isSettingsOpen = false,
                     isSaveBottomSheetOpen = false,
@@ -56,7 +57,8 @@ class StudioUiStateReducerTest {
                     speechState = SpeechState.Idle,
                     isPlayingTts = false,
                     referenceMediaType = null,
-                    hasVideoModel = false,
+                    hasImageEditModel = false,
+                    hasImageToVideoModel = false,
                 ),
             )
 
@@ -170,6 +172,7 @@ class StudioUiStateReducerTest {
             albums = albums,
             settings = ImageGenerationSettings(),
             capabilities = null,
+            isCapabilitiesLoading = false,
             selectedTemplateId = null,
             isSettingsOpen = false,
             isSaveBottomSheetOpen = false,
@@ -181,6 +184,7 @@ class StudioUiStateReducerTest {
             speechState = SpeechState.Idle,
             isPlayingTts = false,
             referenceMediaType = null,
-            hasVideoModel = false,
+            hasImageEditModel = false,
+            hasImageToVideoModel = false,
         )
 }

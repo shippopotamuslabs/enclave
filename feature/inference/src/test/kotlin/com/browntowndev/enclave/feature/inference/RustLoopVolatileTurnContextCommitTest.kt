@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
 import com.browntowndev.enclave.domain.model.inference.AgentLoopHostCallbacks
@@ -637,6 +638,11 @@ class RustLoopVolatileTurnContextCommitTest {
                     object : com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort {
                         override suspend fun <T> withInferenceService(
                             modelType: ModelType,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+
+                        override suspend fun <T> withRawApiServiceForConfig(
+                            configId: ApiModelConfigurationId,
                             block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
                         ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
                     }

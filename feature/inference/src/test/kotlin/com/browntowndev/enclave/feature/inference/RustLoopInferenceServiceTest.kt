@@ -34,6 +34,8 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferenceTranscriptStore
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
@@ -64,6 +66,7 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -1005,69 +1008,228 @@ class RustLoopInferenceServiceTest {
     fun `buildProviderTranscript filters out engine-internal sidecar messages`() =
         runTest {
             val transcriptStore = InMemoryCommittedInferenceTranscriptStore()
-            val innerService = RecordingRustCompatibleService(
-                responses = listOf(
-                    AgentModelTurnResult(
-                        assistantText = "final answer",
-                        toolCalls = emptyList(),
-                        finishReason = AgentFinishReason.Stop,
+            val innerService =
+                RecordingRustCompatibleService(
+                    responses =
+                        listOf(
+                            AgentModelTurnResult(
+                                assistantText = "final answer",
+                                toolCalls = emptyList(),
+                                finishReason = AgentFinishReason.Stop,
+                            ),
+                        ),
+                )
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages =
+                            listOf(
+                                AgentLoopMessage(
+                                    id = "u1",
+                                    role = Role.USER,
+                                    content = "regular user prompt",
+                                ),
+                                AgentLoopMessage(
+                                    id = "budget",
+                                    role = Role.USER,
+                                    content = """{"_agent":{"tool_calls_remaining":1}}""",
+                                    metadataJson = """{"agent_tool_budget":true}""",
+                                ),
+                                AgentLoopMessage(
+                                    id = "nudge",
+                                    role = Role.USER,
+                                    content = """{"tools_blocked_nudge":true}""",
+                                    metadataJson = """{"tools_blocked_nudge":true}""",
+                                ),
+                                AgentLoopMessage(
+                                    id = "parse-failure",
+                                    role = Role.USER,
+                                    content = """{"envelope_parse_failure":true}""",
+                                    metadataJson = """{"envelope_parse_failure":true}""",
+                                ),
+                                AgentLoopMessage(
+                                    id = "synthetic-agent",
+                                    role = Role.USER,
+                                    content = """{"_agent":{"some":"guidance"}}""",
+                                ),
+                            ),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
                     )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = innerService,
+                    committedInferenceTranscripts = transcriptStore,
                 )
-            )
-            val port = CapturingAgentLoopPort { host ->
-                host.completeModelTurn(
-                    sessionMessages = listOf(
-                        AgentLoopMessage(
-                            id = "u1",
-                            role = Role.USER,
-                            content = "regular user prompt"
-                        ),
-                        AgentLoopMessage(
-                            id = "budget",
-                            role = Role.USER,
-                            content = """{"_agent":{"tool_calls_remaining":1}}""",
-                            metadataJson = """{"agent_tool_budget":true}"""
-                        ),
-                        AgentLoopMessage(
-                            id = "nudge",
-                            role = Role.USER,
-                            content = """{"tools_blocked_nudge":true}""",
-                            metadataJson = """{"tools_blocked_nudge":true}"""
-                        ),
-                        AgentLoopMessage(
-                            id = "parse-failure",
-                            role = Role.USER,
-                            content = """{"envelope_parse_failure":true}""",
-                            metadataJson = """{"envelope_parse_failure":true}"""
-                        ),
-                        AgentLoopMessage(
-                            id = "synthetic-agent",
-                            role = Role.USER,
-                            content = """{"_agent":{"some":"guidance"}}"""
-                        )
-                    ),
-                    systemPrompt = "",
-                    toolsSchemaJson = "[]",
-                    allowToolCall = false,
-                )
-                send(AgentLoopEvent.Finished)
-            }
-            val service = createService(
-                agentLoopPort = port,
-                inner = innerService,
-                committedInferenceTranscripts = transcriptStore,
-            )
 
-            service.sendPrompt(
-                prompt = "start",
-                options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1")),
-            ).toList()
+            service
+                .sendPrompt(
+                    prompt = "start",
+                    options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1")),
+                ).toList()
 
             val committed = transcriptStore.get(ChatId("chat-1"))
             assertNotNull(committed)
             assertEquals(2, committed!!.size)
             assertEquals("regular user prompt", committed[0].content)
             assertEquals("final answer", committed[1].content)
+        }
+
+    @Test
+    fun `web search and X tools are marked disabled in sidecars when offline and fail fast`() =
+        runTest {
+            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
+            coEvery { deviceEnvironment.isNetworkAvailable() } returns false
+
+            val innerService =
+                RecordingRustCompatibleService(
+                    responses =
+                        listOf(
+                            AgentModelTurnResult(
+                                assistantText = "let's search",
+                                toolCalls = emptyList(),
+                                finishReason = AgentFinishReason.Stop,
+                            ),
+                        ),
+                )
+
+            val port =
+                CapturingAgentLoopPort { host ->
+                    // 1. Verify buildContextSidecars appends the Offline status
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+
+                    // 2. Verify executeTools fails fast for web_search
+                    val calls =
+                        listOf(
+                            AgentToolCall("call-1", "web_search", """{"query":"weather"}"""),
+                        )
+                    val toolResults = host.executeTools(calls)
+                    val capturedToolResult = toolResults.firstOrNull()
+
+                    assertNotNull(capturedToolResult)
+                    assertTrue(capturedToolResult!!.softFailure)
+                    assertTrue(capturedToolResult.resultJson.contains("network_unavailable"))
+
+                    send(AgentLoopEvent.Finished)
+                }
+
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = innerService,
+                    toolExecutor =
+                        object : ToolExecutorPort {
+                            override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+                                throw AssertionError("Should not execute tool when offline")
+                        },
+                    deviceEnvironmentRepository = deviceEnvironment,
+                )
+
+            service.sendPrompt("start").toList()
+
+            assertNotNull(innerService.lastContextSidecars)
+            assertTrue(innerService.lastContextSidecars!!.contains("Internet status: Offline"))
+            assertTrue(innerService.lastContextSidecars!!.contains("disabled due to no internet access: web_search"))
+        }
+
+    @Test
+    fun `web search and X tools dynamic connectivity state transitions`() =
+        runTest {
+            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
+            val networkStates = mutableListOf(true, false, true)
+            coEvery { deviceEnvironment.isNetworkAvailable() } answers {
+                networkStates.removeFirst()
+            }
+
+            val sidecarsList = mutableListOf<String?>()
+            val innerService =
+                object : RustCompatibleInferenceService {
+                    override val baseUrl: String? = null
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        options: GenerationOptions,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override suspend fun setHistory(messages: List<ChatMessage>) {}
+
+                    override suspend fun closeSession() {}
+
+                    override suspend fun completeSingleTurn(
+                        sessionMessages: List<AgentLoopMessage>,
+                        systemPrompt: String,
+                        contextSidecars: String?,
+                        availableTools: List<ToolDefinition>,
+                        allowToolCall: Boolean,
+                        onTextToken: suspend (String) -> Unit,
+                        onThinkingToken: suspend (String) -> Unit,
+                        options: GenerationOptions,
+                    ): AgentModelTurnResult {
+                        sidecarsList.add(contextSidecars)
+                        return AgentModelTurnResult(
+                            assistantText = "turn",
+                            toolCalls = emptyList(),
+                            finishReason = AgentFinishReason.Stop,
+                        )
+                    }
+                }
+
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                    )
+
+                    send(AgentLoopEvent.Finished)
+                }
+
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = innerService,
+                    deviceEnvironmentRepository = deviceEnvironment,
+                )
+
+            service.sendPrompt("start").toList()
+
+            assertEquals(3, sidecarsList.size)
+            assertNull(sidecarsList[0])
+            assertNotNull(sidecarsList[1])
+            assertTrue(sidecarsList[1]!!.contains("Internet status: Offline"))
+            assertNotNull(sidecarsList[2])
+            assertTrue(sidecarsList[2]!!.contains("Internet status: Online. Search and X tools are now re-enabled."))
         }
 
     private fun createService(
@@ -1087,6 +1249,7 @@ class RustLoopInferenceServiceTest {
             resolveCompactionSummaryModel(fastConfig = null),
         committedInferenceTranscripts: InMemoryCommittedInferenceTranscriptStore =
             InMemoryCommittedInferenceTranscriptStore(),
+        deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -1099,6 +1262,7 @@ class RustLoopInferenceServiceTest {
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferenceTranscripts = committedInferenceTranscripts,
+            deviceEnvironmentRepository = deviceEnvironmentRepository,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
@@ -1209,6 +1373,11 @@ class RustLoopInferenceServiceTest {
             requestedModelType = modelType
             return block(service)
         }
+
+        override suspend fun <T> withRawApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T = block(service)
     }
 
     private class RecordingInferenceService(

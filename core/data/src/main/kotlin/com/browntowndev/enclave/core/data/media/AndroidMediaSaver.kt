@@ -9,9 +9,7 @@ import com.browntowndev.enclave.domain.port.media.MediaSaverPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.io.FileInputStream
-import java.net.URI
 import javax.inject.Inject
 
 class AndroidMediaSaver
@@ -25,8 +23,7 @@ class AndroidMediaSaver
         ): Result<String> =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val uri = URI(localUri)
-                    val file = File(uri)
+                    val file = resolveLocalMediaFile(localUri)
                     if (!file.exists()) {
                         throw IllegalStateException("Local file not found: $localUri")
                     }

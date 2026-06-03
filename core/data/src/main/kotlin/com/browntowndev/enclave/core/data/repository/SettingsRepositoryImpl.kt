@@ -8,9 +8,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
-import com.browntowndev.enclave.domain.model.settings.SettingsPreferenceKeys
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
+import com.browntowndev.enclave.domain.model.settings.SettingsPreferenceKeys
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -23,13 +24,19 @@ import javax.inject.Inject
 /**
  * Implementation of SettingsRepository using DataStore.
  */
+@Suppress("UnusedPrivateProperty", "UnusedParameter")
 class SettingsRepositoryImpl
     @Inject
-    constructor(
+    internal constructor(
         private val dataStore: DataStore<Preferences>,
         private val apiKeyManager: ApiKeyManager,
         private val localEncryption: LocalDataEncryptionService = LocalDataEncryptionService.NoOp,
         private val loggingPort: LoggingPort = NoOpLoggingPort,
+        // The queue is optional only for unit tests that don't exercise the sync path;
+        // production wiring always supplies it. Mutators that change user-facing search
+        // settings route through `markPendingSync` so the next pending-sync cycle picks
+        // up the change.
+        private val searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue? = null,
     ) : SettingsRepository {
         companion object {
             private val THEME_KEY = stringPreferencesKey("settings_theme")
@@ -200,12 +207,17 @@ class SettingsRepositoryImpl
             dataStore.edit { preferences ->
                 preferences[SEARCH_ENABLED_KEY] = enabled
             }
+            // Mark the search-tool-settings doc pending for the next pending sync
+            // cycle. The queue is a boolean flag, so calling this twice (combined
+            // onSaveSearchSkillSettings path) is idempotent.
+            searchToolSettingsSyncQueue?.markPendingSync()
         }
 
         override suspend fun updateSearchProvider(provider: SearchProvider) {
             dataStore.edit { preferences ->
                 preferences[SEARCH_PROVIDER_KEY] = provider.name
             }
+            searchToolSettingsSyncQueue?.markPendingSync()
         }
 
         override suspend fun saveTavilyApiKey(apiKey: String) {
@@ -242,6 +254,7 @@ class SettingsRepositoryImpl
             dataStore.edit { preferences ->
                 preferences[X_SEARCH_ENABLED_KEY] = enabled
             }
+            searchToolSettingsSyncQueue?.markPendingSync()
         }
 
         override suspend fun saveXApiKey(apiKey: String) {
@@ -286,6 +299,27 @@ class SettingsRepositoryImpl
         override suspend fun updateAutomaticErrorTrackingEnabled(enabled: Boolean) {
             dataStore.edit { preferences ->
                 preferences[AUTOMATIC_ERROR_TRACKING_ENABLED_KEY] = enabled
+            }
+        }
+
+        // Internal seam invoked by `SearchToolSettingsSyncHandler.upsertLocal` to
+        // write a remote snapshot into the local DataStore without re-enqueuing a
+        // pending upload. Honors the local-pending-edit-wins policy: if the local
+        // queue has an edit in flight (either pending or claimed) and the caller
+        // did not request an overwrite, the remote snapshot is dropped to avoid
+        // clobbering the newer local edit. The `hasInFlightLocalEdit` check covers
+        // both the pre-claim (PENDING set) and in-flight (CLAIMED_AT set) states so
+        // a stale remote echo arriving after `claimPending` still loses to the
+        // newer local edit.
+        internal suspend fun applyRemoteSearchToolSettings(
+            record: SearchToolSettingsRecord,
+            overwrite: Boolean,
+        ) {
+            if (!overwrite && searchToolSettingsSyncQueue?.hasInFlightLocalEdit() == true) return
+            dataStore.edit { preferences ->
+                preferences[SEARCH_ENABLED_KEY] = record.searchEnabled
+                preferences[X_SEARCH_ENABLED_KEY] = record.xSearchEnabled
+                preferences[SEARCH_PROVIDER_KEY] = record.searchProvider.name
             }
         }
     }

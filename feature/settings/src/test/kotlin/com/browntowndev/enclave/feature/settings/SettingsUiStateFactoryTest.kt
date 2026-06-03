@@ -29,7 +29,7 @@ class SettingsUiStateFactoryTest {
     @BeforeEach
     fun setup() {
         factory =
-            SettingsUiStateFactory(
+            buildSettingsUiStateFactory(
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),

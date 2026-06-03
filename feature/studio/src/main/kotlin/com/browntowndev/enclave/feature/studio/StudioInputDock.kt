@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.studio
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +35,7 @@ import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 
 @Composable
+@Suppress("LongParameterList")
 internal fun StudioInputDock(
     prompt: String,
     speechState: SpeechState,
@@ -41,6 +44,8 @@ internal fun StudioInputDock(
     referenceMediaType: MediaCapability?,
     isGenerating: Boolean,
     isContinualGenerationActive: Boolean,
+    hasImageEditModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onPromptChange: (String) -> Unit,
     onReferenceImageClick: () -> Unit,
     onClearReferenceImage: () -> Unit,
@@ -95,6 +100,8 @@ internal fun StudioInputDock(
                         ReferenceImageAction(
                             mediaType = mediaType,
                             hasReferenceImage = referenceImageUri != null,
+                            hasImageEditModel = hasImageEditModel,
+                            hasImageToVideoModel = hasImageToVideoModel,
                             onReferenceImageClick = onReferenceImageClick,
                         )
                     }
@@ -154,15 +161,41 @@ internal fun StudioPromptField(
 internal fun ReferenceImageAction(
     mediaType: MediaCapability,
     hasReferenceImage: Boolean,
+    hasImageEditModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onReferenceImageClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (mediaType != MediaCapability.MUSIC) {
-        NeoIconButton(
-            onClick = onReferenceImageClick,
-            icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
-            contentDescription = "Reference image",
-            modifier = modifier,
-        )
+    val isVisible =
+        when (mediaType) {
+            MediaCapability.IMAGE -> hasImageEditModel
+            MediaCapability.VIDEO -> hasImageToVideoModel
+            else -> false
+        }
+    val unavailableHint =
+        when {
+            isVisible -> null
+            mediaType == MediaCapability.IMAGE && !hasImageEditModel ->
+                STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE
+            mediaType == MediaCapability.VIDEO && !hasImageToVideoModel ->
+                STUDIO_REFERENCE_I2V_UNAVAILABLE
+            else -> null
+        }
+    Column(modifier = modifier) {
+        if (isVisible) {
+            NeoIconButton(
+                onClick = onReferenceImageClick,
+                icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
+                contentDescription = "Reference image",
+            )
+        }
+        unavailableHint?.let { hint ->
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = if (isVisible) 4.dp else 0.dp),
+            )
+        }
     }
 }

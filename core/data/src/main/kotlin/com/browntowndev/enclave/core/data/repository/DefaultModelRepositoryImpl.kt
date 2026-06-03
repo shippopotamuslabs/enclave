@@ -152,7 +152,15 @@ class DefaultModelRepositoryImpl
                             entityId = mediaProvider.id,
                         )
                     providerName = mediaProvider.provider.displayName
-                    presetName = mediaProvider.capability.displayName
+                    presetName =
+                        mediaProvider.modelName?.let { modelName ->
+                            decryptFieldOrNull(
+                                stored = modelName,
+                                owner = "MediaProviderEntity",
+                                field = "modelName",
+                                entityId = mediaProvider.id,
+                            )
+                        }
                 }
             }
 
@@ -239,9 +247,18 @@ class DefaultModelRepositoryImpl
                                     entityId = ttsProviderId.value,
                                 )
                             }
-                        mediaProviderId != null -> mediaCapability?.displayName
+                        mediaProviderId != null ->
+                            mediaModelName?.let {
+                                decryptFieldOrNull(
+                                    stored = it,
+                                    owner = "MediaProviderEntity",
+                                    field = "modelName",
+                                    entityId = mediaProviderId.value,
+                                )
+                            }
                         else -> null
                     },
+                modelId = apiModelId?.takeIf { it.isNotBlank() },
                 providerName =
                     when {
                         localConfigId != null -> "Local"
@@ -250,7 +267,6 @@ class DefaultModelRepositoryImpl
                         mediaProviderId != null -> mediaProviderName?.displayName
                         else -> null
                     },
-                modelId = apiModelId?.takeIf { it.isNotBlank() },
             )
 
         private fun decryptField(

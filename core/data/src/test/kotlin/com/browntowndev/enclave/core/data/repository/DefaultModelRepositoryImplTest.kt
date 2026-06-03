@@ -247,7 +247,7 @@ class DefaultModelRepositoryImplTest {
             assertEquals(mediaId, result?.mediaProviderId)
             assertEquals("Imagen", result?.displayName)
             assertEquals("Google", result?.providerName)
-            assertEquals("Image", result?.presetName)
+            assertEquals("imagen-3", result?.presetName)
         }
 
     @Test
@@ -274,6 +274,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = null,
                             mediaAssetName = null,
                             mediaProviderName = null,
+                            mediaModelName = null,
                             mediaCapability = null,
                         ),
                     ),
@@ -311,6 +312,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = null,
                             mediaAssetName = null,
                             mediaProviderName = null,
+                            mediaModelName = null,
                             mediaCapability = null,
                         ),
                         DefaultModelAssignmentView(
@@ -331,6 +333,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = null,
                             mediaAssetName = null,
                             mediaProviderName = null,
+                            mediaModelName = null,
                             mediaCapability = null,
                         ),
                         DefaultModelAssignmentView(
@@ -351,6 +354,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = null,
                             mediaAssetName = null,
                             mediaProviderName = null,
+                            mediaModelName = null,
                             mediaCapability = null,
                         ),
                         DefaultModelAssignmentView(
@@ -371,6 +375,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = MediaProviderId("media-1"),
                             mediaAssetName = localEncryption.encryptString("Imagen"),
                             mediaProviderName = ApiProvider.GOOGLE,
+                            mediaModelName = localEncryption.encryptString("imagen-3"),
                             mediaCapability = MediaCapability.IMAGE,
                         ),
                     ),
@@ -397,7 +402,7 @@ class DefaultModelRepositoryImplTest {
 
                 val media = requireNotNull(assignments[ModelType.IMAGE_GENERATION])
                 assertEquals("Imagen", media.displayName)
-                assertEquals("Image", media.presetName)
+                assertEquals("imagen-3", media.presetName)
                 assertEquals("Google", media.providerName)
 
                 cancelAndIgnoreRemainingEvents()
@@ -445,6 +450,7 @@ class DefaultModelRepositoryImplTest {
                             mediaProviderId = null,
                             mediaAssetName = null,
                             mediaProviderName = null,
+                            mediaModelName = null,
                             mediaCapability = null,
                         ),
                     ),
@@ -503,7 +509,7 @@ class DefaultModelRepositoryImplTest {
 
             assertEquals(ModelType.IMAGE_GENERATION, result?.modelType)
             assertNull(result?.displayName)
-            assertEquals("Image", result?.presetName)
+            assertNull(result?.presetName)
         }
 
     @Test

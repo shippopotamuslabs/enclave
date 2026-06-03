@@ -7,7 +7,9 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
@@ -32,6 +34,7 @@ class OnboardingViewModel
         private val discoverApiModelsUseCase: DiscoverApiModelsUseCase,
         private val saveTtsProviderUseCase: SaveTtsProviderUseCase,
         private val saveMediaProviderUseCase: SaveMediaProviderUseCase,
+        private val resolveOnboardingFlowModeUseCase: ResolveOnboardingFlowModeUseCase,
         private val loggingPort: LoggingPort,
     ) : ViewModel() {
         companion object {
@@ -46,6 +49,31 @@ class OnboardingViewModel
         private val _events = Channel<OnboardingEvent>(Channel.UNLIMITED)
         val events = _events.receiveAsFlow()
 
+        init {
+            viewModelScope.launch {
+                refreshFlowMode()
+            }
+        }
+
+        private suspend fun refreshFlowMode() {
+            val flowMode = resolveOnboardingFlowModeUseCase()
+            _uiState.update { state ->
+                state.copy(
+                    flowMode = flowMode,
+                    selectedModelChoice =
+                        when (flowMode) {
+                            OnboardingFlowMode.RESTORED -> ModelChoice.RESTORED
+                            OnboardingFlowMode.FULL ->
+                                if (state.selectedModelChoice == ModelChoice.RESTORED) {
+                                    ModelChoice.UNDECIDED
+                                } else {
+                                    state.selectedModelChoice
+                                }
+                        },
+                )
+            }
+        }
+
         fun onAgeConfirmedChange(confirmed: Boolean) {
             _uiState.update { it.copy(ageConfirmed = confirmed) }
         }
@@ -59,6 +87,10 @@ class OnboardingViewModel
             when (state.currentStep) {
                 0 -> {
                     if (!state.ageConfirmed) return
+                    if (state.flowMode == OnboardingFlowMode.RESTORED) {
+                        onCompleteOnboarding()
+                        return
+                    }
                     _uiState.update { it.copy(currentStep = 1) }
                 }
                 1 -> {
@@ -68,7 +100,9 @@ class OnboardingViewModel
                             if (state.selectedProvider == null || state.apiKey.isBlank() || state.selectedModelId.isBlank()) return
                             _uiState.update { it.copy(currentStep = 2) }
                         }
-                        ModelChoice.UNDECIDED -> return
+                        ModelChoice.UNDECIDED,
+                        ModelChoice.RESTORED,
+                        -> return
                     }
                 }
                 2 -> _uiState.update { it.copy(currentStep = 3) }
@@ -102,13 +136,14 @@ class OnboardingViewModel
             _uiState.update { it.copy(isDiscoveringModels = true, discoveryError = null) }
             viewModelScope.launch {
                 try {
-                    val request = ApiModelDiscoveryRequest(
-                        provider = provider,
-                        currentApiKey = state.apiKey,
-                        credentialAlias = null,
-                        baseUrl = null,
-                        selectedModelId = null,
-                    )
+                    val request =
+                        ApiModelDiscoveryRequest(
+                            provider = provider,
+                            currentApiKey = state.apiKey,
+                            credentialAlias = null,
+                            baseUrl = null,
+                            selectedModelId = null,
+                        )
                     val result = discoverApiModelsUseCase(request)
                     _uiState.update {
                         it.copy(
@@ -153,28 +188,37 @@ class OnboardingViewModel
             }
 
             viewModelScope.launch {
+                if (state.flowMode == OnboardingFlowMode.FULL) {
+                    refreshFlowMode()
+                }
+                val latestState = _uiState.value
                 _uiState.update { it.copy(isSaving = true, saveError = null) }
 
                 settingsRepository.updateAgeConfirmed(true)
-                settingsRepository.updateAutomaticErrorTrackingEnabled(state.automaticErrorTrackingEnabled)
+                settingsRepository.updateAutomaticErrorTrackingEnabled(latestState.automaticErrorTrackingEnabled)
 
-                if (state.selectedModelChoice == ModelChoice.API) {
-                    val provider = state.selectedProvider ?: run {
-                        _uiState.update { it.copy(isSaving = false, saveError = "No provider selected") }
-                        return@launch
-                    }
-                    val credentials = ApiCredentials(
-                        id = com.browntowndev.enclave.domain.model.config.ApiCredentialsId(""),
-                        displayName = provider.name,
-                        provider = provider,
-                        credentialAlias = provider.name.lowercase(),
-                    )
-                    val result = bulkAssignApiProviderUseCase(
-                        credentials = credentials,
-                        apiKey = state.apiKey,
-                        modelId = state.selectedModelId,
-                        displayName = state.selectedModelId,
-                    )
+                if (latestState.selectedModelChoice == ModelChoice.API) {
+                    val provider =
+                        latestState.selectedProvider ?: run {
+                            _uiState.update { it.copy(isSaving = false, saveError = "No provider selected") }
+                            return@launch
+                        }
+                    val credentials =
+                        ApiCredentials(
+                            id =
+                                com.browntowndev.enclave.domain.model.config
+                                    .ApiCredentialsId(""),
+                            displayName = provider.name,
+                            provider = provider,
+                            credentialAlias = provider.name.lowercase(),
+                        )
+                    val result =
+                        bulkAssignApiProviderUseCase(
+                            credentials = credentials,
+                            apiKey = latestState.apiKey,
+                            modelId = latestState.selectedModelId,
+                            displayName = latestState.selectedModelId,
+                        )
                     if (result.isFailure) {
                         _uiState.update {
                             it.copy(
@@ -187,7 +231,7 @@ class OnboardingViewModel
                 }
 
                 // Save deferred TTS provider if configured
-                state.ttsProviderDraft?.let { ttsDraft ->
+                latestState.ttsProviderDraft?.let { ttsDraft ->
                     val result = saveTtsProviderUseCase(ttsDraft)
                     if (result.isFailure) {
                         loggingPort.error(TAG, "Failed to save TTS provider during completion", result.exceptionOrNull())
@@ -202,17 +246,18 @@ class OnboardingViewModel
                 }
 
                 // Save deferred Media provider if configured
-                state.mediaProviderDraft?.let { mediaDraft ->
+                latestState.mediaProviderDraft?.let { mediaDraft ->
                     try {
-                        val asset = com.browntowndev.enclave.domain.model.config.MediaProviderAsset(
-                            id = mediaDraft.id,
-                            displayName = mediaDraft.displayName,
-                            provider = mediaDraft.provider,
-                            modelName = mediaDraft.modelId,
-                            capability = mediaDraft.capability,
-                            baseUrl = mediaDraft.baseUrl,
-                            credentialAlias = mediaDraft.credentialAlias,
-                        )
+                        val asset =
+                            com.browntowndev.enclave.domain.model.config.MediaProviderAsset(
+                                id = mediaDraft.id,
+                                displayName = mediaDraft.displayName,
+                                provider = mediaDraft.provider,
+                                modelName = mediaDraft.modelId,
+                                capability = mediaDraft.capability,
+                                baseUrl = mediaDraft.baseUrl,
+                                credentialAlias = mediaDraft.credentialAlias,
+                            )
                         saveMediaProviderUseCase(asset, mediaDraft.apiKey.takeIf { it.isNotBlank() })
                     } catch (e: Exception) {
                         loggingPort.error(TAG, "Failed to save media provider during completion", e)
@@ -228,7 +273,7 @@ class OnboardingViewModel
 
                 settingsRepository.updateOnboardingCompleted(true)
                 _uiState.update { it.copy(isSaving = false, saveError = null) }
-                _events.send(OnboardingEvent.NavigateToChat(state.selectedModelChoice))
+                _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice))
             }
         }
     }

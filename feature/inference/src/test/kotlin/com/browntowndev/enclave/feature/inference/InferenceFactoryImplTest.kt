@@ -506,6 +506,49 @@ class InferenceFactoryImplTest {
         }
 
     @Test
+    fun `withInferenceService rejects fal credentials for chat inference`() =
+        runTest {
+            val thrown =
+                runCatching {
+                    resolveApiService(
+                        provider = ApiProvider.FAL,
+                        modelType = ModelType.THINKING,
+                        apiConfigId = ApiModelConfigurationId("fal-config"),
+                        apiCredentialsId = ApiCredentialsId("fal-creds"),
+                        modelId = "fal-ai/flux-pro/kontext",
+                    )
+                }.exceptionOrNull()
+
+            assertTrue(thrown is IllegalStateException)
+            assertEquals("fal.ai is media-only and cannot be used for chat inference.", thrown?.message)
+        }
+
+    @Test
+    fun `withRawApiServiceForConfig rejects fal credentials for chat inference`() =
+        runTest {
+            val configId = ApiModelConfigurationId("fal-raw-config")
+            val credsId = ApiCredentialsId("fal-raw-creds")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                apiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credsId,
+                    modelId = "fal-ai/flux-pro/kontext",
+                    displayName = "FAL preset",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
+                apiCredentials(id = credsId, provider = ApiProvider.FAL)
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+            val thrown =
+                runCatching {
+                    factory.withRawApiServiceForConfig(configId) { it }
+                }.exceptionOrNull()
+
+            assertTrue(thrown is IllegalStateException)
+            assertEquals("fal.ai is media-only and cannot be used for chat inference.", thrown?.message)
+        }
+
+    @Test
     fun `withInferenceService resolves default baseUrl for openrouter when configured baseUrl is null`() =
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))

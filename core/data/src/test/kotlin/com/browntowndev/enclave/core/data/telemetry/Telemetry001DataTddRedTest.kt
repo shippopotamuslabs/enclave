@@ -26,7 +26,6 @@ import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadWorker
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.model.inference.WebSearchParams
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.telemetry.ExceptionRecord
 import com.browntowndev.enclave.domain.model.telemetry.InferenceOutcome
@@ -37,7 +36,6 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
@@ -465,7 +463,11 @@ class Telemetry001DataTddRedTest {
             coEvery { otlp.uploadBatch(pending) } returns Result.success(Unit)
             val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
             val result = worker.doWork()
-            assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+            assertEquals(
+                androidx.work.ListenableWorker.Result
+                    .success(),
+                result,
+            )
             coVerify { otlp.uploadBatch(pending) }
         }
 
@@ -510,7 +512,11 @@ class Telemetry001DataTddRedTest {
             coEvery { otlp.uploadBatch(batch2) } returns Result.failure(IOException("network"))
             val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
             val result = worker.doWork()
-            assertEquals(androidx.work.ListenableWorker.Result.retry(), result)
+            assertEquals(
+                androidx.work.ListenableWorker.Result
+                    .retry(),
+                result,
+            )
             coVerify { dao.markUploaded(batch1.map { it.id }) }
         }
 
@@ -525,7 +531,11 @@ class Telemetry001DataTddRedTest {
             coEvery { dao.getPendingUploads(any()) } returns emptyList()
             val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
             val result = worker.doWork()
-            assertEquals(androidx.work.ListenableWorker.Result.success(), result)
+            assertEquals(
+                androidx.work.ListenableWorker.Result
+                    .success(),
+                result,
+            )
             coVerify(exactly = 0) { otlp.uploadBatch(any()) }
         }
 

@@ -423,41 +423,22 @@ fun PreviewByokCustomHeadersList() {
     }
 }
 
-@Suppress("LongParameterList")
 @Composable
 fun PresetModelAndVisionSection(
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
-    availableModels: List<DiscoveredApiModelUi>,
-    filteredModels: List<DiscoveredApiModelUi>,
-    isFetchingModels: Boolean,
+    discovery: ApiModelDiscoveryUiState,
     canFetchModels: Boolean,
-    searchQuery: String,
-    providerFilters: Set<String>,
-    sortOption: ModelSortOption,
     onConfigChange: (ApiModelConfigUi) -> Unit,
-    onFetchModels: () -> Unit,
-    onUpdateSearchQuery: (String) -> Unit,
-    onToggleProviderFilter: (String) -> Unit,
-    onClearProviderFilters: () -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
+    callbacks: ModelDiscoveryFieldCallbacks,
 ) {
     val discoveredVisionCapability = selectedModelMetadata?.isMultimodal
     ModelSelectionField(
         config = config,
-        availableModels = availableModels,
-        filteredModels = filteredModels,
-        isFetchingModels = isFetchingModels,
+        discovery = discovery,
         canFetchModels = canFetchModels,
-        searchQuery = searchQuery,
-        providerFilters = providerFilters,
-        sortOption = sortOption,
         onConfigChange = onConfigChange,
-        onFetchModels = onFetchModels,
-        onUpdateSearchQuery = onUpdateSearchQuery,
-        onToggleProviderFilter = onToggleProviderFilter,
-        onClearProviderFilters = onClearProviderFilters,
-        onUpdateSortOption = onUpdateSortOption,
+        callbacks = callbacks,
     )
     VisionCapabilitySwitch(
         discoveredVisionCapability = discoveredVisionCapability,

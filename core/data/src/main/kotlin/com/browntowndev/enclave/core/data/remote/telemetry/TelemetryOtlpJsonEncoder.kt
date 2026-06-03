@@ -17,11 +17,21 @@ internal object TelemetryOtlpJsonEncoder {
 
     @Suppress("SwallowedException")
     private val deviceManufacturer: String
-        get() = try { android.os.Build.MANUFACTURER } catch (e: Throwable) { "Unknown" }
+        get() =
+            try {
+                android.os.Build.MANUFACTURER
+            } catch (e: Throwable) {
+                "Unknown"
+            }
 
     @Suppress("SwallowedException")
     private val deviceModel: String
-        get() = try { android.os.Build.MODEL } catch (e: Throwable) { "Unknown" }
+        get() =
+            try {
+                android.os.Build.MODEL
+            } catch (e: Throwable) {
+                "Unknown"
+            }
 
     fun buildExportLogsRequest(events: List<TelemetryEventEntity>): String =
         buildJsonObject {

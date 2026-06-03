@@ -14,21 +14,24 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.browntowndev.enclave.core.ui.component.FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaAction
+import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionPlacement
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionsOverlay
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaDetailScaffold
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaPagerContent
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
-import dev.chrisbanes.haze.rememberHazeState
+
 
 @Composable
 fun GalleryDetailScreen(
@@ -39,9 +42,16 @@ fun GalleryDetailScreen(
     onShareMedia: (String) -> Unit,
     onSendToStudio: (String, String, String?) -> Unit,
     onDeleteMedia: (String) -> Unit,
-    hasVideoModel: Boolean = false,
+    onShowSnackbar: (String, String?) -> Unit,
+    hasImageToVideoModel: Boolean = false,
+    saveViewModel: FullscreenMediaSaveViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
 ) {
+    LaunchedEffect(saveViewModel) {
+        saveViewModel.saveFeedback.collect { message ->
+            onShowSnackbar(message, null)
+        }
+    }
     val album =
         remember(albums, albumId) {
             albums.find { it.id == albumId }
@@ -51,7 +61,6 @@ fun GalleryDetailScreen(
         remember(assets, assetId) {
             assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
         }
-    val hazeState = rememberHazeState()
     var showCustomPromptInput by remember { mutableStateOf(false) }
 
     FullscreenMediaDetailScaffold(
@@ -72,7 +81,6 @@ fun GalleryDetailScreen(
         FullscreenMediaPagerContent(
             pagerState = pagerState,
             modifier = Modifier.padding(padding),
-            hazeState = hazeState,
             pageContent = { page ->
                 val asset = assets[page]
                 FullscreenMediaViewer(
@@ -89,10 +97,11 @@ fun GalleryDetailScreen(
                     actions =
                         galleryDetailActions(
                             asset = asset,
-                            hasVideoModel = hasVideoModel,
+                            hasImageToVideoModel = hasImageToVideoModel,
                             onEdit = { onSendToStudio(asset.id, "edit", null) },
                             onAnimate = { showCustomPromptInput = true },
                             onQuickAnimate = { onSendToStudio(asset.id, "quick_animate", null) },
+                            onSave = { saveViewModel.saveToGallery(asset) },
                             onShare = { onShareMedia(asset.id) },
                             onDelete = { onDeleteMedia(asset.id) },
                         ),
@@ -112,8 +121,6 @@ fun GalleryDetailScreen(
                             onSendToStudio(asset.id, "animate", prompt)
                             showCustomPromptInput = false
                         },
-                        onDismiss = { showCustomPromptInput = false },
-                        hazeState = hazeState,
                     )
                 }
             },
@@ -123,19 +130,30 @@ fun GalleryDetailScreen(
 
 private fun galleryDetailActions(
     asset: StudioMediaUi,
-    hasVideoModel: Boolean,
+    hasImageToVideoModel: Boolean,
     onEdit: () -> Unit,
     onAnimate: () -> Unit,
     onQuickAnimate: () -> Unit,
+    onSave: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
 ): List<FullscreenMediaAction> =
     buildList {
         add(
             FullscreenMediaAction(
+                icon = Icons.Default.Share,
+                label = "Share",
+                onClick = onShare,
+                placement = FullscreenMediaActionPlacement.PrimaryBar,
+            ),
+        )
+        add(fullscreenSaveAction(onSave))
+        add(
+            FullscreenMediaAction(
                 icon = Icons.Default.Edit,
                 label = "Edit",
                 onClick = onEdit,
+                placement = FullscreenMediaActionPlacement.SheetOnly,
             ),
         )
         if (asset.mediaType == MediaCapability.IMAGE) {
@@ -144,9 +162,10 @@ private fun galleryDetailActions(
                     icon = Icons.Default.Movie,
                     label = "Animate",
                     onClick = onAnimate,
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                    placement = FullscreenMediaActionPlacement.SheetOnly,
                 ),
             )
             add(
@@ -154,25 +173,20 @@ private fun galleryDetailActions(
                     icon = Icons.Default.FastForward,
                     label = "Quick Animate",
                     onClick = onQuickAnimate,
-                    enabled = hasVideoModel,
+                    enabled = hasImageToVideoModel,
                     disabledTooltip =
-                        if (!hasVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                        if (!hasImageToVideoModel) FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP else null,
+                    placement = FullscreenMediaActionPlacement.SheetOnly,
                 ),
             )
         }
-        add(
-            FullscreenMediaAction(
-                icon = Icons.Default.Share,
-                label = "Share",
-                onClick = onShare,
-            ),
-        )
         add(
             FullscreenMediaAction(
                 icon = Icons.Default.Delete,
                 label = "Delete",
                 onClick = onDelete,
                 isDestructive = true,
+                placement = FullscreenMediaActionPlacement.SheetOnly,
             ),
         )
     }

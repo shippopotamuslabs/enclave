@@ -3,12 +3,17 @@ package com.browntowndev.enclave.domain.port.repository
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 
+data class ApiModelCatalogResult(
+    val models: List<DiscoveredApiModel>,
+    val isTruncated: Boolean = false,
+)
+
 interface ApiModelCatalogPort {
     suspend fun fetchModels(
         provider: ApiProvider,
         apiKey: String,
         baseUrl: String? = null,
-    ): List<DiscoveredApiModel>
+    ): ApiModelCatalogResult
 
     suspend fun fetchModel(
         provider: ApiProvider,

@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.settings
 
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -27,7 +28,7 @@ class TestApiProviderConnectionUseCaseTest {
                     credentialAlias = null,
                     baseUrl = null,
                 )
-            } returns listOf(DiscoveredApiModel(id = "gpt-4o", name = "GPT-4o"))
+            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-4o", name = "GPT-4o")))
 
             val result =
                 useCase(
@@ -69,7 +70,7 @@ class TestApiProviderConnectionUseCaseTest {
                     credentialAlias = null,
                     baseUrl = null,
                 )
-            } returns emptyList()
+            } returns ApiModelCatalogResult(emptyList())
 
             val result =
                 useCase(

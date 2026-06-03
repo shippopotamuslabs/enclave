@@ -126,8 +126,8 @@ class CompositeToolExecutor
             }
         }
 
-        private suspend fun routeToolExecution(request: ToolCallRequest): ToolExecutionResult {
-            return when (request.toolName) {
+        private suspend fun routeToolExecution(request: ToolCallRequest): ToolExecutionResult =
+            when (request.toolName) {
                 ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
                 ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
@@ -152,8 +152,6 @@ class CompositeToolExecutor
                 ToolDefinition.READ_CONTEXT_REFERENCE.name -> ToolExecutionResult(request.toolName, "{}")
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
-        }
 
-        private fun shouldEmitCompositeToolTelemetry(toolName: String): Boolean =
-            toolName != ToolDefinition.WEB_SEARCH.name
+        private fun shouldEmitCompositeToolTelemetry(toolName: String): Boolean = toolName != ToolDefinition.WEB_SEARCH.name
     }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.browntowndev.enclave.core.data.R as CoreDataR
 
 @AndroidEntryPoint
 class MultimediaGenerationService : Service() {
@@ -130,7 +131,7 @@ class MultimediaGenerationService : Service() {
             .Builder(this, CHANNEL_ID)
             .setContentTitle("Enclave")
             .setContentText(content)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(CoreDataR.drawable.ic_notification)
             .setOngoing(true)
             .setSilent(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)

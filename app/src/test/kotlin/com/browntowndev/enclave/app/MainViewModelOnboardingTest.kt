@@ -39,7 +39,6 @@ import org.junit.jupiter.api.extension.RegisterExtension
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelOnboardingTest {
-
     private val testDispatcher = StandardTestDispatcher()
 
     @JvmField
@@ -56,15 +55,17 @@ class MainViewModelOnboardingTest {
             // The default FakeSettingsRepository already emits onboardingCompleted = false
             val fakeSettingsRepository = FakeSettingsRepository()
 
-            val initializedModelsResult = DownloadModelsResult(
-                allModels = emptyMap(),
-                modelsToDownload = emptyList(),
-                scanResult = ModelScanResult(
-                    missingModels = emptyList(),
-                    partialDownloads = emptyMap(),
-                    allValid = true,
-                ),
-            )
+            val initializedModelsResult =
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    modelsToDownload = emptyList(),
+                    scanResult =
+                        ModelScanResult(
+                            missingModels = emptyList(),
+                            partialDownloads = emptyMap(),
+                            allValid = true,
+                        ),
+                )
 
             val getAuthStateUseCase = mockk<GetAuthStateUseCase>()
             val loginWithGoogleUseCase = mockk<LoginWithGoogleUseCase>()
@@ -97,25 +98,26 @@ class MainViewModelOnboardingTest {
             coEvery { initializeModelsUseCase() } returns initializedModelsResult
 
             // When: MainViewModel is constructed with the fake settings (onboardingCompleted=false)
-            val viewModel = MainViewModel(
-                getAuthStateUseCase = getAuthStateUseCase,
-                loginWithGoogleUseCase = loginWithGoogleUseCase,
-                initializeModelsUseCase = initializeModelsUseCase,
-                cryptoManager = cryptoManager,
-                cloudSyncPort = cloudSyncPort,
-                vaultMetadataPort = vaultMetadataPort,
-                biometricPort = biometricPort,
-                biometricManager = biometricManager,
-                createVaultUseCase = createVaultUseCase,
-                unlockVaultUseCase = unlockVaultUseCase,
-                detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
-                adoptCloudVaultUseCase = adoptCloudVaultUseCase,
-                bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-                startCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
-                loggingPort = loggingPort,
-                errorHandler = errorHandler,
-                settingsRepository = fakeSettingsRepository,
-            )
+            val viewModel =
+                MainViewModel(
+                    getAuthStateUseCase = getAuthStateUseCase,
+                    loginWithGoogleUseCase = loginWithGoogleUseCase,
+                    initializeModelsUseCase = initializeModelsUseCase,
+                    cryptoManager = cryptoManager,
+                    cloudSyncPort = cloudSyncPort,
+                    vaultMetadataPort = vaultMetadataPort,
+                    biometricPort = biometricPort,
+                    biometricManager = biometricManager,
+                    createVaultUseCase = createVaultUseCase,
+                    unlockVaultUseCase = unlockVaultUseCase,
+                    detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
+                    adoptCloudVaultUseCase = adoptCloudVaultUseCase,
+                    bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+                    startCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
+                    loggingPort = loggingPort,
+                    errorHandler = errorHandler,
+                    settingsRepository = fakeSettingsRepository,
+                )
 
             advanceUntilIdle()
 

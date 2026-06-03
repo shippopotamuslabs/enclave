@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 import io.mockk.every
 import io.mockk.mockk
@@ -123,13 +124,13 @@ class StudioGenerationCoordinatorTest {
 
             ephemeralMediaFlow.value =
                 ephemeralMediaFlow.value +
-                    StudioMediaAsset(
-                        id = "2",
-                        localUri = "cache://2.jpg",
-                        prompt = "continual prompt",
-                        mediaType = MediaCapability.IMAGE.name,
-                        createdAt = 2L,
-                    )
+                StudioMediaAsset(
+                    id = "2",
+                    localUri = "cache://2.jpg",
+                    prompt = "continual prompt",
+                    mediaType = MediaCapability.IMAGE.name,
+                    createdAt = 2L,
+                )
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
 
@@ -142,6 +143,34 @@ class StudioGenerationCoordinatorTest {
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
             verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationError_mapsFalPolicyFailureForSnackbar() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.startDetailVideoGeneration(
+                StudioMediaAsset(
+                    id = "source-1",
+                    localUri = "file://reference.jpg",
+                    prompt = "Animate",
+                    mediaType = MediaCapability.IMAGE.name,
+                    createdAt = 1L,
+                ),
+            )
+
+            generationErrorFlow.value =
+                "fal video generation failed: could not fetch queue result from " +
+                "https://queue.fal.run/requests/1 " +
+                "(fal queue result failed: 422 Output video has sensitive content.)"
+            advanceUntilIdle()
+
+            val expected = StudioGenerationErrorMessages.toSnackbarMessage(generationErrorFlow.value)
+            assertEquals(expected, coordinator.error.value)
+            val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
+            assertEquals(expected, videoError.message)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

@@ -42,6 +42,7 @@ internal class MediaProviderSyncHandler(
             "model_name" to local.modelName?.let { it.encryptedForFirestore(ctx, collectionPath, local.id, "model_name") },
             "base_url" to local.baseUrl?.let { it.encryptedForFirestore(ctx, collectionPath, local.id, "base_url") },
             "credential_alias" to local.credentialAlias,
+            "tasks_mask" to local.tasksMask,
             "updated_at" to local.updatedAt,
             "deleted" to local.deleted,
         )
@@ -59,6 +60,7 @@ internal class MediaProviderSyncHandler(
             modelName = doc.getEncryptedField(ctx, "model_name"),
             baseUrl = doc.getEncryptedField(ctx, "base_url"),
             credentialAlias = doc.getString("credential_alias") ?: "",
+            tasksMask = doc.getLong("tasks_mask")?.toInt() ?: 0,
             updatedAt = doc.getLong("updated_at") ?: 0L,
             deleted = doc.getBoolean("deleted") ?: false,
         )

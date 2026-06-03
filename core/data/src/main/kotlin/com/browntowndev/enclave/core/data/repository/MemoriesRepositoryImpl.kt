@@ -50,7 +50,11 @@ class MemoriesRepositoryImpl
             val out =
                 memoriesDao
                     .getMemoriesByCategories(
-                        listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES),
+                        listOf(
+                            MemoryCategory.CORE_IDENTITY,
+                            MemoryCategory.PREFERENCES,
+                            MemoryCategory.PSYCH_PROFILE,
+                        ),
                     ).map { toDomain(it, repairs) }
             readRepairApplier.apply(repairs)
             return out

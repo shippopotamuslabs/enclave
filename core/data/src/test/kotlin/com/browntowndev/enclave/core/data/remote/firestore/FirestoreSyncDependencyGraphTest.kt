@@ -24,7 +24,10 @@ class FirestoreSyncDependencyGraphTest {
                 .toSet()
         val graphPaths = FirestoreSyncDependencyGraph.collectionPaths()
 
-        assertEquals(21, registryPaths.size)
+        // 22 = production total after `SearchToolSettingsSyncHandler` is registered
+        // (21 prior + 1 new). See `FirestoreSyncAdapterRegistryTest` for the matching
+        // assertion on the registry side.
+        assertEquals(22, registryPaths.size)
         assertEquals(0, registryPaths.minus(graphPaths).size)
         assertEquals(0, graphPaths.minus(registryPaths).size)
     }
@@ -86,6 +89,26 @@ class FirestoreSyncDependencyGraphTest {
 
         assertEquals(emptyList<FirestoreSyncDependencyGraph.ParentRef>(), parents)
         assertTrue("utility_models" in FirestoreSyncDependencyGraph.collectionPaths())
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("S-HANDLER-002")
+    fun `S-HANDLER-002 dependency graph declares search_tool_settings with no parents`() {
+        assertTrue(
+            "search_tool_settings" in FirestoreSyncDependencyGraph.collectionPaths(),
+            "FirestoreSyncDependencyGraph must list search_tool_settings as a known collection path",
+        )
+
+        val parents =
+            FirestoreSyncDependencyGraph.requiredParents(
+                collectionPath = "search_tool_settings",
+                sourceData = mapOf("search_enabled" to true, "x_search_enabled" to false, "search_provider" to "EXA"),
+            )
+        assertEquals(
+            emptyList<FirestoreSyncDependencyGraph.ParentRef>(),
+            parents,
+            "search_tool_settings must declare NO_PARENTS (the document is a singleton with no foreign-key parents)",
+        )
     }
 
     private fun createMinimalContext(): FirestoreSyncContext {

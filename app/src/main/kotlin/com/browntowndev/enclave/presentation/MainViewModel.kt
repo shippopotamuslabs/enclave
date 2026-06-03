@@ -65,12 +65,13 @@ sealed interface AppStartupState {
         val onboardingCompleted: Boolean = true,
     ) : AppStartupState {
         val initialRoute: String
-            get() = when {
-                !onboardingCompleted -> Routes.ONBOARDING
-                initializationError != null ||
-                    modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
-                else -> Routes.CHAT
-            }
+            get() =
+                when {
+                    !onboardingCompleted -> Routes.ONBOARDING
+                    initializationError != null ||
+                        modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
+                    else -> Routes.CHAT
+                }
     }
 }
 
@@ -162,10 +163,11 @@ class MainViewModel
             isVaultLocked: Boolean,
             isBiometricUnlockPossible: Boolean,
         ) {
-            val onboardingCompleted = settingsRepository
-                .settingsFlow
-                .first()
-                .onboardingCompleted
+            val onboardingCompleted =
+                settingsRepository
+                    .settingsFlow
+                    .first()
+                    .onboardingCompleted
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
                 val vaultLockedNow = !cryptoManager.hasCachedKey()
@@ -285,7 +287,7 @@ class MainViewModel
                         _startupState.update {
                             if (it is AppStartupState.Ready) {
                                 it.copy(
-                                    isVaultLocked = false,
+                                    isVaultLocked = true,
                                     vaultErrorMessage = null,
                                     isBiometricEnrollmentPending = true,
                                 )
@@ -650,7 +652,7 @@ class MainViewModel
                 if (dek == null) {
                     loggingPort.error(TAG, "finalizeBiometricEnrollment: vault is locked, cannot enroll")
                     _startupState.update {
-                        if (it is AppStartupState.Ready) it.copy(isBiometricEnrollmentPending = false) else it
+                        if (it is AppStartupState.Ready) it.copy(isBiometricEnrollmentPending = false, isVaultLocked = false) else it
                     }
                     return@launch
                 }
@@ -676,6 +678,7 @@ class MainViewModel
                         it.copy(
                             isBiometricEnrollmentPending = false,
                             isBiometricUnlockPossible = bioPossibleNow || it.isBiometricUnlockPossible,
+                            isVaultLocked = false,
                         )
                     } else {
                         it
@@ -686,11 +689,28 @@ class MainViewModel
 
         fun cancelBiometricEnrollment() {
             _startupState.update {
-                if (it is AppStartupState.Ready) it.copy(isBiometricEnrollmentPending = false) else it
+                if (it is AppStartupState.Ready) {
+                    it.copy(
+                        isBiometricEnrollmentPending = false,
+                        isVaultLocked = false,
+                    )
+                } else {
+                    it
+                }
             }
         }
 
-        fun getBiometricDecryptCipher(): Cipher? = biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+        fun getBiometricDecryptCipher(): Cipher? {
+            val cipher = biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+            if (cipher == null && biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)) {
+                loggingPort.error(
+                    TAG,
+                    "getBiometricDecryptCipher: Cipher is null but has secure value. Invalidate stale biometric credentials.",
+                )
+                invalidateStaleBiometricUnlock("Biometric key invalidated. Enter your vault password.")
+            }
+            return cipher
+        }
 
         /**
          * Biometric unlock restores the local DEK cache after proving it still decrypts the

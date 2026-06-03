@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
@@ -37,6 +38,9 @@ fun WelcomeAgeGateStep(
     automaticErrorTrackingEnabled: Boolean,
     onAutomaticErrorTrackingChange: (Boolean) -> Unit,
     onNext: () -> Unit,
+    isSaving: Boolean = false,
+    saveError: String? = null,
+    continueButtonText: String = "CONTINUE",
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -108,14 +112,33 @@ fun WelcomeAgeGateStep(
                     )
                 }
             }
+
+            saveError?.let {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         }
 
-        NeoPrimaryButton(
-            text = "CONTINUE",
-            onClick = onNext,
-            enabled = ageConfirmed,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (isSaving) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                NeoCircularProgressIndicator()
+            }
+        } else {
+            NeoPrimaryButton(
+                text = continueButtonText,
+                onClick = onNext,
+                enabled = ageConfirmed,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

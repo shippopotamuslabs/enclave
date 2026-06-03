@@ -16,10 +16,14 @@ import com.browntowndev.enclave.feature.settings.ByokCustomHeadersRoute
 import com.browntowndev.enclave.feature.settings.LocalModelConfigureRoute
 import com.browntowndev.enclave.feature.settings.MediaConfigureRoute
 import com.browntowndev.enclave.feature.settings.ModelConfigurationRoute
+import com.browntowndev.enclave.feature.settings.ProfileBuilderRoute
 import com.browntowndev.enclave.feature.settings.SettingsRoute
 import com.browntowndev.enclave.feature.settings.TtsConfigureRoute
 
-internal fun NavGraphBuilder.settingsMainRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsMainRoute(
+    navController: NavController,
+    onNavigateToProfileBuilder: () -> Unit = {},
+) {
     composable(
         route = SettingsDestination.MAIN,
         enterTransition = { settingsEnterTransition() },
@@ -29,6 +33,7 @@ internal fun NavGraphBuilder.settingsMainRoute(navController: NavController) {
     ) { backStackEntry ->
         SettingsRoute(
             onCloseClick = { navController.popBackStack() },
+            onNavigateToProfileBuilder = onNavigateToProfileBuilder,
             onNavigateToByokConfigure = {
                 navController.navigate(SettingsDestination.BYOK_CONFIGURE)
             },
@@ -153,6 +158,18 @@ internal fun NavGraphBuilder.settingsModelConfigureRoute(navController: NavContr
             onNavigateBack = { navController.popBackStack() },
             viewModel = settingsGraphViewModel(backStackEntry, navController),
         )
+    }
+}
+
+internal fun NavGraphBuilder.profileBuilderMainRoute(onBack: () -> Unit) {
+    composable(
+        route = "profile_builder_main",
+        enterTransition = { settingsEnterTransition() },
+        exitTransition = { settingsExitTransition() },
+        popEnterTransition = { settingsPopEnterTransition() },
+        popExitTransition = { settingsPopExitTransition() },
+    ) {
+        ProfileBuilderRoute(onBack = onBack)
     }
 }
 

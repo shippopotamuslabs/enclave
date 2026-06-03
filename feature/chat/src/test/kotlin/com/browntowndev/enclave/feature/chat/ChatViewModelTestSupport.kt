@@ -145,7 +145,8 @@ object ChatViewModelTestSupport {
                 exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                 loggingPort = loggingPort,
             )
-        val chatShareCoordinator = ChatShareCoordinator(shareChatUseCase = shareChatUseCase, importSharedChatUseCase = importSharedChatUseCase)
+        val chatShareCoordinator =
+            ChatShareCoordinator(shareChatUseCase = shareChatUseCase, importSharedChatUseCase = importSharedChatUseCase)
         val observeMessageTelemetryUseCase = mockk<ObserveMessageTelemetryUseCase>()
         val observeChatTelemetryUseCase = mockk<ObserveChatTelemetryUseCase>()
         io.mockk.every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
