@@ -1,7 +1,62 @@
 {
-  "model_path": "model.onnx",
-  "tokenizer_path": "tokenizer.json",
-  "max_sequence_length": 256,
+  "combined_illegal_labels": [
+    "illicit_drug_instruction",
+    "weapons_explosives_instruction",
+    "malware_cyber_abuse",
+    "phishing_fraud_scam",
+    "violent_or_organized_crime",
+    "other_illegal_instruction"
+  ],
+  "dataset_licenses": {
+    "AdvBench": "MIT",
+    "ClearHarm": "Apache-2.0",
+    "Clinc150": "MIT",
+    "Gretel Safety Alignment": "Apache-2.0",
+    "HardNegatives": "BSD-0 project-generated",
+    "HarmBench": "MIT",
+    "JBB-Behaviors": "Apache-2.0",
+    "NQ-Open": "Apache-2.0",
+    "OpenAI Moderation Dataset": "MIT",
+    "OpenAssistant OASST1": "Apache-2.0",
+    "SyntheticAdversarial": "BSD-0 project-generated",
+    "SyntheticHardNegatives": "BSD-0 project-generated"
+  },
+  "eval_metrics": {
+    "block_recall": 0.9428571428571428,
+    "epoch": 3.0,
+    "exact_match_ratio": 0.7242206235011991,
+    "false_positive_rate": 0.07882352941176471,
+    "loss": 0.1692793071269989,
+    "mean_accuracy": 0.86810551558753,
+    "negative_count": 1700.0,
+    "positive_count": 385.0,
+    "runtime": 2.9128,
+    "samples_per_second": 715.798,
+    "steps_per_second": 22.658
+  },
+  "label_aliases": {
+    "criminal_intent_harmful": [
+      "criminal_intent_harmful"
+    ],
+    "illicit_drug_instruction": [
+      "illicit_drug_instruction"
+    ],
+    "malware_cyber_abuse": [
+      "malware_cyber_abuse"
+    ],
+    "other_illegal_instruction": [
+      "other_illegal_instruction"
+    ],
+    "phishing_fraud_scam": [
+      "phishing_fraud_scam"
+    ],
+    "violent_or_organized_crime": [
+      "violent_or_organized_crime"
+    ],
+    "weapons_explosives_instruction": [
+      "weapons_explosives_instruction"
+    ]
+  },
   "labels": [
     "illicit_drug_instruction",
     "weapons_explosives_instruction",
@@ -11,60 +66,37 @@
     "other_illegal_instruction",
     "criminal_intent_harmful"
   ],
-  "label_aliases": {
-    "illicit_drug_instruction": [
-      "illicit_drug_instruction"
-    ],
-    "weapons_explosives_instruction": [
-      "weapons_explosives_instruction"
-    ],
-    "malware_cyber_abuse": [
-      "malware_cyber_abuse"
-    ],
-    "phishing_fraud_scam": [
-      "phishing_fraud_scam"
-    ],
-    "violent_or_organized_crime": [
-      "violent_or_organized_crime"
-    ],
-    "other_illegal_instruction": [
-      "other_illegal_instruction"
-    ],
-    "criminal_intent_harmful": [
-      "criminal_intent_harmful"
-    ]
+  "max_sequence_length": 256,
+  "model_path": "model.onnx",
+  "provenance_summary": {
+    "AdvBench": 509,
+    "ClearHarm": 179,
+    "Clinc150": 1988,
+    "Gretel Safety Alignment": 3000,
+    "HardNegatives": 22,
+    "HarmBench": 76,
+    "JBB-Behaviors": 200,
+    "NQ-Open": 3000,
+    "OpenAI Moderation Dataset": 1652,
+    "OpenAssistant OASST1": 2942,
+    "SyntheticAdversarial": 180,
+    "SyntheticHardNegatives": 120
   },
   "thresholds": {
+    "criminal_intent_harmful": 0.8,
     "illicit_drug_instruction": 0.7,
-    "weapons_explosives_instruction": 0.7,
-    "malware_cyber_abuse": 0.72,
-    "phishing_fraud_scam": 0.72,
-    "violent_or_organized_crime": 0.72,
+    "malware_cyber_abuse": 0.9,
     "other_illegal_instruction": 0.78,
-    "criminal_intent_harmful": 0.75
+    "phishing_fraud_scam": 0.9,
+    "violent_or_organized_crime": 0.72,
+    "weapons_explosives_instruction": 0.85
   },
-  "combined_illegal_labels": [
-    "illicit_drug_instruction",
-    "weapons_explosives_instruction",
-    "malware_cyber_abuse",
-    "phishing_fraud_scam",
-    "violent_or_organized_crime",
-    "other_illegal_instruction"
-  ],
-  "provenance_summary": {
-    "HardNegatives": 5320,
-    "AdvBench": 4160,
-    "NQ-Open": 3000,
-    "Dolly-15k": 2978,
-    "ClearHarm": 1432,
-    "Clinc150": 1000,
-    "JBB-Behaviors": 900,
-    "HarmfulPositives": 800,
-    "HarmBench": 640
-  },
-  "eval_metrics": {
-    "eval_loss": 0.06721305847167969,
-    "exact_match_ratio": 0.9028006589785832,
-    "mean_accuracy": 0.9832901859261003
+  "tokenizer_path": "tokenizer.json",
+  "training_methodology": {
+    "gamma_neg": 3.0,
+    "gamma_pos": 0.0,
+    "loss": "class-balanced asymmetric focal BCEWithLogits",
+    "physical_replication": false,
+    "split": "grouped_by_seed_or_normalized_prompt"
   }
 }
