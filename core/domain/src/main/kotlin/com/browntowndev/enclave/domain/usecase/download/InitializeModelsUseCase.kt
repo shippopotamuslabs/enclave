@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
+import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -28,6 +29,7 @@ class InitializeModelsUseCase
         private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
         private val checkModelsUseCase: CheckModelsUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
+        private val trustedDomainRepository: TrustedDomainRepositoryPort,
         private val logPort: LoggingPort,
     ) {
         companion object {
@@ -48,6 +50,11 @@ class InitializeModelsUseCase
          * This allows passing scan results downstream to avoid duplicate scanning.
          */
         private suspend fun checkModelsResult(): DownloadModelsResult {
+            // Sync trusted domains asynchronously at startup
+            runCatching {
+                trustedDomainRepository.syncTrustedDomains()
+            }
+
             // Fetch remote config
             val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
             val remoteAssets =

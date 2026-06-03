@@ -25,6 +25,7 @@ import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.BuildConfig
@@ -85,6 +86,7 @@ class ChatViewModel
         private val loggingPort: LoggingPort,
         private val studioRepository: StudioRepositoryPort,
         private val moderatePromptUseCase: ModeratePromptUseCase,
+        private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val inferenceOrchestrator: InferenceOrchestrator,
         private val chatInputCoordinator: ChatInputCoordinator,
         private val speechInputCoordinator: SpeechInputCoordinator,
@@ -580,15 +582,27 @@ class ChatViewModel
                     "Could not send message. Please try again.",
                 ),
             ) {
-                val moderationResult = moderatePromptUseCase(input)
-                if (moderationResult.blocked) {
-                    loggingPort.debug(
-                        TAG,
-                        "Prompt moderation rejected chat input labels=${moderationResult.triggeredLabels} " +
-                            "combined=${moderationResult.combinedIllegalScore}",
-                    )
-                    _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
-                    return@launch
+                val shouldModerate = when (chatInputCoordinator.selectedMode.value) {
+                    ChatModeUi.FAST -> shouldModeratePromptUseCase(ModelType.FAST)
+                    ChatModeUi.THINKING -> shouldModeratePromptUseCase(ModelType.THINKING)
+                    ChatModeUi.COUNCIL -> {
+                        shouldModeratePromptUseCase(ModelType.DRAFT_ONE) ||
+                            shouldModeratePromptUseCase(ModelType.DRAFT_TWO) ||
+                            shouldModeratePromptUseCase(ModelType.MAIN) ||
+                            shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS)
+                    }
+                }
+                if (shouldModerate) {
+                    val moderationResult = moderatePromptUseCase(input)
+                    if (moderationResult.blocked) {
+                        loggingPort.debug(
+                            TAG,
+                            "Prompt moderation rejected chat input labels=${moderationResult.triggeredLabels} " +
+                                "combined=${moderationResult.combinedIllegalScore}",
+                        )
+                        _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
+                        return@launch
+                    }
                 }
 
                 val selectedImageUris =

@@ -17,6 +17,7 @@ import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
@@ -34,6 +35,7 @@ import com.browntowndev.enclave.feature.chat.delegates.TtsController
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
+import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.flow.flowOf
@@ -64,6 +66,9 @@ object ChatViewModelTestSupport {
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
         moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
+            coEvery { this@mockk.invoke(any()) } returns true
+        },
     ): ChatViewModel =
         createHarness(
             settingsUseCases = settingsUseCases,
@@ -85,6 +90,7 @@ object ChatViewModelTestSupport {
             exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             moderatePromptUseCase = moderatePromptUseCase,
+            shouldModeratePromptUseCase = shouldModeratePromptUseCase,
         ).viewModel
 
     fun createHarness(
@@ -107,6 +113,9 @@ object ChatViewModelTestSupport {
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
         moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
+            coEvery { this@mockk.invoke(any()) } returns true
+        },
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
@@ -181,6 +190,7 @@ object ChatViewModelTestSupport {
                     loggingPort = loggingPort,
                     studioRepository = studioRepository,
                     moderatePromptUseCase = moderatePromptUseCase,
+                    shouldModeratePromptUseCase = shouldModeratePromptUseCase,
                     inferenceOrchestrator = inferenceOrchestrator,
                     chatInputCoordinator = chatInputCoordinator,
                     speechInputCoordinator = speechInputCoordinator,

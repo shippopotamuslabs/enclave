@@ -17,6 +17,12 @@ interface ModelUrlProviderPort {
     fun getConfigUrl(): String
 
     /**
+     * Get the URL for fetching the trusted domains whitelist configuration (trusted_domains.json).
+     * This should always point to your R2 bucket.
+     */
+    fun getTrustedDomainsUrl(): String
+
+    /**
      * Get the download URL for a specific file spec.
      * Uses the spec's source and huggingFaceModelName to determine the URL.
      * @param spec The download file spec containing remote file info and source
