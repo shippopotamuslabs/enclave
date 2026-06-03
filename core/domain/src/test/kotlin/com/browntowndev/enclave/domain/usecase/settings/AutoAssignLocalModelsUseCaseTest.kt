@@ -263,7 +263,9 @@ class AutoAssignLocalModelsUseCaseTest {
 
             coVerify {
                 setDefaultModelUseCase(ModelType.IMAGE_GENERATION, null, null, null, image.id)
+                setDefaultModelUseCase(ModelType.IMAGE_EDIT, null, null, null, image.id)
                 setDefaultModelUseCase(ModelType.VIDEO_GENERATION, null, null, null, video.id)
+                setDefaultModelUseCase(ModelType.IMAGE_TO_VIDEO, null, null, null, video.id)
                 setDefaultModelUseCase(ModelType.MUSIC_GENERATION, null, null, null, music.id)
             }
         }

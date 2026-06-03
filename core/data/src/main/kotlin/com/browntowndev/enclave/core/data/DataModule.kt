@@ -135,6 +135,8 @@ import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
+import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
@@ -646,4 +648,10 @@ abstract class DataRepositoryModule {
     abstract fun bindProfileAnalysisPort(
         impl: com.browntowndev.enclave.core.data.profile.analysis.ProfileAnalysisManager,
     ): com.browntowndev.enclave.domain.port.profile.ProfileAnalysisPort
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncOrchestrator(
+        impl: SyncOrchestratorImpl,
+    ): SyncOrchestrator
 }

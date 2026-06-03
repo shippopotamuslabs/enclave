@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.app
 
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
@@ -97,6 +98,8 @@ class MainViewModelOnboardingTest {
             // initializeModelsUseCase returns empty modelsToDownload
             coEvery { initializeModelsUseCase() } returns initializedModelsResult
 
+            val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true)
+
             // When: MainViewModel is constructed with the fake settings (onboardingCompleted=false)
             val viewModel =
                 MainViewModel(
@@ -113,10 +116,10 @@ class MainViewModelOnboardingTest {
                     detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase = adoptCloudVaultUseCase,
                     bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
                     loggingPort = loggingPort,
                     errorHandler = errorHandler,
                     settingsRepository = fakeSettingsRepository,
+                    syncOrchestrator = syncOrchestrator,
                 )
 
             advanceUntilIdle()

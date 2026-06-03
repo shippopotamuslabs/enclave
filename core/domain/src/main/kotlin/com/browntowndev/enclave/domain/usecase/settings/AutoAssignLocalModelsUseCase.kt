@@ -93,11 +93,11 @@ class AutoAssignLocalModelsUseCase
             when (modelType) {
                 ModelType.VISION -> firstMultimodalApi(apiAssets)?.let { Candidate(apiConfigId = it) }
                 ModelType.TTS -> ttsProviders.firstOrNull()?.id?.let { Candidate(ttsProviderId = it) }
-                ModelType.IMAGE_GENERATION ->
+                ModelType.IMAGE_GENERATION, ModelType.IMAGE_EDIT ->
                     mediaProviders.firstOrNull { it.capability == MediaCapability.IMAGE }?.id?.let {
                         Candidate(mediaProviderId = it)
                     }
-                ModelType.VIDEO_GENERATION ->
+                ModelType.VIDEO_GENERATION, ModelType.IMAGE_TO_VIDEO ->
                     mediaProviders.firstOrNull { it.capability == MediaCapability.VIDEO }?.id?.let {
                         Candidate(mediaProviderId = it)
                     }

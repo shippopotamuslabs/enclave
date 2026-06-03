@@ -7,6 +7,7 @@ import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.FirestoreSyncDependenciesFacade
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
@@ -139,7 +140,7 @@ class FirestoreSyncDocumentCacheTest {
                     ),
                 settingsRepository = mockk<SettingsRepositoryImpl>(relaxed = true),
             )
-        return FirestoreDataSource(facade, externalScope)
+        return FirestoreDataSource(facade, externalScope, mockk(relaxed = true))
     }
 
     @Test

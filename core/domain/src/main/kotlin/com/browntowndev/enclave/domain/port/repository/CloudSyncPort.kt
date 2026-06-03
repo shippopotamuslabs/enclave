@@ -124,4 +124,15 @@ interface CloudSyncPort {
      * Retrieves the count of sync events that are remaining to be applied.
      */
     suspend fun getRemainingEventsCount(): Result<Long> = Result.success(0L)
+
+    /**
+     * Reads feature settings from the cloud and applies them locally.
+     * Used after replay to restore configuration/toggles.
+     */
+    suspend fun bootstrapFeatureSettings(): Result<Unit>
+
+    /**
+     * Triggers background cloud sync.
+     */
+    fun triggerSync()
 }

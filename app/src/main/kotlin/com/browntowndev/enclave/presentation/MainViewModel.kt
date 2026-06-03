@@ -3,6 +3,7 @@ package com.browntowndev.enclave.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.toVaultAuthUiState
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
@@ -22,7 +23,6 @@ import com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
-import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.enclave.presentation.navigation.Routes
@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.crypto.Cipher
@@ -93,10 +94,10 @@ class MainViewModel
         private val detectVaultReconciliationStateUseCase: DetectVaultReconciliationStateUseCase,
         private val adoptCloudVaultUseCase: AdoptCloudVaultUseCase,
         private val bootstrapCloudVaultFromLocalUseCase: BootstrapCloudVaultFromLocalUseCase,
-        private val startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
         private val settingsRepository: SettingsRepository,
+        private val syncOrchestrator: SyncOrchestrator,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MainViewModel"
@@ -468,23 +469,28 @@ class MainViewModel
         }
 
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
-            val result =
-                startCloudSyncListeningUseCase(
-                    uploadLocalFirst = initialUpload,
-                    onProgress = { progress ->
-                        _startupState.update { state ->
-                            if (state is AppStartupState.Ready) {
-                                state.copy(
-                                    unlockSyncProgress = progress.progressFraction,
-                                    unlockSyncStatus = progress.status,
-                                )
-                            } else {
-                                state
-                            }
+            val progressJob = viewModelScope.launch {
+                syncOrchestrator.syncProgress.collect { progress ->
+                    _startupState.update { state ->
+                        if (state is AppStartupState.Ready) {
+                            state.copy(
+                                unlockSyncProgress = progress?.fraction,
+                                unlockSyncStatus = progress?.status,
+                            )
+                        } else {
+                            state
                         }
-                    },
-                )
-            if (result.isSuccess) {
+                    }
+                }
+            }
+
+            val result = syncOrchestrator.startInitialSync(initialUpload)
+            progressJob.cancel()
+
+            val isSuccess = result.isSuccess
+            val failureMessage = result.exceptionOrNull()?.message
+
+            if (isSuccess) {
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
                         it.copy(
@@ -499,12 +505,13 @@ class MainViewModel
                 }
                 return true
             }
-            loggingPort.error(TAG, "startCloudSyncAndListen: cloud sync start failed", result.exceptionOrNull())
+
+            loggingPort.error(TAG, "startCloudSyncAndListen: cloud sync worker failed: $failureMessage")
             _startupState.update {
                 if (it is AppStartupState.Ready) {
                     it.copy(
                         cloudSyncDeferred = true,
-                        vaultErrorMessage = "Failed to start cloud sync",
+                        vaultErrorMessage = failureMessage ?: "Failed to start cloud sync",
                         unlockSyncProgress = null,
                         unlockSyncStatus = null,
                     )
