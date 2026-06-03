@@ -17,9 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -43,14 +45,16 @@ fun WelcomeAgeGateStep(
     onAgeConfirmedChange: (Boolean) -> Unit,
     automaticErrorTrackingEnabled: Boolean,
     onAutomaticErrorTrackingChange: (Boolean) -> Unit,
+    tosReviewed: Boolean,
+    onTosReviewedChange: (Boolean) -> Unit,
+    tosAccepted: Boolean,
+    onTosAcceptedChange: (Boolean) -> Unit,
     onNext: () -> Unit,
     isSaving: Boolean = false,
     saveError: String? = null,
     continueButtonText: String = "CONTINUE",
     modifier: Modifier = Modifier,
 ) {
-    var tosReviewed by remember { mutableStateOf(false) }
-    var tosAccepted by remember { mutableStateOf(false) }
     var showTosBottomSheet by remember { mutableStateOf(false) }
 
     if (showTosBottomSheet) {
@@ -133,7 +137,7 @@ fun WelcomeAgeGateStep(
                         text = "REVIEW TERMS OF SERVICE",
                         onClick = {
                             showTosBottomSheet = true
-                            tosReviewed = true
+                            onTosReviewedChange(true)
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -142,7 +146,7 @@ fun WelcomeAgeGateStep(
 
                     AgeGateCheckboxRow(
                         checked = tosAccepted,
-                        onCheckedChange = { tosAccepted = it },
+                        onCheckedChange = onTosAcceptedChange,
                         label = "I agree to the Terms of Service",
                         contentDescription = "TOS Gate Checkbox",
                         enabled = tosReviewed,
@@ -202,25 +206,26 @@ private fun AgeGateCheckboxRow(
         modifier =
             modifier
                 .fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Checkbox,
+                    onValueChange = onCheckedChange,
+                )
                 .semantics {
-                    role = Role.Checkbox
                     this.contentDescription = contentDescription
                 },
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = if (enabled) onCheckedChange else null,
+            onCheckedChange = null,
             enabled = enabled,
             colors =
                 CheckboxDefaults.colors(
                     checkedColor = MaterialTheme.colorScheme.primary,
                     uncheckedColor = MaterialTheme.colorScheme.outline,
                 ),
-            modifier =
-                Modifier.semantics {
-                    role = Role.Checkbox
-                    this.contentDescription = contentDescription
-                },
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Text(
             text = label,
@@ -248,6 +253,10 @@ internal fun WelcomeAgeGateStepLightPreview() {
             onAgeConfirmedChange = {},
             automaticErrorTrackingEnabled = false,
             onAutomaticErrorTrackingChange = {},
+            tosReviewed = false,
+            onTosReviewedChange = {},
+            tosAccepted = false,
+            onTosAcceptedChange = {},
             onNext = {},
         )
     }
@@ -262,6 +271,10 @@ internal fun WelcomeAgeGateStepDarkPreview() {
             onAgeConfirmedChange = {},
             automaticErrorTrackingEnabled = true,
             onAutomaticErrorTrackingChange = {},
+            tosReviewed = true,
+            onTosReviewedChange = {},
+            tosAccepted = true,
+            onTosAcceptedChange = {},
             onNext = {},
         )
     }

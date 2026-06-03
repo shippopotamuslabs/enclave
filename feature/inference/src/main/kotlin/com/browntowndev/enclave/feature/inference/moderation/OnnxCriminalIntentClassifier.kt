@@ -61,10 +61,10 @@ class OnnxCriminalIntentClassifier
                 maxSequenceLength = config.maxSequenceLength,
             )
             val environment = OrtEnvironment.getEnvironment()
-            val sessionOptions = OrtSession.SessionOptions().apply {
-                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            val session = OrtSession.SessionOptions().use { sessionOptions ->
+                sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                environment.createSession(modelFile.absolutePath, sessionOptions)
             }
-            val session = environment.createSession(modelFile.absolutePath, sessionOptions)
             return LoadedCriminalIntentModel(
                 config = config,
                 tokenizer = tokenizer,
@@ -118,10 +118,21 @@ class OnnxCriminalIntentClassifier
             if (targetFile.exists()) {
                 return targetFile
             }
-            context.assets.open("$ASSET_BASE_PATH/$modelPath").use { input ->
-                targetFile.outputStream().use { output ->
-                    input.copyTo(output)
+            val tempFile = File(targetDirectory, "$modelPath.tmp")
+            try {
+                context.assets.open("$ASSET_BASE_PATH/$modelPath").use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                if (!tempFile.renameTo(targetFile)) {
+                    throw java.io.IOException("Failed to rename temporary model file to $targetFile")
+                }
+            } catch (e: Exception) {
+                if (tempFile.exists()) {
+                    tempFile.delete()
+                }
+                throw e
             }
             return targetFile
         }

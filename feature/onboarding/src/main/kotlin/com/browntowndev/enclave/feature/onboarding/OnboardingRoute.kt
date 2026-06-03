@@ -27,6 +27,8 @@ fun OnboardingRoute(
         uiState = uiState,
         onAgeConfirmedChange = viewModel::onAgeConfirmedChange,
         onAutomaticErrorTrackingChange = viewModel::onAutomaticErrorTrackingChange,
+        onTosReviewedChange = viewModel::onTosReviewedChange,
+        onTosAcceptedChange = viewModel::onTosAcceptedChange,
         onNextStep = viewModel::onNextStep,
         onPreviousStep = viewModel::onPreviousStep,
         onModelChoiceSelected = viewModel::onModelChoiceSelected,
