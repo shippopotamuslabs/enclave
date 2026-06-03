@@ -123,4 +123,34 @@ class ShouldModeratePromptUseCaseTest {
 
         assertTrue(useCase(ModelType.FAST))
     }
+
+    @Test
+    fun invoke_returnsFalse_whenTrustedDomainMatchWithUppercase() = runTest {
+        val config = createActiveConfig(
+            id = ApiModelConfigurationId("api-id"),
+            isLocal = false,
+            name = "GPT-4o",
+            modelId = "gpt-4o",
+            apiProvider = ApiProvider.OPENAI,
+            apiBaseUrl = "https://API.OPENAI.COM/v1"
+        )
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+
+        assertFalse(useCase(ModelType.FAST))
+    }
+
+    @Test
+    fun invoke_returnsTrue_whenUntrustedSuffixMatchesWildcard() = runTest {
+        val config = createActiveConfig(
+            id = ApiModelConfigurationId("api-id"),
+            isLocal = false,
+            name = "Malicious Host",
+            modelId = "untrusted",
+            apiProvider = ApiProvider.OPENAI,
+            apiBaseUrl = "https://fake-googleapis.com/v1"
+        )
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+
+        assertTrue(useCase(ModelType.FAST))
+    }
 }

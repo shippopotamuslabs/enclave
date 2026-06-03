@@ -26,7 +26,7 @@ private data class TrustedDomainsResponse(
 
 @Singleton
 class TrustedDomainRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val modelUrlProvider: ModelUrlProviderPort,
 ) : TrustedDomainRepositoryPort {
@@ -67,12 +67,16 @@ class TrustedDomainRepositoryImpl @Inject constructor(
     private val cacheFile: File
         get() = File(context.filesDir, FILE_NAME)
 
-    override suspend fun getTrustedDomains(): Set<String> = mutex.withLock {
-        cachedDomains ?: loadFromCacheOrFallback().first
+    override suspend fun getTrustedDomains(): Set<String> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            cachedDomains ?: loadFromCacheOrFallback().first
+        }
     }
 
-    override suspend fun getTrustedWildcards(): Set<String> = mutex.withLock {
-        cachedWildcards ?: loadFromCacheOrFallback().second
+    override suspend fun getTrustedWildcards(): Set<String> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            cachedWildcards ?: loadFromCacheOrFallback().second
+        }
     }
 
     override suspend fun syncTrustedDomains(): Result<Unit> = withContext(Dispatchers.IO) {

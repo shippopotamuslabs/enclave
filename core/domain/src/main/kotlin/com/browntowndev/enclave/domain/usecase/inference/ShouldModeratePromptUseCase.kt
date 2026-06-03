@@ -15,9 +15,13 @@ class ShouldModeratePromptUseCase @Inject constructor(
         if (config == null || config.isLocal) return true
         val url = config.apiBaseUrl ?: return true
 
-        val host = runCatching { URI(url).host }.getOrNull() ?: return true
-        val isTrusted = host in trustedDomainRepository.getTrustedDomains() ||
-            trustedDomainRepository.getTrustedWildcards().any { host.endsWith(it) }
+        val host = runCatching { URI(url).host?.lowercase() }.getOrNull() ?: return true
+        val isTrusted = trustedDomainRepository.getTrustedDomains().any { it.lowercase() == host } ||
+            trustedDomainRepository.getTrustedWildcards().any { wildcard ->
+                val normalizedWildcard = wildcard.lowercase()
+                val dotPrefixed = if (normalizedWildcard.startsWith(".")) normalizedWildcard else ".$normalizedWildcard"
+                host == normalizedWildcard.removePrefix(".") || host.endsWith(dotPrefixed)
+            }
 
         return !isTrusted
     }

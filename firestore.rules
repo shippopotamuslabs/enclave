@@ -92,7 +92,14 @@ service cloud.firestore {
 
     // Write-only moderation reports for false positives/negatives.
     match /moderation/{reportId} {
-      allow create: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['prompt', 'outcome', 'timestamp', 'version'])
+        && request.resource.data.keys().hasOnly(['prompt', 'outcome', 'timestamp', 'version'])
+        && request.resource.data.prompt is string
+        && request.resource.data.prompt.size() < 5000
+        && request.resource.data.outcome in ['blocked', 'allowed']
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.version == 1;
       allow read, update, delete: if false;
     }
   }
