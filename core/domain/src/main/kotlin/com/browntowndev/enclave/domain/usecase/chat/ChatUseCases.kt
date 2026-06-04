@@ -28,6 +28,11 @@ interface ChatUseCases {
     val generateChatResponseUseCase: GenerateChatResponseUseCase
 
     /**
+     * Generates and applies an on-device chat title (upgrades the truncated default).
+     */
+    val generateChatTitleUseCase: GenerateChatTitleUseCase
+
+    /**
      * Gets the chat messages for the given chat ID.
      */
     val getChatUseCase: GetChatUseCase
@@ -84,6 +89,18 @@ interface ChatUseCases {
         mode: Mode,
         backgroundInferenceEnabled: Boolean,
     ) = generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, mode, backgroundInferenceEnabled)
+
+    /**
+     * Generates an on-device chat title and applies it to the chat.
+     * Intended to run asynchronously, in parallel with the inference turn, for newly created chats.
+     * Silently keeps the existing (truncated) title on failure or low-quality output.
+     * @param chatId The chat whose title should be upgraded
+     * @param prompt The first user message text
+     */
+    suspend fun generateChatTitle(
+        chatId: ChatId,
+        prompt: String,
+    ) = generateChatTitleUseCase(chatId, prompt)
 
     /**
      * Gets the chat messages for the given chat ID.

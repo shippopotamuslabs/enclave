@@ -18,6 +18,15 @@ enum class UtilityType(
 
     @SerialName("onnx_vocab")
     ONNX_VOCAB("onnx_vocab"),
+
+    @SerialName("title_generator_encoder")
+    TITLE_GENERATOR_ENCODER("title_generator_encoder"),
+
+    @SerialName("title_generator_decoder")
+    TITLE_GENERATOR_DECODER("title_generator_decoder"),
+
+    @SerialName("title_generator_tokenizer")
+    TITLE_GENERATOR_TOKENIZER("title_generator_tokenizer"),
     ;
 
     /**
@@ -29,6 +38,9 @@ enum class UtilityType(
             ONNX_MODEL -> "Embeddings"
             ONNX_VOCAB -> "Embedding Vocabulary"
             ONNX -> "Utility Model"
+            TITLE_GENERATOR_ENCODER -> "Chat Title Model"
+            TITLE_GENERATOR_DECODER -> "Chat Title Decoder"
+            TITLE_GENERATOR_TOKENIZER -> "Chat Title Tokenizer"
         }
 
     companion object {
